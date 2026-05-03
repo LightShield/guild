@@ -22,6 +22,32 @@ A locally-focused, cross-platform agent harness that enables running LLM-powered
 
 ---
 
+## Architectural Insights (from Claude Code source analysis)
+
+The following lessons are drawn from the Claude Code 512K-line TypeScript source leak (March 2026) and Anthropic's published harness design research. These should inform our architecture:
+
+1. **The agent loop is dead simple — the harness is everything.** The core loop is a `while` loop: call model → if tool call, execute tool, append result, repeat. All complexity lives in the harness around it (context management, permissions, tools, error recovery). Don't overengineer the loop.
+
+2. **Embed safety at the point of use.** Safety rules belong inside tool descriptions (where the model sees them at invocation time), not in a separate policy doc the model may "forget" during long conversations. Defense-in-depth: multiple layers of checks.
+
+3. **Dedicated tools beat a generic shell.** Replace frequent shell commands with typed, permission-gated, auditable tools. Agents with 5-8 well-described purpose-built tools outperform agents with one omnibus tool.
+
+4. **Context engineering is the competitive moat.** Separate static prompt content (cacheable) from dynamic content. Build multi-tier compression (local trim → model-based summarization → full compact with re-injection of critical state). Instrument what goes into the context window.
+
+5. **Memory should be indexed hints, not trusted truth.** Lightweight index always loaded (<200 lines), detailed notes fetched on demand. Agent must verify memories against actual state before acting. Include "memory consolidation" during idle time.
+
+6. **Multi-agent parallelism via cache sharing.** Sub-agents should share the parent's context/cache to avoid paying full token cost per worker. Use isolated execution environments (worktrees, containers) for parallel work. Sub-agent spawning is just another tool call — keep architecture flat.
+
+7. **Use cheap models for cheap decisions.** Permission checks, safety screening, sentiment detection, context compression — use the smallest model (or regex/deterministic code) that can handle it. Reserve the strong model for reasoning and generation.
+
+8. **Generator + Evaluator pattern (GAN-inspired).** For complex tasks, separate the agent doing the work from the agent judging it. Evaluators catch issues that generators miss when self-evaluating. Tune evaluators to be skeptical.
+
+9. **Context resets > compaction for long tasks.** For very long runs, clearing context and starting a fresh agent with a structured handoff artifact can outperform in-place compaction (avoids "context anxiety" where models wrap up prematurely).
+
+10. **Re-examine harness complexity with each model upgrade.** Every harness component encodes an assumption about what the model can't do alone. As models improve, strip scaffolding that's no longer load-bearing and add new pieces for newly-possible capabilities.
+
+---
+
 ## P0 — MVP Requirements
 
 ### REQ-01: LLM Provider Abstraction
@@ -66,17 +92,22 @@ A locally-focused, cross-platform agent harness that enables running LLM-powered
 
 ### REQ-04: Multi-Agent Team Architecture
 
-**Goal:** Orchestrator + worker pattern where agents collaborate on complex tasks.
+**Goal:** Entry agent (user-facing) that can spawn any agents, including other orchestrators. Flat, composable architecture — not a rigid hierarchy.
 
 | ID | Requirement | Notes |
 |----|-------------|-------|
-| REQ-04.1 | Orchestrator agent that decomposes tasks and delegates to workers | Single orchestrator per team (can be swapped/configured) |
-| REQ-04.2 | Worker agents that execute specific subtasks | Workers can be specialized (coder, researcher, reviewer, etc.) |
-| REQ-04.3 | Inter-agent communication via message passing | Structured messages, not free-text piping |
-| REQ-04.4 | Agent lifecycle management — spawn, monitor, pause, resume, kill | Harness manages all agent processes |
-| REQ-04.5 | Team composition defined in config files | YAML/TOML: which agents, what roles, what models, what permissions |
-| REQ-04.6 | Shared context/workspace between team members | Agents can read each other's outputs and shared state |
-| REQ-04.7 | Dynamic worker spawning — orchestrator can create new workers as needed | Not limited to pre-defined team size |
+| REQ-04.1 | **Entry agent** as the user-facing interface — not a fixed "orchestrator" | This is the agent the user talks to; it can delegate, spawn, or become an orchestrator as needed |
+| REQ-04.2 | Any agent can spawn other agents, including other orchestrators | No rigid hierarchy — an agent spawning a sub-orchestrator for a complex subtask is valid |
+| REQ-04.3 | Agent spawning is just another tool call — keep architecture flat | Per Claude Code insight: no separate multi-agent runtime, sub-agents are tool invocations |
+| REQ-04.4 | Worker agents that execute specific subtasks | Workers can be specialized (coder, researcher, reviewer, etc.) |
+| REQ-04.5 | **MCP (Model Context Protocol) for agent-to-tool communication** | Industry standard — agents connect to tools/data via MCP servers |
+| REQ-04.6 | **A2A (Agent-to-Agent Protocol) for inter-agent communication** | Google's open protocol for agent discovery, negotiation, and collaboration |
+| REQ-04.7 | **Skills support** — agents can have pluggable skill definitions | Skill files that define capabilities, similar to Claude Code's SKILL.md pattern |
+| REQ-04.8 | Agent lifecycle management — spawn, monitor, pause, resume, kill | Harness manages all agent processes |
+| REQ-04.9 | Team composition defined in config files | YAML/TOML: which agents, what roles, what models, what permissions |
+| REQ-04.10 | Shared context/workspace between team members | Agents can read each other's outputs and shared state; cache sharing for token efficiency |
+| REQ-04.11 | Dynamic worker spawning — entry agent or any orchestrator can create new workers as needed | Not limited to pre-defined team size |
+| REQ-04.12 | Isolated execution environments for parallel workers | Separate worktrees/directories to prevent conflicts during parallel edits |
 
 ### REQ-05: Dual Interface — CLI and GUI
 
@@ -93,42 +124,52 @@ A locally-focused, cross-platform agent harness that enables running LLM-powered
 
 ### REQ-06: Autonomous Long-Running Operation ("Anti-Babysitting")
 
-**Goal:** Agents run to completion without unnecessary human check-ins. They stop only when truly done or truly stuck.
+**Goal:** Agents run to completion without unnecessary human check-ins. They stop only when truly done or truly stuck. Use generator+evaluator pattern for quality.
 
 | ID | Requirement | Notes |
 |----|-------------|-------|
 | REQ-06.1 | Agents must not pause for confirmation unless genuinely blocked | No "shall I continue?" after every step |
 | REQ-06.2 | Clear "done" criteria per task — agents self-verify completion | Run tests, check outputs, validate against spec |
-| REQ-06.3 | Stuck detection — recognize when no progress is being made | Loop detection, repeated failures, resource exhaustion |
-| REQ-06.4 | Graceful degradation on stuck — try alternatives before escalating | Retry with different approach, ask a different agent, then escalate |
-| REQ-06.5 | Human escalation only as last resort, with full context | "I tried X, Y, Z. Here's where I'm stuck. Here's what I need from you." |
-| REQ-06.6 | Progress persistence — survive crashes, reboots, network drops | Checkpoint state to disk regularly |
-| REQ-06.7 | Configurable autonomy timeout | "Run for max 4 hours, then pause and report" |
+| REQ-06.3 | **Generator + Evaluator pattern** — separate the agent doing work from the agent judging it | Per Anthropic research: evaluators catch issues generators miss when self-evaluating |
+| REQ-06.4 | Stuck detection — recognize when no progress is being made | Loop detection, repeated failures, resource exhaustion |
+| REQ-06.5 | Graceful degradation on stuck — try alternatives before escalating | Retry with different approach, ask a different agent, then escalate |
+| REQ-06.6 | Human escalation only as last resort, with full context | "I tried X, Y, Z. Here's where I'm stuck. Here's what I need from you." |
+| REQ-06.7 | Progress persistence — survive crashes, reboots, network drops | Checkpoint state to disk regularly |
+| REQ-06.8 | Configurable autonomy timeout | "Run for max 4 hours, then pause and report" |
+| REQ-06.9 | **Simple core loop** — while(true) { call model → execute tool → append result } | Per Claude Code: don't overengineer the control flow; complexity lives in the harness |
 
 ### REQ-07: Context & Memory Management
 
-**Goal:** Agents maintain useful context across sessions and share knowledge within teams.
+**Goal:** Agents maintain useful context across sessions and share knowledge within teams. Memory is indexed hints, not trusted truth.
 
 | ID | Requirement | Notes |
 |----|-------------|-------|
 | REQ-07.1 | Persistent conversation/task context across sessions | Stored on disk, survives restarts |
 | REQ-07.2 | Checkpoint and resume for long-running tasks | Explicit checkpoints + auto-checkpoint on interval |
-| REQ-07.3 | Shared knowledge base between team agents | Worker B can see what Worker A discovered |
-| REQ-07.4 | Context windowing — manage context size vs. model limits | Automatic summarization, sliding window, or retrieval-augmented |
-| REQ-07.5 | Task history — browse and search past tasks and their outcomes | Queryable from CLI and GUI |
+| REQ-07.3 | Shared knowledge base between team agents | Worker B can see what Worker A discovered; cache sharing for token efficiency |
+| REQ-07.4 | **Multi-tier context compression** — local trim → model-based summarization → full compact with re-injection | Per Claude Code: MicroCompact (zero API calls) → AutoCompact (near ceiling) → Full Compact |
+| REQ-07.5 | **Skeptical memory** — agent verifies memories against actual state before acting | Memory entries are hints, not trusted facts (per Claude Code pattern) |
+| REQ-07.6 | Lightweight memory index always loaded, detailed notes fetched on demand | Index <200 lines, topic files loaded as needed |
+| REQ-07.7 | Memory consolidation during idle time | Merge observations, remove contradictions, confirm tentative notes |
+| REQ-07.8 | **Context resets with structured handoff** for very long tasks | Clear context + handoff artifact can outperform in-place compaction |
+| REQ-07.9 | Task history — browse and search past tasks and their outcomes | Queryable from CLI and GUI |
+| REQ-07.10 | **Static/dynamic prompt separation** for cache efficiency | Static instructions (cacheable) separated from session-specific dynamic content |
 
 ### REQ-08: Tool System (Plugin Architecture)
 
-**Goal:** Extensible tool system where adding a new tool is dropping a file in a directory.
+**Goal:** MCP-native tool system. Built-in tools are dedicated and typed (not a generic shell). Adding a new tool is dropping a file in a directory.
 
 | ID | Requirement | Notes |
 |----|-------------|-------|
-| REQ-08.1 | Plugin-based tool loading — file-per-tool or directory-per-tool | Auto-discovery on startup |
-| REQ-08.2 | Standard tool interface: name, description, input schema, execute() | Minimal boilerplate to create a new tool |
-| REQ-08.3 | Built-in tools: file read/write, shell exec, web fetch, code search | Ship with a useful default set |
-| REQ-08.4 | Tool usage audit log | Tool name, args, result, duration, which agent, approval status |
-| REQ-08.5 | Tool timeout and resource limits | Prevent a single tool call from hanging the system |
-| REQ-08.6 | Tool result caching (optional, per-tool) | Avoid redundant expensive calls |
+| REQ-08.1 | **MCP-native tool interface** — tools are MCP servers or expose MCP-compatible schemas | Industry standard; enables reuse of existing MCP ecosystem |
+| REQ-08.2 | Plugin-based tool loading — file-per-tool or directory-per-tool | Auto-discovery on startup |
+| REQ-08.3 | Standard tool contract: name, description, input schema (Zod/JSON Schema), execute(), behavioral properties | Properties like isConcurrencySafe, isReadOnly enable optimization (per Claude Code pattern) |
+| REQ-08.4 | **Dedicated typed tools over generic shell** — replace frequent shell commands with purpose-built tools | File read/write, code search, grep, glob — each with its own permissions and validation |
+| REQ-08.5 | Built-in tools: file read/write, shell exec (with safety checks), web fetch, code search, grep, glob | Ship with a useful default set; shell tool has embedded safety rules |
+| REQ-08.6 | Tool usage audit log | Tool name, args, result, duration, which agent, approval status |
+| REQ-08.7 | Tool timeout and resource limits | Prevent a single tool call from hanging the system |
+| REQ-08.8 | Tool result caching (optional, per-tool) | Avoid redundant expensive calls |
+| REQ-08.9 | Safety rules embedded in tool descriptions | Per Claude Code insight: model sees constraints at invocation time |
 
 ---
 
@@ -231,7 +272,7 @@ A locally-focused, cross-platform agent harness that enables running LLM-powered
 |----|-------------|-------|
 | REQ-16.1 | Per-agent model assignment | Orchestrator = strong model, simple workers = fast/cheap model |
 | REQ-16.2 | Fallback chains — if primary model is down/slow, use backup | Ollama → cloud provider, or large model → small model |
-| REQ-16.3 | Load-based routing — distribute across multiple local model instances | For multi-GPU setups |
+| REQ-16.3 | **Use cheap models for cheap decisions** | Permission checks, safety screening, compression — smallest model that works (per Claude Code pattern) |
 | REQ-16.4 | Model capability tagging — match task requirements to model strengths | "needs code generation" → route to code-specialized model |
 
 ### REQ-17: Artifact Management
@@ -255,7 +296,6 @@ A locally-focused, cross-platform agent harness that enables running LLM-powered
 | REQ-18.1 | Save a workflow as a reusable template | "Do code review like last time" |
 | REQ-18.2 | Parameterized templates — same workflow, different inputs | Template variables |
 | REQ-18.3 | Import/export/share templates | File-based, easy to version control |
-| REQ-18.4 | Template marketplace / community sharing (future) | Optional, not required for MVP |
 
 ### REQ-19: Rate Limiting & Backpressure
 
