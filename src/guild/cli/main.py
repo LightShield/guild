@@ -471,5 +471,43 @@ def learnings():
     console.print(t)
 
 
+# --- guild audit ---
+
+@app.command()
+def audit(
+    limit: int = typer.Option(50, "--limit", "-n", help="Max entries to show"),
+):
+    """Show audit log of agent actions and permission decisions."""
+    guild_dir = _require_guild()
+
+    async def _list() -> list[dict]:
+        from guild.core.storage import Storage
+
+        s = Storage(guild_dir / DB_NAME)
+        await s.connect()
+        items = await s.list_audit(limit=limit)
+        await s.close()
+        return items
+
+    items = asyncio.run(_list())
+    if not items:
+        console.print("[dim]No audit entries yet.[/dim]")
+        return
+
+    t = Table(title="Audit Log")
+    t.add_column("Timestamp", style="dim", max_width=19)
+    t.add_column("Agent", max_width=12)
+    t.add_column("Action")
+    t.add_column("Details", max_width=60)
+    for row in items:
+        t.add_row(
+            (row.get("timestamp") or "")[:19],
+            row.get("agent_id") or "-",
+            row["action"],
+            (row.get("details") or "")[:60],
+        )
+    console.print(t)
+
+
 if __name__ == "__main__":
     app()

@@ -57,6 +57,36 @@ class PermissionChecker:
         self.prompt_fn = prompt_fn or _default_prompt
         self._session_approvals: set[str] = set()
 
+    def get_tier(self) -> PermissionTier:
+        """Get the current permission tier.
+
+        Returns:
+            Current PermissionTier.
+        """
+        return self.tier
+
+    def set_tier(
+        self,
+        tier: PermissionTier,
+        allowed_paths: list[str] | None = None,
+        allowed_tools: list[str] | None = None,
+    ) -> None:
+        """Switch permission tier at runtime.
+
+        Clears session approvals on tier change.
+
+        Args:
+            tier: New permission tier.
+            allowed_paths: New allowed paths (for scoped tier).
+            allowed_tools: New allowed tools (for scoped tier).
+        """
+        self.tier = tier
+        self._session_approvals.clear()
+        if allowed_paths is not None:
+            self.allowed_paths = [Path(p).resolve() for p in allowed_paths]
+        if allowed_tools is not None:
+            self.allowed_tools = set(allowed_tools)
+
     def check(self, tool_name: str, agent_id: str, args: dict) -> bool:
         """Check if a tool call is allowed.
 

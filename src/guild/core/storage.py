@@ -254,6 +254,20 @@ class Storage:
         )
         await self.db.commit()
 
+    async def list_audit(self, limit: int = 50) -> list[dict]:
+        """List audit log entries, newest first.
+
+        Args:
+            limit: Maximum number of entries to return.
+
+        Returns:
+            List of audit log dicts.
+        """
+        async with self.db.execute(
+            "SELECT * FROM audit_log ORDER BY id DESC LIMIT ?", (limit,)
+        ) as cur:
+            return [dict(r) for r in await cur.fetchall()]
+
     # --- Learnings ---
 
     async def add_learning(
