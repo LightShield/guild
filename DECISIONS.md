@@ -87,8 +87,16 @@ Any one triggering = stuck.
 
 **Why:** Audit logs should never be modified or deleted. Append-only is the simplest correct model. The CLI provides basic querying; more advanced filtering can be added later.
 
-## D-13: StuckDetector is not yet wired into AgentLoop
+## D-13: StuckDetector wired into AgentLoop as opt-in
 
-**Decision:** `StuckDetector` is implemented and tested as a standalone component but not yet integrated into `AgentLoop.run()`. Integration will happen when we add the full autonomy features (REQ-06).
+**Decision:** `StuckDetector` is integrated into `AgentLoop` via `enable_stuck_detection=True` parameter. Disabled by default.
 
-**Why:** The detector's API is stable and tested. Wiring it in requires decisions about what to do when stuck is detected (retry with different approach? escalate? stop?) that depend on the escalation patterns (REQ-15) which aren't implemented yet. Better to have a tested component ready to plug in than to wire it in with incomplete behavior.
+**Why:** Opt-in preserves backwards compatibility. Simple tasks (single-turn Q&A) don't need stuck detection. Long-running autonomous tasks should enable it. The `guild task` CLI command will enable it by default for autopilot mode.
+
+**Behavior when stuck:** Agent appends an explanation message ("I appear to be stuck: <reason>"), sets `self.stuck_reason`, and breaks the loop. The caller (CLI or team runner) can then decide what to do — escalate, retry, or report.
+
+## D-14: Tool errors detected by "Error:" prefix
+
+**Decision:** The stuck detector considers a tool result an error if it starts with "Error:". This is a convention enforced by all built-in tool executors.
+
+**Why:** Simple, deterministic, no LLM needed. All built-in tools already follow this convention. Custom tools should too. A more sophisticated approach (LLM-based error classification) would be overkill for stuck detection.
