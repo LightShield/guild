@@ -92,6 +92,9 @@ def load_config(guild_dir: Path | None = None) -> GuildConfig:
             config.max_concurrent_tool_calls = g["max_concurrent_tool_calls"]
         if "autonomy_timeout_minutes" in g:
             config.autonomy_timeout_minutes = g["autonomy_timeout_minutes"]
+        for key in ("stuck_max_repeated_errors", "stuck_max_no_progress_turns", "stuck_max_repeated_calls"):
+            if key in g:
+                setattr(config, key, g[key])
 
     if "entry_agent" in merged:
         ea = merged["entry_agent"]

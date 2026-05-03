@@ -123,10 +123,23 @@ class Connection(BaseModel):
 
 
 class LoopDef(BaseModel):
-    """A feedback loop in the team graph."""
-    evaluator_block: str  # block whose output determines loop continuation
-    generator_block: str  # block to re-run on failure
+    """A feedback loop in the team graph.
+
+    Attributes:
+        evaluator_block: Block whose output determines loop continuation.
+        generator_block: Block to re-run on failure.
+        max_iterations: Maximum loop iterations before forced exit.
+        verification_commands: Shell commands that determine pass/fail deterministically.
+            Each command is run; if all exit 0, the loop passes regardless of LLM output.
+            If empty, falls back to LLM output parsing.
+        verification_files: Files that must exist for the loop to pass.
+    """
+
+    evaluator_block: str
+    generator_block: str
     max_iterations: int = 5
+    verification_commands: list[str] = Field(default_factory=list)
+    verification_files: list[str] = Field(default_factory=list)
 
 
 class TeamDef(BaseModel):

@@ -240,6 +240,10 @@ class GuildConfig(BaseModel):
     max_concurrent_tool_calls: int = 4
     autonomy_timeout_minutes: int | None = None
 
+    stuck_max_repeated_errors: int = 3
+    stuck_max_no_progress_turns: int = 10
+    stuck_max_repeated_calls: int = 3
+
     entry_agent: BlockDef = Field(default_factory=lambda: BlockDef(
         name="guild-master",
         role="orchestrator",

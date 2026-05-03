@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import uuid
+from pathlib import Path
 
 from guild.blocks.registry import BlockRegistry, TeamDef
 from guild.core.agent import AgentLoop
@@ -72,8 +74,12 @@ class TeamRunner:
                 if not loop_def:
                     break
 
-                # Check evaluator result for pass/fail
-                passed = self._check_pass(result)
+                # Check evaluator result: deterministic checks first, LLM text as fallback
+                deterministic = await self._check_pass_deterministic(loop_def, self.working_dir)
+                if deterministic is not None:
+                    passed = deterministic
+                else:
+                    passed = self._check_pass_from_text(result)
                 log.info(f"Loop check [{instance_name}] iteration {iteration}: pass={passed}")
 
                 if passed or iteration >= loop_def.max_iterations:
@@ -174,10 +180,62 @@ class TeamRunner:
         return order
 
     @staticmethod
-    def _check_pass(result: str) -> bool:
-        """Check if an evaluator result indicates pass."""
+    async def _check_pass_deterministic(
+        loop_def: "LoopDef", working_dir: str | None
+    ) -> bool | None:
+        """Run deterministic verification checks.
+
+        Args:
+            loop_def: Loop definition with verification commands/files.
+            working_dir: Working directory for command execution.
+
+        Returns:
+            True if all checks pass, False if any fail, None if no checks defined.
+        """
+        from guild.blocks.registry import LoopDef
+
+        if not loop_def.verification_commands and not loop_def.verification_files:
+            return None  # No deterministic checks — fall back to LLM parsing
+
+        # Check files exist
+        for file_path in loop_def.verification_files:
+            p = Path(file_path)
+            if not p.is_absolute() and working_dir:
+                p = Path(working_dir) / p
+            if not p.exists():
+                log.info(f"Verification file missing: {p}")
+                return False
+
+        # Run verification commands
+        for cmd in loop_def.verification_commands:
+            try:
+                proc = await asyncio.create_subprocess_shell(
+                    cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.STDOUT,
+                    cwd=working_dir,
+                )
+                stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=60)
+                if proc.returncode != 0:
+                    log.info(f"Verification command failed: {cmd} (exit {proc.returncode})")
+                    return False
+            except Exception as e:
+                log.warning(f"Verification command error: {cmd}: {e}")
+                return False
+
+        return True
+
+    @staticmethod
+    def _check_pass_from_text(result: str) -> bool:
+        """Check if evaluator text output indicates pass (last resort).
+
+        Args:
+            result: Evaluator's text output.
+
+        Returns:
+            True if the output indicates pass.
+        """
         lower = result.lower()
-        # Try to parse JSON result
         try:
             for line in result.splitlines():
                 line = line.strip()
@@ -189,7 +247,6 @@ class TeamRunner:
                         return data["score"] >= 70
         except (json.JSONDecodeError, KeyError):
             pass
-        # Heuristic fallback
         if "pass" in lower and "fail" not in lower:
             return True
         if "approved" in lower or "lgtm" in lower:

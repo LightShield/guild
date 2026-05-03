@@ -101,23 +101,23 @@ class TestLoopHandling:
 
 class TestCheckPass:
     def test_json_pass_true(self):
-        assert TeamRunner._check_pass('{"pass": true, "score": 90}') is True
+        assert TeamRunner._check_pass_from_text('{"pass": true, "score": 90}') is True
 
     def test_json_pass_false(self):
-        assert TeamRunner._check_pass('{"pass": false, "score": 30}') is False
+        assert TeamRunner._check_pass_from_text('{"pass": false, "score": 30}') is False
 
     def test_score_threshold(self):
-        assert TeamRunner._check_pass('{"score": 80}') is True
-        assert TeamRunner._check_pass('{"score": 50}') is False
+        assert TeamRunner._check_pass_from_text('{"score": 80}') is True
+        assert TeamRunner._check_pass_from_text('{"score": 50}') is False
 
     def test_heuristic_pass(self):
-        assert TeamRunner._check_pass("The code looks good. Pass.") is True
+        assert TeamRunner._check_pass_from_text("The code looks good. Pass.") is True
 
     def test_heuristic_lgtm(self):
-        assert TeamRunner._check_pass("LGTM, approved.") is True
+        assert TeamRunner._check_pass_from_text("LGTM, approved.") is True
 
     def test_heuristic_fail(self):
-        assert TeamRunner._check_pass("This needs more work.") is False
+        assert TeamRunner._check_pass_from_text("This needs more work.") is False
 
 
 class TestTokenTracking:

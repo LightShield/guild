@@ -11,14 +11,16 @@ import json
 import logging
 import re
 import subprocess
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from guild.core.models import AgentStatus, BlockDef, Message, PermissionTier
 from guild.core.permissions import PermissionChecker
 from guild.core.storage import Storage
+from guild.core.stuck import StuckDetector
 from guild.providers.base import LLMProvider
 
-__all__ = ["AgentLoop", "BUILTIN_TOOLS", "execute_tool"]
+__all__ = ["AgentLoop", "BUILTIN_TOOLS", "ToolResult", "execute_tool"]
 
 log = logging.getLogger(__name__)
 
@@ -30,6 +32,31 @@ SHELL_TIMEOUT_SECONDS = 60
 MAX_SEARCH_RESULTS = 200
 MAX_GLOB_RESULTS = 500
 DEFAULT_MAX_TURNS = 50
+
+
+# --- ToolResult ---
+
+
+@dataclass
+class ToolResult:
+    """Structured result from a tool execution.
+
+    Attributes:
+        success: Whether the tool executed successfully.
+        output: Human-readable output (shown to the LLM).
+        error: Error description if success is False.
+    """
+
+    success: bool
+    output: str
+    error: str | None = None
+
+    def __str__(self) -> str:
+        """Return the text representation for LLM consumption."""
+        if self.success:
+            return self.output
+        return f"Error: {self.error}" if self.error else self.output
+
 
 # --- Built-in tool definitions (JSON schema for the LLM) ---
 
@@ -156,23 +183,30 @@ def _resolve_path(path_str: str, working_dir: str | None) -> Path:
     return p
 
 
-async def _execute_file_read(arguments: dict, working_dir: str | None) -> str:
+async def _execute_file_read(arguments: dict, working_dir: str | None) -> ToolResult:
     """Execute file_read tool."""
     p = _resolve_path(arguments["path"], working_dir)
     if not p.exists():
-        return f"Error: file not found: {p}"
-    return p.read_text(errors="replace")[:MAX_FILE_READ_CHARS]
+        return ToolResult(success=False, output="", error=f"file not found: {p}")
+    try:
+        content = p.read_text(errors="replace")[:MAX_FILE_READ_CHARS]
+        return ToolResult(success=True, output=content)
+    except Exception as e:
+        return ToolResult(success=False, output="", error=str(e))
 
 
-async def _execute_file_write(arguments: dict, working_dir: str | None) -> str:
+async def _execute_file_write(arguments: dict, working_dir: str | None) -> ToolResult:
     """Execute file_write tool."""
     p = _resolve_path(arguments["path"], working_dir)
-    p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(arguments["content"])
-    return f"Wrote {len(arguments['content'])} chars to {p}"
+    try:
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(arguments["content"])
+        return ToolResult(success=True, output=f"Wrote {len(arguments['content'])} chars to {p}")
+    except Exception as e:
+        return ToolResult(success=False, output="", error=str(e))
 
 
-async def _execute_shell(arguments: dict, working_dir: str | None) -> str:
+async def _execute_shell(arguments: dict, working_dir: str | None) -> ToolResult:
     """Execute shell tool."""
     cwd = arguments.get("working_dir", working_dir)
     try:
@@ -184,21 +218,26 @@ async def _execute_shell(arguments: dict, working_dir: str | None) -> str:
         )
         stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=SHELL_TIMEOUT_SECONDS)
         output = stdout.decode(errors="replace")[:MAX_SHELL_OUTPUT_CHARS]
-        return f"[exit {proc.returncode}]\n{output}"
+        text = f"[exit {proc.returncode}]\n{output}"
+        return ToolResult(
+            success=proc.returncode == 0,
+            output=text,
+            error=f"exit code {proc.returncode}" if proc.returncode != 0 else None,
+        )
     except asyncio.TimeoutError:
-        return f"Error: command timed out after {SHELL_TIMEOUT_SECONDS}s"
+        return ToolResult(success=False, output="", error=f"command timed out after {SHELL_TIMEOUT_SECONDS}s")
     except Exception as e:
-        return f"Error: {e}"
+        return ToolResult(success=False, output="", error=str(e))
 
 
-async def _execute_search(arguments: dict, working_dir: str | None) -> str:
+async def _execute_search(arguments: dict, working_dir: str | None) -> ToolResult:
     """Execute search tool."""
     root = Path(arguments.get("path", working_dir or "."))
     include = arguments.get("include", "*")
     try:
         compiled = re.compile(arguments["pattern"])
     except re.error as e:
-        return f"Error: invalid regex: {e}"
+        return ToolResult(success=False, output="", error=f"invalid regex: {e}")
 
     results: list[str] = []
     for fp in sorted(root.rglob(include)):
@@ -209,18 +248,20 @@ async def _execute_search(arguments: dict, working_dir: str | None) -> str:
                         results.append(f"{fp}:{i}: {line.rstrip()}")
                         if len(results) >= MAX_SEARCH_RESULTS:
                             results.append(f"... (truncated at {MAX_SEARCH_RESULTS} matches)")
-                            return "\n".join(results)
+                            return ToolResult(success=True, output="\n".join(results))
             except Exception:
                 continue
-    return "\n".join(results) if results else "No matches found."
+    output = "\n".join(results) if results else "No matches found."
+    return ToolResult(success=True, output=output)
 
 
-async def _execute_glob(arguments: dict, working_dir: str | None) -> str:
+async def _execute_glob(arguments: dict, working_dir: str | None) -> ToolResult:
     """Execute glob tool."""
     root = Path(arguments.get("path", working_dir or "."))
     matches = sorted(root.glob(arguments["pattern"]))
     matches = [m for m in matches if ".git" not in m.parts][:MAX_GLOB_RESULTS]
-    return "\n".join(str(m) for m in matches) if matches else "No files found."
+    output = "\n".join(str(m) for m in matches) if matches else "No files found."
+    return ToolResult(success=True, output=output)
 
 
 _TOOL_EXECUTORS = {
@@ -232,8 +273,8 @@ _TOOL_EXECUTORS = {
 }
 
 
-async def execute_tool(name: str, arguments: dict, working_dir: str | None = None) -> str:
-    """Execute a built-in tool and return the result as a string.
+async def execute_tool(name: str, arguments: dict, working_dir: str | None = None) -> ToolResult:
+    """Execute a built-in tool and return a structured result.
 
     Args:
         name: Tool name.
@@ -241,12 +282,12 @@ async def execute_tool(name: str, arguments: dict, working_dir: str | None = Non
         working_dir: Working directory for path resolution.
 
     Returns:
-        Tool execution result as a string.
+        ToolResult with success flag, output, and optional error.
     """
     executor = _TOOL_EXECUTORS.get(name)
     if executor:
         return await executor(arguments, working_dir)
-    return f"Error: unknown tool '{name}'"
+    return ToolResult(success=False, output="", error=f"unknown tool '{name}'")
 
 
 # --- Agent loop ---
@@ -254,6 +295,9 @@ async def execute_tool(name: str, arguments: dict, working_dir: str | None = Non
 
 class AgentLoop:
     """The core agent loop — call model, execute tools, repeat.
+
+    Stuck detection is always active. It monitors tool results and
+    call patterns to detect when the agent is making no progress.
 
     Args:
         agent_id: Unique agent identifier.
@@ -272,7 +316,6 @@ class AgentLoop:
         storage: Storage,
         working_dir: str | None = None,
         permission_checker: PermissionChecker | None = None,
-        enable_stuck_detection: bool = False,
     ) -> None:
         self.agent_id = agent_id
         self.block = block
@@ -285,10 +328,7 @@ class AgentLoop:
         self.total_input_tokens = 0
         self.total_output_tokens = 0
         self.stuck_reason: str = ""
-        self._stuck_detector: StuckDetector | None = None
-        if enable_stuck_detection:
-            from guild.core.stuck import StuckDetector
-            self._stuck_detector = StuckDetector()
+        self._stuck_detector = StuckDetector()
 
     async def initialize(self) -> None:
         """Set up the agent with its system prompt and register in storage."""
@@ -320,7 +360,7 @@ class AgentLoop:
             log.info(f"[{self.agent_id}] Turn {turn + 1}")
 
             # Check stuck detection before each turn
-            if self._stuck_detector and self._stuck_detector.is_stuck():
+            if self._stuck_detector.is_stuck():
                 self.stuck_reason = self._stuck_detector.get_reason()
                 log.warning(f"[{self.agent_id}] Stuck detected: {self.stuck_reason}")
                 stuck_msg = Message(
@@ -368,7 +408,7 @@ class AgentLoop:
         )
 
     async def _execute_tool_calls(self, tool_calls: list[dict]) -> None:
-        """Execute tool calls with permission checking."""
+        """Execute tool calls with permission checking and stuck detection."""
         for tc in tool_calls:
             func = tc["function"]
             tool_name = func["name"]
@@ -390,11 +430,12 @@ class AgentLoop:
             )
 
             if not allowed:
-                result = (
-                    f"Permission denied: tool '{tool_name}' "
-                    f"blocked by {self.permission.tier.value} tier."
+                tool_result = ToolResult(
+                    success=False,
+                    output="",
+                    error=f"tool '{tool_name}' blocked by {self.permission.tier.value} tier",
                 )
-                log.warning(f"[{self.agent_id}] {result}")
+                log.warning(f"[{self.agent_id}] Permission denied: {tool_result.error}")
             else:
                 log.info(f"[{self.agent_id}] Tool: {tool_name}({list(tool_args.keys())})")
                 await self.storage.log_audit(
@@ -402,19 +443,22 @@ class AgentLoop:
                     agent_id=self.agent_id,
                     details=json.dumps({"tool": tool_name, "args": tool_args}),
                 )
-                result = await execute_tool(tool_name, tool_args, self.working_dir)
+                tool_result = await execute_tool(tool_name, tool_args, self.working_dir)
 
-            tool_msg = Message(role="tool", content=result, tool_call_id=tc.get("id"))
+            # Feed stuck detector with structured result
+            self._stuck_detector.record_turn(
+                success=tool_result.success,
+                error=tool_result.error,
+            )
+            self._stuck_detector.record_tool_call({"tool": tool_name, "args": tool_args})
+
+            # Send text representation to LLM
+            result_text = str(tool_result)
+            tool_msg = Message(role="tool", content=result_text, tool_call_id=tc.get("id"))
             self.messages.append(tool_msg)
             await self.storage.append_message(
-                self.agent_id, "tool", result, tool_call_id=tc.get("id")
+                self.agent_id, "tool", result_text, tool_call_id=tc.get("id")
             )
-
-            # Feed stuck detector
-            if self._stuck_detector:
-                is_error = result.startswith("Error:")
-                self._stuck_detector.record_turn(success=not is_error, error=result if is_error else None)
-                self._stuck_detector.record_tool_call({"tool": tool_name, "args": tool_args})
 
     async def _finalize(self) -> None:
         """Update agent status and token counts in storage."""

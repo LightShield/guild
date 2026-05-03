@@ -30,11 +30,10 @@ def make_provider(responses: list[LLMResponse]) -> AsyncMock:
 
 
 class TestStuckIntegration:
-    """REQ-06.3, REQ-06.4: Agent loop should detect stuck and stop."""
+    """REQ-06.3, REQ-06.4: Agent loop always detects stuck and stops."""
 
     async def test_agent_stops_on_repeated_tool_errors(self, storage):
-        """Agent should stop if the same tool error repeats."""
-        # Agent calls file_read 3 times on a nonexistent file
+        """Agent should stop if the same tool call repeats with errors."""
         provider = make_provider([
             LLMResponse(content="", tool_calls=[
                 {"id": "c0", "function": {"name": "file_read", "arguments": {"path": "/nonexistent"}}}
@@ -49,15 +48,9 @@ class TestStuckIntegration:
         ])
         block = BlockDef(name="test", role="test", system_prompt="test", tools=["file_read"])
         checker = PermissionChecker(PermissionTier.AUTOPILOT)
-        agent = AgentLoop(
-            "a1", block, provider, storage,
-            permission_checker=checker, enable_stuck_detection=True,
-        )
+        agent = AgentLoop("a1", block, provider, storage, permission_checker=checker)
         await agent.initialize()
-        result = await agent.run("read /nonexistent")
-
-        # Should have stopped early due to stuck detection
-        # The result should mention being stuck
+        await agent.run("read /nonexistent")
         assert agent.stuck_reason != ""
 
     async def test_agent_not_stuck_with_varied_calls(self, storage):
@@ -73,17 +66,14 @@ class TestStuckIntegration:
         ])
         block = BlockDef(name="test", role="test", system_prompt="test", tools=["file_read"])
         checker = PermissionChecker(PermissionTier.AUTOPILOT)
-        agent = AgentLoop(
-            "a1", block, provider, storage,
-            permission_checker=checker, enable_stuck_detection=True,
-        )
+        agent = AgentLoop("a1", block, provider, storage, permission_checker=checker)
         await agent.initialize()
         result = await agent.run("read files")
         assert agent.stuck_reason == ""
         assert result == "Done reading both files"
 
-    async def test_stuck_detection_disabled_by_default(self, storage):
-        """Without enable_stuck_detection, agent should not check for stuck."""
+    async def test_stuck_detection_always_active(self, storage):
+        """Stuck detection should be active by default (no opt-in needed)."""
         provider = make_provider([
             LLMResponse(content="", tool_calls=[
                 {"id": "c0", "function": {"name": "file_read", "arguments": {"path": "/x"}}}
@@ -100,6 +90,7 @@ class TestStuckIntegration:
         checker = PermissionChecker(PermissionTier.AUTOPILOT)
         agent = AgentLoop("a1", block, provider, storage, permission_checker=checker)
         await agent.initialize()
-        result = await agent.run("do it", max_turns=4)
-        # Should have run all 4 turns without stopping
-        assert provider.generate.call_count == 4
+        await agent.run("do it", max_turns=10)
+        # Should have stopped early due to stuck detection (repeated calls)
+        assert agent.stuck_reason != ""
+        assert provider.generate.call_count < 10
