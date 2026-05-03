@@ -40,7 +40,7 @@ The following lessons are drawn from the Claude Code 512K-line TypeScript source
 
 7. **Use cheap models for cheap decisions.** Permission checks, safety screening, sentiment detection, context compression — use the smallest model (or regex/deterministic code) that can handle it. Reserve the strong model for reasoning and generation.
 
-8. **Generator + Evaluator pattern (GAN-inspired).** For complex tasks, separate the agent doing the work from the agent judging it. Evaluators catch issues that generators miss when self-evaluating. Tune evaluators to be skeptical.
+8. **Generator + Evaluator is a composable block pattern, not a hardcoded feature.** For complex tasks, separate the agent doing the work from the agent judging it. But this should be a reusable composite block (e.g., "verified-coder" = coder + evaluator), not baked into the autonomy system.
 
 9. **Context resets > compaction for long tasks.** For very long runs, clearing context and starting a fresh agent with a structured handoff artifact can outperform in-place compaction (avoids "context anxiety" where models wrap up prematurely).
 
@@ -90,9 +90,11 @@ The following lessons are drawn from the Claude Code 512K-line TypeScript source
 | REQ-03.7 | Per-agent permission overrides | Orchestrator may have higher permissions than workers |
 | REQ-03.8 | Audit log of all permission decisions | Who approved what, when, for which agent |
 
-### REQ-04: Multi-Agent Team Architecture
+### REQ-04: Multi-Agent Team Architecture & Composable Blocks
 
-**Goal:** Entry agent (user-facing) that can spawn any agents, including other orchestrators. Flat, composable architecture — not a rigid hierarchy.
+**Goal:** Entry agent (user-facing) that can spawn any agents, including other orchestrators. Flat, composable architecture — not a rigid hierarchy. Teams are built from reusable building blocks.
+
+#### 4A: Core Agent Architecture
 
 | ID | Requirement | Notes |
 |----|-------------|-------|
@@ -104,10 +106,51 @@ The following lessons are drawn from the Claude Code 512K-line TypeScript source
 | REQ-04.6 | **A2A (Agent-to-Agent Protocol) for inter-agent communication** | Google's open protocol for agent discovery, negotiation, and collaboration |
 | REQ-04.7 | **Skills support** — agents can have pluggable skill definitions | Skill files that define capabilities, similar to Claude Code's SKILL.md pattern |
 | REQ-04.8 | Agent lifecycle management — spawn, monitor, pause, resume, kill | Harness manages all agent processes |
-| REQ-04.9 | Team composition defined in config files | YAML/TOML: which agents, what roles, what models, what permissions |
-| REQ-04.10 | Shared context/workspace between team members | Agents can read each other's outputs and shared state; cache sharing for token efficiency |
-| REQ-04.11 | Dynamic worker spawning — entry agent or any orchestrator can create new workers as needed | Not limited to pre-defined team size |
-| REQ-04.12 | Isolated execution environments for parallel workers | Separate worktrees/directories to prevent conflicts during parallel edits |
+| REQ-04.9 | Shared context/workspace between team members | Agents can read each other's outputs and shared state; cache sharing for token efficiency |
+| REQ-04.10 | Dynamic worker spawning — entry agent or any orchestrator can create new workers as needed | Not limited to pre-defined team size |
+| REQ-04.11 | Isolated execution environments for parallel workers | Separate worktrees/directories to prevent conflicts during parallel edits |
+
+#### 4B: Composable Agent Blocks
+
+Agents and agent patterns are **building blocks** that can be composed, connected, saved, and reused. Think of it like a visual circuit board — individual components snap together into larger patterns, and those patterns become reusable components themselves.
+
+| ID | Requirement | Notes |
+|----|-------------|-------|
+| REQ-04.20 | **Atomic blocks** — single-agent building blocks with defined inputs/outputs/role | e.g., "coder", "reviewer", "researcher", "evaluator", "planner" |
+| REQ-04.21 | **Composite blocks** — groups of connected blocks saved as a single reusable unit | e.g., "coder + evaluator" = a "verified-coder" block; "planner + coder + reviewer + tester" = a "dev-loop" block |
+| REQ-04.22 | **Block connectors** — defined input/output ports that determine how blocks wire together | Output of "coder" feeds into input of "reviewer"; reviewer output feeds back to coder or forward to "tester" |
+| REQ-04.23 | **Block library** — a local catalog of available atomic and composite blocks | Ships with built-in blocks; user creates and saves custom ones |
+| REQ-04.24 | **Visual team composer in GUI** — drag-and-drop blocks, connect them, save as team config | Like a node-based editor (think Unreal Blueprints / Node-RED style) |
+| REQ-04.25 | **CLI team composer** — equivalent text-based composition via config files | YAML/TOML that describes the same graph the GUI shows |
+| REQ-04.26 | **Nesting** — composite blocks can contain other composite blocks | A "dev-loop" block can be dropped into a larger "full-project" team |
+| REQ-04.27 | **Block versioning** — blocks are versioned so updates don't break existing team configs | Semantic versioning for block definitions |
+| REQ-04.28 | **Loop/cycle support in block graphs** — blocks can form feedback loops | "coder → reviewer → coder" is a valid cycle with configurable exit conditions (max iterations, quality threshold) |
+
+#### 4C: Built-in Atomic Blocks (Ship with Harness)
+
+These are the starter set of single-agent blocks. Each has a defined role, default system prompt, default tools, and input/output contract.
+
+| Block | Role | Inputs | Outputs |
+|-------|------|--------|---------|
+| **planner** | Decomposes a high-level task into a structured plan with subtasks | Task description | Plan (subtask list with acceptance criteria) |
+| **coder** | Writes code to fulfill a specification | Spec/plan + codebase context | Code changes (files, diffs) |
+| **reviewer** | Reviews code for correctness, style, and spec compliance | Code changes + spec | Review (pass/fail + feedback) |
+| **tester** | Writes and runs tests against code | Code changes + spec | Test results (pass/fail + coverage) |
+| **evaluator** | Judges quality of any output against criteria (the "skeptical judge") | Any artifact + grading criteria | Score + detailed critique |
+| **researcher** | Investigates unknowns — reads docs, searches code, gathers context | Question/topic | Findings report |
+| **writer** | Produces documentation, reports, specs | Topic + context | Document |
+| **learner** | Extracts lessons from completed work for the knowledge base (see REQ-21) | Session logs + outcomes | Learnings (patterns, mistakes, insights) |
+
+#### 4D: Built-in Composite Blocks (Reusable Patterns)
+
+These ship as pre-built compositions that users can use directly or customize.
+
+| Composite Block | Composition | Loop? | Description |
+|-----------------|-------------|-------|-------------|
+| **verified-coder** | coder → evaluator | Yes (coder iterates until evaluator passes) | Code with built-in quality gate |
+| **dev-loop** | planner → coder → tester → reviewer | Yes (reviewer can send back to coder) | Standard development cycle |
+| **research-and-implement** | researcher → planner → verified-coder | No | Investigate first, then build |
+| **dev-loop-with-learning** | dev-loop → learner | No | Dev cycle that captures lessons for next time |
 
 ### REQ-05: Dual Interface — CLI and GUI
 
@@ -124,19 +167,19 @@ The following lessons are drawn from the Claude Code 512K-line TypeScript source
 
 ### REQ-06: Autonomous Long-Running Operation ("Anti-Babysitting")
 
-**Goal:** Agents run to completion without unnecessary human check-ins. They stop only when truly done or truly stuck. Use generator+evaluator pattern for quality.
+**Goal:** Agents run to completion without unnecessary human check-ins. They stop only when truly done or truly stuck.
 
 | ID | Requirement | Notes |
 |----|-------------|-------|
 | REQ-06.1 | Agents must not pause for confirmation unless genuinely blocked | No "shall I continue?" after every step |
 | REQ-06.2 | Clear "done" criteria per task — agents self-verify completion | Run tests, check outputs, validate against spec |
-| REQ-06.3 | **Generator + Evaluator pattern** — separate the agent doing work from the agent judging it | Per Anthropic research: evaluators catch issues generators miss when self-evaluating |
-| REQ-06.4 | Stuck detection — recognize when no progress is being made | Loop detection, repeated failures, resource exhaustion |
-| REQ-06.5 | Graceful degradation on stuck — try alternatives before escalating | Retry with different approach, ask a different agent, then escalate |
-| REQ-06.6 | Human escalation only as last resort, with full context | "I tried X, Y, Z. Here's where I'm stuck. Here's what I need from you." |
-| REQ-06.7 | Progress persistence — survive crashes, reboots, network drops | Checkpoint state to disk regularly |
-| REQ-06.8 | Configurable autonomy timeout | "Run for max 4 hours, then pause and report" |
-| REQ-06.9 | **Simple core loop** — while(true) { call model → execute tool → append result } | Per Claude Code: don't overengineer the control flow; complexity lives in the harness |
+| REQ-06.3 | Stuck detection — recognize when no progress is being made | Loop detection, repeated failures, resource exhaustion |
+| REQ-06.4 | Graceful degradation on stuck — try alternatives before escalating | Retry with different approach, ask a different agent, then escalate |
+| REQ-06.5 | Human escalation only as last resort, with full context | "I tried X, Y, Z. Here's where I'm stuck. Here's what I need from you." |
+| REQ-06.6 | Progress persistence — survive crashes, reboots, network drops | Checkpoint state to disk regularly |
+| REQ-06.7 | Configurable autonomy timeout | "Run for max 4 hours, then pause and report" |
+| REQ-06.8 | **Simple core loop** — while(true) { call model → execute tool → append result } | Per Claude Code: don't overengineer the control flow; complexity lives in the harness |
+| REQ-06.9 | **Quality gates via composable blocks, not hardcoded patterns** | Generator+evaluator is a team composition pattern (see REQ-04B), not a built-in autonomy feature |
 
 ### REQ-07: Context & Memory Management
 
@@ -171,153 +214,169 @@ The following lessons are drawn from the Claude Code 512K-line TypeScript source
 | REQ-08.8 | Tool result caching (optional, per-tool) | Avoid redundant expensive calls |
 | REQ-08.9 | Safety rules embedded in tool descriptions | Per Claude Code insight: model sees constraints at invocation time |
 
+### REQ-09: Long-Term Learning Loop
+
+**Goal:** The harness gets smarter over time. Every completed task is an opportunity to extract knowledge that improves future runs.
+
+| ID | Requirement | Notes |
+|----|-------------|-------|
+| REQ-09.1 | **Post-task learning extraction** — after each task completes, a learner agent reviews what happened | Extracts: what worked, what failed, what was slow, what patterns emerged |
+| REQ-09.2 | **Knowledge categories**: patterns (reusable approaches), anti-patterns (mistakes to avoid), tool tips (effective tool usage), domain knowledge (project-specific facts) | Structured, not free-text dump |
+| REQ-09.3 | **Confidence scoring** — learnings start as tentative, get promoted to confirmed after repeated validation | Prevents one-off flukes from becoming "knowledge" |
+| REQ-09.4 | **Learning injection** — confirmed learnings are automatically available to agents in future sessions | Injected into context as hints (per skeptical memory pattern) |
+| REQ-09.5 | **Learning review** — human can browse, edit, approve, or reject extracted learnings | CLI and GUI; human stays in control of the knowledge base |
+| REQ-09.6 | **Cross-task learning** — patterns from task A inform task B | "Last time we did X, it worked well" / "Last time we tried Y, it failed because Z" |
+| REQ-09.7 | **Block-level learning** — learnings can be scoped to specific blocks or block compositions | "When using the dev-loop block, always run linting before tests" |
+| REQ-09.8 | **Learning decay** — old learnings that haven't been validated recently lose confidence | Prevents stale knowledge from accumulating |
+| REQ-09.9 | **Prompt/config refinement suggestions** — learner can suggest improvements to agent prompts or block configs based on observed patterns | "The reviewer agent misses type errors — suggest adding 'pay attention to type safety' to its prompt" |
+
 ---
 
 ## P1 — Important (Daily Use)
 
-### REQ-09: Cost & Resource Tracking
+### REQ-10: Cost & Resource Tracking
 
 **Goal:** Know what your agents are consuming and set limits.
 
 | ID | Requirement | Notes |
 |----|-------------|-------|
-| REQ-09.1 | Token usage tracking per agent, per task, per session | Input tokens, output tokens, total |
-| REQ-09.2 | Budget limits — max tokens, max time, max tool calls | Per-agent and per-task limits |
-| REQ-09.3 | Resource dashboard in GUI, summary in CLI | Real-time and historical |
-| REQ-09.4 | Alerts when approaching limits | Configurable thresholds (80%, 90%, 100%) |
-| REQ-09.5 | Cost estimation for cloud providers (when used) | Map token counts to approximate $ cost |
+| REQ-10.1 | Token usage tracking per agent, per task, per session | Input tokens, output tokens, total |
+| REQ-10.2 | Budget limits — max tokens, max time, max tool calls | Per-agent and per-task limits |
+| REQ-10.3 | Resource dashboard in GUI, summary in CLI | Real-time and historical |
+| REQ-10.4 | Alerts when approaching limits | Configurable thresholds (80%, 90%, 100%) |
+| REQ-10.5 | Cost estimation for cloud providers (when used) | Map token counts to approximate $ cost |
 
-### REQ-10: Observability & Debugging
+### REQ-11: Observability & Debugging
 
 **Goal:** Full visibility into what agents are doing and why.
 
 | ID | Requirement | Notes |
 |----|-------------|-------|
-| REQ-10.1 | Full reasoning chain trace (not just final output) | Every LLM call, tool call, decision point |
-| REQ-10.2 | Session replay from logs | Re-watch what happened step by step |
-| REQ-10.3 | Structured logging with configurable levels | Debug (internals), Info (progress), Warn, Error |
-| REQ-10.4 | Error recovery — restart crashed agents from last checkpoint | Automatic or manual |
-| REQ-10.5 | Log export in standard formats (JSON, OpenTelemetry) | For integration with external observability tools |
+| REQ-11.1 | Full reasoning chain trace (not just final output) | Every LLM call, tool call, decision point |
+| REQ-11.2 | Session replay from logs | Re-watch what happened step by step |
+| REQ-11.3 | Structured logging with configurable levels | Debug (internals), Info (progress), Warn, Error |
+| REQ-11.4 | Error recovery — restart crashed agents from last checkpoint | Automatic or manual |
+| REQ-11.5 | Log export in standard formats (JSON, OpenTelemetry) | For integration with external observability tools |
 
-### REQ-11: Task Specification & Acceptance Criteria
+### REQ-12: Task Specification & Acceptance Criteria
 
 **Goal:** Structured way to define what "done" means so agents can self-verify.
 
 | ID | Requirement | Notes |
 |----|-------------|-------|
-| REQ-11.1 | Task definition format with description, acceptance criteria, verification steps | YAML/TOML/Markdown |
-| REQ-11.2 | Verification step execution — run tests, check files, validate output | Automated pass/fail |
-| REQ-11.3 | Task decomposition tracking — see how orchestrator broke down a task | Tree view in GUI |
-| REQ-11.4 | Task dependencies — "do B after A completes" | DAG-based task scheduling |
-| REQ-11.5 | Task status lifecycle: pending → in-progress → verifying → done/failed/blocked | Clear state machine |
+| REQ-12.1 | Task definition format with description, acceptance criteria, verification steps | YAML/TOML/Markdown |
+| REQ-12.2 | Verification step execution — run tests, check files, validate output | Automated pass/fail |
+| REQ-12.3 | Task decomposition tracking — see how orchestrator broke down a task | Tree view in GUI |
+| REQ-12.4 | Task dependencies — "do B after A completes" | DAG-based task scheduling |
+| REQ-12.5 | Task status lifecycle: pending → in-progress → verifying → done/failed/blocked | Clear state machine |
 
-### REQ-12: Security & Sandboxing
+### REQ-13: Security & Sandboxing
 
 **Goal:** Protect the host system from runaway or malicious agent behavior.
 
 | ID | Requirement | Notes |
 |----|-------------|-------|
-| REQ-12.1 | Sandboxed execution for shell commands | Container, chroot, or OS-level sandboxing |
-| REQ-12.2 | Network access controls per agent | Allow/deny internet, allow only localhost, etc. |
-| REQ-12.3 | Secret management — agents can use API keys without seeing raw values | Injected at runtime, masked in logs |
-| REQ-12.4 | File system boundaries — agents can only access allowed paths | Enforced by the harness, not just by convention |
-| REQ-12.5 | Command allowlist/denylist | Block dangerous commands (rm -rf /, etc.) |
+| REQ-13.1 | Sandboxed execution for shell commands | Container, chroot, or OS-level sandboxing |
+| REQ-13.2 | Network access controls per agent | Allow/deny internet, allow only localhost, etc. |
+| REQ-13.3 | Secret management — agents can use API keys without seeing raw values | Injected at runtime, masked in logs |
+| REQ-13.4 | File system boundaries — agents can only access allowed paths | Enforced by the harness, not just by convention |
+| REQ-13.5 | Command allowlist/denylist | Block dangerous commands (rm -rf /, etc.) |
 
-### REQ-13: Configuration as Code
+### REQ-14: Configuration as Code
 
 **Goal:** Everything configurable via version-controlled files.
 
 | ID | Requirement | Notes |
 |----|-------------|-------|
-| REQ-13.1 | Agent definitions in config files (YAML or TOML) | Name, role, model, system prompt, tools, permissions |
-| REQ-13.2 | Team compositions as named configs | "coding-team", "research-team", "solo-debug" |
-| REQ-13.3 | Permission profiles as named configs | "safe", "dev-work", "full-auto" |
-| REQ-13.4 | Environment-specific overrides | Dev vs. CI vs. production settings |
-| REQ-13.5 | Config validation on startup | Fail fast with clear error messages |
-| REQ-13.6 | Config hot-reload where possible | Change a config, see it take effect without restart |
+| REQ-14.1 | Agent definitions in config files (YAML or TOML) | Name, role, model, system prompt, tools, permissions |
+| REQ-14.2 | Team compositions as named configs | "coding-team", "research-team", "solo-debug" |
+| REQ-14.3 | Permission profiles as named configs | "safe", "dev-work", "full-auto" |
+| REQ-14.4 | Environment-specific overrides | Dev vs. CI vs. production settings |
+| REQ-14.5 | Config validation on startup | Fail fast with clear error messages |
+| REQ-14.6 | Config hot-reload where possible | Change a config, see it take effect without restart |
 
-### REQ-14: Human-in-the-Loop Escalation Patterns
+### REQ-15: Human-in-the-Loop Escalation Patterns
 
 **Goal:** Smart escalation that doesn't block all work when one thing needs human input.
 
 | ID | Requirement | Notes |
 |----|-------------|-------|
-| REQ-14.1 | Asynchronous question queue — agent posts question, continues other work | Non-blocking escalation |
-| REQ-14.2 | Priority-based interrupts — blocked on A, move to B | Orchestrator manages work redistribution |
-| REQ-14.3 | Notification system — desktop, email, or webhook when agent needs you | Configurable channels |
-| REQ-14.4 | Escalation context — full history of what was tried before escalating | Human gets enough context to answer quickly |
-| REQ-14.5 | Batch approval — review and approve multiple pending requests at once | Efficient for returning after AFK |
+| REQ-15.1 | Asynchronous question queue — agent posts question, continues other work | Non-blocking escalation |
+| REQ-15.2 | Priority-based interrupts — blocked on A, move to B | Orchestrator manages work redistribution |
+| REQ-15.3 | Notification system — desktop, email, or webhook when agent needs you | Configurable channels |
+| REQ-15.4 | Escalation context — full history of what was tried before escalating | Human gets enough context to answer quickly |
+| REQ-15.5 | Batch approval — review and approve multiple pending requests at once | Efficient for returning after AFK |
 
-### REQ-15: Testing & Evaluation Framework
+### REQ-16: Testing & Evaluation Framework
 
 **Goal:** Measure and compare agent performance systematically.
 
 | ID | Requirement | Notes |
 |----|-------------|-------|
-| REQ-15.1 | A/B testing — same task, different models/configs, compare results | Side-by-side output comparison |
-| REQ-15.2 | Benchmark suite — standard tasks for regression testing | Customizable per project |
-| REQ-15.3 | Regression detection — alert when config changes degrade performance | Automated comparison against baseline |
-| REQ-15.4 | Eval metrics — task completion rate, time, token usage, tool calls | Quantitative and qualitative |
-| REQ-15.5 | Eval results stored and browsable | Historical trends |
+| REQ-16.1 | A/B testing — same task, different models/configs, compare results | Side-by-side output comparison |
+| REQ-16.2 | Benchmark suite — standard tasks for regression testing | Customizable per project |
+| REQ-16.3 | Regression detection — alert when config changes degrade performance | Automated comparison against baseline |
+| REQ-16.4 | Eval metrics — task completion rate, time, token usage, tool calls | Quantitative and qualitative |
+| REQ-16.5 | Eval results stored and browsable | Historical trends |
 
 ---
 
 ## P2 — Nice-to-Have (Polish & Power)
 
-### REQ-16: Multi-Model Routing
+### REQ-17: Multi-Model Routing
 
 **Goal:** Use the right model for the right job, with automatic fallbacks.
 
 | ID | Requirement | Notes |
 |----|-------------|-------|
-| REQ-16.1 | Per-agent model assignment | Orchestrator = strong model, simple workers = fast/cheap model |
-| REQ-16.2 | Fallback chains — if primary model is down/slow, use backup | Ollama → cloud provider, or large model → small model |
-| REQ-16.3 | **Use cheap models for cheap decisions** | Permission checks, safety screening, compression — smallest model that works (per Claude Code pattern) |
-| REQ-16.4 | Model capability tagging — match task requirements to model strengths | "needs code generation" → route to code-specialized model |
+| REQ-17.1 | Per-agent model assignment | Orchestrator = strong model, simple workers = fast/cheap model |
+| REQ-17.2 | Fallback chains — if primary model is down/slow, use backup | Ollama → cloud provider, or large model → small model |
+| REQ-17.3 | **Use cheap models for cheap decisions** | Permission checks, safety screening, compression — smallest model that works (per Claude Code pattern) |
+| REQ-17.4 | Model capability tagging — match task requirements to model strengths | "needs code generation" → route to code-specialized model |
 
-### REQ-17: Artifact Management
+### REQ-18: Artifact Management
 
 **Goal:** Track, version, and review everything agents produce.
 
 | ID | Requirement | Notes |
 |----|-------------|-------|
-| REQ-17.1 | Artifact collection — gather all outputs (code, docs, reports) | Per-task artifact directory |
-| REQ-17.2 | Diff view of codebase changes made by agents | Git-style diffs in GUI |
-| REQ-17.3 | Accept/reject/edit agent outputs before committing | Review gate |
-| REQ-17.4 | Artifact versioning — track iterations of the same output | "Draft 1, Draft 2, Final" |
-| REQ-17.5 | Artifact export — package outputs for sharing | Zip, git bundle, etc. |
+| REQ-18.1 | Artifact collection — gather all outputs (code, docs, reports) | Per-task artifact directory |
+| REQ-18.2 | Diff view of codebase changes made by agents | Git-style diffs in GUI |
+| REQ-18.3 | Accept/reject/edit agent outputs before committing | Review gate |
+| REQ-18.4 | Artifact versioning — track iterations of the same output | "Draft 1, Draft 2, Final" |
+| REQ-18.5 | Artifact export — package outputs for sharing | Zip, git bundle, etc. |
 
-### REQ-18: Session & Workflow Templates
+### REQ-19: Session & Workflow Templates
 
 **Goal:** Capture successful workflows and replay them.
 
 | ID | Requirement | Notes |
 |----|-------------|-------|
-| REQ-18.1 | Save a workflow as a reusable template | "Do code review like last time" |
-| REQ-18.2 | Parameterized templates — same workflow, different inputs | Template variables |
-| REQ-18.3 | Import/export/share templates | File-based, easy to version control |
+| REQ-19.1 | Save a workflow as a reusable template | "Do code review like last time" |
+| REQ-19.2 | Parameterized templates — same workflow, different inputs | Template variables |
+| REQ-19.3 | Import/export/share templates | File-based, easy to version control |
 
-### REQ-19: Rate Limiting & Backpressure
+### REQ-20: Rate Limiting & Backpressure
 
 **Goal:** Prevent resource exhaustion when running many agents.
 
 | ID | Requirement | Notes |
 |----|-------------|-------|
-| REQ-19.1 | Rate limiting on LLM API calls | Per-provider, configurable |
-| REQ-19.2 | Tool call queue with concurrency limits | Max N parallel shell commands, etc. |
-| REQ-19.3 | Backpressure — pause low-priority agents when system is loaded | Priority-based scheduling |
-| REQ-19.4 | Resource monitoring — CPU, memory, GPU utilization | Alert when system is overloaded |
+| REQ-20.1 | Rate limiting on LLM API calls | Per-provider, configurable |
+| REQ-20.2 | Tool call queue with concurrency limits | Max N parallel shell commands, etc. |
+| REQ-20.3 | Backpressure — pause low-priority agents when system is loaded | Priority-based scheduling |
+| REQ-20.4 | Resource monitoring — CPU, memory, GPU utilization | Alert when system is overloaded |
 
-### REQ-20: Offline-First Design
+### REQ-21: Offline-First Design
 
 **Goal:** Full functionality with local models, graceful degradation without network.
 
 | ID | Requirement | Notes |
 |----|-------------|-------|
-| REQ-20.1 | Core functionality works with zero internet access | Ollama + local tools = fully functional |
-| REQ-20.2 | Cloud features degrade gracefully — no crashes if network is down | Clear error messages, automatic fallback to local |
-| REQ-20.3 | Local model management — pull, list, update Ollama models from harness | `agent-harness models list`, `agent-harness models pull llama3` |
-| REQ-20.4 | Offline documentation — built-in help that doesn't require web access | `agent-harness help <topic>` |
+| REQ-21.1 | Core functionality works with zero internet access | Ollama + local tools = fully functional |
+| REQ-21.2 | Cloud features degrade gracefully — no crashes if network is down | Clear error messages, automatic fallback to local |
+| REQ-21.3 | Local model management — pull, list, update Ollama models from harness | `agent-harness models list`, `agent-harness models pull llama3` |
+| REQ-21.4 | Offline documentation — built-in help that doesn't require web access | `agent-harness help <topic>` |
 
 ---
 
@@ -355,10 +414,20 @@ These apply across all requirements:
 |------|------------|
 | **Harness** | The core runtime that manages agents, tools, permissions, and communication |
 | **Agent** | An LLM-powered entity with a role, tools, and permissions |
-| **Orchestrator** | A special agent that decomposes tasks and delegates to workers |
-| **Worker** | An agent that executes specific subtasks assigned by the orchestrator |
+| **Entry Agent** | The user-facing agent — the first point of contact; can delegate to any other agent |
+| **Orchestrator** | An agent role (not a fixed system component) that decomposes tasks and delegates to workers |
+| **Worker** | An agent that executes specific subtasks assigned by another agent |
+| **Block (Atomic)** | A single-agent building block with defined inputs, outputs, and role |
+| **Block (Composite)** | A group of connected atomic/composite blocks saved as a reusable unit |
+| **Block Library** | The catalog of available blocks (built-in + user-created) |
+| **Connector** | The input/output port definition that determines how blocks wire together |
 | **Tool** | A capability an agent can invoke (file read, shell exec, web fetch, etc.) |
-| **Team** | A configured group of agents working together on a task |
+| **MCP** | Model Context Protocol — industry standard for agent-to-tool communication |
+| **A2A** | Agent-to-Agent Protocol — industry standard for inter-agent communication |
+| **Skill** | A pluggable capability definition that gives an agent domain-specific knowledge |
+| **Team** | A configured graph of connected blocks working together on a task |
 | **Session** | A single run of a task or workflow, from start to completion |
 | **Checkpoint** | A saved snapshot of agent/task state for resume after interruption |
 | **Profile** | A named configuration (permission profile, team profile, etc.) |
+| **Learning** | An extracted insight from completed work, stored with confidence score |
+| **Learner** | An agent block that extracts knowledge from completed tasks for future use |
