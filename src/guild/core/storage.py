@@ -310,3 +310,30 @@ class Storage:
             (min_confidence,),
         ) as cur:
             return [dict(r) for r in await cur.fetchall()]
+
+    async def validate_learning(self, learning_id: int) -> None:
+        """Increase a learning's confidence after successful validation.
+
+        Args:
+            learning_id: Learning row ID.
+        """
+        from datetime import datetime
+
+        await self.db.execute(
+            "UPDATE learnings SET confidence = MIN(1.0, confidence + 0.1), "
+            "last_validated = ? WHERE id = ?",
+            (datetime.now().isoformat(), learning_id),
+        )
+        await self.db.commit()
+
+    async def invalidate_learning(self, learning_id: int) -> None:
+        """Decrease a learning's confidence after failed validation.
+
+        Args:
+            learning_id: Learning row ID.
+        """
+        await self.db.execute(
+            "UPDATE learnings SET confidence = MAX(0.0, confidence - 0.15) WHERE id = ?",
+            (learning_id,),
+        )
+        await self.db.commit()

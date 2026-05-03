@@ -509,5 +509,74 @@ def audit(
     console.print(t)
 
 
+# --- guild config ---
+
+@app.command()
+def config(
+    set_value: str = typer.Option(None, "--set", help="Set a config value: section.key=value"),
+):
+    """Show or modify project configuration."""
+    guild_dir = _require_guild()
+    config_path = guild_dir / "config.toml"
+
+    if set_value:
+        # Parse section.key=value
+        if "=" not in set_value:
+            console.print("[red]Format: --set section.key=value[/red]")
+            raise typer.Exit(1)
+        path_part, value = set_value.split("=", 1)
+        parts = path_part.split(".")
+        if len(parts) != 2:
+            console.print("[red]Format: --set section.key=value[/red]")
+            raise typer.Exit(1)
+        section, key = parts
+
+        import tomllib
+
+        # Load existing config
+        if config_path.exists():
+            with open(config_path, "rb") as f:
+                raw = tomllib.load(f)
+        else:
+            raw = {}
+
+        # Update
+        if section not in raw:
+            raw[section] = {}
+        # Try to parse value as number/bool
+        try:
+            parsed = int(value)
+        except ValueError:
+            try:
+                parsed = float(value)
+            except ValueError:
+                if value.lower() in ("true", "false"):
+                    parsed = value.lower() == "true"
+                else:
+                    parsed = value
+        raw[section][key] = parsed
+
+        # Write back as TOML
+        lines = []
+        for sec, vals in raw.items():
+            lines.append(f"[{sec}]")
+            for k, v in vals.items():
+                if isinstance(v, str):
+                    lines.append(f'{k} = "{v}"')
+                elif isinstance(v, bool):
+                    lines.append(f"{k} = {'true' if v else 'false'}")
+                else:
+                    lines.append(f"{k} = {v}")
+            lines.append("")
+        config_path.write_text("\n".join(lines))
+        console.print(f"[green]✓ Set {section}.{key} = {parsed}[/green]")
+    else:
+        # Show config
+        if config_path.exists():
+            console.print(config_path.read_text())
+        else:
+            console.print("[dim]No config file found.[/dim]")
+
+
 if __name__ == "__main__":
     app()
