@@ -53,3 +53,42 @@ Decisions made during implementation that weren't covered in REQUIREMENTS.md or 
 **Decision:** When a user approves a tool in ASK mode, the approval is remembered for that tool name for the rest of the session. They don't need to approve every individual call.
 
 **Why:** Per-call approval is too noisy for real use. An agent might call `file_read` 50 times in a session. The user can still deny individual tools while approving others.
+
+## D-09: Runtime permission switching clears session approvals
+
+**Decision:** When `set_tier()` is called, all session-level tool approvals are cleared.
+
+**Why:** Switching from ASK to SCOPED and back shouldn't carry over approvals from the previous tier. The user's intent when switching tiers is to change the security posture, so stale approvals should be discarded.
+
+## D-10: Stuck detection uses three independent strategies
+
+**Decision:** `StuckDetector` checks three conditions independently:
+1. Repeated identical errors (same error message N times)
+2. No-progress turns (N consecutive turns with `success=False`)
+3. Tool call loops (same tool+args called N times)
+
+Any one triggering = stuck.
+
+**Why:** Different failure modes need different detection. An agent might not produce errors but still loop on the same file read. Or it might produce different errors each time but never make progress. Three strategies cover the common cases without being overly complex.
+
+**Thresholds:** Configurable per-detector. Defaults: 3 repeated errors, 10 no-progress turns, 3 repeated calls.
+
+## D-11: Multi-turn chat works by design, no special session mechanism
+
+**Decision:** `AgentLoop.run()` appends to `self.messages` without clearing between calls. This means calling `run()` multiple times on the same `AgentLoop` instance naturally preserves conversation context.
+
+**Why:** The simplest correct implementation. No session management, no serialization/deserialization between turns. The agent loop is already stateful — we just don't reset it. The `guild chat` command creates one `AgentLoop` and calls `run()` in a loop.
+
+**Trade-off:** If the conversation gets very long, context will grow unbounded. This is where the multi-tier compression (REQ-07.4) will be needed, but that's a separate feature.
+
+## D-12: Audit log is append-only, queryable via CLI
+
+**Decision:** The audit log is a simple append-only SQLite table. The `guild audit` command shows entries newest-first with a configurable `--limit`.
+
+**Why:** Audit logs should never be modified or deleted. Append-only is the simplest correct model. The CLI provides basic querying; more advanced filtering can be added later.
+
+## D-13: StuckDetector is not yet wired into AgentLoop
+
+**Decision:** `StuckDetector` is implemented and tested as a standalone component but not yet integrated into `AgentLoop.run()`. Integration will happen when we add the full autonomy features (REQ-06).
+
+**Why:** The detector's API is stable and tested. Wiring it in requires decisions about what to do when stuck is detected (retry with different approach? escalate? stop?) that depend on the escalation patterns (REQ-15) which aren't implemented yet. Better to have a tested component ready to plug in than to wire it in with incomplete behavior.
