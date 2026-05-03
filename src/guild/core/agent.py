@@ -316,6 +316,7 @@ class AgentLoop:
         storage: Storage,
         working_dir: str | None = None,
         permission_checker: PermissionChecker | None = None,
+        timeout_seconds: int | None = None,
     ) -> None:
         self.agent_id = agent_id
         self.block = block
@@ -328,6 +329,9 @@ class AgentLoop:
         self.total_input_tokens = 0
         self.total_output_tokens = 0
         self.stuck_reason: str = ""
+        self.timed_out: bool = False
+        self._timeout_seconds = timeout_seconds or 0
+        self._start_time: float = 0
         self._stuck_detector = StuckDetector()
 
     async def initialize(self) -> None:
@@ -356,8 +360,27 @@ class AgentLoop:
 
         tools = self._build_tool_list()
 
+        import time
+        self._start_time = time.monotonic()
+
         for turn in range(max_turns):
             log.info(f"[{self.agent_id}] Turn {turn + 1}")
+
+            # Check timeout
+            if self._timeout_seconds > 0:
+                elapsed = time.monotonic() - self._start_time
+                if elapsed >= self._timeout_seconds:
+                    self.timed_out = True
+                    log.warning(f"[{self.agent_id}] Timeout after {elapsed:.0f}s")
+                    timeout_msg = Message(
+                        role="assistant",
+                        content=f"Autonomy timeout reached ({self._timeout_seconds}s). Pausing.",
+                    )
+                    self.messages.append(timeout_msg)
+                    await self.storage.append_message(
+                        self.agent_id, "assistant", timeout_msg.content
+                    )
+                    break
 
             # Check stuck detection before each turn
             if self._stuck_detector.is_stuck():
