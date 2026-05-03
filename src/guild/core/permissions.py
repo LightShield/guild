@@ -48,14 +48,10 @@ class PermissionChecker:
         """Ask tier: prompt user, remember session approvals."""
         if tool_name in self._session_approvals:
             return True
-        import json
-        print(f"\n🔒 Agent [{agent_id}] wants to use tool: {tool_name}")
-        print(f"   Args: {json.dumps(args, indent=2)[:500]}")
-        resp = input("   Allow? [y]es / [n]o / [a]lways this tool: ").strip().lower()
-        if resp in ("a", "always"):
+        result = self.prompt_fn(tool_name, agent_id, args)
+        if result:
             self._session_approvals.add(tool_name)
-            return True
-        return resp in ("y", "yes")
+        return result
 
     def _check_scope(self, tool_name: str, args: dict) -> bool:
         """Scoped tier: check tool allowlist and path boundaries."""
