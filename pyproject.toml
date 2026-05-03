@@ -19,6 +19,9 @@ dependencies = [
 dev = [
     "pytest>=7.0",
     "pytest-asyncio>=0.21",
+    "ruff>=0.4",
+    "black>=24.0",
+    "mypy>=1.5",
 ]
 
 [project.scripts]
@@ -30,3 +33,29 @@ where = ["src"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+    "unit: Unit tests (fast, no I/O, use mocks)",
+    "integration: Integration tests (slow, with I/O, use real tools)",
+    "e2e: End-to-end tests (slowest, full workflows)",
+]
+strict_markers = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "SIM", "TCH"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["guild"]
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true

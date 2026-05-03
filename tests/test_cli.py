@@ -1,6 +1,8 @@
 """Tests for CLI commands — init, status, blocks, teams."""
 
 import pytest
+
+pytestmark = pytest.mark.integration
 from pathlib import Path
 from typer.testing import CliRunner
 

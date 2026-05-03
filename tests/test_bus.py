@@ -1,7 +1,8 @@
 """Tests for core/bus.py — send/receive, broadcast, queue isolation."""
 
 import pytest
-import asyncio
+
+pytestmark = pytest.mark.unit
 
 from guild.core.bus import MessageBus
 

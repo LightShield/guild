@@ -3,6 +3,8 @@
 import pytest
 from unittest.mock import AsyncMock
 
+pytestmark = pytest.mark.integration
+
 from guild.core.learning import extract_learnings
 from guild.core.storage import Storage
 from guild.providers.base import LLMResponse

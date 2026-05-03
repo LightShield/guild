@@ -3,6 +3,8 @@
 import pytest
 from unittest.mock import AsyncMock
 
+pytestmark = pytest.mark.unit
+
 from guild.blocks.registry import BlockRegistry, TeamDef, Connection, LoopDef, BUILTIN_TEAMS
 from guild.core.models import PermissionTier
 from guild.core.storage import Storage

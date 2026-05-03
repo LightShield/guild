@@ -1,4 +1,7 @@
-"""Permission enforcement for tool execution."""
+"""Permission enforcement for tool execution.
+
+Implements the 4-tier permission system: nothing, ask, scoped, autopilot.
+"""
 
 from __future__ import annotations
 
@@ -7,19 +10,38 @@ from typing import Callable
 
 from guild.core.models import PermissionTier
 
+__all__ = ["PermissionChecker"]
 
-class PermissionDenied(Exception):
-    """Raised when a tool call is denied by the permission system."""
+PromptFn = Callable[[str, str, dict], bool]
+
+
+def _default_prompt(tool_name: str, agent_id: str, args: dict) -> bool:
+    """Default interactive prompt for the ASK tier.
+
+    Args:
+        tool_name: Name of the tool being requested.
+        agent_id: ID of the requesting agent.
+        args: Tool call arguments.
+
+    Returns:
+        True if the user approves the tool call.
+    """
+    import json
+
+    print(f"\n🔒 Agent [{agent_id}] wants to use tool: {tool_name}")
+    print(f"   Args: {json.dumps(args, indent=2)[:500]}")
+    resp = input("   Allow? [y]es / [n]o / [a]lways this tool: ").strip().lower()
+    return resp in ("y", "yes", "a", "always")
 
 
 class PermissionChecker:
     """Checks whether an agent is allowed to execute a tool call.
 
-    Tiers:
-      nothing  — no tool use at all
-      ask      — prompt user for approval (once / per-session / per-call)
-      scoped   — allowed within a defined scope (directory tree, tool set)
-      autopilot — everything allowed
+    Args:
+        tier: Permission tier to enforce.
+        allowed_paths: Directories the agent can access (scoped tier).
+        allowed_tools: Tool names the agent can use (scoped tier).
+        prompt_fn: Callable for interactive approval (ask tier).
     """
 
     def __init__(
@@ -27,22 +49,34 @@ class PermissionChecker:
         tier: PermissionTier,
         allowed_paths: list[str] | None = None,
         allowed_tools: list[str] | None = None,
-        prompt_fn: Callable[[str, str, dict], bool] | None = None,
-    ):
+        prompt_fn: PromptFn | None = None,
+    ) -> None:
         self.tier = tier
         self.allowed_paths = [Path(p).resolve() for p in (allowed_paths or [])]
         self.allowed_tools = set(allowed_tools) if allowed_tools else None
-        self.prompt_fn = prompt_fn or self._default_prompt
+        self.prompt_fn = prompt_fn or _default_prompt
         self._session_approvals: set[str] = set()
 
-    @staticmethod
-    def _default_prompt(tool_name: str, agent_id: str, args: dict) -> bool:
-        """Default interactive prompt for ask tier."""
-        import json
-        print(f"\n🔒 Agent [{agent_id}] wants to use tool: {tool_name}")
-        print(f"   Args: {json.dumps(args, indent=2)[:500]}")
-        resp = input("   Allow? [y]es / [n]o / [a]lways this tool: ").strip().lower()
-        return resp in ("y", "yes", "a", "always")
+    def check(self, tool_name: str, agent_id: str, args: dict) -> bool:
+        """Check if a tool call is allowed.
+
+        Args:
+            tool_name: Name of the tool.
+            agent_id: ID of the requesting agent.
+            args: Tool call arguments.
+
+        Returns:
+            True if the call is permitted.
+        """
+        if self.tier == PermissionTier.NOTHING:
+            return False
+        if self.tier == PermissionTier.AUTOPILOT:
+            return True
+        if self.tier == PermissionTier.ASK:
+            return self._check_ask(tool_name, agent_id, args)
+        if self.tier == PermissionTier.SCOPED:
+            return self._check_scope(tool_name, args)
+        return False
 
     def _check_ask(self, tool_name: str, agent_id: str, args: dict) -> bool:
         """Ask tier: prompt user, remember session approvals."""
@@ -57,30 +91,26 @@ class PermissionChecker:
         """Scoped tier: check tool allowlist and path boundaries."""
         if self.allowed_tools and tool_name not in self.allowed_tools:
             return False
-        # Check path-based args against allowed paths
         for key in ("path", "working_dir"):
             if key in args and args[key] and self.allowed_paths:
                 target = Path(args[key]).resolve()
-                if not any(self._is_under(target, ap) for ap in self.allowed_paths):
+                if not any(_is_under(target, ap) for ap in self.allowed_paths):
                     return False
         return True
 
-    @staticmethod
-    def _is_under(path: Path, parent: Path) -> bool:
-        try:
-            path.relative_to(parent)
-            return True
-        except ValueError:
-            return False
 
-    def check(self, tool_name: str, agent_id: str, args: dict) -> bool:
-        """Check if a tool call is allowed. Returns True/False."""
-        if self.tier == PermissionTier.NOTHING:
-            return False
-        if self.tier == PermissionTier.AUTOPILOT:
-            return True
-        if self.tier == PermissionTier.ASK:
-            return self._check_ask(tool_name, agent_id, args)
-        if self.tier == PermissionTier.SCOPED:
-            return self._check_scope(tool_name, args)
+def _is_under(path: Path, parent: Path) -> bool:
+    """Check if path is under parent directory.
+
+    Args:
+        path: Path to check.
+        parent: Parent directory.
+
+    Returns:
+        True if path is under parent.
+    """
+    try:
+        path.relative_to(parent)
+        return True
+    except ValueError:
         return False

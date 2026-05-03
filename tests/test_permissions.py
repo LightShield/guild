@@ -1,6 +1,8 @@
 """Tests for core/permissions.py — all 4 tiers, path scoping, session approvals."""
 
 import pytest
+
+pytestmark = pytest.mark.unit
 from pathlib import Path
 
 from guild.core.models import PermissionTier

@@ -7,15 +7,32 @@ import ollama as ollama_sdk
 from guild.core.models import Message, ProviderConfig
 from guild.providers.base import LLMProvider, LLMResponse
 
+__all__ = ["OllamaProvider", "create_provider"]
+
 
 class OllamaProvider(LLMProvider):
-    """Ollama backend using the official Python SDK."""
+    """Ollama backend using the official Python SDK.
 
-    def __init__(self, config: ProviderConfig):
+    Args:
+        config: Provider configuration with base_url and model.
+    """
+
+    def __init__(self, config: ProviderConfig) -> None:
         super().__init__(config)
         self._client = ollama_sdk.AsyncClient(host=config.base_url)
 
-    async def generate(self, messages: list[Message], tools: list[dict] | None = None) -> LLMResponse:
+    async def generate(
+        self, messages: list[Message], tools: list[dict] | None = None
+    ) -> LLMResponse:
+        """Send messages to Ollama and get a response.
+
+        Args:
+            messages: Conversation history.
+            tools: Available tool definitions.
+
+        Returns:
+            Unified LLM response with token counts.
+        """
         msgs = [{"role": m.role, "content": m.content} for m in messages]
         kwargs: dict = {
             "model": self.config.model,
@@ -35,7 +52,10 @@ class OllamaProvider(LLMProvider):
             tool_calls = [
                 {
                     "id": f"call_{i}",
-                    "function": {"name": tc.function.name, "arguments": tc.function.arguments},
+                    "function": {
+                        "name": tc.function.name,
+                        "arguments": tc.function.arguments,
+                    },
                 }
                 for i, tc in enumerate(resp.message.tool_calls)
             ]
@@ -49,6 +69,11 @@ class OllamaProvider(LLMProvider):
         )
 
     async def health_check(self) -> bool:
+        """Check if Ollama is reachable.
+
+        Returns:
+            True if Ollama responds to a list request.
+        """
         try:
             await self._client.list()
             return True
@@ -56,12 +81,27 @@ class OllamaProvider(LLMProvider):
             return False
 
     async def list_models(self) -> list[str]:
+        """List available Ollama models.
+
+        Returns:
+            List of model name strings.
+        """
         resp = await self._client.list()
         return [m.model for m in resp.models]
 
 
 def create_provider(config: ProviderConfig) -> LLMProvider:
-    """Factory — create the right provider based on config."""
+    """Factory — create the right provider based on config.
+
+    Args:
+        config: Provider configuration.
+
+    Returns:
+        An LLMProvider instance.
+
+    Raises:
+        ValueError: If the provider name is unknown.
+    """
     providers = {"ollama": OllamaProvider}
     cls = providers.get(config.name)
     if not cls:

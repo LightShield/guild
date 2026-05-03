@@ -1,6 +1,8 @@
 """Tests for core/models.py — data model validation, enums, defaults."""
 
 import pytest
+
+pytestmark = pytest.mark.unit
 from datetime import datetime
 
 from guild.core.models import (

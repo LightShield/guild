@@ -1,6 +1,8 @@
 """Tests for blocks/registry.py — built-in blocks, team validation, port type checking, TOML loading."""
 
 import pytest
+
+pytestmark = pytest.mark.unit
 from pathlib import Path
 
 from guild.blocks.registry import (

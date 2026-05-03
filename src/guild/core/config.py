@@ -1,4 +1,8 @@
-"""Configuration loading — TOML files with global/project layering."""
+"""Configuration loading — TOML files with global/project layering.
+
+Config resolution order: global (~/.guild/config.toml) → project (.guild/config.toml).
+Project values override global values.
+"""
 
 from __future__ import annotations
 
@@ -7,6 +11,7 @@ from pathlib import Path
 
 from guild.core.models import GuildConfig, PermissionTier, ProviderConfig
 
+__all__ = ["find_guild_dir", "load_config", "load_toml"]
 
 GUILD_DIR = ".guild"
 CONFIG_NAME = "config.toml"
@@ -14,7 +19,14 @@ GLOBAL_DIR = Path.home() / ".guild"
 
 
 def find_guild_dir(start: Path | None = None) -> Path | None:
-    """Walk up from start to find .guild/ directory."""
+    """Walk up from start to find .guild/ directory.
+
+    Args:
+        start: Directory to start searching from (default: cwd).
+
+    Returns:
+        Path to .guild/ directory, or None if not found.
+    """
     cwd = start or Path.cwd()
     for p in [cwd, *cwd.parents]:
         gd = p / GUILD_DIR
@@ -24,7 +36,14 @@ def find_guild_dir(start: Path | None = None) -> Path | None:
 
 
 def load_toml(path: Path) -> dict:
-    """Load a TOML file, return empty dict if missing."""
+    """Load a TOML file, return empty dict if missing.
+
+    Args:
+        path: Path to the TOML file.
+
+    Returns:
+        Parsed TOML as a dict.
+    """
     if path.is_file():
         with open(path, "rb") as f:
             return tomllib.load(f)
@@ -32,12 +51,19 @@ def load_toml(path: Path) -> dict:
 
 
 def load_config(guild_dir: Path | None = None) -> GuildConfig:
-    """Load config with global → project layering."""
+    """Load config with global → project layering.
+
+    Args:
+        guild_dir: Path to the project's .guild/ directory.
+
+    Returns:
+        Merged GuildConfig with project overriding global.
+    """
     global_raw = load_toml(GLOBAL_DIR / CONFIG_NAME)
     project_raw = load_toml(guild_dir / CONFIG_NAME) if guild_dir else {}
 
     # Merge: project overrides global
-    merged = {**global_raw}
+    merged: dict = {**global_raw}
     for section, values in project_raw.items():
         if section in merged and isinstance(merged[section], dict) and isinstance(values, dict):
             merged[section] = {**merged[section], **values}
@@ -46,7 +72,6 @@ def load_config(guild_dir: Path | None = None) -> GuildConfig:
 
     config = GuildConfig()
 
-    # Provider
     if "provider" in merged:
         p = merged["provider"]
         config.provider = ProviderConfig(
@@ -57,7 +82,6 @@ def load_config(guild_dir: Path | None = None) -> GuildConfig:
             max_tokens=p.get("max_tokens", config.provider.max_tokens),
         )
 
-    # Guild settings
     if "guild" in merged:
         g = merged["guild"]
         if "default_permission" in g:
@@ -69,7 +93,6 @@ def load_config(guild_dir: Path | None = None) -> GuildConfig:
         if "autonomy_timeout_minutes" in g:
             config.autonomy_timeout_minutes = g["autonomy_timeout_minutes"]
 
-    # Entry agent overrides
     if "entry_agent" in merged:
         ea = merged["entry_agent"]
         if "model" in ea:

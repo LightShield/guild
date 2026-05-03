@@ -1,6 +1,8 @@
 """Tests for core/config.py — TOML loading, global/project layering."""
 
 import pytest
+
+pytestmark = pytest.mark.unit
 from pathlib import Path
 
 from guild.core.config import load_config, find_guild_dir, load_toml

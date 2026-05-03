@@ -1,6 +1,8 @@
 """Tests for core/storage.py — CRUD operations, schema creation."""
 
 import pytest
+
+pytestmark = pytest.mark.integration
 from pathlib import Path
 
 from guild.core.storage import Storage

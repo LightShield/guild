@@ -1,7 +1,9 @@
 """Tests for core/agent.py — tool execution, permission enforcement, turn limits."""
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
+
+pytestmark = [pytest.mark.unit, pytest.mark.integration]
 from pathlib import Path
 
 from guild.core.agent import AgentLoop, execute_tool, BUILTIN_TOOLS
