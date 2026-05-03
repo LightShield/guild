@@ -23,11 +23,11 @@ See [REQUIREMENTS.md](REQUIREMENTS.md) for the full specification and [ARCHITECT
 > Coming soon — install script and first runnable version.
 
 ```bash
-guild init                    # Create a new project (.guild/ directory)
-guild quest "fix the login bug"  # Give the guild a task
-guild status                  # See what's happening
-guild roster                  # List available agent blocks
-guild party create dev-loop   # Compose a team
+guild init                          # Create a new project (.guild/ directory)
+guild task "fix the login bug"      # Give the guild a task
+guild status                        # See what's happening
+guild blocks list                   # List available agent blocks
+guild team create dev-loop          # Compose a team
 ```
 
 ## Project Structure
