@@ -104,7 +104,8 @@ The following lessons are drawn from the Claude Code 512K-line TypeScript source
 | REQ-04.4 | Agent spawning is just another tool call — keep architecture flat | Per Claude Code insight: no separate multi-agent runtime, sub-agents are tool invocations |
 | REQ-04.5 | Worker agents that execute specific subtasks | Workers can be specialized (coder, researcher, reviewer, etc.) |
 | REQ-04.6 | **MCP (Model Context Protocol) for agent-to-tool communication** | Industry standard — agents connect to tools/data via MCP servers |
-| REQ-04.7 | **A2A (Agent-to-Agent Protocol) for inter-agent communication** | Google's open protocol for agent discovery, negotiation, and collaboration |
+| REQ-04.7 | **Simple internal message bus for agent-to-agent communication** | `send(agent_id, port, data)` / `receive()` — direct, no network overhead, easy to debug |
+| REQ-04.7a | **A2A as optional external gateway (P2)** | Only for cross-harness communication with external agents; internal bus wraps to A2A-compatible interface later |
 | REQ-04.8 | **Skills support** — agents can have pluggable skill definitions | Skill files that define capabilities, similar to Claude Code's SKILL.md pattern |
 | REQ-04.9 | Agent lifecycle management — spawn, monitor, pause, resume, kill | Harness manages all agent processes |
 | REQ-04.10 | Shared context/workspace between team members | Agents can read each other's outputs and shared state; cache sharing for token efficiency |
@@ -188,18 +189,19 @@ These ship as pre-built compositions that users can use directly or customize.
 | **research-and-implement** | researcher → planner → verified-coder | No | Investigate first, then build |
 | **dev-loop-with-learning** | dev-loop → learner | No | Dev cycle that captures lessons for next time |
 
-### REQ-05: Dual Interface — CLI and GUI
+### REQ-05: Dual Interface — CLI-First, GUI as Wrapper
 
-**Goal:** Full functionality available through both CLI and a graphical interface.
+**Goal:** CLI is the complete, authoritative interface. GUI is a web wrapper on top of the CLI/API — no feature disparity, no GUI-only functionality.
 
 | ID | Requirement | Notes |
 |----|-------------|-------|
-| REQ-05.1 | CLI for all operations — start, stop, configure, monitor, interact | Scriptable, pipe-friendly |
-| REQ-05.2 | GUI for real-time monitoring and interaction | Web-based (localhost) for cross-platform compatibility |
-| REQ-05.3 | Live view of all agents: status, current task, recent output | Dashboard-style overview |
-| REQ-05.4 | Ability to send messages to any agent from either interface | Chat with orchestrator or individual workers |
-| REQ-05.5 | GUI shows agent communication graph / message flow | Visual representation of who's talking to whom |
-| REQ-05.6 | CLI and GUI share the same backend — no feature disparity | GUI is a frontend to the same API the CLI uses |
+| REQ-05.1 | **CLI is the primary interface** — every operation is a CLI command | Scriptable, pipe-friendly, automatable |
+| REQ-05.2 | All agent interaction, team composition, monitoring, and config happens via CLI | Nothing requires the GUI |
+| REQ-05.3 | CLI exposes a local REST API that the GUI consumes | GUI is purely a frontend to this API |
+| REQ-05.4 | **GUI (P1)** — web-based (localhost) real-time monitoring and interaction | Dashboard: agent status, current tasks, recent output |
+| REQ-05.5 | **Visual team composer (P2)** — drag-and-drop block editor in GUI | Node-based editor; equivalent to editing YAML team configs by hand |
+| REQ-05.6 | Ability to send messages to any agent from CLI or GUI | `harness chat <agent>` in CLI; chat panel in GUI |
+| REQ-05.7 | GUI shows agent communication graph / message flow | Visual representation of who's talking to whom |
 
 ### REQ-06: Autonomous Long-Running Operation ("Anti-Babysitting")
 
@@ -424,7 +426,7 @@ These apply across all requirements:
 |---------|-------------|
 | **Logging** | All components use structured logging with consistent format |
 | **Error handling** | All errors are caught, logged, and surfaced clearly — no silent failures |
-| **Testing** | All components have unit tests; integration tests for critical paths |
+| **Testing** | All components have unit tests; integration tests with mocked LLM; session recording/replay for regression (see ARCHITECTURE.md AD-06) |
 | **Documentation** | All public APIs, config formats, and tool interfaces are documented |
 | **Performance** | Response latency targets: CLI commands < 200ms, GUI updates < 500ms, agent message relay < 100ms |
 | **Backwards compatibility** | Config format changes are versioned; old configs produce clear migration instructions |
@@ -481,7 +483,8 @@ Design principles:
 | **Connector** | The input/output port definition that determines how blocks wire together |
 | **Tool** | A capability an agent can invoke (file read, shell exec, web fetch, etc.) |
 | **MCP** | Model Context Protocol — industry standard for agent-to-tool communication |
-| **A2A** | Agent-to-Agent Protocol — industry standard for inter-agent communication |
+| **A2A** | Agent-to-Agent Protocol — optional (P2) for cross-harness external agent communication |
+| **Message Bus** | Internal agent-to-agent communication mechanism — simple send/receive, no network overhead |
 | **Skill** | A pluggable capability definition that gives an agent domain-specific knowledge |
 | **Team** | A configured graph of connected blocks working together on a task |
 | **Session** | A single run of a task or workflow, from start to completion |
