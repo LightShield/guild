@@ -98,17 +98,18 @@ The following lessons are drawn from the Claude Code 512K-line TypeScript source
 
 | ID | Requirement | Notes |
 |----|-------------|-------|
-| REQ-04.1 | **Entry agent** as the user-facing interface — not a fixed "orchestrator" | This is the agent the user talks to; it can delegate, spawn, or become an orchestrator as needed |
-| REQ-04.2 | Any agent can spawn other agents, including other orchestrators | No rigid hierarchy — an agent spawning a sub-orchestrator for a complex subtask is valid |
-| REQ-04.3 | Agent spawning is just another tool call — keep architecture flat | Per Claude Code insight: no separate multi-agent runtime, sub-agents are tool invocations |
-| REQ-04.4 | Worker agents that execute specific subtasks | Workers can be specialized (coder, researcher, reviewer, etc.) |
-| REQ-04.5 | **MCP (Model Context Protocol) for agent-to-tool communication** | Industry standard — agents connect to tools/data via MCP servers |
-| REQ-04.6 | **A2A (Agent-to-Agent Protocol) for inter-agent communication** | Google's open protocol for agent discovery, negotiation, and collaboration |
-| REQ-04.7 | **Skills support** — agents can have pluggable skill definitions | Skill files that define capabilities, similar to Claude Code's SKILL.md pattern |
-| REQ-04.8 | Agent lifecycle management — spawn, monitor, pause, resume, kill | Harness manages all agent processes |
-| REQ-04.9 | Shared context/workspace between team members | Agents can read each other's outputs and shared state; cache sharing for token efficiency |
-| REQ-04.10 | Dynamic worker spawning — entry agent or any orchestrator can create new workers as needed | Not limited to pre-defined team size |
-| REQ-04.11 | Isolated execution environments for parallel workers | Separate worktrees/directories to prevent conflicts during parallel edits |
+| REQ-04.1 | **Entry agent is always the orchestrator** — every project starts with this agent as the user's interface | User always communicates with this base agent; it delegates, spawns workers, and manages the team |
+| REQ-04.2 | The entry agent is present even in preset team compositions | "Start new project with dev-loop team" → entry agent is created, wires up the team, and becomes the point of contact |
+| REQ-04.3 | Any agent can spawn other agents, including other orchestrators | No rigid hierarchy — an agent spawning a sub-orchestrator for a complex subtask is valid |
+| REQ-04.4 | Agent spawning is just another tool call — keep architecture flat | Per Claude Code insight: no separate multi-agent runtime, sub-agents are tool invocations |
+| REQ-04.5 | Worker agents that execute specific subtasks | Workers can be specialized (coder, researcher, reviewer, etc.) |
+| REQ-04.6 | **MCP (Model Context Protocol) for agent-to-tool communication** | Industry standard — agents connect to tools/data via MCP servers |
+| REQ-04.7 | **A2A (Agent-to-Agent Protocol) for inter-agent communication** | Google's open protocol for agent discovery, negotiation, and collaboration |
+| REQ-04.8 | **Skills support** — agents can have pluggable skill definitions | Skill files that define capabilities, similar to Claude Code's SKILL.md pattern |
+| REQ-04.9 | Agent lifecycle management — spawn, monitor, pause, resume, kill | Harness manages all agent processes |
+| REQ-04.10 | Shared context/workspace between team members | Agents can read each other's outputs and shared state; cache sharing for token efficiency |
+| REQ-04.11 | Dynamic worker spawning — entry agent or any orchestrator can create new workers as needed | Not limited to pre-defined team size |
+| REQ-04.12 | Isolated execution environments for parallel workers | Separate worktrees/directories to prevent conflicts during parallel edits |
 
 #### 4B: Composable Agent Blocks
 
@@ -123,23 +124,58 @@ Agents and agent patterns are **building blocks** that can be composed, connecte
 | REQ-04.24 | **Visual team composer in GUI** — drag-and-drop blocks, connect them, save as team config | Like a node-based editor (think Unreal Blueprints / Node-RED style) |
 | REQ-04.25 | **CLI team composer** — equivalent text-based composition via config files | YAML/TOML that describes the same graph the GUI shows |
 | REQ-04.26 | **Nesting** — composite blocks can contain other composite blocks | A "dev-loop" block can be dropped into a larger "full-project" team |
-| REQ-04.27 | **Block versioning** — blocks are versioned so updates don't break existing team configs | Semantic versioning for block definitions |
-| REQ-04.28 | **Loop/cycle support in block graphs** — blocks can form feedback loops | "coder → reviewer → coder" is a valid cycle with configurable exit conditions (max iterations, quality threshold) |
+| REQ-04.27 | **Block versioning** — blocks are versioned; each reference pins a version or opts into `latest` | Default: pinned to current version at composition time. Set `version: "latest"` for auto-update |
+| REQ-04.28 | **Loop/cycle support in block graphs** — blocks can form feedback loops | "coder → reviewer → coder" is a valid cycle; exit condition defined by the evaluating block |
+
+#### 4B-i: Block Port Type System
+
+Blocks declare typed input/output ports. The harness validates port compatibility **at composition time** (when you wire blocks together in the GUI or config), not at runtime.
+
+| ID | Requirement | Notes |
+|----|-------------|-------|
+| REQ-04.30 | Every port has a **type tag** and optional **JSON schema** | Type tags: `plan`, `code-changes`, `review`, `test-results`, `findings`, `document`, `learnings`, `text`, `files`, `any` |
+| REQ-04.31 | Port compatibility checked at composition time | GUI: incompatible connection shows red/blocked. CLI: config validation rejects it with clear error |
+| REQ-04.32 | `any` type is the escape hatch — accepts/produces anything | For flexible blocks that work with arbitrary data |
+| REQ-04.33 | Composite blocks expose unconnected inner ports as their own ports | A composite's external interface is derived from its internal wiring |
+| REQ-04.34 | New type tags can be registered by users | Extensible — not limited to built-in types |
+| REQ-04.35 | Port data is always serializable (JSON) | Enables persistence, logging, and replay |
+
+#### 4B-ii: Evaluator Contract & Exit Conditions
+
+Each evaluator block defines its own criteria and what "pass" means. The block graph only needs to know: did it pass or fail?
+
+| ID | Requirement | Notes |
+|----|-------------|-------|
+| REQ-04.40 | **Standard evaluator output**: `{pass: bool, score: 0-100, feedback: string, details: {...}}` | All evaluator blocks produce this shape; internals vary |
+| REQ-04.41 | **Each evaluator defines its own rubric/criteria** | Code reviewer checks correctness + style; test evaluator checks coverage + correctness; research evaluator checks completeness + accuracy |
+| REQ-04.42 | **Loop exit checks `pass`** — the feedback loop continues until the evaluator says `pass: true` | Score and feedback flow back to the generator block for iteration |
+| REQ-04.43 | **Max iteration safety limit** per loop — configurable, default 5 | Prevents infinite loops even if evaluator never passes |
+| REQ-04.44 | **Evaluator criteria are part of the block config** — editable per-instance | Same evaluator block type, different criteria for different contexts |
+
+#### 4B-iii: Error Propagation in Block Graphs
+
+| ID | Requirement | Notes |
+|----|-------------|-------|
+| REQ-04.50 | **Block fails → retry N times** (configurable per-block, default 1) | Transient failures handled locally |
+| REQ-04.51 | **Still failing → escalate to caller** (the block/agent that spawned it) | Error includes: what failed, what was tried, full context chain |
+| REQ-04.52 | **Caller decides**: retry with different approach, skip and continue, substitute another block, or escalate further | Caller has autonomy over error handling strategy |
+| REQ-04.53 | **Error reaches entry agent with no resolution → escalate to human** | Last resort; human gets full error chain with context |
+| REQ-04.54 | **Partial failure in parallel branches** — other branches continue; failed branch is reported | Don't kill the whole team because one worker failed |
 
 #### 4C: Built-in Atomic Blocks (Ship with Harness)
 
-These are the starter set of single-agent blocks. Each has a defined role, default system prompt, default tools, and input/output contract.
+These are the starter set of single-agent blocks. Each has a defined role, default system prompt, default tools, and typed input/output ports.
 
-| Block | Role | Inputs | Outputs |
-|-------|------|--------|---------|
-| **planner** | Decomposes a high-level task into a structured plan with subtasks | Task description | Plan (subtask list with acceptance criteria) |
-| **coder** | Writes code to fulfill a specification | Spec/plan + codebase context | Code changes (files, diffs) |
-| **reviewer** | Reviews code for correctness, style, and spec compliance | Code changes + spec | Review (pass/fail + feedback) |
-| **tester** | Writes and runs tests against code | Code changes + spec | Test results (pass/fail + coverage) |
-| **evaluator** | Judges quality of any output against criteria (the "skeptical judge") | Any artifact + grading criteria | Score + detailed critique |
-| **researcher** | Investigates unknowns — reads docs, searches code, gathers context | Question/topic | Findings report |
-| **writer** | Produces documentation, reports, specs | Topic + context | Document |
-| **learner** | Extracts lessons from completed work for the knowledge base (see REQ-21) | Session logs + outcomes | Learnings (patterns, mistakes, insights) |
+| Block | Role | Input Ports (type) | Output Ports (type) |
+|-------|------|--------------------|---------------------|
+| **planner** | Decomposes a high-level task into a structured plan | `task: text` | `plan: plan` |
+| **coder** | Writes code to fulfill a specification | `spec: plan`, `context: files` | `changes: code-changes` |
+| **reviewer** | Reviews code for correctness, style, spec compliance | `changes: code-changes`, `spec: plan` | `result: review` |
+| **tester** | Writes and runs tests against code | `changes: code-changes`, `spec: plan` | `result: test-results` |
+| **evaluator** | Judges quality of any output against criteria | `artifact: any`, `criteria: text` | `result: review` (standard evaluator contract) |
+| **researcher** | Investigates unknowns — reads docs, searches code | `question: text` | `report: findings` |
+| **writer** | Produces documentation, reports, specs | `topic: text`, `context: any` | `doc: document` |
+| **learner** | Extracts lessons from completed work (see REQ-09) | `logs: any`, `outcomes: any` | `insights: learnings` |
 
 #### 4D: Built-in Composite Blocks (Reusable Patterns)
 
@@ -392,6 +428,28 @@ These apply across all requirements:
 | **Documentation** | All public APIs, config formats, and tool interfaces are documented |
 | **Performance** | Response latency targets: CLI commands < 200ms, GUI updates < 500ms, agent message relay < 100ms |
 | **Backwards compatibility** | Config format changes are versioned; old configs produce clear migration instructions |
+
+### Unified Storage Architecture
+
+**Single source of truth: SQLite database** with files on disk for large artifacts.
+
+| Data | Storage | Notes |
+|------|---------|-------|
+| Agent state & context | SQLite | Conversation history, current state, checkpoints |
+| Memory & learnings | SQLite | Index, confidence scores, categories, decay timestamps |
+| Audit logs | SQLite | Tool calls, permission decisions, agent actions |
+| Task history | SQLite | Task definitions, status, decomposition trees, outcomes |
+| Block definitions | SQLite + files | Metadata in DB, config files on disk (version-controlled) |
+| Team compositions | SQLite + files | Metadata in DB, config files on disk |
+| Artifacts (code, docs) | Files on disk, tracked in SQLite | DB stores path, hash, metadata; files stay as files |
+| Session traces | SQLite | Full reasoning chains for replay |
+| Config | Files on disk | TOML/YAML, read on startup, hot-reloaded |
+
+Design principles:
+- SQLite file = single file backup, easy to migrate, queryable
+- Large artifacts (code, docs) stay as files — DB tracks references
+- All writes go through a storage abstraction layer (not direct SQL) for future flexibility
+- WAL mode for concurrent reads during agent execution
 
 ---
 
