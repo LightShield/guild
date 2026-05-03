@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "guild"
+version = "0.1.0"
+description = "Locally-focused agent harness for LLM-powered agent teams"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.0,<3",
+    "typer>=0.9,<1",
+    "rich>=13.0,<14",
+    "aiosqlite>=0.19,<1",
+    "ollama>=0.4,<1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21",
+]
+
+[project.scripts]
+guild = "guild.cli.main:app"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
