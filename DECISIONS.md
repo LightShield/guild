@@ -119,3 +119,39 @@ Decisions made during implementation that weren't covered in REQUIREMENTS.md or 
 **Decision:** `guild config --set` parses the existing TOML, modifies the value, and writes it back using simple string formatting (not a TOML library writer).
 
 **Why:** Python's `tomllib` is read-only (no write support in stdlib). Adding `tomli-w` as a dependency for one feature is overkill. The manual writer handles the simple flat-section TOML format we use. If config format becomes more complex, we'll add `tomli-w`.
+
+## D-19: GUI is a single HTML file with inline CSS/JS
+
+**Decision:** The entire GUI is one `index.html` file with inline styles and JavaScript. No build step, no npm, no framework.
+
+**Why:** Minimal complexity. The GUI is a monitoring dashboard, not a complex app. A single file means: no build toolchain, no node_modules, instant loading, easy to modify. If the GUI grows significantly, we can migrate to a framework later. The API is the real interface — the GUI is just a view.
+
+## D-20: REST API mirrors CLI functionality exactly
+
+**Decision:** Every API endpoint corresponds to a CLI command. No API-only features. The GUI consumes the same API the CLI could use.
+
+**Why:** REQ-05 requires no feature disparity between CLI and GUI. The API is the shared backend. This also means the API is testable via the same patterns as the CLI.
+
+## D-21: FallbackChain checks health sequentially, not in parallel
+
+**Decision:** `FallbackChain.get_healthy_provider()` checks providers one at a time, stopping at the first healthy one.
+
+**Why:** For local Ollama (the primary use case), there's usually only one provider. Sequential checking is simpler and avoids unnecessary network calls to backup providers. If the primary is healthy (the common case), we never touch the fallbacks.
+
+## D-22: RPG mode is text substitution only, not a separate UI
+
+**Decision:** RPG mode uses `rpg_translate()` to swap terms in the existing UI. It doesn't create a separate RPG-themed interface.
+
+**Why:** Maintaining two UIs would be expensive. Text substitution achieves the fun factor (tasks→quests, agents→heroes) with zero additional UI code. The visual theme (dark, animated) already looks game-like.
+
+## D-23: Rate limiter uses token bucket algorithm
+
+**Decision:** `RateLimiter` implements a sliding window token bucket: tracks timestamps of recent calls, blocks when the window is full.
+
+**Why:** Token bucket is the standard rate limiting algorithm. It's simple, handles bursts well, and doesn't require external state. The window-based approach naturally expires old calls.
+
+## D-24: Templates use simple string replacement, not Jinja2
+
+**Decision:** Template rendering uses `str.replace("{param}", value)` instead of a template engine.
+
+**Why:** Our templates have simple `{parameter}` placeholders. Adding Jinja2 for this is overkill. If templates need conditionals or loops in the future, we'll add Jinja2 then.
