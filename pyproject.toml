@@ -13,6 +13,9 @@ dependencies = [
     "rich>=13.0,<14",
     "aiosqlite>=0.19,<1",
     "ollama>=0.4,<1",
+    "fastapi>=0.110,<1",
+    "uvicorn>=0.29,<1",
+    "websockets>=12.0,<14",
 ]
 
 [project.optional-dependencies]

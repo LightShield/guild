@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Guild</title>
+<style>
+/* === Reset & Base === */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #0a0a0f;
+  --bg-card: rgba(255,255,255,0.04);
+  --bg-card-hover: rgba(255,255,255,0.07);
+  --border: rgba(255,255,255,0.08);
+  --text: #e4e4e7;
+  --text-dim: #71717a;
+  --accent: #6366f1;
+  --accent-glow: rgba(99,102,241,0.3);
+  --green: #22c55e;
+  --red: #ef4444;
+  --yellow: #eab308;
+  --blue: #3b82f6;
+  --radius: 12px;
+  --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* === Animated background === */
+body::before {
+  content: '';
+  position: fixed;
+  top: -50%; left: -50%;
+  width: 200%; height: 200%;
+  background: radial-gradient(ellipse at 30% 20%, rgba(99,102,241,0.08) 0%, transparent 50%),
+              radial-gradient(ellipse at 70% 80%, rgba(34,197,94,0.05) 0%, transparent 50%);
+  animation: bgShift 20s ease-in-out infinite alternate;
+  z-index: -1;
+}
+@keyframes bgShift {
+  0% { transform: translate(0, 0) rotate(0deg); }
+  100% { transform: translate(-5%, -5%) rotate(3deg); }
+}
+
+/* === Layout === */
+.app { max-width: 1400px; margin: 0 auto; padding: 24px; }
+
+header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 0 32px;
+  animation: fadeSlideDown 0.5s ease-out;
+}
+@keyframes fadeSlideDown {
+  from { opacity: 0; transform: translateY(-20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.logo { font-size: 24px; font-weight: 700; letter-spacing: -0.5px; }
+.logo span { color: var(--accent); }
+
+nav { display: flex; gap: 4px; }
+nav button {
+  background: transparent; border: 1px solid var(--border); color: var(--text-dim);
+  padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 13px;
+  transition: all var(--transition);
+}
+nav button:hover, nav button.active {
+  background: var(--bg-card-hover); color: var(--text); border-color: var(--accent);
+}
+nav button.active { box-shadow: 0 0 12px var(--accent-glow); }
+
+/* === Cards === */
+.grid { display: grid; gap: 16px; animation: fadeIn 0.6s ease-out; }
+.grid-2 { grid-template-columns: repeat(2, 1fr); }
+.grid-3 { grid-template-columns: repeat(3, 1fr); }
+.grid-4 { grid-template-columns: repeat(4, 1fr); }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+.card {
+  background: var(--bg-card);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  transition: all var(--transition);
+}
+.card:hover {
+  background: var(--bg-card-hover);
+  border-color: rgba(255,255,255,0.12);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+}
+
+.card h3 { font-size: 13px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+.card .value { font-size: 32px; font-weight: 700; }
+.card .sub { font-size: 12px; color: var(--text-dim); margin-top: 4px; }
+
+/* === Status badges === */
+.badge {
+  display: inline-block; padding: 3px 10px; border-radius: 20px;
+  font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
+}
+.badge-done { background: rgba(34,197,94,0.15); color: var(--green); }
+.badge-running { background: rgba(59,130,246,0.15); color: var(--blue); animation: pulse 2s infinite; }
+.badge-failed { background: rgba(239,68,68,0.15); color: var(--red); }
+.badge-pending { background: rgba(234,179,8,0.15); color: var(--yellow); }
+.badge-idle { background: rgba(113,113,122,0.15); color: var(--text-dim); }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+
+/* === Tables === */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+th { text-align: left; font-size: 11px; color: var(--text-dim); text-transform: uppercase;
+     letter-spacing: 1px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+td { padding: 12px 16px; border-bottom: 1px solid var(--border); font-size: 14px;
+     transition: background var(--transition); }
+tr:hover td { background: var(--bg-card-hover); }
+
+/* === Chat === */
+.chat-container { display: flex; flex-direction: column; height: calc(100vh - 200px); }
+.messages { flex: 1; overflow-y: auto; padding: 16px 0; display: flex; flex-direction: column; gap: 12px; }
+.msg {
+  max-width: 80%; padding: 12px 16px; border-radius: 12px; font-size: 14px; line-height: 1.5;
+  animation: msgIn 0.3s ease-out;
+}
+@keyframes msgIn { from { opacity: 0; transform: translateY(10px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+.msg-user { align-self: flex-end; background: var(--accent); color: white; border-bottom-right-radius: 4px; }
+.msg-assistant { align-self: flex-start; background: var(--bg-card); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
+.msg-tool { align-self: flex-start; background: rgba(34,197,94,0.1); border: 1px solid rgba(34,197,94,0.2);
+            font-family: monospace; font-size: 12px; border-bottom-left-radius: 4px; }
+
+.chat-input {
+  display: flex; gap: 8px; padding: 16px 0;
+  border-top: 1px solid var(--border);
+}
+.chat-input input {
+  flex: 1; background: var(--bg-card); border: 1px solid var(--border); color: var(--text);
+  padding: 12px 16px; border-radius: 8px; font-size: 14px; outline: none;
+  transition: border-color var(--transition);
+}
+.chat-input input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+.chat-input button {
+  background: var(--accent); color: white; border: none; padding: 12px 24px;
+  border-radius: 8px; cursor: pointer; font-weight: 600; transition: all var(--transition);
+}
+.chat-input button:hover { filter: brightness(1.1); transform: scale(1.02); }
+
+/* === Block graph === */
+.block-node {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: var(--bg-card); border: 1px solid var(--border);
+  padding: 8px 14px; border-radius: 8px; font-size: 13px;
+  transition: all var(--transition);
+}
+.block-node:hover { border-color: var(--accent); box-shadow: 0 0 12px var(--accent-glow); }
+.block-arrow { color: var(--text-dim); font-size: 18px; }
+
+/* === Section headers === */
+.section-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin: 32px 0 16px; padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.section-header h2 { font-size: 18px; font-weight: 600; }
+
+/* === Responsive === */
+@media (max-width: 768px) {
+  .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+}
+
+/* === Scrollbar === */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.15); }
+
+/* === Loading spinner === */
+.spinner {
+  width: 20px; height: 20px; border: 2px solid var(--border);
+  border-top-color: var(--accent); border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.empty { text-align: center; padding: 48px; color: var(--text-dim); }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <header>
+    <div class="logo"><span>⚔</span> Guild</div>
+    <nav>
+      <button class="active" onclick="showPage('dashboard')">Dashboard</button>
+      <button onclick="showPage('tasks')">Tasks</button>
+      <button onclick="showPage('agents')">Agents</button>
+      <button onclick="showPage('blocks')">Blocks</button>
+      <button onclick="showPage('teams')">Teams</button>
+      <button onclick="showPage('chat')">Chat</button>
+      <button onclick="showPage('learnings')">Learnings</button>
+    </nav>
+  </header>
+  <main id="content"><div class="spinner"></div></main>
+</div>
+
+<script>
+const API = '/api';
+let currentPage = 'dashboard';
+let ws = null;
+
+// --- Fetch helpers ---
+async function api(path) {
+  const r = await fetch(API + path);
+  if (!r.ok) throw new Error(`API error: ${r.status}`);
+  return r.json();
+}
+
+function badge(status) {
+  const cls = {done:'done',running:'running',failed:'failed',pending:'pending',idle:'idle'}[status] || 'idle';
+  return `<span class="badge badge-${cls}">${status}</span>`;
+}
+
+function truncate(s, n=60) { return s && s.length > n ? s.slice(0, n) + '…' : (s || ''); }
+
+// --- Pages ---
+async function renderDashboard() {
+  const data = await api('/status');
+  const tasks = data.tasks || [];
+  const agents = data.agents || [];
+  const running = tasks.filter(t => t.status === 'in_progress').length;
+  const done = tasks.filter(t => t.status === 'done').length;
+  const failed = tasks.filter(t => t.status === 'failed').length;
+  const totalTokens = agents.reduce((s, a) => s + (parseInt(a.token_input)||0) + (parseInt(a.token_output)||0), 0);
+
+  return `
+    <div class="grid grid-4">
+      <div class="card"><h3>Tasks</h3><div class="value">${tasks.length}</div><div class="sub">${running} running · ${done} done · ${failed} failed</div></div>
+      <div class="card"><h3>Agents</h3><div class="value">${agents.length}</div><div class="sub">${agents.filter(a=>a.status==='running').length} active</div></div>
+      <div class="card"><h3>Learnings</h3><div class="value">${data.learnings_count}</div><div class="sub">Knowledge base</div></div>
+      <div class="card"><h3>Tokens</h3><div class="value">${totalTokens.toLocaleString()}</div><div class="sub">Total consumed</div></div>
+    </div>
+    <div class="section-header"><h2>Recent Tasks</h2></div>
+    ${tasks.length ? `<div class="card table-wrap"><table>
+      <tr><th>ID</th><th>Description</th><th>Status</th><th>Agent</th></tr>
+      ${tasks.slice(0,10).map(t => `<tr>
+        <td style="font-family:monospace;color:var(--text-dim)">${t.task_id.slice(0,8)}</td>
+        <td>${truncate(t.description)}</td><td>${badge(t.status)}</td>
+        <td style="font-family:monospace">${t.assigned_agent ? t.assigned_agent.slice(0,8) : '—'}</td>
+      </tr>`).join('')}
+    </table></div>` : '<div class="empty">No tasks yet. Use <code>guild task "description"</code> to create one.</div>'}
+    <div class="section-header"><h2>Agents</h2></div>
+    ${agents.length ? `<div class="card table-wrap"><table>
+      <tr><th>ID</th><th>Block</th><th>Status</th><th>Tokens In</th><th>Tokens Out</th></tr>
+      ${agents.slice(0,10).map(a => `<tr>
+        <td style="font-family:monospace;color:var(--text-dim)">${a.agent_id.slice(0,8)}</td>
+        <td>${a.block_name}</td><td>${badge(a.status)}</td>
+        <td>${parseInt(a.token_input||0).toLocaleString()}</td>
+        <td>${parseInt(a.token_output||0).toLocaleString()}</td>
+      </tr>`).join('')}
+    </table></div>` : ''}`;
+}
+
+async function renderTasks() {
+  const tasks = await api('/tasks');
+  if (!tasks.length) return '<div class="empty">No tasks yet.</div>';
+  return `<div class="card table-wrap"><table>
+    <tr><th>ID</th><th>Description</th><th>Status</th><th>Agent</th><th>Created</th></tr>
+    ${tasks.map(t => `<tr>
+      <td style="font-family:monospace;color:var(--text-dim)">${t.task_id.slice(0,8)}</td>
+      <td>${truncate(t.description, 80)}</td><td>${badge(t.status)}</td>
+      <td style="font-family:monospace">${t.assigned_agent ? t.assigned_agent.slice(0,8) : '—'}</td>
+      <td style="color:var(--text-dim)">${t.created_at ? t.created_at.slice(0,16) : ''}</td>
+    </tr>`).join('')}
+  </table></div>`;
+}
+
+async function renderAgents() {
+  const agents = await api('/agents');
+  if (!agents.length) return '<div class="empty">No agents yet.</div>';
+  return `<div class="card table-wrap"><table>
+    <tr><th>ID</th><th>Block</th><th>Status</th><th>Tokens In</th><th>Tokens Out</th><th>Created</th></tr>
+    ${agents.map(a => `<tr>
+      <td style="font-family:monospace;color:var(--text-dim)">${a.agent_id.slice(0,8)}</td>
+      <td>${a.block_name}</td><td>${badge(a.status)}</td>
+      <td>${parseInt(a.token_input||0).toLocaleString()}</td>
+      <td>${parseInt(a.token_output||0).toLocaleString()}</td>
+      <td style="color:var(--text-dim)">${a.created_at ? a.created_at.slice(0,16) : ''}</td>
+    </tr>`).join('')}
+  </table></div>`;
+}
+
+async function renderBlocks() {
+  const blocks = await api('/blocks');
+  return `<div class="grid grid-2">${blocks.map(b => `
+    <div class="card">
+      <h3>${b.role}</h3>
+      <div style="font-size:18px;font-weight:600;margin-bottom:8px">${b.name}</div>
+      <div class="sub">Tools: ${b.tools.join(', ') || 'none'}</div>
+      <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+        ${b.inputs.map(p => `<span class="block-node" style="border-color:var(--blue)">⬇ ${p.name}:${p.type_tag}</span>`).join('')}
+        ${b.outputs.map(p => `<span class="block-node" style="border-color:var(--green)">⬆ ${p.name}:${p.type_tag}</span>`).join('')}
+      </div>
+    </div>`).join('')}</div>`;
+}
+
+async function renderTeams() {
+  const teams = await api('/teams');
+  return `<div class="grid">${teams.map(t => `
+    <div class="card">
+      <h3>Team</h3>
+      <div style="font-size:18px;font-weight:600;margin-bottom:4px">${t.name}</div>
+      <div class="sub" style="margin-bottom:12px">${t.description}</div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        ${Object.keys(t.blocks).map(b => `<span class="block-node">${b}</span>`).join('<span class="block-arrow">→</span>')}
+      </div>
+      ${t.loops.length ? `<div class="sub" style="margin-top:8px">🔄 ${t.loops.map(l => `${l.generator_block} ↔ ${l.evaluator_block} (max ${l.max_iterations})`).join(', ')}</div>` : ''}
+    </div>`).join('')}</div>`;
+}
+
+async function renderChat() {
+  return `
+    <div class="chat-container">
+      <div class="messages" id="messages">
+        <div class="msg msg-assistant">Welcome to Guild Chat. I'm the Guild Master. How can I help?</div>
+      </div>
+      <div class="chat-input">
+        <input type="text" id="chatInput" placeholder="Type a message..." onkeydown="if(event.key==='Enter')sendChat()">
+        <button onclick="sendChat()">Send</button>
+      </div>
+    </div>`;
+}
+
+async function renderLearnings() {
+  const items = await api('/learnings');
+  if (!items.length) return '<div class="empty">No learnings yet. Complete a task to extract learnings.</div>';
+  return `<div class="card table-wrap"><table>
+    <tr><th>Category</th><th>Content</th><th>Confidence</th><th>Source</th></tr>
+    ${items.map(l => `<tr>
+      <td><span class="badge badge-${l.category === 'pattern' ? 'done' : l.category === 'anti_pattern' ? 'failed' : 'pending'}">${l.category}</span></td>
+      <td>${truncate(l.content, 100)}</td>
+      <td>${Math.round(l.confidence * 100)}%</td>
+      <td style="font-family:monospace;color:var(--text-dim)">${l.source_task_id ? l.source_task_id.slice(0,8) : '—'}</td>
+    </tr>`).join('')}
+  </table></div>`;
+}
+
+// --- Navigation ---
+const pages = { dashboard: renderDashboard, tasks: renderTasks, agents: renderAgents,
+                blocks: renderBlocks, teams: renderTeams, chat: renderChat, learnings: renderLearnings };
+
+async function showPage(name) {
+  currentPage = name;
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('active', b.textContent.toLowerCase() === name));
+  const content = document.getElementById('content');
+  content.innerHTML = '<div style="display:flex;justify-content:center;padding:48px"><div class="spinner"></div></div>';
+  try {
+    content.innerHTML = await pages[name]();
+  } catch (e) {
+    content.innerHTML = `<div class="empty">Error: ${e.message}</div>`;
+  }
+}
+
+// --- Chat ---
+function sendChat() {
+  const input = document.getElementById('chatInput');
+  const msg = input.value.trim();
+  if (!msg) return;
+  input.value = '';
+  const msgs = document.getElementById('messages');
+  msgs.innerHTML += `<div class="msg msg-user">${msg}</div>`;
+  msgs.innerHTML += `<div class="msg msg-assistant"><div class="spinner"></div></div>`;
+  msgs.scrollTop = msgs.scrollHeight;
+  // In a real implementation, this would call the API
+  setTimeout(() => {
+    const last = msgs.querySelector('.msg:last-child');
+    last.innerHTML = 'Chat requires a running Ollama instance. Use <code>guild chat</code> in the CLI for now.';
+  }, 500);
+}
+
+// --- WebSocket ---
+function connectWS() {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(`${proto}//${location.host}/ws`);
+  ws.onmessage = (e) => {
+    const data = JSON.parse(e.data);
+    if (data.type === 'update' && currentPage === 'dashboard') showPage('dashboard');
+  };
+  ws.onclose = () => setTimeout(connectWS, 3000);
+}
+
+// --- Init ---
+showPage('dashboard');
+connectWS();
+
+// Auto-refresh dashboard every 5s
+setInterval(() => { if (currentPage === 'dashboard') showPage('dashboard'); }, 5000);
+</script>
+</body>
+</html>

@@ -578,5 +578,23 @@ def config(
             console.print("[dim]No config file found.[/dim]")
 
 
+# --- guild serve ---
+
+@app.command()
+def serve(
+    port: int = typer.Option(8585, "--port", "-p", help="Port to serve on"),
+    host: str = typer.Option("127.0.0.1", "--host", help="Host to bind to"),
+):
+    """Start the Guild web GUI and API server."""
+    _require_guild()
+    import uvicorn
+    from guild.api.server import create_app
+
+    console.print(f"[bold]Guild GUI[/bold] starting at http://{host}:{port}")
+    console.print("[dim]Press Ctrl+C to stop[/dim]")
+    web_app = create_app()
+    uvicorn.run(web_app, host=host, port=port, log_level="warning")
+
+
 if __name__ == "__main__":
     app()
