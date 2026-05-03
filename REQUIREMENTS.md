@@ -1,4 +1,4 @@
-# Agent Harness — Requirements Specification
+# Guild — Requirements Specification
 
 **Version:** 0.1.0
 **Date:** 2026-05-03
@@ -8,7 +8,7 @@
 
 ## Overview
 
-A locally-focused, cross-platform agent harness that enables running LLM-powered agent teams with full autonomy, observability, and control. Designed to work primarily with local models (Ollama) while remaining provider-agnostic, and to support long-running autonomous workflows with robust permission controls.
+A locally-focused, cross-platform agent harness (Guild) that enables running LLM-powered agent teams with full autonomy, observability, and control. Designed to work primarily with local models (Ollama) while remaining provider-agnostic, and to support long-running autonomous workflows with robust permission controls.
 
 ---
 
@@ -70,7 +70,7 @@ The following lessons are drawn from the Claude Code 512K-line TypeScript source
 |----|-------------|-------|
 | REQ-02.1 | All core functionality must be OS-agnostic | No platform-specific code in business logic |
 | REQ-02.2 | Single install script per platform (or one universal script) | `install.sh` / `install.ps1` or a single cross-platform installer |
-| REQ-02.3 | Single update mechanism | `agent-harness update` or equivalent |
+| REQ-02.3 | Single update mechanism | `guild update` or equivalent |
 | REQ-02.4 | No hard dependencies on platform-specific tools | If a tool is needed (e.g., shell), abstract it behind a platform adapter |
 | REQ-02.5 | File paths, process management, and networking must use cross-platform abstractions | Use language-native path handling, not string concatenation |
 | REQ-02.6 | CI testing on all three platforms | GitHub Actions or equivalent matrix builds |
@@ -105,9 +105,9 @@ The following lessons are drawn from the Claude Code 512K-line TypeScript source
 | REQ-04.5 | Worker agents that execute specific subtasks | Workers can be specialized (coder, researcher, reviewer, etc.) |
 | REQ-04.6 | **MCP (Model Context Protocol) for agent-to-tool communication** | Industry standard — agents connect to tools/data via MCP servers |
 | REQ-04.7 | **Simple internal message bus for agent-to-agent communication** | `send(agent_id, port, data)` / `receive()` — direct, no network overhead, easy to debug |
-| REQ-04.7a | **A2A as optional external gateway (P2)** | Only for cross-harness communication with external agents; internal bus wraps to A2A-compatible interface later |
+| REQ-04.7a | **A2A as optional external gateway (P2)** | Only for cross-Guild communication with external agents; internal bus wraps to A2A-compatible interface later |
 | REQ-04.8 | **Skills support** — agents can have pluggable skill definitions | Skill files that define capabilities, similar to Claude Code's SKILL.md pattern |
-| REQ-04.9 | Agent lifecycle management — spawn, monitor, pause, resume, kill | Harness manages all agent processes |
+| REQ-04.9 | Agent lifecycle management — spawn, monitor, pause, resume, kill | Guild manages all agent processes |
 | REQ-04.10 | Shared context/workspace between team members | Agents can read each other's outputs and shared state; cache sharing for token efficiency |
 | REQ-04.11 | Dynamic worker spawning — entry agent or any orchestrator can create new workers as needed | Not limited to pre-defined team size |
 | REQ-04.12 | Isolated execution environments for parallel workers | Separate worktrees/directories to prevent conflicts during parallel edits |
@@ -130,7 +130,7 @@ Agents and agent patterns are **building blocks** that can be composed, connecte
 
 #### 4B-i: Block Port Type System
 
-Blocks declare typed input/output ports. The harness validates port compatibility **at composition time** (when you wire blocks together in the GUI or config), not at runtime.
+Blocks declare typed input/output ports. Guild validates port compatibility **at composition time** (when you wire blocks together in the GUI or config), not at runtime.
 
 | ID | Requirement | Notes |
 |----|-------------|-------|
@@ -163,7 +163,7 @@ Each evaluator block defines its own criteria and what "pass" means. The block g
 | REQ-04.53 | **Error reaches entry agent with no resolution → escalate to human** | Last resort; human gets full error chain with context |
 | REQ-04.54 | **Partial failure in parallel branches** — other branches continue; failed branch is reported | Don't kill the whole team because one worker failed |
 
-#### 4C: Built-in Atomic Blocks (Ship with Harness)
+#### 4C: Built-in Atomic Blocks (Ship with Guild)
 
 These are the starter set of single-agent blocks. Each has a defined role, default system prompt, default tools, and typed input/output ports.
 
@@ -200,7 +200,7 @@ These ship as pre-built compositions that users can use directly or customize.
 | REQ-05.3 | CLI exposes a local REST API that the GUI consumes | GUI is purely a frontend to this API |
 | REQ-05.4 | **GUI (P1)** — web-based (localhost) real-time monitoring and interaction | Dashboard: agent status, current tasks, recent output |
 | REQ-05.5 | **Visual team composer (P2)** — drag-and-drop block editor in GUI | Node-based editor; equivalent to editing YAML team configs by hand |
-| REQ-05.6 | Ability to send messages to any agent from CLI or GUI | `harness chat <agent>` in CLI; chat panel in GUI |
+| REQ-05.6 | Ability to send messages to any agent from CLI or GUI | `guild chat <agent>` in CLI; chat panel in GUI |
 | REQ-05.7 | GUI shows agent communication graph / message flow | Visual representation of who's talking to whom |
 
 ### REQ-06: Autonomous Long-Running Operation ("Anti-Babysitting")
@@ -254,7 +254,7 @@ These ship as pre-built compositions that users can use directly or customize.
 
 ### REQ-09: Long-Term Learning Loop
 
-**Goal:** The harness gets smarter over time. Every completed task is an opportunity to extract knowledge that improves future runs.
+**Goal:** Guild gets smarter over time. Every completed task is an opportunity to extract knowledge that improves future runs.
 
 | ID | Requirement | Notes |
 |----|-------------|-------|
@@ -317,7 +317,7 @@ These ship as pre-built compositions that users can use directly or customize.
 | REQ-13.1 | Sandboxed execution for shell commands | Container, chroot, or OS-level sandboxing |
 | REQ-13.2 | Network access controls per agent | Allow/deny internet, allow only localhost, etc. |
 | REQ-13.3 | Secret management — agents can use API keys without seeing raw values | Injected at runtime, masked in logs |
-| REQ-13.4 | File system boundaries — agents can only access allowed paths | Enforced by the harness, not just by convention |
+| REQ-13.4 | File system boundaries — agents can only access allowed paths | Enforced by Guild, not just by convention |
 | REQ-13.5 | Command allowlist/denylist | Block dangerous commands (rm -rf /, etc.) |
 
 ### REQ-14: Configuration as Code
@@ -413,8 +413,21 @@ These ship as pre-built compositions that users can use directly or customize.
 |----|-------------|-------|
 | REQ-21.1 | Core functionality works with zero internet access | Ollama + local tools = fully functional |
 | REQ-21.2 | Cloud features degrade gracefully — no crashes if network is down | Clear error messages, automatic fallback to local |
-| REQ-21.3 | Local model management — pull, list, update Ollama models from harness | `agent-harness models list`, `agent-harness models pull llama3` |
-| REQ-21.4 | Offline documentation — built-in help that doesn't require web access | `agent-harness help <topic>` |
+| REQ-21.3 | Local model management — pull, list, update Ollama models from Guild | `guild models list`, `guild models pull llama3` |
+| REQ-21.4 | Offline documentation — built-in help that doesn't require web access | `guild help <topic>` |
+
+### REQ-22: RPG Fun Mode (UI Theme)
+
+**Goal:** Optional RPG-themed UI skin that makes working with Guild more fun. All functionality stays identical — this is purely a presentation layer toggle.
+
+| ID | Requirement | Notes |
+|----|-------------|-------|
+| REQ-22.1 | **UI mode toggle**: "serious" (default) and "RPG" mode | `guild config set ui.mode rpg` or GUI toggle |
+| REQ-22.2 | RPG mode renames concepts in the UI only (not in configs/APIs) | Tasks → Quests, Teams → Parties, Blocks → Classes, Entry agent → Guild Master, etc. |
+| REQ-22.3 | RPG-style progress indicators | XP bars instead of progress %, "Level Up!" on learning milestones |
+| REQ-22.4 | Quest log view for task history | RPG-style quest tracker with status icons |
+| REQ-22.5 | Agent "character sheets" showing stats | Model, tools, permissions, tasks completed, learnings contributed |
+| REQ-22.6 | Fun notifications in RPG mode | "A new quest has arrived!", "The Coder has leveled up!", "Party wiped — requesting aid from Guild Master" |
 
 ---
 
@@ -462,7 +475,7 @@ Design principles:
 | Primary language | Python, TypeScript, Rust, Go | Python has best LLM ecosystem; Go/Rust for performance |
 | GUI framework | Web (React/Svelte), TUI (Textual/Ratatui), Electron | Web = most cross-platform |
 | Config format | YAML, TOML, JSON | TOML preferred for readability |
-| IPC mechanism | HTTP/REST, gRPC, Unix sockets, message queue | Between harness core and agents |
+| IPC mechanism | HTTP/REST, gRPC, Unix sockets, message queue | Between Guild core and agents |
 | Storage | SQLite, flat files, embedded KV store | For context, logs, artifacts |
 | Sandboxing | Docker, Bubblewrap, OS-native | Platform-dependent |
 
@@ -472,7 +485,7 @@ Design principles:
 
 | Term | Definition |
 |------|------------|
-| **Harness** | The core runtime that manages agents, tools, permissions, and communication |
+| **Guild** | The core runtime that manages agents, tools, permissions, and communication |
 | **Agent** | An LLM-powered entity with a role, tools, and permissions |
 | **Entry Agent** | The user-facing agent — the first point of contact; can delegate to any other agent |
 | **Orchestrator** | An agent role (not a fixed system component) that decomposes tasks and delegates to workers |
@@ -483,7 +496,7 @@ Design principles:
 | **Connector** | The input/output port definition that determines how blocks wire together |
 | **Tool** | A capability an agent can invoke (file read, shell exec, web fetch, etc.) |
 | **MCP** | Model Context Protocol — industry standard for agent-to-tool communication |
-| **A2A** | Agent-to-Agent Protocol — optional (P2) for cross-harness external agent communication |
+| **A2A** | Agent-to-Agent Protocol — optional (P2) for cross-Guild external agent communication |
 | **Message Bus** | Internal agent-to-agent communication mechanism — simple send/receive, no network overhead |
 | **Skill** | A pluggable capability definition that gives an agent domain-specific knowledge |
 | **Team** | A configured graph of connected blocks working together on a task |

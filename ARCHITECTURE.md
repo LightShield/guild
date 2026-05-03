@@ -1,4 +1,4 @@
-# Agent Harness — Architecture Decisions
+# Guild — Architecture Decisions
 
 **Version:** 0.1.0
 **Date:** 2026-05-03
@@ -9,12 +9,12 @@ This document captures architecture decisions that shape implementation but don'
 
 ## AD-01: Project / Workspace Model
 
-A **project** is a directory with a `.harness/` folder — similar to how `.git/` works.
+A **project** is a directory with a `.guild/` folder — similar to how `.git/` works.
 
 ```
 my-project/
-├── .harness/
-│   ├── harness.db          # SQLite database (single source of truth)
+├── .guild/
+│   ├── guild.db            # SQLite database (single source of truth)
 │   ├── config.toml         # Project-level config overrides
 │   ├── blocks/             # Project-specific custom block definitions
 │   ├── learnings/          # Extracted learnings (also in DB, files for readability)
@@ -23,10 +23,10 @@ my-project/
 └── ...
 ```
 
-- `harness init` creates the `.harness/` directory in the current folder
-- `harness status` shows current project info (like `git status`)
-- The entry agent knows its project by the `.harness/` directory it was started in
-- Global config lives in `~/.harness/config.toml` (defaults, provider settings, global block library)
+- `guild init` creates the `.guild/` directory in the current folder
+- `guild status` shows current project info (like `git status`)
+- The entry agent knows its project by the `.guild/` directory it was started in
+- Global config lives in `~/.guild/config.toml` (defaults, provider settings, global block library)
 - Project config overrides global config
 
 ---
@@ -43,7 +43,7 @@ The entry agent is the **facilitator** — it routes work to the right blocks/ag
 2. No team, complex task? → Use planner block to decompose, then spawn workers
 3. No team, simple task? → Do it directly (entry agent has basic tools: file read/write, shell, search)
 
-**Configurable per-project** in `.harness/config.toml`:
+**Configurable per-project** in `.guild/config.toml`:
 ```toml
 [entry_agent]
 system_prompt_file = "custom_prompt.md"  # override default
