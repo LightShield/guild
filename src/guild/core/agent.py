@@ -272,6 +272,7 @@ class AgentLoop:
         storage: Storage,
         working_dir: str | None = None,
         permission_checker: PermissionChecker | None = None,
+        enable_stuck_detection: bool = False,
     ) -> None:
         self.agent_id = agent_id
         self.block = block
@@ -283,6 +284,11 @@ class AgentLoop:
         self.status = AgentStatus.IDLE
         self.total_input_tokens = 0
         self.total_output_tokens = 0
+        self.stuck_reason: str = ""
+        self._stuck_detector: StuckDetector | None = None
+        if enable_stuck_detection:
+            from guild.core.stuck import StuckDetector
+            self._stuck_detector = StuckDetector()
 
     async def initialize(self) -> None:
         """Set up the agent with its system prompt and register in storage."""
@@ -312,6 +318,21 @@ class AgentLoop:
 
         for turn in range(max_turns):
             log.info(f"[{self.agent_id}] Turn {turn + 1}")
+
+            # Check stuck detection before each turn
+            if self._stuck_detector and self._stuck_detector.is_stuck():
+                self.stuck_reason = self._stuck_detector.get_reason()
+                log.warning(f"[{self.agent_id}] Stuck detected: {self.stuck_reason}")
+                stuck_msg = Message(
+                    role="assistant",
+                    content=f"I appear to be stuck: {self.stuck_reason}",
+                )
+                self.messages.append(stuck_msg)
+                await self.storage.append_message(
+                    self.agent_id, "assistant", stuck_msg.content
+                )
+                break
+
             response = await self.provider.generate(self.messages, tools=tools or None)
             self.total_input_tokens += response.input_tokens
             self.total_output_tokens += response.output_tokens
@@ -388,6 +409,12 @@ class AgentLoop:
             await self.storage.append_message(
                 self.agent_id, "tool", result, tool_call_id=tc.get("id")
             )
+
+            # Feed stuck detector
+            if self._stuck_detector:
+                is_error = result.startswith("Error:")
+                self._stuck_detector.record_turn(success=not is_error, error=result if is_error else None)
+                self._stuck_detector.record_tool_call({"tool": tool_name, "args": tool_args})
 
     async def _finalize(self) -> None:
         """Update agent status and token counts in storage."""
