@@ -1,4 +1,7 @@
-"""Guild CLI — the primary interface."""
+"""Guild CLI — the primary interface.
+
+All features are accessible via CLI commands. The GUI is a wrapper on top of this.
+"""
 
 from __future__ import annotations
 
@@ -17,13 +20,26 @@ GUILD_DIR = ".guild"
 DB_NAME = "guild.db"
 CONFIG_NAME = "config.toml"
 
+# Global RPG mode flag
+_rpg_mode = False
+
+
+def _out(text: str) -> None:
+    """Print text, applying RPG translation if enabled."""
+    if _rpg_mode:
+        from guild.core.rpg import rpg_translate
+        text = rpg_translate(text)
+    console.print(text)
+
 
 def _find_guild_dir() -> Path | None:
+    """Find the .guild directory."""
     from guild.core.config import find_guild_dir
     return find_guild_dir()
 
 
 def _require_guild() -> Path:
+    """Get guild dir or exit with error."""
     gd = _find_guild_dir()
     if not gd or not gd.is_dir():
         console.print("[red]Not a Guild project. Run 'guild init' first.[/red]")
@@ -31,18 +47,31 @@ def _require_guild() -> Path:
     return gd
 
 
+def _rpg_callback(value: bool) -> None:
+    """Callback for --rpg flag."""
+    global _rpg_mode
+    _rpg_mode = value
+
+
+@app.callback()
+def main_callback(
+    rpg: bool = typer.Option(False, "--rpg", help="Enable RPG fun mode", callback=_rpg_callback, is_eager=True),
+) -> None:
+    """Guild — locally-focused agent harness for LLM-powered teams."""
+
+
 # --- guild init ---
 
 @app.command()
-def init(path: Path = typer.Argument(Path("."), help="Directory to initialize")):
+def init(path: Path = typer.Argument(Path("."), help="Directory to initialize")) -> None:
     """Initialize a new Guild project."""
     guild_dir = path / GUILD_DIR
     if guild_dir.exists():
-        console.print(f"[yellow]Guild project already exists at {guild_dir}[/yellow]")
+        _out(f"[yellow]Guild project already exists at {guild_dir}[/yellow]")
         raise typer.Exit(0)
 
     guild_dir.mkdir(parents=True)
-    for sub in ("blocks", "learnings", "artifacts"):
+    for sub in ("blocks", "learnings", "artifacts", "templates"):
         (guild_dir / sub).mkdir()
 
     config_content = """\
@@ -56,10 +85,11 @@ max_tokens = 4096
 [guild]
 default_permission = "ask"
 max_concurrent_agents = 1
+max_concurrent_tool_calls = 4
 """
     (guild_dir / CONFIG_NAME).write_text(config_content)
 
-    async def _init_db():
+    async def _init_db() -> None:
         from guild.core.storage import Storage
         s = Storage(guild_dir / DB_NAME)
         await s.connect()
@@ -67,17 +97,17 @@ max_concurrent_agents = 1
         await s.close()
 
     asyncio.run(_init_db())
-    console.print(f"[green]✓ Guild project initialized at {guild_dir}[/green]")
+    _out(f"[green]✓ Guild project initialized at {guild_dir}[/green]")
 
 
 # --- guild status ---
 
 @app.command()
-def status():
+def status() -> None:
     """Show current Guild project status."""
     guild_dir = _require_guild()
 
-    async def _status():
+    async def _status() -> tuple:
         from guild.core.storage import Storage
         s = Storage(guild_dir / DB_NAME)
         await s.connect()
@@ -89,7 +119,7 @@ def status():
 
     tasks, agents, learnings = asyncio.run(_status())
 
-    console.print(f"\n[bold]Guild Project[/bold]: {guild_dir.parent.resolve()}\n")
+    _out(f"\n[bold]Guild Project[/bold]: {guild_dir.parent.resolve()}\n")
 
     if tasks:
         t = Table(title="Tasks")
@@ -102,7 +132,7 @@ def status():
             t.add_row(row["task_id"][:8], row["description"][:60], f"[{style}]{row['status']}[/]", row["assigned_agent"] or "-")
         console.print(t)
     else:
-        console.print("[dim]No tasks yet.[/dim]")
+        _out("[dim]No tasks yet.[/dim]")
 
     if agents:
         t = Table(title="Agents")
@@ -115,7 +145,7 @@ def status():
         console.print(t)
 
     if learnings:
-        console.print(f"\n[dim]{len(learnings)} learnings in knowledge base[/dim]")
+        _out(f"\n[dim]{len(learnings)} learnings in knowledge base[/dim]")
 
 
 # --- guild task ---
@@ -123,65 +153,87 @@ def status():
 @app.command()
 def task(
     description: str = typer.Argument(..., help="Task description"),
-    team: str = typer.Option(None, "--team", "-t", help="Team to use (e.g. dev-loop)"),
-    permission: str = typer.Option(None, "--permission", "-p", help="Permission tier override"),
-    learn: bool = typer.Option(True, help="Extract learnings after task completes"),
-):
+    team: str = typer.Option(None, "--team", "-t", help="Team to use"),
+    permission: str = typer.Option(None, "--permission", "-p", help="Permission tier"),
+    learn: bool = typer.Option(True, help="Extract learnings after task"),
+    timeout: int = typer.Option(0, "--timeout", help="Timeout in seconds (0=none)"),
+    template: str = typer.Option(None, "--template", help="Use a workflow template"),
+) -> None:
     """Create a task and run it with the Guild Master or a team."""
     guild_dir = _require_guild()
 
-    async def _run():
+    async def _run() -> None:
         from guild.blocks.registry import BlockRegistry
+        from guild.core.agent import AgentLoop
+        from guild.core.artifacts import ArtifactManager
         from guild.core.config import load_config
         from guild.core.learning import extract_learnings
         from guild.core.models import PermissionTier
+        from guild.core.offline import OfflineManager
         from guild.core.permissions import PermissionChecker
+        from guild.core.ratelimit import RateLimiter, ToolQueue
         from guild.core.storage import Storage
         from guild.core.team_runner import TeamRunner
+        from guild.core.templates import TemplateManager
         from guild.providers.ollama import create_provider
+        from guild.providers.router import ModelRouter
 
         config = load_config(guild_dir)
         storage = Storage(guild_dir / DB_NAME)
         await storage.connect()
 
-        task_id = uuid.uuid4().hex[:12]
-        await storage.create_task(task_id, description)
-        console.print(f"[blue]Task:[/blue] {task_id[:8]} — {description}")
+        # Resolve template if specified
+        actual_description = description
+        actual_team = team
+        if template:
+            tmgr = TemplateManager(guild_dir / "templates")
+            tmpl = tmgr.get(template)
+            if not tmpl:
+                _out(f"[red]Template '{template}' not found.[/red]")
+                await storage.close()
+                raise typer.Exit(1)
+            actual_description = tmpl.render() if not description else tmpl.render(**{"input": description})
+            actual_team = actual_team or tmpl.team
+            _out(f"[blue]Template:[/blue] {tmpl.name}")
 
+        task_id = uuid.uuid4().hex[:12]
+        await storage.create_task(task_id, actual_description)
+        _out(f"[blue]Task:[/blue] {task_id[:8]} — {actual_description}")
+
+        # Create provider with offline check
         provider = create_provider(config.provider)
-        if not await provider.health_check():
-            console.print(f"[red]Cannot reach {config.provider.name} at {config.provider.base_url}[/red]")
-            console.print("Make sure Ollama is running: [bold]ollama serve[/bold]")
+        offline_mgr = OfflineManager(provider)
+        if not await offline_mgr.check_connectivity():
+            _out(f"[red]Cannot reach {config.provider.name} at {config.provider.base_url}[/red]")
+            _out("Make sure Ollama is running: [bold]ollama serve[/bold]")
             await storage.update_task(task_id, status="failed", result="Provider unreachable")
             await storage.close()
             raise typer.Exit(1)
 
         perm_tier = PermissionTier(permission) if permission else config.default_permission
-
-        # Load block registry
         registry = BlockRegistry()
         registry.load_from_dir(guild_dir / "blocks")
+        artifacts = ArtifactManager(guild_dir / "artifacts", storage)
+        rate_limiter = RateLimiter(max_calls=30, window_seconds=60.0)
+        tool_queue = ToolQueue(max_concurrent=config.max_concurrent_tool_calls)
 
         result = ""
         tokens = {"input": 0, "output": 0}
 
         try:
-            if team:
-                # Team mode
-                team_def = registry.get_team(team)
+            if actual_team:
+                team_def = registry.get_team(actual_team)
                 if not team_def:
-                    console.print(f"[red]Team '{team}' not found. Available: {list(registry.teams.keys())}[/red]")
+                    _out(f"[red]Team '{actual_team}' not found. Available: {list(registry.teams.keys())}[/red]")
                     raise typer.Exit(1)
-
                 errors = registry.validate_team(team_def)
                 if errors:
                     for e in errors:
-                        console.print(f"[red]  {e}[/red]")
+                        _out(f"[red]  {e}[/red]")
                     raise typer.Exit(1)
 
-                console.print(f"[blue]Team:[/blue] {team} ({team_def.description})")
-                console.print(f"[blue]Blocks:[/blue] {', '.join(team_def.blocks.keys())}")
-                console.print(f"[blue]Permission:[/blue] {perm_tier.value}\n")
+                _out(f"[blue]Team:[/blue] {actual_team} ({team_def.description})")
+                _out(f"[blue]Permission:[/blue] {perm_tier.value}\n")
 
                 runner = TeamRunner(
                     team=team_def, registry=registry, provider=provider,
@@ -189,59 +241,52 @@ def task(
                     permission_tier=perm_tier,
                 )
                 await storage.update_task(task_id, status="in_progress")
-                result = await runner.run(description)
+                result = await runner.run(actual_description)
                 tokens = runner.total_tokens
             else:
-                # Solo mode — Guild Master
-                from guild.core.agent import AgentLoop
-
                 agent_id = uuid.uuid4().hex[:12]
                 block = config.entry_agent
                 block.permission = perm_tier
-
-                checker = PermissionChecker(
-                    perm_tier,
-                    allowed_paths=[str(guild_dir.parent)],
-                )
+                checker = PermissionChecker(perm_tier, allowed_paths=[str(guild_dir.parent)])
                 agent = AgentLoop(
                     agent_id=agent_id, block=block, provider=provider,
                     storage=storage, working_dir=str(guild_dir.parent),
-                    permission_checker=checker,
+                    permission_checker=checker, timeout_seconds=timeout or None,
+                    rate_limiter=rate_limiter, tool_queue=tool_queue,
+                    context_window=config.provider.max_tokens,
                 )
                 await agent.initialize()
                 await storage.update_task(task_id, status="in_progress", assigned_agent=agent_id)
-
-                console.print(f"[blue]Agent:[/blue] {agent_id[:8]} ({block.name})")
-                console.print(f"[blue]Model:[/blue] {config.provider.model}")
-                console.print(f"[blue]Permission:[/blue] {perm_tier.value}\n")
-
-                result = await agent.run(description)
+                _out(f"[blue]Agent:[/blue] {agent_id[:8]} ({block.name})")
+                _out(f"[blue]Model:[/blue] {config.provider.model}")
+                _out(f"[blue]Permission:[/blue] {perm_tier.value}\n")
+                result = await agent.run(actual_description)
                 tokens = {"input": agent.total_input_tokens, "output": agent.total_output_tokens}
 
             await storage.update_task(task_id, status="done", result=result[:1000])
-            console.print(f"\n[green]✓ Task complete[/green]")
-            console.print(result)
+            artifacts.save(task_id, "result.txt", result)
+            _out(f"\n[green]✓ Task complete[/green]")
+            _out(result)
 
-            # Learning extraction
             if learn:
-                console.print("\n[dim]Extracting learnings...[/dim]")
+                _out("\n[dim]Extracting learnings...[/dim]")
                 try:
                     new_learnings = await extract_learnings(task_id, storage, provider)
                     if new_learnings:
-                        console.print(f"[dim]Extracted {len(new_learnings)} learnings[/dim]")
+                        _out(f"[dim]Extracted {len(new_learnings)} learnings[/dim]")
                 except Exception as e:
-                    console.print(f"[dim]Learning extraction failed: {e}[/dim]")
+                    _out(f"[dim]Learning extraction failed: {e}[/dim]")
 
         except KeyboardInterrupt:
             await storage.update_task(task_id, status="failed", result="Interrupted")
-            console.print("\n[yellow]Interrupted.[/yellow]")
+            _out("\n[yellow]Interrupted.[/yellow]")
         except typer.Exit:
             raise
         except Exception as e:
             await storage.update_task(task_id, status="failed", result=str(e)[:500])
-            console.print(f"\n[red]Failed: {e}[/red]")
+            _out(f"\n[red]Failed: {e}[/red]")
         finally:
-            console.print(f"\n[dim]Tokens: {tokens['input']} in / {tokens['output']} out[/dim]")
+            _out(f"\n[dim]Tokens: {tokens['input']} in / {tokens['output']} out[/dim]")
             await storage.close()
 
     asyncio.run(_run())
@@ -252,15 +297,17 @@ def task(
 @app.command()
 def chat(
     permission: str = typer.Option("ask", "--permission", "-p", help="Permission tier"),
-):
+) -> None:
     """Interactive chat with the Guild Master."""
     guild_dir = _require_guild()
 
-    async def _chat():
+    async def _chat() -> None:
         from guild.core.agent import AgentLoop
         from guild.core.config import load_config
         from guild.core.models import PermissionTier
+        from guild.core.offline import OfflineManager
         from guild.core.permissions import PermissionChecker
+        from guild.core.ratelimit import RateLimiter
         from guild.core.storage import Storage
         from guild.providers.ollama import create_provider
 
@@ -269,8 +316,9 @@ def chat(
         await storage.connect()
 
         provider = create_provider(config.provider)
-        if not await provider.health_check():
-            console.print(f"[red]Cannot reach Ollama at {config.provider.base_url}[/red]")
+        offline_mgr = OfflineManager(provider)
+        if not await offline_mgr.check_connectivity():
+            _out(f"[red]Cannot reach Ollama at {config.provider.base_url}[/red]")
             await storage.close()
             raise typer.Exit(1)
 
@@ -278,17 +326,19 @@ def chat(
         agent_id = uuid.uuid4().hex[:12]
         block = config.entry_agent
         checker = PermissionChecker(perm_tier, allowed_paths=[str(guild_dir.parent)])
+        rate_limiter = RateLimiter(max_calls=30, window_seconds=60.0)
 
         agent = AgentLoop(
             agent_id=agent_id, block=block, provider=provider,
             storage=storage, working_dir=str(guild_dir.parent),
-            permission_checker=checker,
+            permission_checker=checker, rate_limiter=rate_limiter,
+            context_window=config.provider.max_tokens,
         )
         await agent.initialize()
 
-        console.print(f"[bold]Guild Chat[/bold] — talking to {block.name}")
-        console.print(f"Model: {config.provider.model} | Permission: {perm_tier.value}")
-        console.print("[dim]Type 'exit' or Ctrl+C to quit[/dim]\n")
+        _out(f"[bold]Guild Chat[/bold] — talking to {block.name}")
+        _out(f"Model: {config.provider.model} | Permission: {perm_tier.value}")
+        _out("[dim]Type 'exit' or Ctrl+C to quit[/dim]\n")
 
         try:
             while True:
@@ -300,13 +350,12 @@ def chat(
                     break
                 if not user_input.strip():
                     continue
-
                 result = await agent.run(user_input)
-                console.print(f"\n[bold blue]guild-master>[/bold blue] {result}\n")
+                _out(f"\n[bold blue]guild-master>[/bold blue] {result}\n")
         except KeyboardInterrupt:
             pass
 
-        console.print(f"\n[dim]Session tokens: {agent.total_input_tokens} in / {agent.total_output_tokens} out[/dim]")
+        _out(f"\n[dim]Session tokens: {agent.total_input_tokens} in / {agent.total_output_tokens} out[/dim]")
         await storage.close()
 
     asyncio.run(_chat())
@@ -315,21 +364,23 @@ def chat(
 # --- guild models ---
 
 @app.command()
-def models():
+def models() -> None:
     """List available Ollama models."""
-    async def _list():
+    async def _list() -> None:
         from guild.core.config import load_config
+        from guild.core.offline import OfflineManager
         from guild.providers.ollama import create_provider
 
         guild_dir = _find_guild_dir()
         config = load_config(guild_dir)
         provider = create_provider(config.provider)
+        offline_mgr = OfflineManager(provider)
 
-        if not await provider.health_check():
-            console.print(f"[red]Cannot reach Ollama at {config.provider.base_url}[/red]")
+        if not await offline_mgr.check_connectivity():
+            _out(f"[red]Cannot reach Ollama at {config.provider.base_url}[/red]")
             raise typer.Exit(1)
 
-        model_list = await provider.list_models()
+        model_list = await offline_mgr.list_local_models()
         if model_list:
             t = Table(title="Available Models")
             t.add_column("Model")
@@ -337,7 +388,7 @@ def models():
                 t.add_row(m)
             console.print(t)
         else:
-            console.print("[dim]No models found. Run: ollama pull llama3.2[/dim]")
+            _out("[dim]No models found. Run: ollama pull llama3.2[/dim]")
 
     asyncio.run(_list())
 
@@ -345,9 +396,7 @@ def models():
 # --- guild blocks ---
 
 @app.command()
-def blocks(
-    name: str = typer.Argument(None, help="Block name to show details"),
-):
+def blocks(name: str = typer.Argument(None, help="Block name to show details")) -> None:
     """List available blocks, or show details of a specific block."""
     from guild.blocks.registry import BlockRegistry
 
@@ -359,16 +408,16 @@ def blocks(
     if name:
         block = registry.get_block(name)
         if not block:
-            console.print(f"[red]Block '{name}' not found[/red]")
+            _out(f"[red]Block '{name}' not found[/red]")
             raise typer.Exit(1)
-        console.print(f"\n[bold]{block.name}[/bold] ({block.role})")
-        console.print(f"Prompt: {block.system_prompt[:200]}...")
-        console.print(f"Tools: {', '.join(block.tools)}")
-        console.print(f"Permission: {block.permission.value}")
+        _out(f"\n[bold]{block.name}[/bold] ({block.role})")
+        _out(f"Prompt: {block.system_prompt[:200]}...")
+        _out(f"Tools: {', '.join(block.tools)}")
+        _out(f"Permission: {block.permission.value}")
         if block.inputs:
-            console.print(f"Inputs: {', '.join(f'{p.name}:{p.type_tag}' for p in block.inputs)}")
+            _out(f"Inputs: {', '.join(f'{p.name}:{p.type_tag}' for p in block.inputs)}")
         if block.outputs:
-            console.print(f"Outputs: {', '.join(f'{p.name}:{p.type_tag}' for p in block.outputs)}")
+            _out(f"Outputs: {', '.join(f'{p.name}:{p.type_tag}' for p in block.outputs)}")
     else:
         t = Table(title="Available Blocks")
         t.add_column("Name")
@@ -389,9 +438,7 @@ def blocks(
 # --- guild teams ---
 
 @app.command()
-def teams(
-    name: str = typer.Argument(None, help="Team name to show details"),
-):
+def teams(name: str = typer.Argument(None, help="Team name to show details")) -> None:
     """List available teams, or show details of a specific team."""
     from guild.blocks.registry import BlockRegistry
 
@@ -401,53 +448,45 @@ def teams(
         registry.load_from_dir(guild_dir / "blocks")
 
     if name:
-        team = registry.get_team(name)
-        if not team:
-            console.print(f"[red]Team '{name}' not found[/red]")
+        t = registry.get_team(name)
+        if not t:
+            _out(f"[red]Team '{name}' not found[/red]")
             raise typer.Exit(1)
-        console.print(f"\n[bold]{team.name}[/bold]")
-        console.print(f"Description: {team.description}")
-        console.print(f"Entry block: {team.entry_block}")
-        console.print(f"Blocks: {', '.join(f'{k}({v})' for k, v in team.blocks.items())}")
-        if team.connections:
-            console.print("Connections:")
-            for c in team.connections:
-                console.print(f"  {c.source_block}.{c.source_port} → {c.target_block}.{c.target_port}")
-        if team.loops:
-            console.print("Loops:")
-            for l in team.loops:
-                console.print(f"  {l.generator_block} ↔ {l.evaluator_block} (max {l.max_iterations} iterations)")
-
-        errors = registry.validate_team(team)
-        if errors:
-            console.print("\n[red]Validation errors:[/red]")
-            for e in errors:
-                console.print(f"  [red]{e}[/red]")
-        else:
-            console.print("\n[green]✓ Valid[/green]")
+        _out(f"\n[bold]{t.name}[/bold]")
+        _out(f"Description: {t.description}")
+        _out(f"Entry block: {t.entry_block}")
+        _out(f"Blocks: {', '.join(f'{k}({v})' for k, v in t.blocks.items())}")
+        if t.connections:
+            _out("Connections:")
+            for c in t.connections:
+                _out(f"  {c.source_block}.{c.source_port} → {c.target_block}.{c.target_port}")
+        if t.loops:
+            _out("Loops:")
+            for l in t.loops:
+                _out(f"  {l.generator_block} ↔ {l.evaluator_block} (max {l.max_iterations} iterations)")
+        errors = registry.validate_team(t)
+        _out(f"\n[green]✓ Valid[/green]" if not errors else "")
+        for e in errors:
+            _out(f"  [red]{e}[/red]")
     else:
-        t = Table(title="Available Teams")
-        t.add_column("Name")
-        t.add_column("Description")
-        t.add_column("Blocks")
-        t.add_column("Loops")
-        for team in sorted(registry.teams.values(), key=lambda x: x.name):
-            t.add_row(
-                team.name, team.description,
-                ", ".join(team.blocks.keys()),
-                str(len(team.loops)),
-            )
-        console.print(t)
+        tbl = Table(title="Available Teams")
+        tbl.add_column("Name")
+        tbl.add_column("Description")
+        tbl.add_column("Blocks")
+        tbl.add_column("Loops")
+        for t in sorted(registry.teams.values(), key=lambda x: x.name):
+            tbl.add_row(t.name, t.description, ", ".join(t.blocks.keys()), str(len(t.loops)))
+        console.print(tbl)
 
 
 # --- guild learnings ---
 
 @app.command()
-def learnings():
+def learnings() -> None:
     """Show extracted learnings from past tasks."""
     guild_dir = _require_guild()
 
-    async def _list():
+    async def _list() -> list[dict]:
         from guild.core.storage import Storage
         s = Storage(guild_dir / DB_NAME)
         await s.connect()
@@ -457,7 +496,7 @@ def learnings():
 
     items = asyncio.run(_list())
     if not items:
-        console.print("[dim]No learnings yet. Complete a task to extract learnings.[/dim]")
+        _out("[dim]No learnings yet. Complete a task to extract learnings.[/dim]")
         return
 
     t = Table(title="Learnings")
@@ -474,15 +513,12 @@ def learnings():
 # --- guild audit ---
 
 @app.command()
-def audit(
-    limit: int = typer.Option(50, "--limit", "-n", help="Max entries to show"),
-):
+def audit(limit: int = typer.Option(50, "--limit", "-n", help="Max entries")) -> None:
     """Show audit log of agent actions and permission decisions."""
     guild_dir = _require_guild()
 
     async def _list() -> list[dict]:
         from guild.core.storage import Storage
-
         s = Storage(guild_dir / DB_NAME)
         await s.connect()
         items = await s.list_audit(limit=limit)
@@ -491,7 +527,7 @@ def audit(
 
     items = asyncio.run(_list())
     if not items:
-        console.print("[dim]No audit entries yet.[/dim]")
+        _out("[dim]No audit entries yet.[/dim]")
         return
 
     t = Table(title="Audit Log")
@@ -501,10 +537,8 @@ def audit(
     t.add_column("Details", max_width=60)
     for row in items:
         t.add_row(
-            (row.get("timestamp") or "")[:19],
-            row.get("agent_id") or "-",
-            row["action"],
-            (row.get("details") or "")[:60],
+            (row.get("timestamp") or "")[:19], row.get("agent_id") or "-",
+            row["action"], (row.get("details") or "")[:60],
         )
     console.print(t)
 
@@ -514,49 +548,38 @@ def audit(
 @app.command()
 def config(
     set_value: str = typer.Option(None, "--set", help="Set a config value: section.key=value"),
-):
+) -> None:
     """Show or modify project configuration."""
     guild_dir = _require_guild()
-    config_path = guild_dir / "config.toml"
+    config_path = guild_dir / CONFIG_NAME
 
     if set_value:
-        # Parse section.key=value
         if "=" not in set_value:
-            console.print("[red]Format: --set section.key=value[/red]")
+            _out("[red]Format: --set section.key=value[/red]")
             raise typer.Exit(1)
         path_part, value = set_value.split("=", 1)
         parts = path_part.split(".")
         if len(parts) != 2:
-            console.print("[red]Format: --set section.key=value[/red]")
+            _out("[red]Format: --set section.key=value[/red]")
             raise typer.Exit(1)
         section, key = parts
 
         import tomllib
-
-        # Load existing config
+        raw = {}
         if config_path.exists():
             with open(config_path, "rb") as f:
                 raw = tomllib.load(f)
-        else:
-            raw = {}
-
-        # Update
         if section not in raw:
             raw[section] = {}
-        # Try to parse value as number/bool
         try:
-            parsed = int(value)
+            parsed: int | float | bool | str = int(value)
         except ValueError:
             try:
                 parsed = float(value)
             except ValueError:
-                if value.lower() in ("true", "false"):
-                    parsed = value.lower() == "true"
-                else:
-                    parsed = value
+                parsed = value.lower() == "true" if value.lower() in ("true", "false") else value
         raw[section][key] = parsed
 
-        # Write back as TOML
         lines = []
         for sec, vals in raw.items():
             lines.append(f"[{sec}]")
@@ -569,13 +592,87 @@ def config(
                     lines.append(f"{k} = {v}")
             lines.append("")
         config_path.write_text("\n".join(lines))
-        console.print(f"[green]✓ Set {section}.{key} = {parsed}[/green]")
+        _out(f"[green]✓ Set {section}.{key} = {parsed}[/green]")
     else:
-        # Show config
         if config_path.exists():
             console.print(config_path.read_text())
         else:
-            console.print("[dim]No config file found.[/dim]")
+            _out("[dim]No config file found.[/dim]")
+
+
+# --- guild templates ---
+
+@app.command()
+def templates(
+    name: str = typer.Argument(None, help="Template name to show details"),
+) -> None:
+    """List or show workflow templates."""
+    guild_dir = _require_guild()
+    from guild.core.templates import TemplateManager
+
+    mgr = TemplateManager(guild_dir / "templates")
+    items = mgr.list()
+
+    if name:
+        tmpl = mgr.get(name)
+        if not tmpl:
+            _out(f"[red]Template '{name}' not found[/red]")
+            raise typer.Exit(1)
+        _out(f"\n[bold]{tmpl.name}[/bold]")
+        _out(f"Description: {tmpl.description}")
+        _out(f"Team: {tmpl.team or 'none'}")
+        _out(f"Task template: {tmpl.task_template}")
+        _out(f"Parameters: {', '.join(tmpl.parameters) or 'none'}")
+    else:
+        if not items:
+            _out("[dim]No templates yet. Create .guild/templates/*.toml files.[/dim]")
+            return
+        t = Table(title="Workflow Templates")
+        t.add_column("Name")
+        t.add_column("Description")
+        t.add_column("Team")
+        t.add_column("Parameters")
+        for tmpl in items:
+            t.add_row(tmpl.name, tmpl.description, tmpl.team or "-", ", ".join(tmpl.parameters) or "-")
+        console.print(t)
+
+
+# --- guild artifacts ---
+
+@app.command()
+def artifacts(
+    task_id: str = typer.Argument(None, help="Task ID to list artifacts for"),
+) -> None:
+    """List artifacts produced by tasks."""
+    guild_dir = _require_guild()
+    from guild.core.artifacts import ArtifactManager
+    from guild.core.storage import Storage
+
+    mgr = ArtifactManager(guild_dir / "artifacts", Storage(guild_dir / DB_NAME))
+
+    if task_id:
+        files = mgr.list_for_task(task_id)
+        if not files:
+            _out(f"[dim]No artifacts for task {task_id[:8]}[/dim]")
+            return
+        for f in files:
+            _out(f"  {f.name} ({f.stat().st_size} bytes)")
+    else:
+        artifacts_dir = guild_dir / "artifacts"
+        if not artifacts_dir.is_dir():
+            _out("[dim]No artifacts yet.[/dim]")
+            return
+        task_dirs = sorted(d for d in artifacts_dir.iterdir() if d.is_dir())
+        if not task_dirs:
+            _out("[dim]No artifacts yet.[/dim]")
+            return
+        t = Table(title="Artifacts")
+        t.add_column("Task", style="dim", max_width=12)
+        t.add_column("Files")
+        for td in task_dirs:
+            files = list(td.iterdir())
+            t.add_row(td.name[:12], ", ".join(f.name for f in files))
+        console.print(t)
 
 
 # --- guild serve ---
@@ -584,14 +681,14 @@ def config(
 def serve(
     port: int = typer.Option(8585, "--port", "-p", help="Port to serve on"),
     host: str = typer.Option("127.0.0.1", "--host", help="Host to bind to"),
-):
+) -> None:
     """Start the Guild web GUI and API server."""
     _require_guild()
     import uvicorn
     from guild.api.server import create_app
 
-    console.print(f"[bold]Guild GUI[/bold] starting at http://{host}:{port}")
-    console.print("[dim]Press Ctrl+C to stop[/dim]")
+    _out(f"[bold]Guild GUI[/bold] starting at http://{host}:{port}")
+    _out("[dim]Press Ctrl+C to stop[/dim]")
     web_app = create_app()
     uvicorn.run(web_app, host=host, port=port, log_level="warning")
 

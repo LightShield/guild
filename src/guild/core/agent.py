@@ -11,11 +11,14 @@ import json
 import logging
 import re
 import subprocess
-from dataclasses import dataclass, field
+import time
+from dataclasses import dataclass
 from pathlib import Path
 
+from guild.core.context import MicroCompact
 from guild.core.models import AgentStatus, BlockDef, Message, PermissionTier
 from guild.core.permissions import PermissionChecker
+from guild.core.ratelimit import RateLimiter, ToolQueue
 from guild.core.storage import Storage
 from guild.core.stuck import StuckDetector
 from guild.providers.base import LLMProvider
@@ -32,6 +35,20 @@ SHELL_TIMEOUT_SECONDS = 60
 MAX_SEARCH_RESULTS = 200
 MAX_GLOB_RESULTS = 500
 DEFAULT_MAX_TURNS = 50
+
+# Shell command denylist — blocked unless user explicitly overrides
+SHELL_DENYLIST = [
+    r"\brm\s+-rf\s+/",
+    r"\bgit\s+push\s+--force\b",
+    r"\bgit\s+reset\s+--hard\b",
+    r"\bgit\s+clean\s+-f\b",
+    r"\bmkfs\b",
+    r"\bdd\s+if=",
+    r"\b:(){ :\|:& };:",  # fork bomb
+    r"\bchmod\s+-R\s+777\s+/",
+    r"\bsudo\s+rm\b",
+]
+_DENYLIST_COMPILED = [re.compile(p) for p in SHELL_DENYLIST]
 
 
 # --- ToolResult ---
@@ -97,7 +114,7 @@ BUILTIN_TOOLS: dict[str, dict] = {
             "name": "shell",
             "description": (
                 "Execute a shell command and return stdout+stderr. "
-                "SAFETY: NEVER run destructive commands (rm -rf, git push --force, "
+                "SAFETY: NEVER run destructive commands (rm -rf /, git push --force, "
                 "git reset --hard) unless explicitly requested. "
                 "Prefer non-destructive alternatives."
             ),
@@ -168,19 +185,23 @@ BUILTIN_TOOLS: dict[str, dict] = {
 
 
 def _resolve_path(path_str: str, working_dir: str | None) -> Path:
-    """Resolve a path, making relative paths relative to working_dir.
-
-    Args:
-        path_str: Path string from tool arguments.
-        working_dir: Working directory for relative path resolution.
-
-    Returns:
-        Resolved Path object.
-    """
+    """Resolve a path, making relative paths relative to working_dir."""
     p = Path(path_str)
     if not p.is_absolute() and working_dir:
         p = Path(working_dir) / p
     return p
+
+
+def _check_shell_denylist(command: str) -> str | None:
+    """Check if a shell command matches the denylist.
+
+    Returns:
+        Error message if denied, None if allowed.
+    """
+    for pattern in _DENYLIST_COMPILED:
+        if pattern.search(command):
+            return f"Command blocked by security denylist: matches '{pattern.pattern}'"
+    return None
 
 
 async def _execute_file_read(arguments: dict, working_dir: str | None) -> ToolResult:
@@ -207,21 +228,24 @@ async def _execute_file_write(arguments: dict, working_dir: str | None) -> ToolR
 
 
 async def _execute_shell(arguments: dict, working_dir: str | None) -> ToolResult:
-    """Execute shell tool."""
+    """Execute shell tool with denylist check."""
+    command = arguments["command"]
+
+    # Security: check denylist
+    denied = _check_shell_denylist(command)
+    if denied:
+        return ToolResult(success=False, output="", error=denied)
+
     cwd = arguments.get("working_dir", working_dir)
     try:
         proc = await asyncio.create_subprocess_shell(
-            arguments["command"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            cwd=cwd,
+            command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, cwd=cwd,
         )
         stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=SHELL_TIMEOUT_SECONDS)
         output = stdout.decode(errors="replace")[:MAX_SHELL_OUTPUT_CHARS]
         text = f"[exit {proc.returncode}]\n{output}"
         return ToolResult(
-            success=proc.returncode == 0,
-            output=text,
+            success=proc.returncode == 0, output=text,
             error=f"exit code {proc.returncode}" if proc.returncode != 0 else None,
         )
     except asyncio.TimeoutError:
@@ -274,16 +298,7 @@ _TOOL_EXECUTORS = {
 
 
 async def execute_tool(name: str, arguments: dict, working_dir: str | None = None) -> ToolResult:
-    """Execute a built-in tool and return a structured result.
-
-    Args:
-        name: Tool name.
-        arguments: Tool call arguments.
-        working_dir: Working directory for path resolution.
-
-    Returns:
-        ToolResult with success flag, output, and optional error.
-    """
+    """Execute a built-in tool and return a structured result."""
     executor = _TOOL_EXECUTORS.get(name)
     if executor:
         return await executor(arguments, working_dir)
@@ -296,8 +311,8 @@ async def execute_tool(name: str, arguments: dict, working_dir: str | None = Non
 class AgentLoop:
     """The core agent loop — call model, execute tools, repeat.
 
-    Stuck detection is always active. It monitors tool results and
-    call patterns to detect when the agent is making no progress.
+    Integrates: MicroCompact (context compression), RateLimiter (API throttling),
+    ToolQueue (concurrency), StuckDetector (loop/error detection).
 
     Args:
         agent_id: Unique agent identifier.
@@ -305,7 +320,11 @@ class AgentLoop:
         provider: LLM provider to use.
         storage: Storage backend for persistence.
         working_dir: Working directory for tool execution.
-        permission_checker: Permission enforcement (default: from block config).
+        permission_checker: Permission enforcement.
+        timeout_seconds: Max wall-clock seconds before auto-pause.
+        rate_limiter: Optional rate limiter for LLM calls.
+        tool_queue: Optional concurrency limiter for tool calls.
+        context_window: Max tokens for context compression (0 = no compression).
     """
 
     def __init__(
@@ -317,6 +336,9 @@ class AgentLoop:
         working_dir: str | None = None,
         permission_checker: PermissionChecker | None = None,
         timeout_seconds: int | None = None,
+        rate_limiter: RateLimiter | None = None,
+        tool_queue: ToolQueue | None = None,
+        context_window: int = 0,
     ) -> None:
         self.agent_id = agent_id
         self.block = block
@@ -333,6 +355,9 @@ class AgentLoop:
         self._timeout_seconds = timeout_seconds or 0
         self._start_time: float = 0
         self._stuck_detector = StuckDetector()
+        self._rate_limiter = rate_limiter
+        self._tool_queue = tool_queue
+        self._compactor = MicroCompact(max_tokens=context_window) if context_window > 0 else None
 
     async def initialize(self) -> None:
         """Set up the agent with its system prompt and register in storage."""
@@ -342,15 +367,7 @@ class AgentLoop:
         await self.storage.append_message(self.agent_id, "system", self.block.system_prompt)
 
     async def run(self, user_input: str, max_turns: int = DEFAULT_MAX_TURNS) -> str:
-        """Run the agent loop on a user message.
-
-        Args:
-            user_input: The user's message/task.
-            max_turns: Maximum model calls before stopping.
-
-        Returns:
-            The agent's final response text.
-        """
+        """Run the agent loop on a user message."""
         self.status = AgentStatus.RUNNING
         await self.storage.update_agent(self.agent_id, status="running")
 
@@ -359,8 +376,6 @@ class AgentLoop:
         await self.storage.append_message(self.agent_id, "user", user_input)
 
         tools = self._build_tool_list()
-
-        import time
         self._start_time = time.monotonic()
 
         for turn in range(max_turns):
@@ -372,31 +387,26 @@ class AgentLoop:
                 if elapsed >= self._timeout_seconds:
                     self.timed_out = True
                     log.warning(f"[{self.agent_id}] Timeout after {elapsed:.0f}s")
-                    timeout_msg = Message(
-                        role="assistant",
-                        content=f"Autonomy timeout reached ({self._timeout_seconds}s). Pausing.",
-                    )
-                    self.messages.append(timeout_msg)
-                    await self.storage.append_message(
-                        self.agent_id, "assistant", timeout_msg.content
-                    )
+                    self._append_and_store("assistant", f"Autonomy timeout reached ({self._timeout_seconds}s). Pausing.")
                     break
 
-            # Check stuck detection before each turn
+            # Check stuck
             if self._stuck_detector.is_stuck():
                 self.stuck_reason = self._stuck_detector.get_reason()
                 log.warning(f"[{self.agent_id}] Stuck detected: {self.stuck_reason}")
-                stuck_msg = Message(
-                    role="assistant",
-                    content=f"I appear to be stuck: {self.stuck_reason}",
-                )
-                self.messages.append(stuck_msg)
-                await self.storage.append_message(
-                    self.agent_id, "assistant", stuck_msg.content
-                )
+                self._append_and_store("assistant", f"I appear to be stuck: {self.stuck_reason}")
                 break
 
-            response = await self.provider.generate(self.messages, tools=tools or None)
+            # Compress context if needed
+            msgs_to_send = self.messages
+            if self._compactor:
+                msgs_to_send = self._compactor.compact(self.messages)
+
+            # Rate limit LLM call
+            if self._rate_limiter:
+                await self._rate_limiter.acquire()
+
+            response = await self.provider.generate(msgs_to_send, tools=tools or None)
             self.total_input_tokens += response.input_tokens
             self.total_output_tokens += response.output_tokens
 
@@ -410,6 +420,14 @@ class AgentLoop:
         await self._finalize()
         return self.messages[-1].content if self.messages else ""
 
+    def _append_and_store(self, role: str, content: str) -> None:
+        """Append a message synchronously (for timeout/stuck messages)."""
+        msg = Message(role=role, content=content)
+        self.messages.append(msg)
+        # Storage append is async but we need it in sync context — schedule it
+        import asyncio
+        asyncio.ensure_future(self.storage.append_message(self.agent_id, role, content))
+
     def _build_tool_list(self) -> list[dict]:
         """Build the tool list based on permission tier."""
         if self.permission.tier == PermissionTier.NOTHING:
@@ -418,20 +436,14 @@ class AgentLoop:
 
     async def _append_assistant_message(self, response: "LLMResponse") -> None:
         """Append an assistant message to history and storage."""
-        from guild.providers.base import LLMResponse
-
-        msg = Message(
-            role="assistant",
-            content=response.content,
-            tool_calls=response.tool_calls,
-        )
+        msg = Message(role="assistant", content=response.content, tool_calls=response.tool_calls)
         self.messages.append(msg)
         await self.storage.append_message(
             self.agent_id, "assistant", response.content, tool_calls=response.tool_calls
         )
 
     async def _execute_tool_calls(self, tool_calls: list[dict]) -> None:
-        """Execute tool calls with permission checking and stuck detection."""
+        """Execute tool calls with permission checking, rate limiting, and stuck detection."""
         for tc in tool_calls:
             func = tc["function"]
             tool_name = func["name"]
@@ -443,52 +455,40 @@ class AgentLoop:
 
             allowed = self.permission.check(tool_name, self.agent_id, tool_args)
             await self.storage.log_audit(
-                "permission_check",
-                agent_id=self.agent_id,
-                details=json.dumps({
-                    "tool": tool_name,
-                    "allowed": allowed,
-                    "tier": self.permission.tier.value,
-                }),
+                "permission_check", agent_id=self.agent_id,
+                details=json.dumps({"tool": tool_name, "allowed": allowed, "tier": self.permission.tier.value}),
             )
 
             if not allowed:
-                tool_result = ToolResult(
-                    success=False,
-                    output="",
-                    error=f"tool '{tool_name}' blocked by {self.permission.tier.value} tier",
-                )
+                tool_result = ToolResult(success=False, output="", error=f"tool '{tool_name}' blocked by {self.permission.tier.value} tier")
                 log.warning(f"[{self.agent_id}] Permission denied: {tool_result.error}")
             else:
                 log.info(f"[{self.agent_id}] Tool: {tool_name}({list(tool_args.keys())})")
                 await self.storage.log_audit(
-                    "tool_call",
-                    agent_id=self.agent_id,
+                    "tool_call", agent_id=self.agent_id,
                     details=json.dumps({"tool": tool_name, "args": tool_args}),
                 )
-                tool_result = await execute_tool(tool_name, tool_args, self.working_dir)
+                # Execute with optional concurrency limiting
+                if self._tool_queue:
+                    tool_result = await self._tool_queue.execute(execute_tool(tool_name, tool_args, self.working_dir))
+                else:
+                    tool_result = await execute_tool(tool_name, tool_args, self.working_dir)
 
-            # Feed stuck detector with structured result
-            self._stuck_detector.record_turn(
-                success=tool_result.success,
-                error=tool_result.error,
-            )
+            # Feed stuck detector
+            self._stuck_detector.record_turn(success=tool_result.success, error=tool_result.error)
             self._stuck_detector.record_tool_call({"tool": tool_name, "args": tool_args})
 
-            # Send text representation to LLM
+            # Send text to LLM
             result_text = str(tool_result)
             tool_msg = Message(role="tool", content=result_text, tool_call_id=tc.get("id"))
             self.messages.append(tool_msg)
-            await self.storage.append_message(
-                self.agent_id, "tool", result_text, tool_call_id=tc.get("id")
-            )
+            await self.storage.append_message(self.agent_id, "tool", result_text, tool_call_id=tc.get("id"))
 
     async def _finalize(self) -> None:
         """Update agent status and token counts in storage."""
         self.status = AgentStatus.DONE
         await self.storage.update_agent(
-            self.agent_id,
-            status="done",
+            self.agent_id, status="done",
             token_input=str(self.total_input_tokens),
             token_output=str(self.total_output_tokens),
         )
