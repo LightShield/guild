@@ -161,3 +161,23 @@ class Storage:
             (agent_id, action, details, datetime.now().isoformat()),
         )
         await self.db.commit()
+
+    # --- Learnings ---
+
+    async def add_learning(
+        self, category: str, content: str, confidence: float = 0.5,
+        block_scope: str | None = None, source_task_id: str | None = None,
+    ) -> None:
+        now = datetime.now().isoformat()
+        await self.db.execute(
+            "INSERT INTO learnings (category, content, confidence, block_scope, created_at, last_validated, source_task_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (category, content, confidence, block_scope, now, now, source_task_id),
+        )
+        await self.db.commit()
+
+    async def list_learnings(self, min_confidence: float = 0.0) -> list[dict]:
+        async with self.db.execute(
+            "SELECT * FROM learnings WHERE confidence >= ? ORDER BY confidence DESC", (min_confidence,)
+        ) as cur:
+            return [dict(r) for r in await cur.fetchall()]
