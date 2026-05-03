@@ -95,3 +95,27 @@ Decisions made during implementation that weren't covered in REQUIREMENTS.md or 
 **Why (revised):** Original approach detected errors by checking if the string started with "Error:" — brittle and convention-dependent. `ToolResult` is the standard practice in tool-use systems. The harness gets a definitive success/failure signal without parsing. Custom tools follow the same contract.
 
 **Impact:** Shell commands with non-zero exit codes are now `success=False`. File-not-found is `success=False`. Search with no matches is `success=True` (no matches is not an error). Unknown tools are `success=False`.
+
+## D-15: MicroCompact preserves message count, only truncates content
+
+**Decision:** Context compression never removes messages from the conversation — it only shortens their content. System prompt and recent N messages are fully preserved. Old tool outputs are truncated oldest-first.
+
+**Why:** Removing messages could break tool call/result pairing (the model expects a tool result for every tool call). Truncation preserves the conversation structure while reducing token count. The `[truncated]` marker tells the model that content was shortened.
+
+## D-16: Autonomy timeout is wall-clock, checked per-turn
+
+**Decision:** `timeout_seconds` is checked at the start of each turn (before calling the model). It uses `time.monotonic()` for wall-clock measurement, not token count or turn count.
+
+**Why:** Wall-clock is the most intuitive measure for "run for max 4 hours." Token-based limits are handled separately by budget controls. Turn-based limits already exist via `max_turns`. The check happens before the model call so we don't waste a model call just to discover we're over time.
+
+## D-17: Learning confidence uses asymmetric adjustment
+
+**Decision:** `validate_learning()` increases confidence by +0.1, `invalidate_learning()` decreases by -0.15. Capped at [0.0, 1.0].
+
+**Why:** Invalidation should have more impact than validation — it's easier to confirm something works than to discover it doesn't. A learning that fails once should lose more confidence than it gains from one success. This makes the system conservative: learnings need multiple validations to reach high confidence but can be demoted quickly.
+
+## D-18: Config CLI writes TOML manually
+
+**Decision:** `guild config --set` parses the existing TOML, modifies the value, and writes it back using simple string formatting (not a TOML library writer).
+
+**Why:** Python's `tomllib` is read-only (no write support in stdlib). Adding `tomli-w` as a dependency for one feature is overkill. The manual writer handles the simple flat-section TOML format we use. If config format becomes more complex, we'll add `tomli-w`.
