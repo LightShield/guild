@@ -27,9 +27,10 @@ def _default_prompt(tool_name: str, agent_id: str, args: dict) -> bool:
         True if the user approves the tool call.
     """
     import json
+    import logging
 
-    print(f"\n🔒 Agent [{agent_id}] wants to use tool: {tool_name}")
-    print(f"   Args: {json.dumps(args, indent=2)[:500]}")
+    logging.info(f"Agent [{agent_id}] wants to use tool: {tool_name}")
+    logging.info(f"Args: {json.dumps(args, indent=2)[:500]}")
     resp = input("   Allow? [y]es / [n]o / [a]lways this tool: ").strip().lower()
     return resp in ("y", "yes", "a", "always")
 

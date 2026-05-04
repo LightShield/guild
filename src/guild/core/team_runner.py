@@ -15,6 +15,8 @@ from guild.core.permissions import PermissionChecker
 from guild.core.storage import Storage
 from guild.providers.base import LLMProvider
 
+__all__ = ["TeamRunner"]
+
 log = logging.getLogger(__name__)
 
 

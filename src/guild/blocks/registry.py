@@ -244,9 +244,25 @@ class BlockRegistry:
                 logging.getLogger(__name__).warning(f"Failed to load block from {f}: {e}")
 
     def get_block(self, name: str) -> BlockDef | None:
+        """Look up a block definition by name.
+
+        Args:
+            name: Block name.
+
+        Returns:
+            BlockDef or None if not found.
+        """
         return self.blocks.get(name)
 
     def get_team(self, name: str) -> TeamDef | None:
+        """Look up a team definition by name.
+
+        Args:
+            name: Team name.
+
+        Returns:
+            TeamDef or None if not found.
+        """
         return self.teams.get(name)
 
     def validate_team(self, team: TeamDef) -> list[str]:
