@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+from typing import Any
 
 __all__ = ["RateLimiter", "ToolQueue"]
 
@@ -51,7 +52,7 @@ class ToolQueue:
         self._semaphore = asyncio.Semaphore(max_concurrent)
         self._active = 0
 
-    async def execute(self, coro):
+    async def execute(self, coro: Any) -> Any:
         """Execute a coroutine with concurrency limiting.
 
         Args:
