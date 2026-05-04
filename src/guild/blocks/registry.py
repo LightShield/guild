@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+__all__ = ["BlockRegistry", "BUILTIN_BLOCKS", "BUILTIN_TEAMS", "TeamDef", "Connection", "LoopDef"]
+
 import tomllib
 from pathlib import Path
 from typing import Any

@@ -5,6 +5,8 @@ All features are accessible via CLI commands. The GUI is a wrapper on top of thi
 
 from __future__ import annotations
 
+__all__ = ["app"]
+
 import asyncio
 import uuid
 from pathlib import Path

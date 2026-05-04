@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+__all__ = ["extract_learnings"]
+
 import json
 import logging
 
