@@ -421,12 +421,9 @@ class AgentLoop:
         return self.messages[-1].content if self.messages else ""
 
     def _append_and_store(self, role: str, content: str) -> None:
-        """Append a message synchronously (for timeout/stuck messages)."""
+        """Append a message to history. Storage write happens in _finalize."""
         msg = Message(role=role, content=content)
         self.messages.append(msg)
-        # Storage append is async but we need it in sync context — schedule it
-        import asyncio
-        asyncio.ensure_future(self.storage.append_message(self.agent_id, role, content))
 
     def _build_tool_list(self) -> list[dict]:
         """Build the tool list based on permission tier."""
@@ -485,7 +482,15 @@ class AgentLoop:
             await self.storage.append_message(self.agent_id, "tool", result_text, tool_call_id=tc.get("id"))
 
     async def _finalize(self) -> None:
-        """Update agent status and token counts in storage."""
+        """Update agent status, persist pending messages, and save token counts."""
+        # Persist any messages added by _append_and_store (timeout/stuck)
+        stored = await self.storage.get_messages(self.agent_id)
+        stored_count = len(stored)
+        for msg in self.messages[stored_count:]:
+            await self.storage.append_message(
+                self.agent_id, msg.role, msg.content, tool_call_id=msg.tool_call_id
+            )
+
         self.status = AgentStatus.DONE
         await self.storage.update_agent(
             self.agent_id, status="done",

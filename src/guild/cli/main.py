@@ -58,8 +58,13 @@ def _rpg_callback(value: bool) -> None:
 @app.callback()
 def main_callback(
     rpg: bool = typer.Option(False, "--rpg", help="Enable RPG fun mode", callback=_rpg_callback, is_eager=True),
+    version: bool = typer.Option(False, "--version", "-V", help="Show version", is_eager=True),
 ) -> None:
     """Guild — locally-focused agent harness for LLM-powered teams."""
+    if version:
+        from guild import __version__
+        console.print(f"Guild v{__version__}")
+        raise typer.Exit(0)
 
 
 # --- guild init ---
@@ -194,7 +199,9 @@ def task(
                 _out(f"[red]Template '{template}' not found.[/red]")
                 await storage.close()
                 raise typer.Exit(1)
-            actual_description = tmpl.render() if not description else tmpl.render(**{"input": description})
+            # Use description as the value for all template parameters
+            params = {p: description for p in tmpl.parameters} if description else {}
+            actual_description = tmpl.render(**params)
             actual_team = actual_team or tmpl.team
             _out(f"[blue]Template:[/blue] {tmpl.name}")
 
@@ -207,7 +214,10 @@ def task(
         offline_mgr = OfflineManager(provider)
         if not await offline_mgr.check_connectivity():
             _out(f"[red]Cannot reach {config.provider.name} at {config.provider.base_url}[/red]")
-            _out("Make sure Ollama is running: [bold]ollama serve[/bold]")
+            _out("Make sure Ollama is running:")
+            _out("  1. Install: [bold]curl -fsSL https://ollama.ai/install.sh | sh[/bold]")
+            _out("  2. Start:   [bold]ollama serve[/bold]")
+            _out(f"  3. Pull:    [bold]ollama pull {config.provider.model}[/bold]")
             await storage.update_task(task_id, status="failed", result="Provider unreachable")
             await storage.close()
             raise typer.Exit(1)
