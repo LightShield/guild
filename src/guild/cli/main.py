@@ -55,16 +55,19 @@ def _rpg_callback(value: bool) -> None:
     _rpg_mode = value
 
 
-@app.callback()
+@app.callback(invoke_without_command=True)
 def main_callback(
+    ctx: typer.Context,
     rpg: bool = typer.Option(False, "--rpg", help="Enable RPG fun mode", callback=_rpg_callback, is_eager=True),
-    version: bool = typer.Option(False, "--version", "-V", help="Show version", is_eager=True),
+    version: bool = typer.Option(False, "--version", "-V", help="Show version"),
 ) -> None:
     """Guild — locally-focused agent harness for LLM-powered teams."""
     if version:
         from guild import __version__
         console.print(f"Guild v{__version__}")
         raise typer.Exit(0)
+    if ctx.invoked_subcommand is None:
+        console.print(ctx.get_help())
 
 
 # --- guild init ---
