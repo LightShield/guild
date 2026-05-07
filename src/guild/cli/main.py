@@ -169,14 +169,20 @@ def chat(
     working_dir = str(guild_dir.parent)
 
     try:
+        loop = _create_chat_loop(config, working_dir, permission)
+        first_turn = True
+
         while True:
             user_input = console.input("[bold blue]> [/bold blue]")
             if not user_input.strip():
                 continue
 
-            result = asyncio.run(
-                _run_task(config, working_dir, user_input, permission, 0, guild_dir)
-            )
+            if first_turn:
+                result = asyncio.run(loop.run(_GUILD_MASTER_PROMPT, user_input))
+                first_turn = False
+            else:
+                result = asyncio.run(loop.send(user_input))
+
             console.print(f"\n{result}\n")
     except (KeyboardInterrupt, EOFError):
         console.print("\n[dim]Goodbye.[/dim]")
@@ -247,6 +253,43 @@ def audit(
             entry.get("agent_id", "") or "-",
             entry.get("action", ""),
             entry.get("details", "") or "",
+        )
+
+    console.print(table)
+
+
+@app.command()
+def decisions(
+    task_id: Optional[str] = typer.Option(None, "--task", "-t", help="Filter by task ID."),
+    limit: int = typer.Option(50, "--limit", "-n", help="Number of entries."),
+) -> None:
+    """Show recent decision log entries."""
+    guild_dir = find_guild_dir()
+    if guild_dir is None:
+        console.print("[red]Error:[/red] Not a guild project (no .guild/ found).")
+        raise typer.Exit(code=1)
+
+    db_path = guild_dir / "guild.db"
+    entries = asyncio.run(_fetch_decisions(db_path, task_id, limit))
+
+    if not entries:
+        console.print("[dim]No decisions found.[/dim]")
+        return
+
+    table = Table(title="Decision Log")
+    table.add_column("Timestamp", style="dim")
+    table.add_column("Agent", style="cyan")
+    table.add_column("Decision", style="yellow")
+    table.add_column("Rationale", style="white")
+    table.add_column("Alternatives", style="dim")
+
+    for entry in entries:
+        table.add_row(
+            entry.get("timestamp", ""),
+            entry.get("agent_id", "") or "-",
+            entry.get("decision", ""),
+            entry.get("rationale", ""),
+            entry.get("alternatives", "") or "-",
         )
 
     console.print(table)
@@ -422,6 +465,34 @@ def _get_counts(db_path: Path) -> tuple[int, int]:
     return asyncio.run(_query())
 
 
+def _create_chat_loop(config, working_dir: str, permission: str):
+    """Create an AgentLoop instance for interactive chat (REQ-06.9)."""
+    from guild.agent.loop import AgentLoop
+    from guild.permissions.checker import PermissionChecker, PermissionTier
+    from guild.tools.file_ops import execute_file_read, execute_file_write
+    from guild.tools.search import execute_glob, execute_search
+    from guild.tools.shell import execute_shell
+
+    provider = create_provider(config.base_url, config.model)
+    tool_executors = {
+        "file_read": execute_file_read,
+        "file_write": execute_file_write,
+        "shell": execute_shell,
+        "search": execute_search,
+        "glob": execute_glob,
+    }
+
+    tier = PermissionTier(permission)
+    _checker = PermissionChecker(tier=tier)
+
+    return AgentLoop(
+        provider=provider,
+        tool_executors=tool_executors,
+        working_dir=working_dir,
+        max_turns=50,
+    )
+
+
 async def _run_task(
     config,
     working_dir: str,
@@ -499,6 +570,24 @@ async def _fetch_audit(db_path: Path, limit: int) -> list[dict]:
     store = Storage(db_path)
     await store.connect()
     entries = await store.list_audit(limit=limit)
+    await store.close()
+    return entries
+
+
+async def _fetch_decisions(
+    db_path: Path,
+    task_id: str | None,
+    limit: int,
+) -> list[dict]:
+    """Fetch decision log entries from the database."""
+    from guild.storage.sqlite import Storage
+
+    if not db_path.exists():
+        return []
+
+    store = Storage(db_path)
+    await store.connect()
+    entries = await store.list_decisions(task_id=task_id, limit=limit)
     await store.close()
     return entries
 

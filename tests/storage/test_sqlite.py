@@ -188,6 +188,102 @@ class TestAudit:
 
 
 @pytest.mark.unit
+@pytest.mark.req("REQ-06.12")
+class TestDecisions:
+    """Decision logging operations."""
+
+    async def test_log_decision_persists_to_db(self, storage: Storage) -> None:
+        """log_decision stores a decision record in the database."""
+        await storage.log_decision(
+            task_id="t1",
+            agent_id="a1",
+            decision="Use SQLite over PostgreSQL",
+            rationale="Simpler deployment, no server needed",
+        )
+        decisions = await storage.list_decisions()
+        assert len(decisions) == 1
+        assert decisions[0]["decision"] == "Use SQLite over PostgreSQL"
+        assert decisions[0]["rationale"] == "Simpler deployment, no server needed"
+        assert decisions[0]["task_id"] == "t1"
+        assert decisions[0]["agent_id"] == "a1"
+        assert decisions[0]["reversible"] == 1
+
+    async def test_log_decision_with_alternatives(self, storage: Storage) -> None:
+        """log_decision stores rejected alternatives as JSON."""
+        await storage.log_decision(
+            task_id="t1",
+            agent_id="a1",
+            decision="Use async/await",
+            rationale="Better concurrency model",
+            alternatives=["threading", "multiprocessing"],
+        )
+        decisions = await storage.list_decisions()
+        assert len(decisions) == 1
+        import json
+
+        alts = json.loads(decisions[0]["alternatives"])
+        assert alts == ["threading", "multiprocessing"]
+
+    async def test_list_decisions_returns_recent_first(
+        self, storage: Storage
+    ) -> None:
+        """Decisions are returned most-recent first."""
+        await storage.log_decision(
+            task_id="t1",
+            agent_id="a1",
+            decision="First decision",
+            rationale="First reason",
+        )
+        await storage.log_decision(
+            task_id="t1",
+            agent_id="a1",
+            decision="Second decision",
+            rationale="Second reason",
+        )
+        await storage.log_decision(
+            task_id="t1",
+            agent_id="a1",
+            decision="Third decision",
+            rationale="Third reason",
+        )
+        decisions = await storage.list_decisions()
+        assert decisions[0]["decision"] == "Third decision"
+        assert decisions[2]["decision"] == "First decision"
+
+    async def test_list_decisions_filters_by_task_id(
+        self, storage: Storage
+    ) -> None:
+        """list_decisions with task_id returns only that task's decisions."""
+        await storage.log_decision(
+            task_id="t1",
+            agent_id="a1",
+            decision="Decision for t1",
+            rationale="Reason for t1",
+        )
+        await storage.log_decision(
+            task_id="t2",
+            agent_id="a2",
+            decision="Decision for t2",
+            rationale="Reason for t2",
+        )
+        t1_decisions = await storage.list_decisions(task_id="t1")
+        assert len(t1_decisions) == 1
+        assert t1_decisions[0]["decision"] == "Decision for t1"
+
+    async def test_list_decisions_respects_limit(self, storage: Storage) -> None:
+        """list_decisions respects the limit parameter."""
+        for i in range(10):
+            await storage.log_decision(
+                task_id="t1",
+                agent_id="a1",
+                decision=f"Decision {i}",
+                rationale=f"Reason {i}",
+            )
+        decisions = await storage.list_decisions(limit=3)
+        assert len(decisions) == 3
+
+
+@pytest.mark.unit
 @pytest.mark.req("REQ-06.6")
 class TestPersistence:
     """Data survives close/reconnect cycles."""

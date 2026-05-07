@@ -332,6 +332,78 @@ class TestResumeCommand:
 
 
 @pytest.mark.unit
+@pytest.mark.req("REQ-06.12")
+class TestDecisionsCommand:
+    """Tests for `guild decisions`."""
+
+    def test_decisions_command_shows_entries(self, guild_app, guild_project: Path) -> None:
+        """Verify decisions command displays logged decisions."""
+        from guild.storage.sqlite import Storage
+
+        db_path = guild_project / ".guild" / "guild.db"
+
+        async def _setup():
+            store = Storage(db_path)
+            await store.connect()
+            await store.log_decision(
+                task_id="task-1",
+                agent_id="agent-1",
+                decision="Use Typer for CLI",
+                rationale="Excellent type annotation support",
+                alternatives=["click", "argparse"],
+            )
+            await store.close()
+
+        asyncio.run(_setup())
+
+        result = runner.invoke(guild_app, ["decisions"], terminal_width=200)
+
+        assert result.exit_code == 0
+        assert "Typer" in result.output
+        assert "Decision Log" in result.output
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-06.9")
+class TestChatMultiTurn:
+    """Tests for multi-turn chat (REQ-06.9)."""
+
+    def test_chat_reuses_agent_loop_across_turns(self, guild_app, guild_project: Path) -> None:
+        """Verify chat keeps one AgentLoop and uses send() for follow-ups."""
+        mock_response = AsyncMock(
+            content="Got it.",
+            tool_calls=None,
+            has_tool_call=False,
+            input_tokens=10,
+            output_tokens=20,
+            model="test",
+        )
+
+        with patch("guild.cli.main.create_provider") as mock_pf:
+            mock_provider = AsyncMock()
+            mock_provider.generate = AsyncMock(return_value=mock_response)
+            mock_pf.return_value = mock_provider
+
+            # Simulate two inputs then Ctrl+C (EOFError)
+            result = runner.invoke(
+                guild_app,
+                ["chat"],
+                input="hello\nworld\n",
+            )
+
+        assert result.exit_code == 0
+        # Provider's generate was called at least twice (once per turn)
+        assert mock_provider.generate.call_count >= 2
+
+        # On the second call, the messages should include the first exchange
+        second_call_messages = mock_provider.generate.call_args_list[1][0][0]
+        roles = [m["role"] for m in second_call_messages]
+        # Second call should include: system, user, assistant, user
+        assert roles.count("user") == 2
+        assert roles.count("assistant") >= 1
+
+
+@pytest.mark.unit
 @pytest.mark.req("REQ-25.8")
 class TestKillAllFlag:
     """Tests for `guild kill --all`."""

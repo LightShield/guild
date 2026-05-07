@@ -51,6 +51,9 @@ class AgentLoop:
     async def run(self, system_prompt: str, user_input: str) -> str:
         """Execute the agent loop until completion or max_turns.
 
+        Resets the conversation history. Use send() to continue an
+        existing conversation without resetting.
+
         Returns the final text content from the model.
         """
         self.messages = [
@@ -58,7 +61,24 @@ class AgentLoop:
             {"role": "user", "content": user_input},
         ]
         self.recent_tool_calls = []
+        return await self._execute_turns()
 
+    async def send(self, user_input: str) -> str:
+        """Continue an existing conversation with a new user message.
+
+        Unlike run(), this preserves the full conversation history.
+        Raises RuntimeError if run() has not been called first.
+
+        Returns the final text content from the model.
+        """
+        if not self.messages:
+            raise RuntimeError("Must call run() before send().")
+        self.messages.append({"role": "user", "content": user_input})
+        self.recent_tool_calls = []
+        return await self._execute_turns()
+
+    async def _execute_turns(self) -> str:
+        """Drive the tool-calling loop until the model stops or max_turns."""
         tool_schemas = self._get_tool_schemas()
         last_content = ""
 

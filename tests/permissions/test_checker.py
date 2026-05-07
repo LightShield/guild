@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from guild.permissions.checker import PermissionChecker, PermissionTier
+from guild.permissions.checker import HARDCODED_NEVER, PermissionChecker, PermissionTier
 
 # ---------------------------------------------------------------------------
 # REQ-03.1: Tier 0 "Nothing" — no tool use at all
@@ -211,3 +211,175 @@ class TestSetTier:
         # Should re-prompt since approvals were cleared
         checker.check("file_read", "agent-1", {"path": "/b"})
         assert call_count == 2
+
+
+# ---------------------------------------------------------------------------
+# REQ-03.7: Hardcoded-never layer — destructive/irreversible actions blocked
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-03.7")
+class TestHardcodedNever:
+    """Hardcoded-never layer blocks destructive actions regardless of tier."""
+
+    def test_hardcoded_never_blocks_git_push_force_in_autopilot(self) -> None:
+        """git push --force is blocked even in AUTOPILOT mode."""
+        checker = PermissionChecker(tier=PermissionTier.AUTOPILOT)
+        result = checker.check("shell", "agent-1", {"command": "git push --force origin main"})
+        assert result is False
+
+    def test_hardcoded_never_blocks_rm_rf_slash_in_autopilot(self) -> None:
+        """rm -rf / is blocked even in AUTOPILOT mode."""
+        checker = PermissionChecker(tier=PermissionTier.AUTOPILOT)
+        result = checker.check("shell", "agent-1", {"command": "rm -rf /"})
+        assert result is False
+
+    def test_hardcoded_never_blocks_git_reset_hard_in_autopilot(self) -> None:
+        """git reset --hard is blocked even in AUTOPILOT mode."""
+        checker = PermissionChecker(tier=PermissionTier.AUTOPILOT)
+        result = checker.check("shell", "agent-1", {"command": "git reset --hard HEAD~3"})
+        assert result is False
+
+    def test_hardcoded_never_allows_safe_git_push(self) -> None:
+        """Normal git push (without --force) is not blocked."""
+        checker = PermissionChecker(tier=PermissionTier.AUTOPILOT)
+        result = checker.check("shell", "agent-1", {"command": "git push origin main"})
+        assert result is True
+
+    def test_hardcoded_never_allows_normal_rm(self) -> None:
+        """Normal rm (without -rf /) is not blocked."""
+        checker = PermissionChecker(tier=PermissionTier.AUTOPILOT)
+        result = checker.check("shell", "agent-1", {"command": "rm temp_file.txt"})
+        assert result is True
+
+    def test_hardcoded_never_returns_reason_when_blocked(self) -> None:
+        """check_hardcoded_never returns a descriptive reason when blocking."""
+        checker = PermissionChecker(tier=PermissionTier.AUTOPILOT)
+        allowed, reason = checker.check_hardcoded_never(
+            "shell", {"command": "git push --force origin main"}
+        )
+        assert allowed is False
+        assert "git push --force" in reason
+        assert "REQ-03.7" in reason
+
+    def test_hardcoded_never_blocks_git_push_short_force_flag(self) -> None:
+        """git push -f (short flag) is also blocked."""
+        checker = PermissionChecker(tier=PermissionTier.AUTOPILOT)
+        result = checker.check("shell", "agent-1", {"command": "git push -f origin main"})
+        assert result is False
+
+    def test_hardcoded_never_blocks_rm_rf_home(self) -> None:
+        """rm -rf ~ is blocked."""
+        checker = PermissionChecker(tier=PermissionTier.AUTOPILOT)
+        result = checker.check("shell", "agent-1", {"command": "rm -rf ~/."})
+        assert result is False
+
+    def test_hardcoded_never_blocks_mkfs(self) -> None:
+        """mkfs commands are blocked."""
+        checker = PermissionChecker(tier=PermissionTier.AUTOPILOT)
+        result = checker.check("shell", "agent-1", {"command": "mkfs.ext4 /dev/sda1"})
+        assert result is False
+
+    def test_hardcoded_never_blocks_dd(self) -> None:
+        """dd if= commands are blocked."""
+        checker = PermissionChecker(tier=PermissionTier.AUTOPILOT)
+        result = checker.check(
+            "shell", "agent-1", {"command": "dd if=/dev/zero of=/dev/sda bs=1M"}
+        )
+        assert result is False
+
+    def test_hardcoded_never_blocks_sudo_rm(self) -> None:
+        """sudo rm is blocked."""
+        checker = PermissionChecker(tier=PermissionTier.AUTOPILOT)
+        result = checker.check("shell", "agent-1", {"command": "sudo rm -rf /var/log"})
+        assert result is False
+
+    def test_hardcoded_never_blocks_git_rebase_main(self) -> None:
+        """git rebase onto main is blocked."""
+        checker = PermissionChecker(tier=PermissionTier.AUTOPILOT)
+        result = checker.check("shell", "agent-1", {"command": "git rebase main"})
+        assert result is False
+
+    def test_hardcoded_never_blocks_git_branch_delete_main(self) -> None:
+        """git branch -D main is blocked."""
+        checker = PermissionChecker(tier=PermissionTier.AUTOPILOT)
+        result = checker.check("shell", "agent-1", {"command": "git branch -D main"})
+        assert result is False
+
+    def test_hardcoded_never_override_flag(self) -> None:
+        """Explicit allow_hardcoded_never flag bypasses the layer."""
+        checker = PermissionChecker(tier=PermissionTier.AUTOPILOT)
+        allowed, reason = checker.check_hardcoded_never(
+            "shell", {"command": "git push --force origin main"}, allow_hardcoded_never=True
+        )
+        assert allowed is True
+        assert reason == ""
+
+    def test_hardcoded_never_does_not_affect_non_shell_tools(self) -> None:
+        """Non-shell tools are not subject to shell-specific patterns."""
+        checker = PermissionChecker(tier=PermissionTier.AUTOPILOT)
+        # file_write is not "shell", so patterns don't apply
+        result = checker.check("file_write", "agent-1", {"path": "/tmp/x", "content": "x"})
+        assert result is True
+
+    def test_hardcoded_never_works_with_cmd_key(self) -> None:
+        """Shell tool using 'cmd' arg key is also checked."""
+        checker = PermissionChecker(tier=PermissionTier.AUTOPILOT)
+        result = checker.check("shell", "agent-1", {"cmd": "git push --force origin main"})
+        assert result is False
+
+    def test_hardcoded_never_list_not_empty(self) -> None:
+        """HARDCODED_NEVER has entries defined."""
+        assert len(HARDCODED_NEVER) > 0
+        for rule in HARDCODED_NEVER:
+            assert "tool" in rule
+            assert "pattern" in rule
+            assert "reason" in rule
+
+
+# ---------------------------------------------------------------------------
+# REQ-03.8: Reversibility — safe operations allowed in all tiers
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-03.8")
+class TestReversibilitySafeOperations:
+    """Safe, reversible operations remain allowed in all tiers."""
+
+    def test_reversibility_safe_operations_allowed_in_all_tiers(self) -> None:
+        """Non-destructive commands like ls, cat, git status pass in all tiers."""
+        safe_commands = [
+            "ls -la",
+            "cat README.md",
+            "git status",
+            "git log --oneline",
+            "git diff HEAD",
+            "git push origin feature-branch",
+            "rm temp.txt",
+            "rm -r build/",
+            "git branch -d feature-x",
+            "git rebase feature-branch",
+        ]
+
+        for tier in PermissionTier:
+            if tier == PermissionTier.NOTHING:
+                continue  # NOTHING blocks everything, unrelated to hardcoded-never
+            if tier == PermissionTier.ASK:
+                # ASK tier requires prompt_fn, skip for this test
+                continue
+            if tier == PermissionTier.SCOPED:
+                checker = PermissionChecker(
+                    tier=tier,
+                    allowed_tools=["shell"],
+                    allowed_paths=["/"],
+                )
+            else:
+                checker = PermissionChecker(tier=tier)
+
+            for cmd in safe_commands:
+                result = checker.check("shell", "agent-1", {"command": cmd})
+                assert result is True, (
+                    f"Safe command '{cmd}' was blocked in tier {tier.value}"
+                )

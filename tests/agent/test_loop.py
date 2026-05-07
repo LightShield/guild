@@ -311,6 +311,142 @@ class TestLoopCompletionHeuristics:
         assert nudge_found
 
 
+@pytest.mark.unit
+@pytest.mark.req("REQ-06.9")
+class TestMultiTurnConversation:
+    """Tests for send() — multi-turn conversation support."""
+
+    async def test_send_preserves_conversation_history(self) -> None:
+        """send() appends to existing messages rather than resetting."""
+        provider = _make_provider(
+            # Response to run()
+            LLMResponse(content="Hello! How can I help?", tool_calls=None),
+            # Response to send()
+            LLMResponse(content="Your name is Alice.", tool_calls=None),
+        )
+        loop = AgentLoop(provider=provider, tool_executors=_make_tool_executors())
+
+        await loop.run(system_prompt="You are helpful.", user_input="My name is Alice.")
+        result = await loop.send("What is my name?")
+
+        assert result == "Your name is Alice."
+        # Verify system prompt is still at the start
+        assert loop.messages[0]["role"] == "system"
+        assert loop.messages[0]["content"] == "You are helpful."
+        # Verify both user messages are present
+        user_msgs = [m for m in loop.messages if m.get("role") == "user"]
+        assert len(user_msgs) >= 2
+        assert any("Alice" in m["content"] for m in user_msgs)
+        assert any("name" in m["content"] for m in user_msgs)
+
+    async def test_send_after_run_maintains_context(self) -> None:
+        """send() sees tool results from the initial run()."""
+        provider = _make_provider(
+            # run(): tool call then final response
+            LLMResponse(
+                content="",
+                tool_calls=[{"function": {"name": "file_read", "arguments": {"path": "a.txt"}}}],
+            ),
+            LLMResponse(content="The file contains: file contents here", tool_calls=None),
+            # send(): response referencing prior context
+            LLMResponse(content="Yes, the file had: file contents here", tool_calls=None),
+        )
+        loop = AgentLoop(provider=provider, tool_executors=_make_tool_executors())
+
+        await loop.run(system_prompt="You are helpful.", user_input="Read a.txt")
+        result = await loop.send("What did the file contain?")
+
+        assert "file contents here" in result
+        # The generate call for send() should include the full history
+        final_call_messages = provider.generate.call_args_list[-1][0][0]
+        # Should include system, user, assistant, tool, assistant, user
+        roles = [m["role"] for m in final_call_messages]
+        assert roles[0] == "system"
+        assert "tool" in roles  # tool result from run() is preserved
+
+    async def test_multiple_sends_accumulate_messages(self) -> None:
+        """Multiple send() calls accumulate all messages in history."""
+        provider = _make_provider(
+            LLMResponse(content="Response 1", tool_calls=None),
+            LLMResponse(content="Response 2", tool_calls=None),
+            LLMResponse(content="Response 3", tool_calls=None),
+            LLMResponse(content="Response 4", tool_calls=None),
+        )
+        loop = AgentLoop(provider=provider, tool_executors=_make_tool_executors())
+
+        await loop.run(system_prompt="sys", user_input="msg1")
+        await loop.send("msg2")
+        await loop.send("msg3")
+        result = await loop.send("msg4")
+
+        assert result == "Response 4"
+        # Should have 4 user messages and 4 assistant messages
+        user_msgs = [m for m in loop.messages if m["role"] == "user"]
+        assistant_msgs = [m for m in loop.messages if m["role"] == "assistant"]
+        assert len(user_msgs) == 4
+        assert len(assistant_msgs) == 4
+
+    async def test_run_resets_but_send_does_not(self) -> None:
+        """run() resets conversation; send() preserves it."""
+        provider = _make_provider(
+            LLMResponse(content="First run response", tool_calls=None),
+            LLMResponse(content="After send", tool_calls=None),
+            # Second run() resets everything
+            LLMResponse(content="Second run response", tool_calls=None),
+        )
+        loop = AgentLoop(provider=provider, tool_executors=_make_tool_executors())
+
+        await loop.run(system_prompt="sys1", user_input="first")
+        await loop.send("follow-up")
+
+        # At this point we should have 2 user messages
+        user_msgs_before = [m for m in loop.messages if m["role"] == "user"]
+        assert len(user_msgs_before) == 2
+
+        # Now run() resets
+        await loop.run(system_prompt="sys2", user_input="fresh start")
+
+        # After run(), only 1 user message (the new one)
+        user_msgs_after = [m for m in loop.messages if m["role"] == "user"]
+        assert len(user_msgs_after) == 1
+        assert user_msgs_after[0]["content"] == "fresh start"
+        # System prompt changed
+        assert loop.messages[0]["content"] == "sys2"
+
+    async def test_send_without_run_raises_error(self) -> None:
+        """send() before run() raises RuntimeError."""
+        provider = _make_provider(
+            LLMResponse(content="Nope", tool_calls=None),
+        )
+        loop = AgentLoop(provider=provider, tool_executors=_make_tool_executors())
+
+        with pytest.raises(RuntimeError, match="run.*before"):
+            await loop.send("hello")
+
+    async def test_send_resets_recent_tool_calls_per_turn(self) -> None:
+        """send() resets recent_tool_calls to avoid stale dedup state."""
+        same_call = {"function": {"name": "file_read", "arguments": {"path": "a.txt"}}}
+        provider = _make_provider(
+            # run(): calls file_read
+            LLMResponse(content="", tool_calls=[same_call]),
+            LLMResponse(content="Read it.", tool_calls=None),
+            # send(): calls file_read again — should NOT be deduped
+            LLMResponse(content="", tool_calls=[same_call]),
+            LLMResponse(content="Read it again.", tool_calls=None),
+        )
+        loop = AgentLoop(provider=provider, tool_executors=_make_tool_executors())
+
+        await loop.run(system_prompt="sys", user_input="read a.txt")
+        result = await loop.send("read a.txt again")
+
+        assert result == "Read it again."
+        # The tool should have been executed (not deduped)
+        tool_msgs = [m for m in loop.messages if m["role"] == "tool"]
+        # Should have 2 real tool results (not dedup messages)
+        real_tool_msgs = [m for m in tool_msgs if "already" not in m.get("content", "").lower()]
+        assert len(real_tool_msgs) == 2
+
+
 @pytest.mark.integration
 @pytest.mark.req("REQ-06.8")
 class TestRealOllama:

@@ -1,11 +1,13 @@
 """SQLite-backed persistence layer for Guild state.
 
 Uses aiosqlite with WAL mode for concurrent read access and crash safety.
-All state — tasks, agents, messages, audit log — lives in a single SQLite file.
+All state — tasks, agents, messages, audit log, decisions — lives in a
+single SQLite file.
 """
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
@@ -54,6 +56,17 @@ CREATE TABLE IF NOT EXISTS audit_log (
     agent_id TEXT,
     action TEXT NOT NULL,
     details TEXT,
+    timestamp TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS decisions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id TEXT,
+    agent_id TEXT,
+    decision TEXT NOT NULL,
+    rationale TEXT NOT NULL,
+    alternatives TEXT,
+    reversible BOOLEAN DEFAULT 1,
     timestamp TEXT NOT NULL
 );
 """
@@ -229,6 +242,61 @@ class Storage:
         cursor = await self._db.execute(
             "SELECT * FROM audit_log ORDER BY id DESC LIMIT ?", (limit,)
         )
+        rows = await cursor.fetchall()
+        return [dict(r) for r in rows]
+
+    # ------------------------------------------------------------------
+    # Decisions
+    # ------------------------------------------------------------------
+
+    async def log_decision(
+        self,
+        task_id: str | None,
+        agent_id: str | None,
+        decision: str,
+        rationale: str,
+        alternatives: list[str] | None = None,
+        *,
+        reversible: bool = True,
+    ) -> None:
+        """Record a non-trivial decision with rationale."""
+        assert self._db is not None
+        alts_json = json.dumps(alternatives) if alternatives else None
+        await self._db.execute(
+            "INSERT INTO decisions"
+            " (task_id, agent_id, decision, rationale,"
+            "  alternatives, reversible, timestamp)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (
+                task_id,
+                agent_id,
+                decision,
+                rationale,
+                alts_json,
+                reversible,
+                _now(),
+            ),
+        )
+        await self._db.commit()
+
+    async def list_decisions(
+        self,
+        task_id: str | None = None,
+        limit: int = 50,
+    ) -> list[dict]:
+        """List decisions, most recent first, optionally by task."""
+        assert self._db is not None
+        if task_id is None:
+            cursor = await self._db.execute(
+                "SELECT * FROM decisions ORDER BY id DESC LIMIT ?",
+                (limit,),
+            )
+        else:
+            cursor = await self._db.execute(
+                "SELECT * FROM decisions"
+                " WHERE task_id = ? ORDER BY id DESC LIMIT ?",
+                (task_id, limit),
+            )
         rows = await cursor.fetchall()
         return [dict(r) for r in rows]
 
