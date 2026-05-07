@@ -140,4 +140,27 @@ TOOL_SCHEMAS: dict[str, dict] = {
             "required": ["pattern"],
         },
     },
+    "spawn_agent": {
+        "name": "spawn_agent",
+        "description": (
+            "Spawn a sub-agent to work on a subtask. The sub-agent runs "
+            "independently and returns its result."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "task": {
+                    "type": "string",
+                    "description": "Task description for the sub-agent.",
+                },
+                "system_prompt": {
+                    "type": "string",
+                    "description": (
+                        "System prompt for the sub-agent (optional)."
+                    ),
+                },
+            },
+            "required": ["task"],
+        },
+    },
 }

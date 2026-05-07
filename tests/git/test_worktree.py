@@ -1,0 +1,188 @@
+"""Tests for guild.git.worktree — worktree isolation for tasks."""
+
+import asyncio
+from pathlib import Path
+
+import pytest
+
+from guild.git.worktree import WorktreeManager
+
+
+async def _init_test_repo(tmp_path: Path) -> Path:
+    """Create a minimal git repo with an initial commit for testing."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    async def run(cmd: str) -> None:
+        proc = await asyncio.create_subprocess_shell(
+            cmd,
+            cwd=str(repo),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+        stdout, _ = await proc.communicate()
+        if proc.returncode != 0:
+            raise RuntimeError(f"Command failed: {cmd}\n{stdout.decode()}")
+
+    await run("git init -b main")
+    await run("git config user.email 'test@test.com'")
+    await run("git config user.name 'Test'")
+    # Create an initial commit so branches can be created
+    (repo / "README.md").write_text("# Test Repo\n")
+    await run("git add README.md")
+    await run("git commit -m 'Initial commit'")
+
+    return repo
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-04.12")
+class TestCreateWorktree:
+    """Test worktree creation for task isolation."""
+
+    async def test_create_worktree_makes_directory(self, tmp_path: Path) -> None:
+        repo = await _init_test_repo(tmp_path)
+        manager = WorktreeManager(repo)
+
+        info = await manager.create("task-001")
+
+        assert info.path.exists()
+        assert info.path.is_dir()
+        assert info.task_id == "task-001"
+
+    async def test_create_worktree_creates_branch(self, tmp_path: Path) -> None:
+        repo = await _init_test_repo(tmp_path)
+        manager = WorktreeManager(repo)
+
+        info = await manager.create("task-002")
+
+        assert info.branch == "guild/task-002"
+        # Verify the branch exists in git
+        exit_code, _ = await manager._run_git("rev-parse", "--verify", "guild/task-002")
+        assert exit_code == 0
+
+    async def test_create_worktree_path_under_guild_dir(self, tmp_path: Path) -> None:
+        repo = await _init_test_repo(tmp_path)
+        manager = WorktreeManager(repo)
+
+        info = await manager.create("task-003")
+
+        expected = repo / ".guild" / "worktrees" / "task-003"
+        assert info.path == expected
+
+    async def test_create_worktree_has_timestamp(self, tmp_path: Path) -> None:
+        repo = await _init_test_repo(tmp_path)
+        manager = WorktreeManager(repo)
+
+        info = await manager.create("task-004")
+
+        assert info.created_at != ""
+        assert "T" in info.created_at  # ISO format
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-04.12")
+class TestRemoveWorktree:
+    """Test worktree cleanup after task completion."""
+
+    async def test_remove_worktree_cleans_up(self, tmp_path: Path) -> None:
+        repo = await _init_test_repo(tmp_path)
+        manager = WorktreeManager(repo)
+
+        info = await manager.create("task-rm-001")
+        assert info.path.exists()
+
+        await manager.remove("task-rm-001")
+
+        # Worktree directory should be gone
+        assert not info.path.exists()
+        # Branch should also be deleted
+        exit_code, _ = await manager._run_git("rev-parse", "--verify", "guild/task-rm-001")
+        assert exit_code != 0
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-04.12")
+class TestListActiveWorktrees:
+    """Test listing active Guild worktrees."""
+
+    async def test_list_active_worktrees(self, tmp_path: Path) -> None:
+        repo = await _init_test_repo(tmp_path)
+        manager = WorktreeManager(repo)
+
+        await manager.create("task-list-001")
+        await manager.create("task-list-002")
+
+        active = await manager.list_active()
+
+        task_ids = [w.task_id for w in active]
+        assert "task-list-001" in task_ids
+        assert "task-list-002" in task_ids
+
+    async def test_list_active_excludes_removed(self, tmp_path: Path) -> None:
+        repo = await _init_test_repo(tmp_path)
+        manager = WorktreeManager(repo)
+
+        await manager.create("task-keep")
+        await manager.create("task-gone")
+        await manager.remove("task-gone")
+
+        active = await manager.list_active()
+
+        task_ids = [w.task_id for w in active]
+        assert "task-keep" in task_ids
+        assert "task-gone" not in task_ids
+
+    async def test_list_active_empty_when_none(self, tmp_path: Path) -> None:
+        repo = await _init_test_repo(tmp_path)
+        manager = WorktreeManager(repo)
+
+        active = await manager.list_active()
+
+        # Should not include the main worktree (not guild-managed)
+        assert len(active) == 0
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-04.14")
+class TestMergeToStaging:
+    """Test merging task branches to staging area."""
+
+    async def test_merge_to_staging_succeeds(self, tmp_path: Path) -> None:
+        repo = await _init_test_repo(tmp_path)
+        manager = WorktreeManager(repo)
+
+        info = await manager.create("task-merge-001")
+        # Make a change in the task worktree
+        (info.path / "new_file.txt").write_text("task work\n")
+        await manager._run_git("add", "new_file.txt", cwd=info.path)
+        await manager._run_git("commit", "-m", "task work", cwd=info.path)
+
+        success, message = await manager.merge_to_staging("task-merge-001")
+
+        assert success is True
+        assert "Successfully merged" in message
+
+    async def test_merge_to_staging_reports_conflicts(self, tmp_path: Path) -> None:
+        repo = await _init_test_repo(tmp_path)
+        manager = WorktreeManager(repo)
+
+        # Create two tasks that modify the same file
+        info_a = await manager.create("task-conflict-a")
+        (info_a.path / "shared.txt").write_text("version A\n")
+        await manager._run_git("add", "shared.txt", cwd=info_a.path)
+        await manager._run_git("commit", "-m", "A changes shared", cwd=info_a.path)
+
+        info_b = await manager.create("task-conflict-b")
+        (info_b.path / "shared.txt").write_text("version B\n")
+        await manager._run_git("add", "shared.txt", cwd=info_b.path)
+        await manager._run_git("commit", "-m", "B changes shared", cwd=info_b.path)
+
+        # Merge A first — should succeed
+        success_a, _ = await manager.merge_to_staging("task-conflict-a")
+        assert success_a is True
+
+        # Merge B — should conflict with A's changes
+        success_b, message_b = await manager.merge_to_staging("task-conflict-b")
+        assert success_b is False
+        assert "conflict" in message_b.lower()
