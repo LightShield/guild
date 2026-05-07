@@ -7,7 +7,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
 
-__all__ = ["BusMessage", "MessageBus"]
+__all__ = ["BusMessage", "MessageBus", "SharedContext"]
 
 
 @dataclass
@@ -18,9 +18,7 @@ class BusMessage:
     target_agent: str
     port: str
     data: dict
-    timestamp: str = field(
-        default_factory=lambda: datetime.now().isoformat()
-    )
+    timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
 
 
 class MessageBus:
@@ -31,14 +29,10 @@ class MessageBus:
     """
 
     def __init__(self) -> None:
-        self._queues: dict[str, asyncio.Queue[BusMessage]] = defaultdict(
-            asyncio.Queue
-        )
+        self._queues: dict[str, asyncio.Queue[BusMessage]] = defaultdict(asyncio.Queue)
         self._log: list[BusMessage] = []
 
-    async def send(
-        self, source: str, target: str, port: str, data: dict
-    ) -> None:
+    async def send(self, source: str, target: str, port: str, data: dict) -> None:
         """Send a message from one agent to another."""
         msg = BusMessage(
             source_agent=source,
@@ -49,9 +43,7 @@ class MessageBus:
         self._log.append(msg)
         await self._queues[target].put(msg)
 
-    async def receive(
-        self, agent_id: str, timeout: float | None = None
-    ) -> BusMessage | None:
+    async def receive(self, agent_id: str, timeout: float | None = None) -> BusMessage | None:
         """Receive next message for an agent.
 
         Returns None if timeout expires before a message arrives.
@@ -82,14 +74,33 @@ class MessageBus:
         """
         excluded = exclude or set()
         excluded.add(source)
-        targets = [
-            agent_id
-            for agent_id in self._queues
-            if agent_id not in excluded
-        ]
+        targets = [agent_id for agent_id in self._queues if agent_id not in excluded]
         for target in targets:
             await self.send(source, target, port, data)
 
     def get_log(self) -> list[BusMessage]:
         """Return all messages sent through the bus (for audit/replay)."""
         return list(self._log)
+
+
+class SharedContext:
+    """Shared workspace context for team members (REQ-04.10).
+
+    Provides a key-value store accessible to all agents in a team,
+    enabling shared state without direct message passing.
+    """
+
+    def __init__(self) -> None:
+        self._store: dict[str, dict] = {}
+
+    def put(self, key: str, data: dict, agent_id: str) -> None:
+        """Store data accessible to all team members."""
+        self._store[key] = data
+
+    def get(self, key: str) -> dict | None:
+        """Retrieve shared data by key."""
+        return self._store.get(key)
+
+    def list_keys(self) -> list[str]:
+        """List all available keys."""
+        return list(self._store.keys())

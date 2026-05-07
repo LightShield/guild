@@ -106,3 +106,78 @@ class TestMessageBus:
         # No more messages
         assert not bus.has_pending("agent-1")
         assert not bus.has_pending("agent-2")
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-04.10")
+class TestSharedContext:
+    """SharedContext provides a shared workspace for team members."""
+
+    async def test_shared_context_put_and_get(self) -> None:
+        """Data stored in shared context is retrievable by any agent."""
+        from guild.orchestration.bus import SharedContext
+
+        ctx = SharedContext()
+        ctx.put("design-doc", {"title": "Architecture", "version": 2}, "agent-a")
+
+        result = ctx.get("design-doc")
+        assert result is not None
+        assert result["title"] == "Architecture"
+        assert result["version"] == 2
+
+    async def test_shared_context_list_keys(self) -> None:
+        """All shared context keys can be listed."""
+        from guild.orchestration.bus import SharedContext
+
+        ctx = SharedContext()
+        ctx.put("file-list", {"files": ["a.py", "b.py"]}, "agent-1")
+        ctx.put("config", {"debug": True}, "agent-2")
+
+        keys = ctx.list_keys()
+        assert "file-list" in keys
+        assert "config" in keys
+        assert len(keys) == 2
+
+    async def test_shared_context_get_missing_returns_none(self) -> None:
+        """Getting a non-existent key returns None."""
+        from guild.orchestration.bus import SharedContext
+
+        ctx = SharedContext()
+        assert ctx.get("nonexistent") is None
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-04.11")
+class TestDynamicWorkerSpawning:
+    """Dynamic worker spawning during execution."""
+
+    async def test_dynamic_worker_spawning(self) -> None:
+        """Spawner can create agents on the fly during execution."""
+        from unittest.mock import AsyncMock
+
+        from guild.orchestration.spawner import AgentSpawner
+        from guild.provider.base import LLMResponse
+
+        provider = AsyncMock()
+        provider.generate.return_value = LLMResponse(
+            content="Worker result",
+            tool_calls=None,
+            input_tokens=10,
+            output_tokens=5,
+            model="mock-model",
+        )
+        bus = MessageBus()
+        spawner = AgentSpawner(provider=provider, storage=None, bus=bus)
+
+        # Spawn workers dynamically during execution
+        result1 = await spawner.spawn(task="Subtask A", agent_id="dynamic-1")
+        result2 = await spawner.spawn(task="Subtask B", agent_id="dynamic-2")
+
+        assert result1 == "Worker result"
+        assert result2 == "Worker result"
+        assert "dynamic-1" in spawner.active_agents
+        assert "dynamic-2" in spawner.active_agents
+        # Can spawn more after initial ones complete
+        result3 = await spawner.spawn(task="Subtask C", agent_id="dynamic-3")
+        assert result3 == "Worker result"
+        assert len(spawner.active_agents) == 3
