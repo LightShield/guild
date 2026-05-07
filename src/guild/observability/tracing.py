@@ -10,6 +10,8 @@ from datetime import UTC, datetime
 __all__ = [
     "TraceEvent",
     "Tracer",
+    "export_events_json",
+    "export_events_jsonl",
 ]
 
 
@@ -62,3 +64,21 @@ class Tracer:
     def clear(self) -> None:
         """Clear all recorded events."""
         self._events.clear()
+
+
+def export_events_json(events: list[TraceEvent]) -> str:
+    """Export trace events as a JSON array string (REQ-11.5).
+
+    Returns a valid JSON array containing all events as objects.
+    """
+    return json.dumps([asdict(e) for e in events], indent=2)
+
+
+def export_events_jsonl(events: list[TraceEvent]) -> str:
+    """Export trace events as JSON lines — one JSON object per line (REQ-11.5).
+
+    Each line is a self-contained JSON object, suitable for streaming
+    ingestion by log aggregators and OpenTelemetry collectors.
+    """
+    lines = [json.dumps(asdict(e)) for e in events]
+    return "\n".join(lines)

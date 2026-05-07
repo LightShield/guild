@@ -94,6 +94,16 @@ CREATE TABLE IF NOT EXISTS questions (
     answer TEXT,
     answered_at TEXT
 );
+
+CREATE TABLE IF NOT EXISTS memories (
+    id TEXT PRIMARY KEY,
+    summary TEXT NOT NULL,
+    content TEXT NOT NULL,
+    category TEXT NOT NULL,
+    verified INTEGER DEFAULT 0,
+    last_verified TEXT,
+    created_at TEXT NOT NULL
+);
 """
 
 

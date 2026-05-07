@@ -6,6 +6,7 @@ and learnings for injection into agent prompts.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import TYPE_CHECKING
 
@@ -96,3 +97,71 @@ class TemporalKnowledge:
             confidence = item.get("confidence", 0)
             lines.append(f"- [{category}] (confidence: {confidence:.1f}) {content}")
         return "\n".join(lines)
+
+    # ------------------------------------------------------------------
+    # REQ-27.2: Present state + key past info fetchable when relevant
+    # ------------------------------------------------------------------
+
+    async def get_present_state(self, working_dir: str) -> str:
+        """Get current project state summary (REQ-27.2).
+
+        Includes git status, recent commits, and top-level file structure.
+        """
+        sections: list[str] = []
+
+        git_status = await self._run_cmd("git status --short", working_dir)
+        if git_status is not None:
+            sections.append(f"### Git Status\n```\n{git_status}\n```")
+
+        git_log = await self._run_cmd("git log --oneline -5", working_dir)
+        if git_log is not None:
+            sections.append(f"### Recent Commits\n```\n{git_log}\n```")
+
+        ls_output = await self._run_cmd("ls -1", working_dir)
+        if ls_output is not None:
+            sections.append(f"### Top-Level Files\n```\n{ls_output}\n```")
+
+        if not sections:
+            return "No project state available."
+
+        return "## Present State\n\n" + "\n\n".join(sections)
+
+    async def get_key_past_info(self, task_description: str) -> str:
+        """Fetch relevant historical context for a task (REQ-27.2).
+
+        Returns recent decisions and learnings relevant to the task area.
+        """
+        sections: list[str] = []
+
+        # Recent decisions
+        decisions = await self.get_decision_history(limit=5)
+        if decisions:
+            formatted = self._format_decisions(decisions)
+            sections.append(f"### Recent Decisions\n{formatted}")
+
+        # Relevant learnings (high confidence only)
+        learnings = await self._storage.list_learnings(min_confidence=0.5)
+        if learnings:
+            formatted = self._format_learnings(learnings)
+            sections.append(f"### Relevant Learnings\n{formatted}")
+
+        if not sections:
+            return ""
+
+        return "## Key Past Info\n\n" + "\n\n".join(sections)
+
+    async def _run_cmd(self, cmd: str, cwd: str) -> str | None:
+        """Run a shell command and return stdout, or None on failure."""
+        try:
+            proc = await asyncio.create_subprocess_shell(
+                cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd=cwd,
+            )
+            stdout, _ = await proc.communicate()
+            if proc.returncode == 0:
+                return stdout.decode().strip()
+        except OSError:
+            logger.debug("Command failed: %s", cmd)
+        return None

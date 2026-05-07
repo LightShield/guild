@@ -9,7 +9,7 @@ import pytest
 if TYPE_CHECKING:
     from pathlib import Path
 
-from guild.config.loader import find_guild_dir, load_config
+from guild.config.loader import ConfigWatcher, find_guild_dir, load_config
 from guild.config.models import GuildConfig
 
 
@@ -151,3 +151,94 @@ class TestLoadConfig:
         cfg = load_config(guild_dir=guild_dir)
 
         assert cfg.resource_mode.value == "stealth"
+
+
+# ------------------------------------------------------------------
+# REQ-14.4: Environment-specific overrides
+# ------------------------------------------------------------------
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-14.4")
+class TestEnvVarOverrides:
+    """Tests that environment variables override config file values."""
+
+    def test_env_var_overrides_config_file(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """GUILD_MODEL env var overrides model set in config file."""
+        guild_dir = tmp_path / ".guild"
+        guild_dir.mkdir()
+        config_file = guild_dir / "config.toml"
+        config_file.write_text('[provider]\nmodel = "from-file"\n')
+
+        monkeypatch.setenv("GUILD_MODEL", "env-override-model")
+
+        cfg = load_config(guild_dir=guild_dir)
+
+        assert cfg.model == "env-override-model"
+
+
+# ------------------------------------------------------------------
+# REQ-14.6: Config hot-reload
+# ------------------------------------------------------------------
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-14.6")
+class TestConfigWatcher:
+    """Tests for ConfigWatcher hot-reload detection."""
+
+    def test_config_watcher_detects_change(self, tmp_path: Path) -> None:
+        """ConfigWatcher detects when file mtime changes and calls callback."""
+        config_file = tmp_path / "config.toml"
+        config_file.write_text('[provider]\nmodel = "original"\n')
+
+        callback_calls: list[bool] = []
+
+        def on_reload() -> None:
+            callback_calls.append(True)
+
+        watcher = ConfigWatcher(config_file, on_reload)
+
+        # No change on first check (mtime already recorded in __init__)
+        assert watcher.check_for_changes() is False
+        assert len(callback_calls) == 0
+
+        # Modify the file (change mtime)
+        import time
+
+        time.sleep(0.05)  # ensure mtime differs
+        config_file.write_text('[provider]\nmodel = "updated"\n')
+
+        assert watcher.check_for_changes() is True
+        assert len(callback_calls) == 1
+
+    def test_config_watcher_no_false_positive(self, tmp_path: Path) -> None:
+        """ConfigWatcher does not fire callback when file is unchanged."""
+        config_file = tmp_path / "config.toml"
+        config_file.write_text('[provider]\nmodel = "stable"\n')
+
+        callback_calls: list[bool] = []
+
+        def on_reload() -> None:
+            callback_calls.append(True)
+
+        watcher = ConfigWatcher(config_file, on_reload)
+
+        # Multiple checks without modification
+        assert watcher.check_for_changes() is False
+        assert watcher.check_for_changes() is False
+        assert watcher.check_for_changes() is False
+
+        assert len(callback_calls) == 0
+
+    def test_config_watcher_missing_file(self, tmp_path: Path) -> None:
+        """ConfigWatcher returns False for non-existent files."""
+        missing = tmp_path / "nonexistent.toml"
+        callback_calls: list[bool] = []
+
+        watcher = ConfigWatcher(missing, lambda: callback_calls.append(True))
+
+        assert watcher.check_for_changes() is False
+        assert len(callback_calls) == 0

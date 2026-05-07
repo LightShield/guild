@@ -156,3 +156,71 @@ class TestStructuredLogging:
         assert parsed["message"] == "hello world"
         assert parsed["logger"] == "guild.test"
         assert "timestamp" in parsed
+
+
+# ------------------------------------------------------------------
+# REQ-11.5: Log export in standard formats
+# ------------------------------------------------------------------
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-11.5")
+class TestLogExport:
+    """Tests for JSON and JSONL export of trace events."""
+
+    def test_export_events_json_valid(self) -> None:
+        """export_events_json returns a valid JSON array."""
+        from guild.observability.tracing import export_events_json
+
+        tracer = Tracer()
+        tracer.trace("llm_call", agent_id="a1", details={"model": "llama3"})
+        tracer.trace("tool_call", agent_id="a1", details={"tool": "file_read"})
+
+        result = export_events_json(tracer.events)
+
+        parsed = json.loads(result)
+        assert isinstance(parsed, list)
+        assert len(parsed) == 2
+        assert parsed[0]["event_type"] == "llm_call"
+        assert parsed[0]["agent_id"] == "a1"
+        assert parsed[1]["event_type"] == "tool_call"
+        assert parsed[1]["details"]["tool"] == "file_read"
+
+    def test_export_events_jsonl_one_per_line(self) -> None:
+        """export_events_jsonl produces one JSON object per line."""
+        from guild.observability.tracing import export_events_jsonl
+
+        tracer = Tracer()
+        tracer.trace("llm_call", agent_id="a1")
+        tracer.trace("tool_call", agent_id="a2")
+        tracer.trace("decision", agent_id="a3")
+
+        result = export_events_jsonl(tracer.events)
+        lines = result.strip().split("\n")
+
+        assert len(lines) == 3
+        # Each line should be independently parseable JSON
+        for _i, line in enumerate(lines):
+            parsed = json.loads(line)
+            assert "event_type" in parsed
+            assert "timestamp" in parsed
+
+        # Verify order
+        assert json.loads(lines[0])["agent_id"] == "a1"
+        assert json.loads(lines[1])["agent_id"] == "a2"
+        assert json.loads(lines[2])["agent_id"] == "a3"
+
+    def test_export_events_json_empty(self) -> None:
+        """export_events_json with empty list returns empty JSON array."""
+        from guild.observability.tracing import export_events_json
+
+        result = export_events_json([])
+        parsed = json.loads(result)
+        assert parsed == []
+
+    def test_export_events_jsonl_empty(self) -> None:
+        """export_events_jsonl with empty list returns empty string."""
+        from guild.observability.tracing import export_events_jsonl
+
+        result = export_events_jsonl([])
+        assert result == ""

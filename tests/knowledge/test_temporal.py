@@ -145,3 +145,81 @@ class TestRelevantContext:
 
         assert "Follow TDD approach." in context
         assert "Project Instructions" in context
+
+
+# ------------------------------------------------------------------
+# REQ-27.2: Present state + key past info fetchable when relevant
+# ------------------------------------------------------------------
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-27.2")
+class TestPresentStateAndPastInfo:
+    """Tests for get_present_state and get_key_past_info."""
+
+    async def test_get_present_state_includes_git_status(
+        self, storage: Storage, guild_dir: Path, tmp_path: Path
+    ) -> None:
+        """get_present_state includes git status output for a git repo."""
+        import subprocess
+
+        # Create a mini git repo in tmp_path
+        repo_dir = tmp_path / "repo"
+        repo_dir.mkdir()
+        subprocess.run(["git", "init"], cwd=str(repo_dir), capture_output=True, check=True)
+        subprocess.run(
+            ["git", "config", "user.email", "test@test.com"],
+            cwd=str(repo_dir),
+            capture_output=True,
+            check=True,
+        )
+        subprocess.run(
+            ["git", "config", "user.name", "Test"],
+            cwd=str(repo_dir),
+            capture_output=True,
+            check=True,
+        )
+        # Create a file and commit
+        (repo_dir / "file.txt").write_text("hello")
+        subprocess.run(["git", "add", "."], cwd=str(repo_dir), capture_output=True, check=True)
+        subprocess.run(
+            ["git", "commit", "-m", "init"],
+            cwd=str(repo_dir),
+            capture_output=True,
+            check=True,
+        )
+        # Create an uncommitted change
+        (repo_dir / "new.txt").write_text("world")
+
+        tk = TemporalKnowledge(guild_dir, storage)
+        result = await tk.get_present_state(str(repo_dir))
+
+        assert "Present State" in result
+        assert "Git Status" in result
+        # The new untracked file should show up
+        assert "new.txt" in result
+
+    async def test_get_key_past_info_fetches_relevant_context(
+        self, storage: Storage, guild_dir: Path
+    ) -> None:
+        """get_key_past_info returns decisions and learnings."""
+        # Add a decision
+        await storage.log_decision(
+            task_id="t1",
+            agent_id="a1",
+            decision="Use async patterns",
+            rationale="Better I/O performance",
+        )
+        # Add a high-confidence learning
+        await storage.add_learning(
+            category="pattern",
+            content="Always validate inputs",
+            confidence=0.9,
+        )
+
+        tk = TemporalKnowledge(guild_dir, storage)
+        result = await tk.get_key_past_info("Implement validation")
+
+        assert "Key Past Info" in result
+        assert "Use async patterns" in result
+        assert "Always validate inputs" in result

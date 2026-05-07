@@ -13,6 +13,7 @@ from guild.agent.completion import (
     should_nudge_completion,
 )
 from guild.agent.context import ContextManager
+from guild.agent.cost import COST_TABLE, estimate_cost, format_cost_summary
 from guild.agent.learning import extract_learnings, format_learnings_for_injection
 from guild.agent.loop import AgentLoop
 from guild.agent.ratelimit import RateLimiter, ToolQueue
@@ -22,6 +23,7 @@ from guild.agent.stuck import StuckDetector
 __all__ = [
     "AgentLoop",
     "BUDGET_ALERT_THRESHOLDS",
+    "COST_TABLE",
     "Checkpoint",
     "ContextManager",
     "RateLimiter",
@@ -29,7 +31,9 @@ __all__ = [
     "StuckDetector",
     "ToolQueue",
     "check_budget_alert",
+    "estimate_cost",
     "extract_learnings",
+    "format_cost_summary",
     "format_learnings_for_injection",
     "format_tool_result",
     "is_duplicate_call",

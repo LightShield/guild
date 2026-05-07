@@ -9,10 +9,14 @@ from __future__ import annotations
 import logging
 import tomllib
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from guild.config.models import GuildConfig
 
-__all__ = ["find_guild_dir", "load_config"]
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+__all__ = ["ConfigWatcher", "find_guild_dir", "load_config"]
 
 logger = logging.getLogger(__name__)
 
@@ -154,3 +158,38 @@ def load_config(
             merged_file.unlink()
 
     return config  # type: ignore[return-value]
+
+
+class ConfigWatcher:
+    """Watch config file for changes and reload on mtime change (REQ-14.6).
+
+    Call check_for_changes() periodically (e.g., each agent loop iteration).
+    If the file's mtime has changed, reloads config and invokes the callback.
+    """
+
+    def __init__(self, config_path: Path, callback: Callable) -> None:
+        self._config_path = config_path
+        self._callback = callback
+        self._last_mtime: float | None = self._get_mtime()
+
+    def _get_mtime(self) -> float | None:
+        """Return file modification time, or None if file missing."""
+        if self._config_path.is_file():
+            return self._config_path.stat().st_mtime
+        return None
+
+    def check_for_changes(self) -> bool:
+        """Check mtime. If changed, reload and call callback.
+
+        Returns True if the config was reloaded, False otherwise.
+        """
+        current_mtime = self._get_mtime()
+        if current_mtime is None:
+            return False
+        if current_mtime == self._last_mtime:
+            return False
+
+        self._last_mtime = current_mtime
+        self._callback()
+        logger.info("Config reloaded from %s", self._config_path)
+        return True
