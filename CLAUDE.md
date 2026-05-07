@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Guild is a locally-focused agent harness for running an autonomous coding agent against local models (Ollama). Core value: an agent that works while you're away and backs off when you're present ("good neighbor"). Early development — v0.2.0.
+Guild is a locally-focused agent harness for running an autonomous coding agent against local models (Ollama). Core value: an agent that works while you're away and backs off when you're present ("good neighbor"). Version 0.2.0.
 
 ## Commands
 
@@ -13,87 +13,74 @@ Guild is a locally-focused agent harness for running an autonomous coding agent 
 pip install -e ".[dev]"
 
 # Run tests
-pytest                                    # all tests
+pytest                                    # all tests (including integration)
 pytest -m unit                            # unit tests only (fast, no network)
 pytest -m integration                     # integration tests (requires Ollama)
-pytest tests/agent/test_loop.py           # single file
-pytest tests/agent/test_loop.py::TestAgentLoop::test_loop_exits_on_text_only_response  # single test
+pytest tests/agent/                       # single directory
+pytest tests/agent/test_loop.py::TestAgentLoop::test_loop_exits_on_text_only_response
 
 # Linting and formatting
-ruff check src/ tests/                    # lint
-ruff check --fix src/ tests/             # auto-fix
-black src/ tests/                         # format
-
-# Type checking
-mypy src/
+ruff check src/ tests/
+ruff check --fix src/ tests/
+black src/ tests/
 
 # Requirements traceability
-python scripts/req_coverage.py            # show coverage report
+python scripts/req_coverage.py            # RTM report
 
 # Run the CLI
 guild --help
 guild init                                # initialize .guild/ in current dir
 guild task "description"                  # run a task (foreground)
-guild task "description" --background     # run as background daemon
-guild chat                                # interactive chat
-guild status                              # project status
-guild ps                                  # list running background tasks
-guild kill <task_id>                      # stop a background task
-guild pause/resume <task_id>              # pause/resume a task
-guild logs <task_id>                      # stream task output
-guild config                              # show config
-guild config --set provider.model=x       # modify config
-guild audit                               # show audit log
-
-# Remote Ollama (for LAN development)
-./scripts/remote-ollama-setup.sh --client <ip>
+guild task "description" --background     # background daemon
+guild chat                                # interactive multi-turn
+guild status / guild ps                   # project status / running tasks
+guild kill/pause/resume <task_id>         # process lifecycle
+guild logs/attach <task_id>               # view or interact with task
+guild history / guild usage               # past tasks / token summary
+guild learnings / guild decisions         # knowledge base
+guild questions / guild answer            # human-in-the-loop queue
+guild config / guild audit                # configuration / audit log
+guild resource-status                     # scheduling mode and throttle state
 ```
 
 ## Architecture
 
-**Single-process async model.** The agent loop is async, tools execute via asyncio, state persists in SQLite (WAL mode).
+**Three-layer design:**
+- Layer 1 (Harness): process lifecycle, resource management, tools, storage, permissions
+- Layer 2 (Agent Behaviors): decision framework, self-review, learning, escalation
+- Layer 3 (Orchestration): teams, decomposition, multi-agent coordination
 
 ### Domain-Grouped Structure
 
 ```
 src/guild/
-├── agent/       — Core loop, completion heuristics, stuck detection
-├── provider/    — LLM abstraction (base ABC + Ollama implementation)
-├── storage/     — SQLite persistence (tasks, messages, audit)
-├── tools/       — Built-in tools (file_read, file_write, shell, search, glob)
-├── permissions/ — 4-tier permission enforcement
-├── config/      — ConfigsLoader-based config (TOML + CLI + env)
-├── daemon/      — Background execution, lifecycle, resource monitor, sleep/wake
-└── cli/         — Typer CLI (all commands in main.py)
-```
-
-### Core Concepts
-
-- **AgentLoop**: while-loop calling model → executing tools → repeating. Integrates 3 anti-looping fixes (enriched results, completion nudge, dedup guard).
-- **Permission tiers**: `nothing` → `ask` → `scoped` → `autopilot`
-- **DaemonSupervisor**: PID files, signal handlers, supervised execution for background tasks
-- **ResourceMonitor**: 3 modes (full/polite/stealth) — throttles when user is active
-- **SleepWakeDetector**: time-drift detection, provider recovery on wake
-- **Storage**: All state in `.guild/guild.db` (tasks, agents, messages, audit log)
-
-### Data Flow
-
-`CLI command` → `load_config()` → `create_provider()` → `AgentLoop` → tool calls → results stored in SQLite
-
-### Config System
-
-Uses `configsloader` (custom lib at ../configs_loader_python). One flat class with per-field TOML sections:
-```python
-class GuildConfig(ConfigsLoader):
-    model: str = Field(default="gemma4-4b", section="provider", flags=["--model"])
-    base_url: str = Field(default="http://localhost:11434", section="provider")
-    default_permission: PermissionTier = Field(default=PermissionTier.ASK, section="guild")
+├── agent/          — Core loop, completion, stuck detection, rollback, checkpoint, learning, cost, budget, rate limiting, context management
+├── provider/       — LLM abstraction (base, Ollama, CLI tool, escalation chain)
+├── storage/        — SQLite persistence (tasks, messages, audit, decisions, learnings, questions, checkpoints, memories)
+├── tools/          — Built-in tools (file_read, file_write, shell, search, glob, spawn_agent)
+├── permissions/    — 4-tier permission + hardcoded-never layer
+├── config/         — ConfigsLoader-based config, profiles, validation
+├── daemon/         — Background execution, lifecycle, resource monitor, sleep/wake
+├── cli/            — Typer CLI (all commands)
+├── orchestration/  — Message bus, agent spawner, team runner, shared context
+├── blocks/         — Block definitions, registry, port types, skills
+├── git/            — Worktree manager, branch policy
+├── knowledge/      — Temporal knowledge, memory index
+├── security/       — Sandbox policy (paths, commands, secrets, network)
+├── escalation/     — Question queue, notification channels
+├── observability/  — Structured tracing, log export, session replay
+├── task/           — Task specs, verification, status lifecycle
+├── artifacts/      — Artifact versioning, diff, export
+├── templates/      — Workflow templates (save, render, import/export)
+├── offline/        — Offline-first manager (connectivity, model management)
+├── ui/             — RPG mode theming
+└── api/            — REST API stub (requires fastapi optional dep)
 ```
 
 ## Code Conventions
 
 - Python 3.11+, all modules have `__all__` exports
-- ConfigsLoader for config (replaces Pydantic), dataclasses for internal data
+- ConfigsLoader for config, dataclasses for internal data
 - All I/O is async (`aiosqlite`, `asyncio.create_subprocess_shell`)
 - No `print()` — use `logging` in library code, `rich.console` in CLI
 - Line length: 100 (ruff + black)
@@ -108,8 +95,17 @@ Requirements-Based Testing (RBT) with auto-generated RTM:
 - `scripts/req_coverage.py` generates the traceability matrix
 - Test markers: `@pytest.mark.unit`, `@pytest.mark.integration`, `@pytest.mark.e2e`
 - `pytest-asyncio` with `asyncio_mode = "auto"`
-- Integration tests hit real Ollama at configured address
 - Tests mirror src structure: `tests/agent/`, `tests/provider/`, etc.
+- 635 tests total (631 unit + 4 integration)
+
+## Design Principles
+
+1. **Reversibility governs everything** — planning, decisions, permissions calibrated by "how hard to undo?"
+2. **Maximize autonomous progress** — user never the bottleneck unless truly irreversible
+3. **Adapt to user presence** — attached: interactive. Detached: autonomous. Resource monitor drives this.
+4. **Senior engineer mindset** — opinionated, documents rationale, asks only when genuinely stuck
+5. **Three separate layers** — harness / behaviors / orchestration evolve independently
+6. **Fix, log, and learn** — every mistake feeds the confidence-scored learning loop
 
 ## Remote Ollama Setup
 
