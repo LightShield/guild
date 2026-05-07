@@ -320,6 +320,20 @@ The following lessons are drawn from the Claude Code 512K-line TypeScript source
 | REQ-08.10 | Tool behavioral properties: `isConcurrencySafe`, `isReadOnly` | Enables optimization |
 | REQ-08.11 | Tool result caching (optional, per-tool) | Avoid redundant expensive calls |
 
+### REQ-17: Multi-Model Routing & Escalation
+
+**Goal:** Use the right model for the right job. Escalate to smarter models when stuck, including external CLI tools.
+
+| ID | Requirement | Notes |
+|----|-------------|-------|
+| REQ-17.1 | Per-agent model assignment | Orchestrator = strong, workers = fast/cheap |
+| REQ-17.2 | Fallback chains — if primary model is down/slow, use backup | Ollama → cloud, or large → small |
+| REQ-17.3 | **Use cheap models for cheap decisions** | Permission checks, safety screening — smallest model that works |
+| REQ-17.4 | Model capability tagging — match task requirements to model strengths | "needs code generation" → code-specialized model |
+| REQ-17.5 | **Stuck-triggered escalation** — when stuck detector fires, automatically retry with next model in chain | Default chain: fast local → smart local → external CLI → human |
+| REQ-17.6 | **External CLI tool as provider** — shell out to installed CLI tools (e.g., `gemini`, `claude`) as escalation providers | Parse text response; structured tool calling not required at this tier |
+| REQ-17.7 | Escalation chain configurable per-project | `[escalation] chain = ["gemma4-4b", "gemma4-26b", "gemini-cli"]` |
+
 ### REQ-20: Rate Limiting & Backpressure
 
 **Goal:** Prevent resource exhaustion when running many agents.
@@ -422,14 +436,6 @@ The following lessons are drawn from the Claude Code 512K-line TypeScript source
 | **research-and-implement** | researcher → planner → verified-coder | No | Investigate first, then build |
 | **dev-loop-with-learning** | dev-loop → learner | No | Dev cycle that captures lessons |
 
-### REQ-17: Multi-Model Routing
-
-| ID | Requirement | Notes |
-|----|-------------|-------|
-| REQ-17.1 | Per-agent model assignment | Orchestrator = strong, workers = fast/cheap |
-| REQ-17.2 | Fallback chains — if primary model is down/slow, use backup | Ollama → cloud, or large → small |
-| REQ-17.3 | **Use cheap models for cheap decisions** | Permission checks, safety screening — smallest model that works |
-| REQ-17.4 | Model capability tagging — match task requirements to model strengths | "needs code generation" → code-specialized model |
 
 ---
 

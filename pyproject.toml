@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "guild"
-version = "0.1.0"
-description = "Locally-focused agent harness for LLM-powered agent teams"
+version = "0.2.0"
+description = "Locally-focused agent harness for LLM-powered autonomous coding"
 requires-python = ">=3.11"
 dependencies = [
     "pydantic>=2.0,<3",
@@ -13,9 +13,6 @@ dependencies = [
     "rich>=13.0,<14",
     "aiosqlite>=0.19,<1",
     "ollama>=0.4,<1",
-    "fastapi>=0.110,<1",
-    "uvicorn>=0.29,<1",
-    "websockets>=12.0,<14",
 ]
 
 [project.optional-dependencies]
@@ -38,10 +35,10 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 markers = [
     "unit: Unit tests (fast, no I/O, use mocks)",
-    "integration: Integration tests (slow, with I/O, use real tools)",
-    "e2e: End-to-end tests (slowest, full workflows)",
+    "integration: Integration tests (real Ollama required)",
+    "e2e: End-to-end tests (full workflows)",
+    "req(id): Requirement ID this test verifies",
 ]
-strict_markers = true
 
 [tool.ruff]
 line-length = 100
