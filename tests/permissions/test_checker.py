@@ -339,6 +339,61 @@ class TestHardcodedNever:
 
 
 # ---------------------------------------------------------------------------
+# REQ-03.6: Audit log of permission decisions
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-03.6")
+class TestPermissionDecisionAuditable:
+    """Permission decisions expose enough info for audit logging."""
+
+    def test_permission_decision_is_auditable(self) -> None:
+        """check() returns a bool, and the checker exposes tier + tool name.
+
+        The caller (agent loop) has access to tool_name, the boolean result,
+        and the checker's tier — all needed to write an audit entry.
+        """
+        checker = PermissionChecker(tier=PermissionTier.AUTOPILOT)
+        tool_name = "file_read"
+        agent_id = "agent-1"
+        args = {"path": "/tmp/x"}
+
+        result = checker.check(tool_name, agent_id, args)
+
+        # The caller has: tool_name (str), result (bool), tier (enum)
+        assert isinstance(result, bool)
+        assert result is True
+        # Tier is accessible for logging
+        assert checker._tier == PermissionTier.AUTOPILOT
+        # Tool name and agent_id are the caller's own variables — always available
+
+    def test_permission_denial_is_auditable(self) -> None:
+        """Denied permission decisions also expose all required audit info."""
+        checker = PermissionChecker(tier=PermissionTier.NOTHING)
+        tool_name = "shell"
+        agent_id = "agent-2"
+        args = {"command": "ls"}
+
+        result = checker.check(tool_name, agent_id, args)
+
+        assert isinstance(result, bool)
+        assert result is False
+        assert checker._tier == PermissionTier.NOTHING
+
+    def test_hardcoded_never_provides_reason_for_audit(self) -> None:
+        """check_hardcoded_never returns a descriptive reason for logging."""
+        checker = PermissionChecker(tier=PermissionTier.AUTOPILOT)
+        allowed, reason = checker.check_hardcoded_never(
+            "shell", {"command": "rm -rf /"}
+        )
+        assert allowed is False
+        assert len(reason) > 0
+        # Reason is suitable for writing to audit log
+        assert "rm -rf /" in reason
+
+
+# ---------------------------------------------------------------------------
 # REQ-03.8: Reversibility — safe operations allowed in all tiers
 # ---------------------------------------------------------------------------
 

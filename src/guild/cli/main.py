@@ -408,6 +408,28 @@ def logs(
         console.print(f"[bold]{role}:[/bold] {content}")
 
 
+@app.command(name="resource-status")
+def resource_status_cmd() -> None:
+    """Show current resource scheduling mode and system state."""
+    from guild.daemon.resource import ResourceMonitor, SchedulingMode
+
+    guild_dir = find_guild_dir()
+    if guild_dir is None:
+        console.print("[red]Error:[/red] Not a guild project (no .guild/ found).")
+        raise typer.Exit(code=1)
+
+    config = load_config(guild_dir)
+    monitor = ResourceMonitor(mode=SchedulingMode(config.resource_mode))
+    status = monitor.get_status()
+
+    console.print(f"[bold]Mode:[/bold] {status.mode.value}")
+    console.print(f"[bold]Activity:[/bold] {status.activity.value}")
+    console.print(f"[bold]CPU:[/bold] {status.cpu_percent:.1f}%")
+    console.print(f"[bold]Throttled:[/bold] {status.is_throttled}")
+    if status.reason:
+        console.print(f"[bold]Reason:[/bold] {status.reason}")
+
+
 @app.command()
 def attach(
     task_id: str = typer.Argument(..., help="Task ID to attach to."),

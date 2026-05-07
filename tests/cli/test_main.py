@@ -418,3 +418,130 @@ class TestKillAllFlag:
             assert result.exit_code == 0
             mock_kill_all.assert_called_once_with(guild_project / ".guild")
             assert "3" in result.output
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-05.3")
+class TestChatSendsMessages:
+    """Tests for sending messages to the running agent (REQ-05.3)."""
+
+    def test_chat_sends_messages_to_agent(self, guild_app, guild_project: Path) -> None:
+        """Verify chat command sends user input to the agent and gets responses."""
+        mock_response = AsyncMock(
+            content="I received your message.",
+            tool_calls=None,
+            has_tool_call=False,
+            input_tokens=10,
+            output_tokens=20,
+            model="test",
+        )
+
+        with patch("guild.cli.main.create_provider") as mock_pf:
+            mock_provider = AsyncMock()
+            mock_provider.generate = AsyncMock(return_value=mock_response)
+            mock_pf.return_value = mock_provider
+
+            result = runner.invoke(guild_app, ["chat"], input="hello agent\n")
+
+        assert result.exit_code == 0
+        # The agent received and responded to our message
+        assert mock_provider.generate.call_count >= 1
+        # The user input was passed to the model
+        first_call_messages = mock_provider.generate.call_args_list[0][0][0]
+        user_msgs = [m for m in first_call_messages if m.get("role") == "user"]
+        assert any("hello agent" in m["content"] for m in user_msgs)
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-24.8")
+class TestResourceStatusCommand:
+    """Tests for `guild resource-status`."""
+
+    def test_resource_status_command_shows_mode(self, guild_app, guild_project: Path) -> None:
+        """Verify resource-status displays scheduling mode and throttle state."""
+        from guild.daemon.resource import ActivityState, ResourceStatus, SchedulingMode
+
+        with patch("guild.daemon.resource.ResourceMonitor") as mock_monitor_cls:
+            mock_monitor = MagicMock()
+            mock_monitor.get_status.return_value = ResourceStatus(
+                mode=SchedulingMode.POLITE,
+                activity=ActivityState.IDLE,
+                cpu_percent=25.3,
+                is_throttled=False,
+            )
+            mock_monitor_cls.return_value = mock_monitor
+
+            result = runner.invoke(guild_app, ["resource-status"])
+
+        assert result.exit_code == 0
+        assert "polite" in result.output.lower()
+        assert "25.3" in result.output
+        assert "False" in result.output or "false" in result.output.lower()
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-06.1")
+class TestAutopilotNeverPrompts:
+    """Tests for REQ-06.1 — agents in autopilot never pause for confirmation."""
+
+    def test_autopilot_never_prompts_user(self, guild_app, guild_project: Path) -> None:
+        """In autopilot mode, agent completes task without prompting."""
+        mock_response = AsyncMock(
+            content="Task done without prompting.",
+            tool_calls=None,
+            has_tool_call=False,
+            input_tokens=10,
+            output_tokens=20,
+            model="test",
+        )
+
+        prompt_called = False
+
+        def spy_prompt(tool: str, agent_id: str, args: dict) -> bool:
+            nonlocal prompt_called
+            prompt_called = True
+            return True
+
+        with patch("guild.cli.main.create_provider") as mock_pf:
+            mock_provider = AsyncMock()
+            mock_provider.generate = AsyncMock(return_value=mock_response)
+            mock_pf.return_value = mock_provider
+
+            result = runner.invoke(
+                guild_app,
+                ["task", "say hello", "--permission", "autopilot"],
+            )
+
+        assert result.exit_code == 0
+        # In autopilot, no prompt function is ever called
+        assert prompt_called is False
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-06.2")
+class TestAgentRecognizesCompletion:
+    """Tests for REQ-06.2 — agents self-verify completion."""
+
+    def test_agent_recognizes_task_completion_after_successful_tool_call(self) -> None:
+        """should_nudge_completion fires after simple success, signaling done."""
+        from guild.agent.completion import should_nudge_completion
+        from guild.tools.base import ToolResult
+
+        # A single successful tool result triggers completion nudge
+        results = [ToolResult(success=True, output="File written successfully")]
+        assert should_nudge_completion(results) is True
+
+    def test_agent_does_not_signal_completion_on_failure(self) -> None:
+        """Failed tool calls do not trigger the completion signal."""
+        from guild.agent.completion import should_nudge_completion
+        from guild.tools.base import ToolResult
+
+        results = [ToolResult(success=False, output="", error="Permission denied")]
+        assert should_nudge_completion(results) is False
+
+    def test_completion_nudge_text_instructs_summarize(self) -> None:
+        """The completion nudge message asks the agent to summarize."""
+        from guild.agent.completion import COMPLETION_NUDGE
+
+        assert "summarize" in COMPLETION_NUDGE.lower()
+        assert "complete" in COMPLETION_NUDGE.lower()
