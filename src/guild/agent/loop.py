@@ -16,11 +16,37 @@ from guild.agent.completion import (
 from guild.tools.base import TOOL_SCHEMAS, ToolResult
 
 if TYPE_CHECKING:
+    from guild.agent.stuck import StuckDetector
     from guild.provider.base import LLMProvider, LLMResponse
 
-__all__ = ["AgentLoop"]
+__all__ = [
+    "AgentLoop",
+    "ESCALATION_TEMPLATE",
+    "SELF_REVIEW_PROMPT",
+    "STUCK_RECOVERY_PROMPT",
+]
 
 logger = logging.getLogger(__name__)
+
+STUCK_RECOVERY_PROMPT = (
+    "You appear to be stuck (repeating the same action or encountering repeated errors). "
+    "Try a completely different approach to accomplish the task. "
+    "If you cannot find an alternative, explain what you're stuck on."
+)
+
+SELF_REVIEW_PROMPT = (
+    "Review what you just did. Look for bugs, edge cases, security issues, "
+    "and spec violations. If you find problems, fix them now. "
+    "If everything looks correct, confirm with a brief summary."
+)
+
+ESCALATION_TEMPLATE = (
+    "I'm stuck and need help.\n\n"
+    "Task: {task}\n"
+    "What I tried: {attempts}\n"
+    "Where I'm stuck: {reason}\n"
+    "What I need: {need}"
+)
 
 ToolExecutor = Callable[[dict, str | None], Awaitable[ToolResult]]
 
@@ -40,19 +66,29 @@ class AgentLoop:
         tool_executors: dict[str, ToolExecutor],
         working_dir: str | None = None,
         max_turns: int = 50,
+        stuck_detector: StuckDetector | None = None,
     ) -> None:
         self.provider = provider
         self.tool_executors = tool_executors
         self.working_dir = working_dir
         self.max_turns = max_turns
+        self.stuck_detector = stuck_detector
         self.messages: list[dict[str, Any]] = []
         self.recent_tool_calls: list[dict[str, Any]] = []
+        self._task_description: str = ""
+        self._attempted_tools: list[str] = []
+        self._recovery_attempted: bool = False
 
-    async def run(self, system_prompt: str, user_input: str) -> str:
+    async def run(self, system_prompt: str, user_input: str, self_review: bool = False) -> str:
         """Execute the agent loop until completion or max_turns.
 
         Resets the conversation history. Use send() to continue an
         existing conversation without resetting.
+
+        Args:
+            system_prompt: System prompt for the model.
+            user_input: The user's task description.
+            self_review: If True, inject adversarial self-review after success.
 
         Returns the final text content from the model.
         """
@@ -61,7 +97,19 @@ class AgentLoop:
             {"role": "user", "content": user_input},
         ]
         self.recent_tool_calls = []
-        return await self._execute_turns()
+        self._task_description = user_input
+        self._attempted_tools = []
+        self._recovery_attempted = False
+        if self.stuck_detector:
+            self.stuck_detector.reset()
+
+        result = await self._execute_turns()
+
+        # If escalated (result starts with escalation marker), skip self-review
+        if self_review and not result.startswith("I'm stuck and need help."):
+            result = await self._run_self_review()
+
+        return result
 
     async def send(self, user_input: str) -> str:
         """Continue an existing conversation with a new user message.
@@ -94,14 +142,80 @@ class AgentLoop:
             if not response.has_tool_call:
                 break
 
+            # Track tool calls for stuck detection
+            self._track_tool_calls(response.tool_calls or [])
+
             # Execute tool calls
             turn_results = await self._execute_tool_calls(response.tool_calls or [])
+
+            # Check stuck detection
+            escalation = self._check_stuck(turn_results)
+            if escalation is not None:
+                return escalation
 
             # Fix B: Inject completion nudge if appropriate
             if should_nudge_completion(turn_results):
                 self.messages.append({"role": "user", "content": COMPLETION_NUDGE})
 
         return last_content
+
+    def _track_tool_calls(self, tool_calls: list[dict[str, Any]]) -> None:
+        """Record tool calls for stuck detection and escalation context."""
+        for call in tool_calls:
+            fn_info = call.get("function", {})
+            tool_name = fn_info.get("name", "")
+            if tool_name and tool_name not in self._attempted_tools:
+                self._attempted_tools.append(tool_name)
+            if self.stuck_detector:
+                self.stuck_detector.record_tool_call(call)
+
+    def _check_stuck(self, turn_results: list[ToolResult]) -> str | None:
+        """Check if stuck; attempt recovery or escalate. Returns escalation or None."""
+        if not self.stuck_detector:
+            return None
+
+        # Record turn outcome for the stuck detector
+        any_failure = any(not r.success for r in turn_results)
+        error_msg = next((r.error for r in turn_results if not r.success and r.error), None)
+        self.stuck_detector.record_turn(success=not any_failure, error=error_msg)
+
+        if not self.stuck_detector.is_stuck():
+            return None
+
+        # Stuck detected
+        if not self._recovery_attempted:
+            return self._attempt_recovery()
+        # Already tried recovery — escalate
+        return self._produce_escalation()
+
+    def _attempt_recovery(self) -> str | None:
+        """Inject recovery prompt and reset detector. Returns None (continue loop)."""
+        self._recovery_attempted = True
+        reason = self.stuck_detector.get_reason() if self.stuck_detector else ""
+        logger.info("Stuck detected (%s), attempting recovery", reason)
+        if self.stuck_detector:
+            self.stuck_detector.reset()
+        self.messages.append({"role": "user", "content": STUCK_RECOVERY_PROMPT})
+        return None  # Continue the loop
+
+    def _produce_escalation(self) -> str:
+        """Build and return a structured escalation message."""
+        reason = self.stuck_detector.get_reason() if self.stuck_detector else "Unknown"
+        attempts = ", ".join(self._attempted_tools) if self._attempted_tools else "None"
+        escalation = ESCALATION_TEMPLATE.format(
+            task=self._task_description,
+            attempts=attempts,
+            reason=reason,
+            need="Human guidance to resolve the blocking issue",
+        )
+        self.messages.append({"role": "assistant", "content": escalation})
+        return escalation
+
+    async def _run_self_review(self) -> str:
+        """Inject self-review prompt and execute one more round."""
+        self.messages.append({"role": "user", "content": SELF_REVIEW_PROMPT})
+        self.recent_tool_calls = []
+        return await self._execute_turns()
 
     async def _execute_tool_calls(self, tool_calls: list[dict[str, Any]]) -> list[ToolResult]:
         """Execute a batch of tool calls, applying dedup guard (Fix C)."""

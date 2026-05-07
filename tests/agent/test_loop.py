@@ -447,6 +447,240 @@ class TestMultiTurnConversation:
         assert len(real_tool_msgs) == 2
 
 
+@pytest.mark.unit
+@pytest.mark.req("REQ-06.4")
+class TestStuckRecovery:
+    """Tests for stuck recovery — try alternatives before escalating."""
+
+    async def test_stuck_triggers_recovery_prompt(self) -> None:
+        """Model gets stuck, recovery prompt is injected, model gets another chance."""
+        from guild.agent.loop import STUCK_RECOVERY_PROMPT
+        from guild.agent.stuck import StuckDetector
+
+        # Model repeats the same call 3 times (triggers stuck), then after
+        # recovery prompt, produces text.
+        same_call = {"function": {"name": "file_read", "arguments": {"path": "a.txt"}}}
+        provider = _make_provider(
+            LLMResponse(content="", tool_calls=[same_call]),
+            LLMResponse(content="", tool_calls=[same_call]),
+            LLMResponse(content="", tool_calls=[same_call]),
+            # After recovery prompt injection:
+            LLMResponse(content="Let me try a different approach.", tool_calls=None),
+        )
+        detector = StuckDetector(max_repeated_calls=3)
+        loop = AgentLoop(
+            provider=provider,
+            tool_executors=_make_tool_executors(),
+            stuck_detector=detector,
+            max_turns=10,
+        )
+        result = await loop.run(system_prompt="sys", user_input="read a.txt")
+
+        # Recovery prompt should have been injected
+        user_msgs = [m for m in loop.messages if m["role"] == "user"]
+        recovery_msgs = [m for m in user_msgs if STUCK_RECOVERY_PROMPT in m["content"]]
+        assert len(recovery_msgs) == 1
+        assert result == "Let me try a different approach."
+
+    async def test_recovery_success_continues_normally(self) -> None:
+        """After recovery prompt, model produces good output and loop continues."""
+        from guild.agent.stuck import StuckDetector
+
+        same_call = {"function": {"name": "file_read", "arguments": {"path": "a.txt"}}}
+        different_call = {
+            "function": {"name": "file_write", "arguments": {"path": "b.txt", "content": "x"}}
+        }
+        provider = _make_provider(
+            LLMResponse(content="", tool_calls=[same_call]),
+            LLMResponse(content="", tool_calls=[same_call]),
+            LLMResponse(content="", tool_calls=[same_call]),
+            # After recovery: model tries a different tool
+            LLMResponse(content="", tool_calls=[different_call]),
+            LLMResponse(content="Fixed it!", tool_calls=None),
+        )
+        detector = StuckDetector(max_repeated_calls=3)
+        loop = AgentLoop(
+            provider=provider,
+            tool_executors=_make_tool_executors(),
+            stuck_detector=detector,
+            max_turns=10,
+        )
+        result = await loop.run(system_prompt="sys", user_input="do something")
+        assert result == "Fixed it!"
+
+    async def test_double_stuck_escalates(self) -> None:
+        """Recovery attempted, still stuck — escalation produced."""
+        from guild.agent.stuck import StuckDetector
+
+        same_call = {"function": {"name": "file_read", "arguments": {"path": "a.txt"}}}
+        provider = _make_provider(
+            # First stuck (3 identical calls)
+            LLMResponse(content="", tool_calls=[same_call]),
+            LLMResponse(content="", tool_calls=[same_call]),
+            LLMResponse(content="", tool_calls=[same_call]),
+            # After recovery prompt — still stuck (3 more identical calls)
+            LLMResponse(content="", tool_calls=[same_call]),
+            LLMResponse(content="", tool_calls=[same_call]),
+            LLMResponse(content="", tool_calls=[same_call]),
+        )
+        detector = StuckDetector(max_repeated_calls=3)
+        loop = AgentLoop(
+            provider=provider,
+            tool_executors=_make_tool_executors(),
+            stuck_detector=detector,
+            max_turns=20,
+        )
+        result = await loop.run(system_prompt="sys", user_input="read a.txt")
+
+        # Should return escalation message
+        assert "stuck" in result.lower() or "need help" in result.lower()
+        assert "read a.txt" in result  # task description present
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-06.5")
+class TestHumanEscalation:
+    """Tests for structured escalation messages."""
+
+    async def test_escalation_includes_task_description(self) -> None:
+        """Escalation message includes the original task."""
+        from guild.agent.stuck import StuckDetector
+
+        same_call = {"function": {"name": "file_read", "arguments": {"path": "x.py"}}}
+        provider = _make_provider(
+            *[LLMResponse(content="", tool_calls=[same_call]) for _ in range(6)],
+        )
+        detector = StuckDetector(max_repeated_calls=3)
+        loop = AgentLoop(
+            provider=provider,
+            tool_executors=_make_tool_executors(),
+            stuck_detector=detector,
+            max_turns=20,
+        )
+        result = await loop.run(system_prompt="sys", user_input="Refactor the database module")
+
+        assert "Refactor the database module" in result
+
+    async def test_escalation_includes_stuck_reason(self) -> None:
+        """Escalation message includes the reason from stuck detector."""
+        from guild.agent.stuck import StuckDetector
+
+        same_call = {"function": {"name": "file_read", "arguments": {"path": "x.py"}}}
+        provider = _make_provider(
+            *[LLMResponse(content="", tool_calls=[same_call]) for _ in range(6)],
+        )
+        detector = StuckDetector(max_repeated_calls=3)
+        loop = AgentLoop(
+            provider=provider,
+            tool_executors=_make_tool_executors(),
+            stuck_detector=detector,
+            max_turns=20,
+        )
+        result = await loop.run(system_prompt="sys", user_input="Do task X")
+
+        # Should contain the stuck reason
+        assert "stuck" in result.lower() or "repeated" in result.lower()
+
+    async def test_escalation_includes_what_was_tried(self) -> None:
+        """Escalation message includes what tools were attempted."""
+        from guild.agent.stuck import StuckDetector
+
+        same_call = {"function": {"name": "file_read", "arguments": {"path": "x.py"}}}
+        provider = _make_provider(
+            *[LLMResponse(content="", tool_calls=[same_call]) for _ in range(6)],
+        )
+        detector = StuckDetector(max_repeated_calls=3)
+        loop = AgentLoop(
+            provider=provider,
+            tool_executors=_make_tool_executors(),
+            stuck_detector=detector,
+            max_turns=20,
+        )
+        result = await loop.run(system_prompt="sys", user_input="Fix the bug")
+
+        # Should mention what was tried (tool name)
+        assert "file_read" in result
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-06.10")
+class TestAdversarialSelfReview:
+    """Tests for adversarial self-review after successful task completion."""
+
+    async def test_self_review_runs_after_successful_task(self) -> None:
+        """After task completes, self-review prompt is injected."""
+        from guild.agent.loop import SELF_REVIEW_PROMPT
+
+        provider = _make_provider(
+            # Normal task completion
+            LLMResponse(
+                content="",
+                tool_calls=[
+                    {
+                        "function": {
+                            "name": "file_write",
+                            "arguments": {"path": "x.py", "content": "code"},
+                        }
+                    }
+                ],
+            ),
+            LLMResponse(content="Done writing file.", tool_calls=None),
+            # Self-review response
+            LLMResponse(content="Reviewed. Everything looks correct.", tool_calls=None),
+        )
+        loop = AgentLoop(provider=provider, tool_executors=_make_tool_executors())
+        result = await loop.run(system_prompt="sys", user_input="Write code", self_review=True)
+
+        # The self-review prompt should have been injected
+        user_msgs = [m for m in loop.messages if m["role"] == "user"]
+        review_msgs = [m for m in user_msgs if SELF_REVIEW_PROMPT in m["content"]]
+        assert len(review_msgs) == 1
+        assert result == "Reviewed. Everything looks correct."
+
+    async def test_self_review_skipped_when_disabled(self) -> None:
+        """Self-review is not run when self_review=False (default)."""
+        from guild.agent.loop import SELF_REVIEW_PROMPT
+
+        provider = _make_provider(
+            LLMResponse(content="Task complete.", tool_calls=None),
+        )
+        loop = AgentLoop(provider=provider, tool_executors=_make_tool_executors())
+        result = await loop.run(system_prompt="sys", user_input="Do task")
+
+        # No review prompt should be in messages
+        user_msgs = [m for m in loop.messages if m["role"] == "user"]
+        review_msgs = [m for m in user_msgs if SELF_REVIEW_PROMPT in m["content"]]
+        assert len(review_msgs) == 0
+        assert result == "Task complete."
+
+    async def test_self_review_can_trigger_additional_tool_calls(self) -> None:
+        """Self-review finds an issue and makes a fix via tool call."""
+        provider = _make_provider(
+            # Normal task
+            LLMResponse(content="File written.", tool_calls=None),
+            # Self-review: finds issue, calls a tool to fix
+            LLMResponse(
+                content="",
+                tool_calls=[
+                    {
+                        "function": {
+                            "name": "file_write",
+                            "arguments": {"path": "x.py", "content": "fixed code"},
+                        }
+                    }
+                ],
+            ),
+            LLMResponse(content="Fixed a bug I found during review.", tool_calls=None),
+        )
+        loop = AgentLoop(provider=provider, tool_executors=_make_tool_executors())
+        result = await loop.run(system_prompt="sys", user_input="Write code", self_review=True)
+
+        assert result == "Fixed a bug I found during review."
+        # Should have tool calls from the review phase
+        tool_msgs = [m for m in loop.messages if m["role"] == "tool"]
+        assert len(tool_msgs) >= 1
+
+
 @pytest.mark.integration
 @pytest.mark.req("REQ-06.8")
 class TestRealOllama:
