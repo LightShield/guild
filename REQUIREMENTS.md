@@ -51,6 +51,24 @@ The following lessons are drawn from the Claude Code 512K-line TypeScript source
 
 ---
 
+## Design Principles
+
+These emerged from design review and govern all implementation decisions:
+
+1. **Reversibility governs everything.** Planning depth, decision-making, permissions, execution approach — all calibrated by "how hard is this to undo?" Low-impact/reversible → just do it. High-impact/irreversible → think, test, get approval.
+
+2. **Maximize autonomous progress.** The user is never the bottleneck unless it's truly irreversible. When blocked on one thing, work on another. Queue questions, don't block on them.
+
+3. **Adapt to user presence.** Attached: interactive back-and-forth. Detached: full autonomy. The resource monitor's activity detection drives notification and interaction mode.
+
+4. **Senior engineer mindset.** Opinionated, makes judgment calls, documents rationale. Asks only when genuinely uncertain, not for validation. Self-reviews adversarially.
+
+5. **Three separate layers.** Layer 1 (Harness): process lifecycle, resource management, tools, storage, permissions. Layer 2 (Agent Behaviors): decision framework, self-review, learning, escalation. Layer 3 (Orchestration): teams, decomposition, multi-agent. Each evolves independently.
+
+6. **Fix, log, and learn.** Every mistake feeds the confidence-scored learning loop. Fix immediately, log for review, extract a rule for future sessions.
+
+---
+
 ## P0 — Get a Single Agent to Work End-to-End
 
 ### REQ-01: LLM Provider Abstraction
@@ -88,6 +106,8 @@ The following lessons are drawn from the Claude Code 512K-line TypeScript source
 | REQ-03.4 | **Tier 3 — "Autopilot"**: All tools allowed, no approval needed | For trusted, long-running autonomous work |
 | REQ-03.5 | Permission level switchable at runtime (CLI command or GUI toggle) | No restart required |
 | REQ-03.6 | Audit log of all permission decisions | Who approved what, when |
+| REQ-03.7 | **Hardcoded-never layer** — destructive/irreversible actions blocked regardless of tier | git push --force, rm -rf, history rewrite, money-spending API calls. Overridable only by explicit per-action flag |
+| REQ-03.8 | **Reversibility principle** governs all permission decisions — the harder to undo, the more caution required | This is the universal governance rule across all tiers |
 
 ### REQ-05: CLI Interface
 
@@ -98,6 +118,7 @@ The following lessons are drawn from the Claude Code 512K-line TypeScript source
 | REQ-05.1 | **CLI is the primary interface** — every operation is a CLI command | Scriptable, pipe-friendly, automatable |
 | REQ-05.2 | All agent interaction, monitoring, and config happens via CLI | Nothing requires a GUI |
 | REQ-05.3 | Ability to send messages to the running agent from CLI | `guild chat` for interactive mode |
+| REQ-05.4a | **Interactive attach** — `guild attach` allows sending messages to steer a running task, not just viewing | Challenge decisions, request tweaks, provide answers to queued questions |
 
 ### REQ-06: Autonomous Long-Running Operation ("Anti-Babysitting")
 
@@ -113,6 +134,10 @@ The following lessons are drawn from the Claude Code 512K-line TypeScript source
 | REQ-06.6 | Progress persistence — survive crashes, reboots, network drops | Checkpoint state to disk regularly |
 | REQ-06.7 | Configurable autonomy timeout | "Run for max 4 hours, then pause and report" |
 | REQ-06.8 | **Simple core loop** — while(true) { call model → execute tool → append result } | Per Claude Code: don't overengineer the control flow |
+| REQ-06.9 | **Multi-turn conversation** — agent loop preserves message history between user inputs | `run()` appends to existing messages, does not reset. Enables `guild chat` and interactive attach |
+| REQ-06.10 | **Adversarial self-review** — after tests pass, agent actively tries to break its own implementation | Look for edge cases, security holes, spec violations the tests might miss |
+| REQ-06.11 | **Try-test-rollback for impactful decisions** — for non-trivial choices, try approach A, test it, rollback if it fails, try B | Only escalate to human if all approaches fail |
+| REQ-06.12 | **Decision logging** — every non-trivial decision documented with rationale | Separate from audit log (which tracks tool calls). This tracks "why did I choose X over Y?" |
 
 ### REQ-08: Tool System
 
@@ -295,9 +320,10 @@ The following lessons are drawn from the Claude Code 512K-line TypeScript source
 | ID | Requirement | Notes |
 |----|-------------|-------|
 | REQ-15.1 | Asynchronous question queue — agent posts question, continues other work | Non-blocking escalation |
-| REQ-15.2 | Notification system — desktop or webhook when agent needs you | Configurable channels |
+| REQ-15.2 | **Presence-aware notification** — when user is active, notify immediately; when idle/sleeping, queue silently | Tied to resource monitor's activity detection |
 | REQ-15.3 | Escalation context — full history of what was tried before escalating | Human gets enough context to answer quickly |
 | REQ-15.4 | Batch approval — review multiple pending requests at once | Efficient for returning after AFK |
+| REQ-15.5 | Notification channels: desktop toast, terminal bell, webhook — configurable | Different channels for different presence states |
 
 ### REQ-16: Testing & Evaluation Framework
 
