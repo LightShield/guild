@@ -1,6 +1,12 @@
 """Agent module — core loop, completion heuristics, stuck detection, rollback, learning."""
 
-from guild.agent.checkpoint import Checkpoint, load_checkpoint, save_checkpoint
+from guild.agent.budget import BUDGET_ALERT_THRESHOLDS, check_budget_alert
+from guild.agent.checkpoint import (
+    Checkpoint,
+    load_checkpoint,
+    recover_from_checkpoint,
+    save_checkpoint,
+)
 from guild.agent.completion import (
     format_tool_result,
     is_duplicate_call,
@@ -15,17 +21,20 @@ from guild.agent.stuck import StuckDetector
 
 __all__ = [
     "AgentLoop",
+    "BUDGET_ALERT_THRESHOLDS",
     "Checkpoint",
     "ContextManager",
     "RateLimiter",
     "RollbackContext",
     "StuckDetector",
     "ToolQueue",
+    "check_budget_alert",
     "extract_learnings",
     "format_learnings_for_injection",
     "format_tool_result",
     "is_duplicate_call",
     "load_checkpoint",
+    "recover_from_checkpoint",
     "save_checkpoint",
     "should_nudge_completion",
     "try_with_rollback",

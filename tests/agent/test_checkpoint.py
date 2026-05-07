@@ -1,15 +1,21 @@
-"""Tests for agent/checkpoint.py — checkpoint and resume (REQ-07.2)."""
+"""Tests for agent/checkpoint.py — checkpoint and resume (REQ-07.2, REQ-11.4)."""
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+from unittest.mock import AsyncMock
 
 import pytest
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-from guild.agent.checkpoint import Checkpoint, load_checkpoint, save_checkpoint
+from guild.agent.checkpoint import (
+    Checkpoint,
+    load_checkpoint,
+    recover_from_checkpoint,
+    save_checkpoint,
+)
 from guild.storage.sqlite import Storage
 
 
@@ -137,14 +143,74 @@ class TestCheckpointPersistence:
         finally:
             await storage.close()
 
-    async def test_load_checkpoint_returns_none_when_missing(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_load_checkpoint_returns_none_when_missing(self, tmp_path: Path) -> None:
         """load_checkpoint returns None for an agent with no checkpoints."""
         storage = Storage(tmp_path / "test.db")
         await storage.connect()
         try:
             result = await load_checkpoint(storage, "nonexistent-agent")
+            assert result is None
+        finally:
+            await storage.close()
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-11.4")
+class TestRecoverFromCheckpoint:
+    """Error recovery — restart crashed agents from last checkpoint."""
+
+    async def test_recover_from_checkpoint_restores_state(self, tmp_path: Path) -> None:
+        """recover_from_checkpoint reconstructs AgentLoop with saved state."""
+        storage = Storage(tmp_path / "test.db")
+        await storage.connect()
+        try:
+            cp = Checkpoint(
+                agent_id="agent-crash",
+                task_id="task-42",
+                messages=[
+                    {"role": "system", "content": "You are helpful."},
+                    {"role": "user", "content": "Fix the bug."},
+                    {"role": "assistant", "content": "Working on it."},
+                ],
+                turn_number=3,
+                total_input_tokens=500,
+                total_output_tokens=300,
+                total_tool_calls=2,
+            )
+            await save_checkpoint(storage, cp)
+
+            provider = AsyncMock()
+            tool_executors = {"file_read": AsyncMock()}
+
+            loop = await recover_from_checkpoint(
+                storage, "agent-crash", provider, tool_executors, "/tmp"
+            )
+
+            assert loop is not None
+            # Verify state was restored
+            from guild.agent.loop import AgentLoop
+
+            assert isinstance(loop, AgentLoop)
+            assert loop.messages == cp.messages
+            assert loop.total_input_tokens == 500
+            assert loop.total_output_tokens == 300
+            assert loop.total_tool_calls == 2
+            assert loop.working_dir == "/tmp"
+        finally:
+            await storage.close()
+
+    async def test_recover_returns_none_when_no_checkpoint(self, tmp_path: Path) -> None:
+        """recover_from_checkpoint returns None if no checkpoint exists."""
+        storage = Storage(tmp_path / "test.db")
+        await storage.connect()
+        try:
+            provider = AsyncMock()
+            tool_executors = {}
+
+            result = await recover_from_checkpoint(
+                storage, "no-such-agent", provider, tool_executors
+            )
+
             assert result is None
         finally:
             await storage.close()

@@ -556,6 +556,58 @@ def resource_status_cmd() -> None:
 
 
 @app.command()
+def questions(
+    limit: int = typer.Option(50, "--limit", "-n", help="Number of entries."),
+) -> None:
+    """List pending escalation questions from agents (REQ-15.1)."""
+    guild_dir = find_guild_dir()
+    if guild_dir is None:
+        console.print("[red]Error:[/red] Not a guild project (no .guild/ found).")
+        raise typer.Exit(code=1)
+
+    db_path = guild_dir / "guild.db"
+    entries = asyncio.run(_fetch_pending_questions(db_path))
+
+    if not entries:
+        console.print("[dim]No pending questions.[/dim]")
+        return
+
+    table = Table(title="Pending Questions")
+    table.add_column("ID", style="cyan", max_width=12)
+    table.add_column("Priority", style="yellow")
+    table.add_column("Question", style="white")
+    table.add_column("Context", style="dim", max_width=40)
+    table.add_column("Created", style="dim")
+
+    for q in entries[:limit]:
+        table.add_row(
+            q.id[:12],
+            q.priority.value,
+            q.question,
+            q.context[:40],
+            q.created_at,
+        )
+
+    console.print(table)
+
+
+@app.command()
+def answer(
+    question_id: str = typer.Argument(..., help="Question ID to answer."),
+    response: str = typer.Argument(..., help="Your answer to the question."),
+) -> None:
+    """Answer a pending escalation question (REQ-15.1)."""
+    guild_dir = find_guild_dir()
+    if guild_dir is None:
+        console.print("[red]Error:[/red] Not a guild project (no .guild/ found).")
+        raise typer.Exit(code=1)
+
+    db_path = guild_dir / "guild.db"
+    asyncio.run(_answer_pending_question(db_path, question_id, response))
+    console.print(f"[green]Answered question:[/green] {question_id[:12]}")
+
+
+@app.command()
 def attach(
     task_id: str = typer.Argument(..., help="Task ID to attach to."),
 ) -> None:
@@ -1094,3 +1146,38 @@ async def _decay_learnings(db_path: Path) -> int:
     count = await store.decay_learnings()
     await store.close()
     return count
+
+
+# ------------------------------------------------------------------
+# Escalation helpers (REQ-15.1)
+# ------------------------------------------------------------------
+
+
+async def _fetch_pending_questions(db_path: Path) -> list:
+    """Fetch pending escalation questions from the database."""
+    from guild.escalation.queue import QuestionQueue
+    from guild.storage.sqlite import Storage
+
+    if not db_path.exists():
+        return []
+
+    store = Storage(db_path)
+    await store.connect()
+    queue = QuestionQueue(store)
+    pending = await queue.get_pending()
+    await store.close()
+    return pending
+
+
+async def _answer_pending_question(
+    db_path: Path, question_id: str, response: str
+) -> None:
+    """Answer a pending escalation question."""
+    from guild.escalation.queue import QuestionQueue
+    from guild.storage.sqlite import Storage
+
+    store = Storage(db_path)
+    await store.connect()
+    queue = QuestionQueue(store)
+    await queue.answer_question(question_id, response)
+    await store.close()

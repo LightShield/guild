@@ -14,6 +14,7 @@ if TYPE_CHECKING:
 __all__ = [
     "Checkpoint",
     "load_checkpoint",
+    "recover_from_checkpoint",
     "save_checkpoint",
 ]
 
@@ -80,14 +81,61 @@ async def load_checkpoint(storage: Storage, agent_id: str) -> Checkpoint | None:
     await _ensure_table(storage)
     assert storage._db is not None
     cursor = await storage._db.execute(
-        "SELECT state_json FROM checkpoints"
-        " WHERE agent_id = ? ORDER BY id DESC LIMIT 1",
+        "SELECT state_json FROM checkpoints" " WHERE agent_id = ? ORDER BY id DESC LIMIT 1",
         (agent_id,),
     )
     row = await cursor.fetchone()
     if row is None:
         return None
     return Checkpoint.from_json(row[0])
+
+
+async def recover_from_checkpoint(
+    storage: Storage,
+    agent_id: str,
+    provider: object,
+    tool_executors: dict,
+    working_dir: str | None = None,
+) -> object | None:
+    """Recover an agent loop from its last checkpoint.
+
+    Loads the most recent checkpoint for the given agent and
+    reconstructs an AgentLoop with the saved state. Returns None
+    if no checkpoint exists.
+
+    Args:
+        storage: The storage backend.
+        agent_id: The agent to recover.
+        provider: The LLM provider instance.
+        tool_executors: Dict of tool name to executor callable.
+        working_dir: Working directory for tool execution.
+    """
+    from guild.agent.loop import AgentLoop
+
+    checkpoint = await load_checkpoint(storage, agent_id)
+    if checkpoint is None:
+        return None
+
+    loop = AgentLoop(
+        provider=provider,  # type: ignore[arg-type]
+        tool_executors=tool_executors,
+        working_dir=working_dir,
+        max_turns=50,
+        token_budget=0,
+    )
+
+    # Restore state from checkpoint
+    loop.messages = list(checkpoint.messages)
+    loop.total_input_tokens = checkpoint.total_input_tokens
+    loop.total_output_tokens = checkpoint.total_output_tokens
+    loop.total_tool_calls = checkpoint.total_tool_calls
+
+    logger.info(
+        "Recovered agent %s from checkpoint (turn %d)",
+        agent_id,
+        checkpoint.turn_number,
+    )
+    return loop
 
 
 async def _ensure_table(storage: Storage) -> None:

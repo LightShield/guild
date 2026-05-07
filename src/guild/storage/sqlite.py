@@ -81,6 +81,19 @@ CREATE TABLE IF NOT EXISTS learnings (
     last_validated TEXT,
     validation_count INTEGER DEFAULT 0
 );
+
+CREATE TABLE IF NOT EXISTS questions (
+    id TEXT PRIMARY KEY,
+    task_id TEXT,
+    agent_id TEXT,
+    question TEXT NOT NULL,
+    context TEXT NOT NULL,
+    priority TEXT DEFAULT 'normal',
+    created_at TEXT NOT NULL,
+    answered INTEGER DEFAULT 0,
+    answer TEXT,
+    answered_at TEXT
+);
 """
 
 
@@ -441,6 +454,64 @@ class Storage:
             "agent_count": row[2],
             "task_count": task_row[0],
         }
+
+    # ------------------------------------------------------------------
+    # Questions (REQ-15.1)
+    # ------------------------------------------------------------------
+
+    async def insert_question(
+        self,
+        question_id: str,
+        question: str,
+        context: str,
+        created_at: str,
+        task_id: str | None = None,
+        agent_id: str | None = None,
+        priority: str = "normal",
+    ) -> None:
+        """Insert a new question into the escalation queue."""
+        assert self._db is not None
+        await self._db.execute(
+            "INSERT INTO questions"
+            " (id, task_id, agent_id, question, context, priority, created_at)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (question_id, task_id, agent_id, question, context, priority, created_at),
+        )
+        await self._db.commit()
+
+    async def list_questions(self, answered: bool | None = None) -> list[dict]:
+        """List questions, optionally filtered by answered status."""
+        assert self._db is not None
+        if answered is None:
+            cursor = await self._db.execute("SELECT * FROM questions")
+        else:
+            cursor = await self._db.execute(
+                "SELECT * FROM questions WHERE answered = ?",
+                (int(answered),),
+            )
+        rows = await cursor.fetchall()
+        return [dict(r) for r in rows]
+
+    async def get_question(self, question_id: str) -> dict | None:
+        """Retrieve a single question by ID."""
+        assert self._db is not None
+        cursor = await self._db.execute(
+            "SELECT * FROM questions WHERE id = ?", (question_id,)
+        )
+        row = await cursor.fetchone()
+        if row is None:
+            return None
+        return dict(row)
+
+    async def answer_question(self, question_id: str, answer: str) -> None:
+        """Mark a question as answered and store the response."""
+        assert self._db is not None
+        await self._db.execute(
+            "UPDATE questions SET answered = 1, answer = ?, answered_at = ?"
+            " WHERE id = ?",
+            (answer, _now(), question_id),
+        )
+        await self._db.commit()
 
     # ------------------------------------------------------------------
     # Internal helpers

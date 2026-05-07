@@ -803,6 +803,81 @@ class TestTokenBudget:
         assert loop.total_input_tokens == 10000
 
 
+@pytest.mark.unit
+@pytest.mark.req("REQ-10.4")
+class TestBudgetAlerts:
+    """Tests for budget alerts when approaching token limits."""
+
+    def test_budget_alert_at_80_percent(self) -> None:
+        """Alert fires when usage reaches 80% of budget."""
+        from guild.agent.budget import check_budget_alert
+
+        alerted: set[float] = set()
+        result = check_budget_alert(8000, 10000, alerted)
+
+        assert result is not None
+        assert "80%" in result
+        assert "warning" in result.lower()
+        assert 0.8 in alerted
+
+    def test_budget_alert_at_90_percent(self) -> None:
+        """Alert fires when usage reaches 90% of budget."""
+        from guild.agent.budget import check_budget_alert
+
+        alerted: set[float] = {0.8}  # 80% already alerted
+        result = check_budget_alert(9500, 10000, alerted)
+
+        assert result is not None
+        assert "90%" in result
+        assert 0.9 in alerted
+
+    def test_budget_alert_at_100_percent(self) -> None:
+        """Alert fires when usage reaches 100% of budget."""
+        from guild.agent.budget import check_budget_alert
+
+        alerted: set[float] = {0.8, 0.9}  # Lower thresholds already alerted
+        result = check_budget_alert(10000, 10000, alerted)
+
+        assert result is not None
+        assert "100%" in result
+        assert "exceeded" in result.lower()
+        assert 1.0 in alerted
+
+    def test_no_alert_when_under_threshold(self) -> None:
+        """No alert when usage is below all thresholds."""
+        from guild.agent.budget import check_budget_alert
+
+        alerted: set[float] = set()
+        result = check_budget_alert(5000, 10000, alerted)
+
+        assert result is None
+        assert len(alerted) == 0
+
+    def test_no_alert_when_budget_is_zero(self) -> None:
+        """Zero budget means unlimited — no alerts ever."""
+        from guild.agent.budget import check_budget_alert
+
+        alerted: set[float] = set()
+        result = check_budget_alert(999999, 0, alerted)
+
+        assert result is None
+
+    def test_alert_does_not_repeat_for_same_threshold(self) -> None:
+        """Once a threshold is alerted, it does not fire again."""
+        from guild.agent.budget import check_budget_alert
+
+        alerted: set[float] = set()
+        # First call at 80%
+        result1 = check_budget_alert(8000, 10000, alerted)
+        assert result1 is not None
+
+        # Second call still at 80% — no new alert
+        result2 = check_budget_alert(8100, 10000, alerted)
+        # Should fire 90% or None depending on whether 8100/10000 >= 0.9
+        # 8100/10000 = 0.81, so no 90% threshold
+        assert result2 is None
+
+
 @pytest.mark.integration
 @pytest.mark.req("REQ-06.8")
 class TestRealOllama:
