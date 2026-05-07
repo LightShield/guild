@@ -453,6 +453,90 @@ class TestChatSendsMessages:
 
 
 @pytest.mark.unit
+@pytest.mark.req("REQ-10.3")
+class TestUsageCommand:
+    """Tests for `guild usage`."""
+
+    def test_usage_command_shows_token_summary(self, guild_app, guild_project: Path) -> None:
+        """Verify usage command displays token usage summary."""
+        from guild.storage.sqlite import Storage
+
+        db_path = guild_project / ".guild" / "guild.db"
+
+        async def _setup():
+            store = Storage(db_path)
+            await store.connect()
+            await store.register_agent("agent-1", "coder")
+            await store.update_agent("agent-1", token_input="1500", token_output="800")
+            await store.register_agent("agent-2", "reviewer")
+            await store.update_agent("agent-2", token_input="500", token_output="200")
+            await store.create_task("t1", "Task one")
+            await store.close()
+
+        asyncio.run(_setup())
+
+        result = runner.invoke(guild_app, ["usage"], terminal_width=200)
+
+        assert result.exit_code == 0
+        assert "2000" in result.output  # total input: 1500 + 500
+        assert "1000" in result.output  # total output: 800 + 200
+        assert "Token Usage" in result.output
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-07.9")
+class TestHistoryCommand:
+    """Tests for `guild history`."""
+
+    def test_history_command_shows_past_tasks(self, guild_app, guild_project: Path) -> None:
+        """Verify history shows completed tasks."""
+        from guild.storage.sqlite import Storage
+
+        db_path = guild_project / ".guild" / "guild.db"
+
+        async def _setup():
+            store = Storage(db_path)
+            await store.connect()
+            await store.create_task("t1", "Build feature A")
+            await store.update_task("t1", status="completed", result="Done")
+            await store.create_task("t2", "Fix bug B")
+            await store.update_task("t2", status="completed", result="Fixed")
+            await store.close()
+
+        asyncio.run(_setup())
+
+        result = runner.invoke(guild_app, ["history"], terminal_width=200)
+
+        assert result.exit_code == 0
+        assert "Build feature A" in result.output
+        assert "Fix bug B" in result.output
+        assert "Task History" in result.output
+
+    def test_history_filters_by_status(self, guild_app, guild_project: Path) -> None:
+        """Verify history --status filters tasks."""
+        from guild.storage.sqlite import Storage
+
+        db_path = guild_project / ".guild" / "guild.db"
+
+        async def _setup():
+            store = Storage(db_path)
+            await store.connect()
+            await store.create_task("t1", "Completed task")
+            await store.update_task("t1", status="completed")
+            await store.create_task("t2", "Pending task")
+            # t2 stays 'pending' (default)
+            await store.close()
+
+        asyncio.run(_setup())
+
+        result = runner.invoke(guild_app, ["history", "--status", "completed"], terminal_width=200)
+
+        assert result.exit_code == 0
+        assert "Completed task" in result.output
+        assert "Pending task" not in result.output
+
+
+@pytest.mark.unit
 @pytest.mark.req("REQ-24.8")
 class TestResourceStatusCommand:
     """Tests for `guild resource-status`."""
@@ -545,3 +629,103 @@ class TestAgentRecognizesCompletion:
 
         assert "summarize" in COMPLETION_NUDGE.lower()
         assert "complete" in COMPLETION_NUDGE.lower()
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-09.5")
+class TestLearningsCommand:
+    """Tests for `guild learnings` CLI command."""
+
+    def test_learnings_command_shows_entries(self, guild_app, guild_project: Path) -> None:
+        """Verify learnings command displays stored learnings."""
+        from guild.storage.sqlite import Storage
+
+        db_path = guild_project / ".guild" / "guild.db"
+
+        async def _setup():
+            store = Storage(db_path)
+            await store.connect()
+            await store.add_learning(
+                category="pattern",
+                content="Always validate inputs",
+                confidence=0.7,
+            )
+            await store.close()
+
+        asyncio.run(_setup())
+
+        result = runner.invoke(guild_app, ["learnings"], terminal_width=200)
+
+        assert result.exit_code == 0
+        assert "validate inputs" in result.output
+        assert "pattern" in result.output
+
+    def test_learnings_approve_boosts_confidence(self, guild_app, guild_project: Path) -> None:
+        """Verify --approve boosts the learning's confidence."""
+        from guild.storage.sqlite import Storage
+
+        db_path = guild_project / ".guild" / "guild.db"
+
+        async def _setup():
+            store = Storage(db_path)
+            await store.connect()
+            lid = await store.add_learning(
+                category="tool_tip",
+                content="Use grep for search",
+                confidence=0.3,
+            )
+            await store.close()
+            return lid
+
+        lid = asyncio.run(_setup())
+
+        result = runner.invoke(guild_app, ["learnings", "--approve", str(lid)])
+
+        assert result.exit_code == 0
+        assert "Approved" in result.output
+
+        # Verify the confidence was boosted
+        async def _check():
+            store = Storage(db_path)
+            await store.connect()
+            learning = await store.get_learning(lid)
+            await store.close()
+            return learning
+
+        learning = asyncio.run(_check())
+        assert learning["confidence"] == pytest.approx(0.4)
+
+    def test_learnings_reject_deletes_entry(self, guild_app, guild_project: Path) -> None:
+        """Verify --reject deletes the learning."""
+        from guild.storage.sqlite import Storage
+
+        db_path = guild_project / ".guild" / "guild.db"
+
+        async def _setup():
+            store = Storage(db_path)
+            await store.connect()
+            lid = await store.add_learning(
+                category="anti_pattern",
+                content="Never use eval()",
+                confidence=0.5,
+            )
+            await store.close()
+            return lid
+
+        lid = asyncio.run(_setup())
+
+        result = runner.invoke(guild_app, ["learnings", "--reject", str(lid)])
+
+        assert result.exit_code == 0
+        assert "Rejected" in result.output
+
+        # Verify it was deleted
+        async def _check():
+            store = Storage(db_path)
+            await store.connect()
+            learning = await store.get_learning(lid)
+            await store.close()
+            return learning
+
+        learning = asyncio.run(_check())
+        assert learning is None

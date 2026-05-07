@@ -69,6 +69,18 @@ CREATE TABLE IF NOT EXISTS decisions (
     reversible BOOLEAN DEFAULT 1,
     timestamp TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS learnings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    category TEXT NOT NULL,
+    content TEXT NOT NULL,
+    confidence REAL DEFAULT 0.3,
+    scope TEXT,
+    source_task_id TEXT,
+    created_at TEXT NOT NULL,
+    last_validated TEXT,
+    validation_count INTEGER DEFAULT 0
+);
 """
 
 
@@ -293,12 +305,142 @@ class Storage:
             )
         else:
             cursor = await self._db.execute(
-                "SELECT * FROM decisions"
-                " WHERE task_id = ? ORDER BY id DESC LIMIT ?",
+                "SELECT * FROM decisions" " WHERE task_id = ? ORDER BY id DESC LIMIT ?",
                 (task_id, limit),
             )
         rows = await cursor.fetchall()
         return [dict(r) for r in rows]
+
+    # ------------------------------------------------------------------
+    # Learnings
+    # ------------------------------------------------------------------
+
+    async def add_learning(
+        self,
+        category: str,
+        content: str,
+        confidence: float = 0.3,
+        scope: str | None = None,
+        source_task_id: str | None = None,
+    ) -> int:
+        """Insert a new learning and return its ID."""
+        assert self._db is not None
+        cursor = await self._db.execute(
+            "INSERT INTO learnings"
+            " (category, content, confidence, scope, source_task_id, created_at)"
+            " VALUES (?, ?, ?, ?, ?, ?)",
+            (category, content, confidence, scope, source_task_id, _now()),
+        )
+        await self._db.commit()
+        return cursor.lastrowid  # type: ignore[return-value]
+
+    async def list_learnings(
+        self,
+        min_confidence: float = 0.0,
+        category: str | None = None,
+        scope: str | None = None,
+        limit: int = 50,
+    ) -> list[dict]:
+        """List learnings filtered by confidence, category, and scope."""
+        assert self._db is not None
+        query = "SELECT * FROM learnings WHERE confidence >= ?"
+        params: list = [min_confidence]
+
+        if category is not None:
+            query += " AND category = ?"
+            params.append(category)
+        if scope is not None:
+            query += " AND scope = ?"
+            params.append(scope)
+
+        query += " ORDER BY confidence DESC LIMIT ?"
+        params.append(limit)
+
+        cursor = await self._db.execute(query, params)
+        rows = await cursor.fetchall()
+        return [dict(r) for r in rows]
+
+    async def validate_learning(self, learning_id: int) -> None:
+        """Increase confidence by 0.1 (capped at 1.0), update validation."""
+        assert self._db is not None
+        await self._db.execute(
+            "UPDATE learnings SET"
+            " confidence = MIN(confidence + 0.1, 1.0),"
+            " last_validated = ?,"
+            " validation_count = validation_count + 1"
+            " WHERE id = ?",
+            (_now(), learning_id),
+        )
+        await self._db.commit()
+
+    async def invalidate_learning(self, learning_id: int) -> None:
+        """Decrease confidence by 0.15 (floored at 0.0)."""
+        assert self._db is not None
+        await self._db.execute(
+            "UPDATE learnings SET" " confidence = MAX(confidence - 0.15, 0.0)" " WHERE id = ?",
+            (learning_id,),
+        )
+        await self._db.commit()
+
+    async def decay_learnings(self, days_since_validation: int = 30) -> int:
+        """Decay confidence by 0.05 for learnings unvalidated for N days.
+
+        Returns the number of affected rows.
+        """
+        assert self._db is not None
+        from datetime import timedelta
+
+        cutoff = (datetime.now(UTC) - timedelta(days=days_since_validation)).isoformat()
+        cursor = await self._db.execute(
+            "UPDATE learnings SET confidence = MAX(confidence - 0.05, 0.0)"
+            " WHERE (last_validated IS NULL OR last_validated < ?)"
+            " AND created_at < ?",
+            (cutoff, cutoff),
+        )
+        await self._db.commit()
+        return cursor.rowcount
+
+    async def delete_learning(self, learning_id: int) -> None:
+        """Delete a learning by ID."""
+        assert self._db is not None
+        await self._db.execute("DELETE FROM learnings WHERE id = ?", (learning_id,))
+        await self._db.commit()
+
+    async def get_learning(self, learning_id: int) -> dict | None:
+        """Retrieve a single learning by ID."""
+        assert self._db is not None
+        cursor = await self._db.execute("SELECT * FROM learnings WHERE id = ?", (learning_id,))
+        row = await cursor.fetchone()
+        if row is None:
+            return None
+        return dict(row)
+
+    # ------------------------------------------------------------------
+    # Token usage aggregation (REQ-10.3)
+    # ------------------------------------------------------------------
+
+    async def get_token_summary(self) -> dict:
+        """Aggregate token usage across all agents.
+
+        Returns a dict with total_input, total_output, agent_count,
+        and task_count.
+        """
+        assert self._db is not None
+        cursor = await self._db.execute(
+            "SELECT COALESCE(SUM(token_input), 0) AS total_input,"
+            " COALESCE(SUM(token_output), 0) AS total_output,"
+            " COUNT(*) AS agent_count"
+            " FROM agents"
+        )
+        row = await cursor.fetchone()
+        task_cursor = await self._db.execute("SELECT COUNT(*) FROM tasks")
+        task_row = await task_cursor.fetchone()
+        return {
+            "total_input": row[0],
+            "total_output": row[1],
+            "agent_count": row[2],
+            "task_count": task_row[0],
+        }
 
     # ------------------------------------------------------------------
     # Internal helpers

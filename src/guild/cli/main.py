@@ -295,6 +295,61 @@ def decisions(
     console.print(table)
 
 
+@app.command()
+def learnings(
+    approve: Optional[int] = typer.Option(None, "--approve", help="Approve a learning by ID."),
+    reject: Optional[int] = typer.Option(None, "--reject", help="Reject/delete a learning by ID."),
+    decay: bool = typer.Option(False, "--decay", help="Run decay on old unvalidated learnings."),
+    category: Optional[str] = typer.Option(None, "--category", "-c", help="Filter by category."),
+    limit: int = typer.Option(50, "--limit", "-n", help="Number of entries."),
+) -> None:
+    """Browse, approve, reject, or decay learnings."""
+    guild_dir = find_guild_dir()
+    if guild_dir is None:
+        console.print("[red]Error:[/red] Not a guild project (no .guild/ found).")
+        raise typer.Exit(code=1)
+
+    db_path = guild_dir / "guild.db"
+
+    if approve is not None:
+        asyncio.run(_approve_learning(db_path, approve))
+        console.print(f"[green]Approved learning {approve}.[/green]")
+        return
+
+    if reject is not None:
+        asyncio.run(_reject_learning(db_path, reject))
+        console.print(f"[green]Rejected learning {reject}.[/green]")
+        return
+
+    if decay:
+        count = asyncio.run(_decay_learnings(db_path))
+        console.print(f"[green]Decayed {count} learning(s).[/green]")
+        return
+
+    entries = asyncio.run(_fetch_learnings(db_path, category, limit))
+    if not entries:
+        console.print("[dim]No learnings found.[/dim]")
+        return
+
+    table = Table(title="Learnings")
+    table.add_column("ID", style="dim")
+    table.add_column("Category", style="cyan")
+    table.add_column("Confidence", style="yellow")
+    table.add_column("Content", style="white")
+    table.add_column("Validated", style="dim")
+
+    for entry in entries:
+        table.add_row(
+            str(entry.get("id", "")),
+            entry.get("category", ""),
+            f"{entry.get('confidence', 0):.2f}",
+            entry.get("content", ""),
+            str(entry.get("validation_count", 0)),
+        )
+
+    console.print(table)
+
+
 @app.command(name="ps")
 def ps_cmd() -> None:
     """Show running/paused Guild tasks."""
@@ -406,6 +461,76 @@ def logs(
         role = msg.get("role", "")
         content = msg.get("content", "")
         console.print(f"[bold]{role}:[/bold] {content}")
+
+
+@app.command()
+def history(
+    limit: int = typer.Option(20, "--limit", "-n", help="Number of tasks to show."),
+    status: Optional[str] = typer.Option(None, "--status", "-s", help="Filter by status."),
+) -> None:
+    """Browse past tasks and their outcomes (REQ-07.9)."""
+    guild_dir = find_guild_dir()
+    if guild_dir is None:
+        console.print("[red]Error:[/red] Not a guild project (no .guild/ found).")
+        raise typer.Exit(code=1)
+
+    db_path = guild_dir / "guild.db"
+    tasks = asyncio.run(_fetch_task_history(db_path, limit, status))
+
+    if not tasks:
+        console.print("[dim]No tasks found.[/dim]")
+        return
+
+    table = Table(title="Task History")
+    table.add_column("Task ID", style="cyan", max_width=12)
+    table.add_column("Status", style="yellow")
+    table.add_column("Description", style="white")
+    table.add_column("Created", style="dim")
+    table.add_column("Result", style="green", max_width=40)
+
+    for t in tasks:
+        table.add_row(
+            t.get("task_id", "")[:12],
+            t.get("status", ""),
+            t.get("description", ""),
+            t.get("created_at", ""),
+            (t.get("result") or "")[:40],
+        )
+
+    console.print(table)
+
+
+@app.command()
+def usage() -> None:
+    """Show token usage summary across all tasks (REQ-10.3)."""
+    guild_dir = find_guild_dir()
+    if guild_dir is None:
+        console.print("[red]Error:[/red] Not a guild project (no .guild/ found).")
+        raise typer.Exit(code=1)
+
+    db_path = guild_dir / "guild.db"
+    summary = asyncio.run(_fetch_token_summary(db_path))
+
+    if summary is None:
+        console.print("[dim]No usage data found.[/dim]")
+        return
+
+    total_tokens = summary["total_input"] + summary["total_output"]
+    task_count = summary["task_count"]
+    avg_per_task = total_tokens // task_count if task_count > 0 else 0
+
+    table = Table(title="Token Usage Summary")
+    table.add_column("Metric", style="cyan")
+    table.add_column("Value", style="white")
+
+    table.add_row("Total input tokens", str(summary["total_input"]))
+    table.add_row("Total output tokens", str(summary["total_output"]))
+    table.add_row("Total tokens", str(total_tokens))
+    table.add_row("Tasks", str(task_count))
+    table.add_row("Agents", str(summary["agent_count"]))
+    table.add_row("Avg tokens/task", str(avg_per_task))
+
+    console.print(table)
 
 
 @app.command(name="resource-status")
@@ -562,21 +687,56 @@ async def _run_task(
         max_turns=max_turns,
     )
 
-    result = await loop.run(_GUILD_MASTER_PROMPT, description)
-
-    # Store task result
+    # Inject high-confidence learnings into system prompt (REQ-09.4)
+    system_prompt = _GUILD_MASTER_PROMPT
     db_path = guild_dir / "guild.db"
     store = Storage(db_path)
     await store.connect()
 
+    try:
+        from guild.agent.learning import format_learnings_for_injection
+
+        existing_learnings = await store.list_learnings(min_confidence=0.5)
+        injection = format_learnings_for_injection(existing_learnings)
+        if injection:
+            system_prompt = f"{system_prompt}\n\n{injection}"
+    except Exception:
+        logger.debug("Learning injection failed (non-critical)", exc_info=True)
+
+    result = await loop.run(system_prompt, description)
+
     task_id = str(uuid.uuid4())
+    agent_id = f"guild-master-{task_id[:8]}"
     await store.create_task(task_id, description)
-    await store.update_task(task_id, status="completed", result=result)
+    await store.update_task(task_id, status="completed", result=result, assigned_agent=agent_id)
+    await store.register_agent(agent_id, "master")
+    await store.update_agent(
+        agent_id,
+        token_input=str(loop.total_input_tokens),
+        token_output=str(loop.total_output_tokens),
+    )
+    # Store messages from the loop for learning extraction
+    for msg in loop.messages:
+        role = msg.get("role", "")
+        content = msg.get("content", "")
+        if role and content:
+            await store.append_message(agent_id, role, content)
+
     await store.log_audit(
         action="task_completed",
-        agent_id="guild-master",
-        details=f"task={task_id}",
+        agent_id=agent_id,
+        details=f"task={task_id} tokens_in={loop.total_input_tokens}"
+        f" tokens_out={loop.total_output_tokens}",
     )
+
+    # Post-task learning extraction (REQ-09.1)
+    try:
+        from guild.agent.learning import extract_learnings
+
+        await extract_learnings(task_id, store, provider)
+    except Exception:
+        logger.debug("Learning extraction failed (non-critical)", exc_info=True)
+
     await store.close()
 
     return result
@@ -612,6 +772,36 @@ async def _fetch_decisions(
     entries = await store.list_decisions(task_id=task_id, limit=limit)
     await store.close()
     return entries
+
+
+async def _fetch_task_history(db_path: Path, limit: int, status: str | None) -> list[dict]:
+    """Fetch task history from the database."""
+    from guild.storage.sqlite import Storage
+
+    if not db_path.exists():
+        return []
+
+    store = Storage(db_path)
+    await store.connect()
+    tasks = await store.list_tasks(status=status)
+    await store.close()
+    # Return most recent first, capped at limit
+    tasks.sort(key=lambda t: t.get("created_at", ""), reverse=True)
+    return tasks[:limit]
+
+
+async def _fetch_token_summary(db_path: Path) -> dict | None:
+    """Fetch token usage summary from the database."""
+    from guild.storage.sqlite import Storage
+
+    if not db_path.exists():
+        return None
+
+    store = Storage(db_path)
+    await store.connect()
+    summary = await store.get_token_summary()
+    await store.close()
+    return summary
 
 
 def _load_toml(path: Path) -> dict:
@@ -850,3 +1040,57 @@ async def _fetch_task_messages(guild_dir: Path, task_id: str) -> list[dict]:
     messages = await store.get_messages(agent_id)
     await store.close()
     return messages
+
+
+# ------------------------------------------------------------------
+# Learnings helpers
+# ------------------------------------------------------------------
+
+
+async def _fetch_learnings(
+    db_path: Path,
+    category: str | None,
+    limit: int,
+) -> list[dict]:
+    """Fetch learnings from the database."""
+    from guild.storage.sqlite import Storage
+
+    if not db_path.exists():
+        return []
+
+    store = Storage(db_path)
+    await store.connect()
+    entries = await store.list_learnings(category=category, limit=limit)
+    await store.close()
+    return entries
+
+
+async def _approve_learning(db_path: Path, learning_id: int) -> None:
+    """Validate (approve) a learning, boosting its confidence."""
+    from guild.storage.sqlite import Storage
+
+    store = Storage(db_path)
+    await store.connect()
+    await store.validate_learning(learning_id)
+    await store.close()
+
+
+async def _reject_learning(db_path: Path, learning_id: int) -> None:
+    """Delete a rejected learning."""
+    from guild.storage.sqlite import Storage
+
+    store = Storage(db_path)
+    await store.connect()
+    await store.delete_learning(learning_id)
+    await store.close()
+
+
+async def _decay_learnings(db_path: Path) -> int:
+    """Run decay on old unvalidated learnings."""
+    from guild.storage.sqlite import Storage
+
+    store = Storage(db_path)
+    await store.connect()
+    count = await store.decay_learnings()
+    await store.close()
+    return count

@@ -681,6 +681,128 @@ class TestAdversarialSelfReview:
         assert len(tool_msgs) >= 1
 
 
+@pytest.mark.unit
+@pytest.mark.req("REQ-10.1")
+class TestTokenTracking:
+    """Tests for token usage tracking per agent loop execution."""
+
+    async def test_tracks_input_tokens(self) -> None:
+        """AgentLoop accumulates input_tokens from each LLM response."""
+        provider = _make_provider(
+            LLMResponse(content="Hello", tool_calls=None, input_tokens=100, output_tokens=20),
+        )
+        loop = AgentLoop(provider=provider, tool_executors=_make_tool_executors())
+        await loop.run(system_prompt="sys", user_input="hi")
+
+        assert loop.total_input_tokens == 100
+
+    async def test_tracks_output_tokens(self) -> None:
+        """AgentLoop accumulates output_tokens from each LLM response."""
+        provider = _make_provider(
+            LLMResponse(
+                content="",
+                tool_calls=[{"function": {"name": "file_read", "arguments": {"path": "a"}}}],
+                input_tokens=50,
+                output_tokens=30,
+            ),
+            LLMResponse(content="Done", tool_calls=None, input_tokens=80, output_tokens=40),
+        )
+        loop = AgentLoop(provider=provider, tool_executors=_make_tool_executors())
+        await loop.run(system_prompt="sys", user_input="read")
+
+        assert loop.total_output_tokens == 70  # 30 + 40
+
+    async def test_tracks_tool_call_count(self) -> None:
+        """AgentLoop counts total tool calls across all turns."""
+        write_call = {
+            "function": {"name": "file_write", "arguments": {"path": "b", "content": "x"}}
+        }
+        read_call = {"function": {"name": "file_read", "arguments": {"path": "a"}}}
+        provider = _make_provider(
+            LLMResponse(
+                content="",
+                tool_calls=[read_call, write_call],
+                input_tokens=10,
+                output_tokens=10,
+            ),
+            LLMResponse(
+                content="",
+                tool_calls=[{"function": {"name": "file_read", "arguments": {"path": "c"}}}],
+                input_tokens=10,
+                output_tokens=10,
+            ),
+            LLMResponse(content="Done", tool_calls=None, input_tokens=10, output_tokens=10),
+        )
+        loop = AgentLoop(provider=provider, tool_executors=_make_tool_executors())
+        await loop.run(system_prompt="sys", user_input="do things")
+
+        assert loop.total_tool_calls == 3
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-10.2")
+class TestTokenBudget:
+    """Tests for budget enforcement — stop loop when budget exceeded."""
+
+    async def test_token_budget_stops_loop_when_exceeded(self) -> None:
+        """Loop stops when cumulative tokens exceed budget."""
+        provider = _make_provider(
+            LLMResponse(
+                content="",
+                tool_calls=[{"function": {"name": "file_read", "arguments": {"path": "a"}}}],
+                input_tokens=500,
+                output_tokens=500,
+            ),
+            # This response should never be reached due to budget
+            LLMResponse(
+                content="Should not reach",
+                tool_calls=None,
+                input_tokens=500,
+                output_tokens=500,
+            ),
+        )
+        loop = AgentLoop(
+            provider=provider,
+            tool_executors=_make_tool_executors(),
+            token_budget=900,  # budget < 1000 (500+500 from first call)
+        )
+        await loop.run(system_prompt="sys", user_input="read")
+
+        # First call uses 1000 tokens total, exceeding budget of 900
+        # Loop should stop before the second generate call
+        assert loop.total_input_tokens == 500
+        assert loop.total_output_tokens == 500
+        assert provider.generate.call_count == 1
+
+    async def test_zero_budget_means_unlimited(self) -> None:
+        """A budget of 0 means no limit — loop runs normally."""
+        read_call = {"function": {"name": "file_read", "arguments": {"path": "a"}}}
+        provider = _make_provider(
+            LLMResponse(
+                content="",
+                tool_calls=[read_call],
+                input_tokens=5000,
+                output_tokens=5000,
+            ),
+            LLMResponse(
+                content="Done",
+                tool_calls=None,
+                input_tokens=5000,
+                output_tokens=5000,
+            ),
+        )
+        loop = AgentLoop(
+            provider=provider,
+            tool_executors=_make_tool_executors(),
+            token_budget=0,
+        )
+        result = await loop.run(system_prompt="sys", user_input="read")
+
+        assert result == "Done"
+        assert provider.generate.call_count == 2
+        assert loop.total_input_tokens == 10000
+
+
 @pytest.mark.integration
 @pytest.mark.req("REQ-06.8")
 class TestRealOllama:

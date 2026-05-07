@@ -65,6 +65,20 @@ class GuildConfig(ConfigsLoader):
         default=3, section="guild", description="Max repeated identical calls"
     )
 
+    # Escalation section (REQ-17.7)
+    escalation_chain: str = Field(
+        default="",
+        section="escalation",
+        env="GUILD_ESCALATION_CHAIN",
+        description="Comma-separated model list for escalation fallback chain",
+    )
+    escalation_cli_providers: str = Field(
+        default="",
+        section="escalation",
+        env="GUILD_ESCALATION_CLI_PROVIDERS",
+        description="Comma-separated CLI tool names to use as last-resort providers",
+    )
+
     # Resource section
     resource_mode: SchedulingMode = Field(
         default=SchedulingMode.POLITE,

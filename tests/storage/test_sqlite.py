@@ -224,9 +224,7 @@ class TestDecisions:
         alts = json.loads(decisions[0]["alternatives"])
         assert alts == ["threading", "multiprocessing"]
 
-    async def test_list_decisions_returns_recent_first(
-        self, storage: Storage
-    ) -> None:
+    async def test_list_decisions_returns_recent_first(self, storage: Storage) -> None:
         """Decisions are returned most-recent first."""
         await storage.log_decision(
             task_id="t1",
@@ -250,9 +248,7 @@ class TestDecisions:
         assert decisions[0]["decision"] == "Third decision"
         assert decisions[2]["decision"] == "First decision"
 
-    async def test_list_decisions_filters_by_task_id(
-        self, storage: Storage
-    ) -> None:
+    async def test_list_decisions_filters_by_task_id(self, storage: Storage) -> None:
         """list_decisions with task_id returns only that task's decisions."""
         await storage.log_decision(
             task_id="t1",
@@ -321,3 +317,189 @@ class TestPersistence:
             assert audit[0]["action"] == "started"
         finally:
             await store2.close()
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-07.1")
+class TestMessagePersistence:
+    """Conversation messages persist across sessions (REQ-07.1)."""
+
+    async def test_messages_persist_across_reconnect(self, tmp_path: Path) -> None:
+        """Messages stored survive close and reopen of storage."""
+        db_path = tmp_path / "persist_msg.db"
+
+        store = Storage(db_path)
+        await store.connect()
+        await store.append_message("agent-x", "system", "You are helpful.")
+        await store.append_message("agent-x", "user", "Hello")
+        await store.append_message("agent-x", "assistant", "Hi there!")
+        await store.append_message("agent-x", "user", "Do task")
+        await store.append_message("agent-x", "assistant", "Done.")
+        await store.close()
+
+        # Reopen and verify full conversation history
+        store2 = Storage(db_path)
+        await store2.connect()
+        try:
+            messages = await store2.get_messages("agent-x")
+            assert len(messages) == 5
+            assert messages[0]["role"] == "system"
+            assert messages[1]["role"] == "user"
+            assert messages[1]["content"] == "Hello"
+            assert messages[4]["role"] == "assistant"
+            assert messages[4]["content"] == "Done."
+        finally:
+            await store2.close()
+
+    async def test_task_context_survives_close_reopen(self, tmp_path: Path) -> None:
+        """Task + agent + messages can be retrieved after reconnect."""
+        db_path = tmp_path / "persist_ctx.db"
+
+        store = Storage(db_path)
+        await store.connect()
+        await store.create_task("task-1", "Build feature")
+        await store.update_task("task-1", status="completed", assigned_agent="ag-1")
+        await store.register_agent("ag-1", "coder")
+        await store.update_agent("ag-1", token_input="1200", token_output="600")
+        await store.append_message("ag-1", "user", "Build the feature")
+        await store.append_message("ag-1", "assistant", "Done building.")
+        await store.close()
+
+        # Reopen and verify full context
+        store2 = Storage(db_path)
+        await store2.connect()
+        try:
+            task = await store2.get_task("task-1")
+            assert task is not None
+            assert task["status"] == "completed"
+            assert task["assigned_agent"] == "ag-1"
+
+            agents = await store2.list_agents()
+            assert len(agents) == 1
+            assert agents[0]["token_input"] == 1200
+            assert agents[0]["token_output"] == 600
+
+            messages = await store2.get_messages("ag-1")
+            assert len(messages) == 2
+            assert messages[0]["content"] == "Build the feature"
+            assert messages[1]["content"] == "Done building."
+        finally:
+            await store2.close()
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-09.2")
+class TestLearningsCategory:
+    """Learning creation with categories."""
+
+    async def test_add_learning_with_category(self, storage: Storage) -> None:
+        """add_learning stores a learning with the correct category."""
+        lid = await storage.add_learning(
+            category="pattern",
+            content="Always validate inputs before processing",
+            source_task_id="task-1",
+        )
+        assert lid is not None
+        learning = await storage.get_learning(lid)
+        assert learning is not None
+        assert learning["category"] == "pattern"
+        assert learning["content"] == "Always validate inputs before processing"
+        assert learning["confidence"] == pytest.approx(0.3)
+        assert learning["source_task_id"] == "task-1"
+
+    async def test_add_learning_all_categories(self, storage: Storage) -> None:
+        """All four categories are accepted and stored."""
+        categories = ["pattern", "anti_pattern", "tool_tip", "domain_knowledge"]
+        for cat in categories:
+            lid = await storage.add_learning(category=cat, content=f"Test {cat}")
+            learning = await storage.get_learning(lid)
+            assert learning["category"] == cat
+
+    async def test_list_learnings_filters_by_category(self, storage: Storage) -> None:
+        """list_learnings with category filter returns only matching."""
+        await storage.add_learning(category="pattern", content="Pattern 1")
+        await storage.add_learning(category="tool_tip", content="Tip 1")
+        patterns = await storage.list_learnings(category="pattern")
+        assert len(patterns) == 1
+        assert patterns[0]["category"] == "pattern"
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-09.3")
+class TestLearningsConfidence:
+    """Confidence scoring for learnings."""
+
+    async def test_validate_increases_confidence(self, storage: Storage) -> None:
+        """validate_learning increases confidence by 0.1."""
+        lid = await storage.add_learning(category="pattern", content="Test")
+        await storage.validate_learning(lid)
+        learning = await storage.get_learning(lid)
+        assert learning["confidence"] == pytest.approx(0.4)
+        assert learning["validation_count"] == 1
+        assert learning["last_validated"] is not None
+
+    async def test_invalidate_decreases_confidence(self, storage: Storage) -> None:
+        """invalidate_learning decreases confidence by 0.15."""
+        lid = await storage.add_learning(category="pattern", content="Test")
+        await storage.invalidate_learning(lid)
+        learning = await storage.get_learning(lid)
+        assert learning["confidence"] == pytest.approx(0.15)
+
+    async def test_confidence_capped_at_1(self, storage: Storage) -> None:
+        """Confidence never exceeds 1.0 after multiple validations."""
+        lid = await storage.add_learning(category="pattern", content="Test", confidence=0.95)
+        await storage.validate_learning(lid)
+        learning = await storage.get_learning(lid)
+        assert learning["confidence"] == pytest.approx(1.0)
+        # Validate again — should still be 1.0
+        await storage.validate_learning(lid)
+        learning = await storage.get_learning(lid)
+        assert learning["confidence"] == pytest.approx(1.0)
+
+    async def test_confidence_floored_at_0(self, storage: Storage) -> None:
+        """Confidence never goes below 0.0 after multiple invalidations."""
+        lid = await storage.add_learning(category="pattern", content="Test", confidence=0.1)
+        await storage.invalidate_learning(lid)
+        learning = await storage.get_learning(lid)
+        assert learning["confidence"] == pytest.approx(0.0)
+        # Invalidate again — should still be 0.0
+        await storage.invalidate_learning(lid)
+        learning = await storage.get_learning(lid)
+        assert learning["confidence"] == pytest.approx(0.0)
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-09.8")
+class TestLearningsDecay:
+    """Learning decay for old unvalidated entries."""
+
+    async def test_decay_reduces_old_unvalidated_learnings(self, storage: Storage) -> None:
+        """decay_learnings reduces confidence for old entries."""
+        # Insert a learning with an old created_at timestamp
+        assert storage._db is not None
+        old_date = "2020-01-01T00:00:00+00:00"
+        await storage._db.execute(
+            "INSERT INTO learnings"
+            " (category, content, confidence, created_at, last_validated)"
+            " VALUES (?, ?, ?, ?, ?)",
+            ("pattern", "Old learning", 0.5, old_date, None),
+        )
+        await storage._db.commit()
+
+        count = await storage.decay_learnings(days_since_validation=30)
+        assert count == 1
+
+        entries = await storage.list_learnings()
+        assert len(entries) == 1
+        assert entries[0]["confidence"] == pytest.approx(0.45)
+
+    async def test_decay_skips_recently_validated(self, storage: Storage) -> None:
+        """decay_learnings does not touch recently validated entries."""
+        lid = await storage.add_learning(category="pattern", content="Fresh")
+        await storage.validate_learning(lid)
+
+        count = await storage.decay_learnings(days_since_validation=30)
+        assert count == 0
+
+        learning = await storage.get_learning(lid)
+        assert learning["confidence"] == pytest.approx(0.4)

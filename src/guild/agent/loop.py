@@ -67,17 +67,24 @@ class AgentLoop:
         working_dir: str | None = None,
         max_turns: int = 50,
         stuck_detector: StuckDetector | None = None,
+        token_budget: int = 0,
     ) -> None:
         self.provider = provider
         self.tool_executors = tool_executors
         self.working_dir = working_dir
         self.max_turns = max_turns
         self.stuck_detector = stuck_detector
+        self.token_budget = token_budget
         self.messages: list[dict[str, Any]] = []
         self.recent_tool_calls: list[dict[str, Any]] = []
         self._task_description: str = ""
         self._attempted_tools: list[str] = []
         self._recovery_attempted: bool = False
+
+        # Token usage tracking (REQ-10.1)
+        self.total_input_tokens: int = 0
+        self.total_output_tokens: int = 0
+        self.total_tool_calls: int = 0
 
     async def run(self, system_prompt: str, user_input: str, self_review: bool = False) -> str:
         """Execute the agent loop until completion or max_turns.
@@ -131,8 +138,17 @@ class AgentLoop:
         last_content = ""
 
         for _turn in range(self.max_turns):
+            # Budget check (REQ-10.2): stop if token budget exceeded
+            if self._budget_exceeded():
+                logger.info("Token budget exceeded, stopping loop")
+                break
+
             response = await self.provider.generate(self.messages, tools=tool_schemas)
             last_content = response.content or ""
+
+            # Track token usage (REQ-10.1)
+            self.total_input_tokens += response.input_tokens
+            self.total_output_tokens += response.output_tokens
 
             # Append the assistant message
             assistant_msg = self._build_assistant_message(response)
@@ -142,11 +158,13 @@ class AgentLoop:
             if not response.has_tool_call:
                 break
 
-            # Track tool calls for stuck detection
-            self._track_tool_calls(response.tool_calls or [])
+            # Track tool calls for stuck detection and counting
+            tool_calls = response.tool_calls or []
+            self._track_tool_calls(tool_calls)
+            self.total_tool_calls += len(tool_calls)
 
             # Execute tool calls
-            turn_results = await self._execute_tool_calls(response.tool_calls or [])
+            turn_results = await self._execute_tool_calls(tool_calls)
 
             # Check stuck detection
             escalation = self._check_stuck(turn_results)
@@ -158,6 +176,13 @@ class AgentLoop:
                 self.messages.append({"role": "user", "content": COMPLETION_NUDGE})
 
         return last_content
+
+    def _budget_exceeded(self) -> bool:
+        """Return True if the token budget has been exceeded."""
+        if not self.token_budget:
+            return False
+        total = self.total_input_tokens + self.total_output_tokens
+        return total > self.token_budget
 
     def _track_tool_calls(self, tool_calls: list[dict[str, Any]]) -> None:
         """Record tool calls for stuck detection and escalation context."""
