@@ -45,7 +45,7 @@ async def _run_task(task_id: str, guild_dir: Path) -> None:
     await store.update_task(task_id, status="running")
 
     # Create provider and tools
-    provider = create_provider(config.provider.base_url, config.provider.model)
+    provider = create_provider(config.base_url, config.model)
     tool_executors = {
         "file_read": execute_file_read,
         "file_write": execute_file_write,

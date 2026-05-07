@@ -1,36 +1,73 @@
 """Configuration models for Guild (REQ-01.3).
 
-Pydantic models for provider and guild-level configuration,
-loaded from TOML files.
+ConfigsLoader-based declarative config with CLI flags, env vars,
+and TOML file support.
 """
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from configsloader import ConfigsLoader, Field
 
+from guild.daemon.resource import SchedulingMode
 from guild.permissions.checker import PermissionTier
 
-__all__ = ["GuildConfig", "ProviderConfig"]
+__all__ = ["GuildConfig"]
 
 
-class ProviderConfig(BaseModel):
-    """LLM provider settings."""
+class GuildConfig(ConfigsLoader):
+    """Unified Guild configuration — flat fields with section-based TOML layout."""
 
-    name: str = "ollama"
-    base_url: str = "http://localhost:11434"
-    model: str = "gemma4-4b-dense-med"
-    temperature: float = 0.7
-    max_tokens: int = 4096
+    # Provider section
+    provider_name: str = Field(
+        default="ollama", section="provider", description="LLM provider name"
+    )
+    base_url: str = Field(
+        default="http://localhost:11434",
+        section="provider",
+        env="GUILD_BASE_URL",
+        description="Provider base URL",
+    )
+    model: str = Field(
+        default="gemma4-4b-dense-med",
+        section="provider",
+        flags=["--model", "-m"],
+        env="GUILD_MODEL",
+        description="Model name",
+    )
+    temperature: float = Field(default=0.7, section="provider", description="Sampling temperature")
+    max_tokens: int = Field(default=4096, section="provider", description="Max output tokens")
 
+    # Guild section
+    default_permission: PermissionTier = Field(
+        default=PermissionTier.ASK,
+        section="guild",
+        flags=["--permission", "-p"],
+        description="Default permission tier",
+    )
+    max_concurrent_agents: int = Field(
+        default=1, section="guild", description="Max concurrent agents"
+    )
+    max_concurrent_tool_calls: int = Field(
+        default=4, section="guild", description="Max concurrent tool calls"
+    )
+    autonomy_timeout_minutes: int = Field(
+        default=0, section="guild", description="Autonomy timeout in minutes (0=unlimited)"
+    )
 
-class GuildConfig(BaseModel):
-    """Top-level guild configuration."""
+    # Stuck detection (guild section)
+    stuck_max_repeated_errors: int = Field(
+        default=3, section="guild", description="Max repeated errors before stuck"
+    )
+    stuck_max_no_progress_turns: int = Field(
+        default=10, section="guild", description="Max turns without progress"
+    )
+    stuck_max_repeated_calls: int = Field(
+        default=3, section="guild", description="Max repeated identical calls"
+    )
 
-    provider: ProviderConfig = Field(default_factory=ProviderConfig)
-    default_permission: PermissionTier = PermissionTier.ASK
-    max_concurrent_agents: int = 1
-    max_concurrent_tool_calls: int = 4
-    autonomy_timeout_minutes: int | None = None
-    stuck_max_repeated_errors: int = 3
-    stuck_max_no_progress_turns: int = 10
-    stuck_max_repeated_calls: int = 3
+    # Resource section
+    resource_mode: SchedulingMode = Field(
+        default=SchedulingMode.POLITE,
+        section="resource",
+        description="Resource scheduling mode",
+    )

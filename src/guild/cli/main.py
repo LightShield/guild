@@ -21,7 +21,7 @@ from rich.console import Console
 from rich.table import Table
 
 from guild import __version__
-from guild.config.loader import find_guild_dir, load_config, load_toml
+from guild.config.loader import find_guild_dir, load_config
 from guild.provider.ollama import create_provider
 
 __all__ = ["app"]
@@ -44,7 +44,7 @@ _GUILD_MASTER_PROMPT = (
 
 _DEFAULT_CONFIG_TOML = """\
 [provider]
-name = "ollama"
+provider_name = "ollama"
 base_url = "http://localhost:11434"
 model = "gemma4-4b-dense-med"
 temperature = 0.7
@@ -114,8 +114,8 @@ def status() -> None:
     task_count, agent_count = _get_counts(db_path)
 
     console.print(f"[bold]Project:[/bold] {project_path}")
-    console.print(f"[bold]Provider:[/bold] {config.provider.name}")
-    console.print(f"[bold]Model:[/bold] {config.provider.model}")
+    console.print(f"[bold]Provider:[/bold] {config.provider_name}")
+    console.print(f"[bold]Model:[/bold] {config.model}")
     console.print(f"[bold]Tasks:[/bold] {task_count}")
     console.print(f"[bold]Agents:[/bold] {agent_count}")
 
@@ -207,11 +207,11 @@ def config_cmd(
     table.add_column("Key", style="cyan")
     table.add_column("Value", style="white")
 
-    table.add_row("provider.name", config.provider.name)
-    table.add_row("provider.base_url", config.provider.base_url)
-    table.add_row("provider.model", config.provider.model)
-    table.add_row("provider.temperature", str(config.provider.temperature))
-    table.add_row("provider.max_tokens", str(config.provider.max_tokens))
+    table.add_row("provider.name", config.provider_name)
+    table.add_row("provider.base_url", config.base_url)
+    table.add_row("provider.model", config.model)
+    table.add_row("provider.temperature", str(config.temperature))
+    table.add_row("provider.max_tokens", str(config.max_tokens))
     table.add_row("guild.default_permission", config.default_permission.value)
     table.add_row("guild.max_concurrent_agents", str(config.max_concurrent_agents))
 
@@ -441,7 +441,7 @@ async def _run_task(
     from guild.tools.shell import execute_shell
 
     # Create provider
-    provider = create_provider(config.provider.base_url, config.provider.model)
+    provider = create_provider(config.base_url, config.model)
 
     # Build tool executors
     tool_executors = {
@@ -503,6 +503,19 @@ async def _fetch_audit(db_path: Path, limit: int) -> list[dict]:
     return entries
 
 
+def _load_toml(path: Path) -> dict:
+    """Load a TOML file, returning empty dict on failure or missing."""
+    import tomllib
+
+    if not path.is_file():
+        return {}
+    try:
+        with open(path, "rb") as f:
+            return tomllib.load(f)
+    except Exception:
+        return {}
+
+
 def _set_config_value(config_path: Path, key_value: str) -> None:
     """Set a dotted key=value in a TOML config file.
 
@@ -516,7 +529,7 @@ def _set_config_value(config_path: Path, key_value: str) -> None:
     parts = key.strip().split(".")
 
     # Load existing TOML data
-    existing = load_toml(config_path)
+    existing = _load_toml(config_path)
 
     # Navigate to the right nested level
     current = existing
