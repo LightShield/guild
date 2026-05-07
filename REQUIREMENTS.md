@@ -336,6 +336,19 @@ These emerged from design review and govern all implementation decisions:
 | REQ-16.3 | Regression detection — alert when config changes degrade performance | Automated comparison against baseline |
 | REQ-16.4 | Eval metrics — task completion rate, time, token usage, tool calls | Quantitative and qualitative |
 | REQ-16.5 | Eval results stored and browsable | Historical trends |
+| REQ-16.6 | **Progressive confidence building** — benchmarks → self-development → real projects | Trust in the system built incrementally through demonstrated capability |
+| REQ-16.7 | **Self-development benchmark** — Guild can implement its own P1 features autonomously | If it can develop itself, it can develop other projects |
+
+### REQ-27: Temporal Knowledge
+
+**Goal:** Capture not just current code state but "why it was built this way" — the temporal aspect usually lost as developers change.
+
+| ID | Requirement | Notes |
+|----|-------------|-------|
+| REQ-27.1 | **Decision history** — key architectural and implementation decisions stored with context and rationale | Like DECISIONS.md but queryable by the agent |
+| REQ-27.2 | **Present state + key past info** fetchable when relevant | Agent can ask "why is this module structured this way?" and get the historical answer |
+| REQ-27.3 | Project-level instruction files (like .guild/prompt.md) consumed when they exist | Industry standard steering files — use them if present |
+| REQ-27.4 | Learnings from past tasks injected as temporal context | "Last time we touched this module, X happened" |
 
 ### REQ-08 (extended): MCP Plugin Architecture
 
@@ -359,6 +372,7 @@ These emerged from design review and govern all implementation decisions:
 | REQ-17.5 | **Stuck-triggered escalation** — when stuck detector fires, automatically retry with next model in chain | Default chain: fast local → smart local → external CLI → human |
 | REQ-17.6 | **External CLI tool as provider** — shell out to installed CLI tools (e.g., `gemini`, `claude`) as escalation providers | Parse text response; structured tool calling not required at this tier |
 | REQ-17.7 | Escalation chain configurable per-project | `[escalation] chain = ["gemma4-4b", "gemma4-26b", "gemini-cli"]` |
+| REQ-17.8 | **Malformed output recovery** — retry with correction hint, then escalate model, then exhaust chain, only then human | Retry 1-2x with "your response was malformed" hint before escalating |
 
 ### REQ-20: Rate Limiting & Backpressure
 
@@ -394,7 +408,10 @@ These emerged from design review and govern all implementation decisions:
 | REQ-04.9 | Agent lifecycle management — spawn, monitor, pause, resume, kill | Guild manages all agent processes |
 | REQ-04.10 | Shared context/workspace between team members | Cache sharing for token efficiency |
 | REQ-04.11 | Dynamic worker spawning | Not limited to pre-defined team size |
-| REQ-04.12 | Isolated execution environments for parallel workers | Separate worktrees to prevent conflicts |
+| REQ-04.12 | **Git worktrees as isolation model** — each task gets its own worktree for true parallel file modification | Not just branches — separate working directories via `git worktree add` |
+| REQ-04.13 | **Branching strategy** — agents merge freely to staging; main/release is gated by user review | Configurable policy: which branches are protected, which are free |
+| REQ-04.14 | **Staging area** — a shared branch agents can merge to without user approval | Allows progress without blocking on review; user reviews staging → main merges in batch |
+| REQ-04.15 | **Merge policy configurable per project** — auto-merge if tests pass, always require review, or trust level per branch | As user gains trust in system, gates can be relaxed |
 
 #### 4B: Composable Agent Blocks
 
