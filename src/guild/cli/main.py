@@ -11,6 +11,8 @@ config, and audit commands.
 
 import asyncio
 import logging
+import subprocess
+import sys
 from pathlib import Path
 from typing import Optional
 
@@ -125,12 +127,21 @@ def task(
     timeout: int = typer.Option(
         0, "--timeout", "-t", help="Autonomy timeout in seconds (0=unlimited)."
     ),
+    background: bool = typer.Option(
+        False, "--background", "-b", help="Run task in background daemon process."
+    ),
 ) -> None:
     """Run a task using the agent loop."""
     guild_dir = find_guild_dir()
     if guild_dir is None:
         console.print("[red]Error:[/red] Not a guild project (no .guild/ found).")
         raise typer.Exit(code=1)
+
+    if background:
+        task_id = _create_task_in_storage(guild_dir, description)
+        _launch_background_task(guild_dir, task_id)
+        console.print(f"[green]Launched background task:[/green] {task_id}")
+        return
 
     config = load_config(guild_dir)
     working_dir = str(guild_dir.parent)
@@ -239,6 +250,141 @@ def audit(
         )
 
     console.print(table)
+
+
+@app.command(name="ps")
+def ps_cmd() -> None:
+    """Show running/paused Guild tasks."""
+    guild_dir = find_guild_dir()
+    if guild_dir is None:
+        console.print("[red]Error:[/red] Not a guild project (no .guild/ found).")
+        raise typer.Exit(code=1)
+
+    run_dir = guild_dir / "run"
+    if not run_dir.exists():
+        console.print("[dim]No running tasks.[/dim]")
+        return
+
+    tasks = _get_running_tasks(run_dir)
+
+    if not tasks:
+        console.print("[dim]No running tasks.[/dim]")
+        return
+
+    table = Table(title="Guild Tasks")
+    table.add_column("Task ID", style="cyan")
+    table.add_column("PID", style="yellow")
+    table.add_column("Status", style="green")
+
+    for t in tasks:
+        table.add_row(t["task_id"], str(t["pid"]), "running")
+
+    console.print(table)
+
+
+@app.command()
+def kill(
+    task_id: Optional[str] = typer.Argument(None, help="Task ID to kill."),
+    all_tasks: bool = typer.Option(False, "--all", help="Kill all running tasks."),
+) -> None:
+    """Stop a running task (or all tasks with --all)."""
+    guild_dir = find_guild_dir()
+    if guild_dir is None:
+        console.print("[red]Error:[/red] Not a guild project (no .guild/ found).")
+        raise typer.Exit(code=1)
+
+    if all_tasks:
+        count = _kill_all_tasks(guild_dir)
+        console.print(f"[green]Killed {count} task(s).[/green]")
+        return
+
+    if task_id is None:
+        console.print("[red]Error:[/red] Provide a task ID or use --all.")
+        raise typer.Exit(code=1)
+
+    success = _kill_task(task_id, guild_dir)
+    if success:
+        console.print(f"[green]Killed task:[/green] {task_id}")
+    else:
+        console.print(f"[yellow]Task not found or not running:[/yellow] {task_id}")
+
+
+@app.command()
+def pause(
+    task_id: str = typer.Argument(..., help="Task ID to pause."),
+) -> None:
+    """Pause a running task."""
+    guild_dir = find_guild_dir()
+    if guild_dir is None:
+        console.print("[red]Error:[/red] Not a guild project (no .guild/ found).")
+        raise typer.Exit(code=1)
+
+    success = _pause_task(task_id, guild_dir)
+    if success:
+        console.print(f"[green]Paused task:[/green] {task_id}")
+    else:
+        console.print(f"[yellow]Cannot pause task:[/yellow] {task_id}")
+
+
+@app.command()
+def resume(
+    task_id: str = typer.Argument(..., help="Task ID to resume."),
+) -> None:
+    """Resume a paused task."""
+    guild_dir = find_guild_dir()
+    if guild_dir is None:
+        console.print("[red]Error:[/red] Not a guild project (no .guild/ found).")
+        raise typer.Exit(code=1)
+
+    success = _resume_task(task_id, guild_dir)
+    if success:
+        console.print(f"[green]Resumed task:[/green] {task_id}")
+    else:
+        console.print(f"[yellow]Cannot resume task:[/yellow] {task_id}")
+
+
+@app.command()
+def logs(
+    task_id: str = typer.Argument(..., help="Task ID to show logs for."),
+    follow: bool = typer.Option(False, "--follow", "-f", help="Follow log output."),
+) -> None:
+    """Stream task output."""
+    guild_dir = find_guild_dir()
+    if guild_dir is None:
+        console.print("[red]Error:[/red] Not a guild project (no .guild/ found).")
+        raise typer.Exit(code=1)
+
+    messages = asyncio.run(_fetch_task_messages(guild_dir, task_id))
+    if not messages:
+        console.print(f"[dim]No messages for task {task_id}.[/dim]")
+        return
+
+    for msg in messages:
+        role = msg.get("role", "")
+        content = msg.get("content", "")
+        console.print(f"[bold]{role}:[/bold] {content}")
+
+
+@app.command()
+def attach(
+    task_id: str = typer.Argument(..., help="Task ID to attach to."),
+) -> None:
+    """Attach to a running task (interactive)."""
+    guild_dir = find_guild_dir()
+    if guild_dir is None:
+        console.print("[red]Error:[/red] Not a guild project (no .guild/ found).")
+        raise typer.Exit(code=1)
+
+    # For now, attach behaves like logs --follow
+    messages = asyncio.run(_fetch_task_messages(guild_dir, task_id))
+    if not messages:
+        console.print(f"[dim]No messages for task {task_id}.[/dim]")
+        return
+
+    for msg in messages:
+        role = msg.get("role", "")
+        content = msg.get("content", "")
+        console.print(f"[bold]{role}:[/bold] {content}")
 
 
 # ------------------------------------------------------------------
@@ -427,3 +573,156 @@ def _toml_value(value) -> str:
     if isinstance(value, str):
         return f'"{value}"'
     return str(value)
+
+
+# ------------------------------------------------------------------
+# Daemon / background helpers
+# ------------------------------------------------------------------
+
+
+def _create_task_in_storage(guild_dir: Path, description: str) -> str:
+    """Create a task record in storage and return its ID."""
+    import uuid
+
+    from guild.storage.sqlite import Storage
+
+    task_id = str(uuid.uuid4())
+    db_path = guild_dir / "guild.db"
+
+    async def _create() -> None:
+        store = Storage(db_path)
+        await store.connect()
+        await store.create_task(task_id, description)
+        await store.close()
+
+    asyncio.run(_create())
+    return task_id
+
+
+def _launch_background_task(guild_dir: Path, task_id: str) -> None:
+    """Fork a background daemon process to run the task."""
+    subprocess.Popen(
+        [sys.executable, "-m", "guild.daemon.run", task_id, str(guild_dir)],
+        start_new_session=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        stdin=subprocess.DEVNULL,
+    )
+
+
+def _get_running_tasks(run_dir: Path) -> list[dict]:
+    """List tasks with live PID files in the run directory."""
+    import os as _os
+
+    tasks: list[dict] = []
+    for pid_file in run_dir.glob("*.pid"):
+        try:
+            pid = int(pid_file.read_text().strip())
+            _os.kill(pid, 0)  # Check if alive
+            tasks.append({"task_id": pid_file.stem, "pid": pid})
+        except (OSError, ValueError):
+            continue
+    return tasks
+
+
+def _kill_task(task_id: str, guild_dir: Path) -> bool:
+    """Kill a task by sending SIGTERM."""
+    from guild.daemon.lifecycle import LifecycleManager
+    from guild.storage.sqlite import Storage
+
+    run_dir = guild_dir / "run"
+    db_path = guild_dir / "guild.db"
+
+    async def _do_kill() -> bool:
+        store = Storage(db_path)
+        await store.connect()
+        mgr = LifecycleManager(run_dir, store)
+        result = await mgr.kill_task(task_id)
+        await store.close()
+        return result
+
+    return asyncio.run(_do_kill())
+
+
+def _kill_all_tasks(guild_dir: Path) -> int:
+    """Kill all running tasks."""
+    from guild.daemon.lifecycle import LifecycleManager
+    from guild.storage.sqlite import Storage
+
+    run_dir = guild_dir / "run"
+    db_path = guild_dir / "guild.db"
+
+    async def _do_kill_all() -> int:
+        store = Storage(db_path)
+        await store.connect()
+        mgr = LifecycleManager(run_dir, store)
+        count = await mgr.kill_all()
+        await store.close()
+        return count
+
+    return asyncio.run(_do_kill_all())
+
+
+def _pause_task(task_id: str, guild_dir: Path) -> bool:
+    """Pause a running task."""
+    from guild.daemon.lifecycle import LifecycleManager
+    from guild.storage.sqlite import Storage
+
+    run_dir = guild_dir / "run"
+    db_path = guild_dir / "guild.db"
+
+    async def _do_pause() -> bool:
+        store = Storage(db_path)
+        await store.connect()
+        mgr = LifecycleManager(run_dir, store)
+        result = await mgr.pause_task(task_id)
+        await store.close()
+        return result
+
+    return asyncio.run(_do_pause())
+
+
+def _resume_task(task_id: str, guild_dir: Path) -> bool:
+    """Resume a paused task."""
+    from guild.daemon.lifecycle import LifecycleManager
+    from guild.storage.sqlite import Storage
+
+    run_dir = guild_dir / "run"
+    db_path = guild_dir / "guild.db"
+
+    async def _do_resume() -> bool:
+        store = Storage(db_path)
+        await store.connect()
+        mgr = LifecycleManager(run_dir, store)
+        result = await mgr.resume_task(task_id)
+        await store.close()
+        return result
+
+    return asyncio.run(_do_resume())
+
+
+async def _fetch_task_messages(guild_dir: Path, task_id: str) -> list[dict]:
+    """Fetch messages associated with a task's agent."""
+    from guild.storage.sqlite import Storage
+
+    db_path = guild_dir / "guild.db"
+    if not db_path.exists():
+        return []
+
+    store = Storage(db_path)
+    await store.connect()
+
+    # Check if the task exists and has an assigned agent
+    task = await store.get_task(task_id)
+    if task is None:
+        await store.close()
+        return []
+
+    agent_id = task.get("assigned_agent")
+    if not agent_id:
+        await store.close()
+        return []
+
+    messages = await store.get_messages(agent_id)
+    await store.close()
+    return messages
