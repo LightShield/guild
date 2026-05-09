@@ -52,6 +52,14 @@ export async function fetchLearnings() {
 	return request('/learnings');
 }
 
+export async function fetchBlocks() {
+	return request('/blocks');
+}
+
+export async function fetchTeams() {
+	return request('/teams');
+}
+
 export async function createTask(description) {
 	return request('/tasks', {
 		method: 'POST',
