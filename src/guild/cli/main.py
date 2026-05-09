@@ -698,6 +698,33 @@ def _create_chat_loop(config, working_dir: str, permission: str):
     )
 
 
+def _build_provider(config):
+    """Build an LLM provider, with escalation chain if configured."""
+    from guild.provider.escalation import EscalatingProvider, EscalationChain
+
+    primary = create_provider(config.base_url, config.model)
+
+    chain_models = [m.strip() for m in config.escalation_chain.split(",") if m.strip()]
+    cli_tools = [t.strip() for t in config.escalation_cli_providers.split(",") if t.strip()]
+
+    if not chain_models and not cli_tools:
+        return primary
+
+    providers = [primary]
+    for model_name in chain_models:
+        if model_name != config.model:
+            providers.append(create_provider(config.base_url, model_name))
+
+    if cli_tools:
+        from guild.provider.cli_provider import CLIToolProvider
+
+        for tool_cmd in cli_tools:
+            providers.append(CLIToolProvider(command=tool_cmd))
+
+    chain = EscalationChain(providers)
+    return EscalatingProvider(chain)
+
+
 async def _run_task(
     config,
     working_dir: str,
@@ -716,8 +743,8 @@ async def _run_task(
     from guild.tools.search import execute_glob, execute_search
     from guild.tools.shell import execute_shell
 
-    # Create provider
-    provider = create_provider(config.base_url, config.model)
+    # Create provider with escalation chain if configured
+    provider = _build_provider(config)
 
     # Build tool executors
     tool_executors = {
@@ -737,12 +764,21 @@ async def _run_task(
     if timeout > 0:
         max_turns = min(max(timeout // 10, 5), 200)
 
-    # Create and run agent loop
+    # Create agent loop with stuck detector
+    from guild.agent.stuck import StuckDetector
+
+    stuck_detector = StuckDetector(
+        max_repeated_errors=config.stuck_max_repeated_errors,
+        max_no_progress_turns=config.stuck_max_no_progress_turns,
+        max_repeated_calls=config.stuck_max_repeated_calls,
+    )
+
     loop = AgentLoop(
         provider=provider,
         tool_executors=tool_executors,
         working_dir=working_dir,
         max_turns=max_turns,
+        stuck_detector=stuck_detector,
     )
 
     # Inject high-confidence learnings into system prompt (REQ-09.4)
