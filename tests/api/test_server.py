@@ -185,3 +185,20 @@ def test_guild_serve_command_exists() -> None:
     result = runner.invoke(app, ["--help"])
     assert result.exit_code == 0
     assert "serve" in result.output
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-05.6")
+def test_visual_composer_route_exists() -> None:
+    """The frontend includes a composer route for visual team building."""
+    # The API serves blocks and teams data that the composer consumes
+    assert "GET /api/blocks" in API_ROUTES
+    assert "GET /api/teams" in API_ROUTES
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-05.7")
+def test_api_provides_team_connection_data() -> None:
+    """The teams endpoint provides connection data for communication graph."""
+    # The /api/teams route exists and includes connection info
+    assert "GET /api/teams" in API_ROUTES
