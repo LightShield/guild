@@ -18,6 +18,8 @@ if TYPE_CHECKING:  # pragma: no cover — type-checking only
 
 __all__ = ["ConfigWatcher", "find_guild_dir", "load_config"]
 
+_TEMP_FILE_PREFIX = "guild_config_"
+
 logger = logging.getLogger(__name__)
 
 
@@ -71,7 +73,7 @@ def _merge_toml_files(guild_dir: Path | None) -> Path | None:
     import tempfile
 
     with tempfile.NamedTemporaryFile(
-        mode="wb", suffix=".toml", delete=False, prefix="guild_config_"
+        mode="wb", suffix=".toml", delete=False, prefix=_TEMP_FILE_PREFIX
     ) as tmp:
         _write_toml_bytes(tmp, merged)
     return Path(tmp.name)
@@ -151,7 +153,7 @@ def load_config(
     )
 
     # Clean up temp file if we created one
-    if merged_file and "guild_config_" in str(merged_file):
+    if merged_file and _TEMP_FILE_PREFIX in str(merged_file):
         import contextlib
 
         with contextlib.suppress(OSError):
