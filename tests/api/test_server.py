@@ -188,17 +188,11 @@ def test_guild_serve_command_exists() -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-05.6")
-def test_visual_composer_route_exists() -> None:
-    """The frontend includes a composer route for visual team building."""
-    # The API serves blocks and teams data that the composer consumes
+def test_visual_composer_api_routes_exist() -> None:
+    """The API provides blocks/teams data for the composer (backend side only)."""
+    # NOTE: REQ-05.6 (visual composer) and REQ-05.7 (communication graph) are
+    # frontend features that cannot be meaningfully unit-tested without a browser.
+    # These tests only verify the backend API supports the composer's data needs.
+    # The requirements remain UNCOVERED until E2E browser tests exist.
     assert "GET /api/blocks" in API_ROUTES
-    assert "GET /api/teams" in API_ROUTES
-
-
-@pytest.mark.unit
-@pytest.mark.req("REQ-05.7")
-def test_api_provides_team_connection_data() -> None:
-    """The teams endpoint provides connection data for communication graph."""
-    # The /api/teams route exists and includes connection info
     assert "GET /api/teams" in API_ROUTES

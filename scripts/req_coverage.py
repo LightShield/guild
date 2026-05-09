@@ -194,14 +194,17 @@ def generate_report(
 
     tier_order = sorted(tiers.keys())
 
-    # Summary per tier
+    # Summary per tier with quality breakdown
     for tier in tier_order:
         reqs = tiers[tier]
         total = len(reqs)
         covered = sum(1 for r in reqs if r in coverage and len(coverage[r]) > 0)
+        solid = sum(1 for r in reqs if r in coverage and len(coverage[r]) >= 3)
+        thin = covered - solid
         uncovered = total - covered
         suffix = f" ({uncovered} uncovered)" if uncovered > 0 else ""
-        lines.append(f"{tier}: {covered}/{total} requirements covered{suffix}")
+        quality = f" [solid: {solid}, thin: {thin}]" if covered > 0 else ""
+        lines.append(f"{tier}: {covered}/{total} requirements covered{suffix}{quality}")
 
     lines.append("")
 
