@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import asdict, dataclass
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -19,16 +18,6 @@ __all__ = [
 ]
 
 logger = logging.getLogger(__name__)
-
-_CHECKPOINT_TABLE_SQL = """
-CREATE TABLE IF NOT EXISTS checkpoints (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    agent_id TEXT NOT NULL,
-    task_id TEXT,
-    state_json TEXT NOT NULL,
-    created_at TEXT NOT NULL
-);
-"""
 
 
 @dataclass
@@ -64,30 +53,20 @@ class Checkpoint:
 
 async def save_checkpoint(storage: Storage, checkpoint: Checkpoint) -> None:
     """Persist a checkpoint to storage."""
-    await _ensure_table(storage)
-    assert storage._db is not None
-    now = datetime.now(UTC).isoformat()
-    await storage._db.execute(
-        "INSERT INTO checkpoints (agent_id, task_id, state_json, created_at)"
-        " VALUES (?, ?, ?, ?)",
-        (checkpoint.agent_id, checkpoint.task_id, checkpoint.to_json(), now),
+    await storage.save_checkpoint(
+        agent_id=checkpoint.agent_id,
+        task_id=checkpoint.task_id,
+        state_json=checkpoint.to_json(),
     )
-    await storage._db.commit()
     logger.debug("Saved checkpoint for agent %s", checkpoint.agent_id)
 
 
 async def load_checkpoint(storage: Storage, agent_id: str) -> Checkpoint | None:
     """Load the most recent checkpoint for an agent."""
-    await _ensure_table(storage)
-    assert storage._db is not None
-    cursor = await storage._db.execute(
-        "SELECT state_json FROM checkpoints" " WHERE agent_id = ? ORDER BY id DESC LIMIT 1",
-        (agent_id,),
-    )
-    row = await cursor.fetchone()
+    row = await storage.load_checkpoint(agent_id)
     if row is None:
         return None
-    return Checkpoint.from_json(row[0])
+    return Checkpoint.from_json(row["state_json"])
 
 
 async def recover_from_checkpoint(
@@ -136,9 +115,3 @@ async def recover_from_checkpoint(
         checkpoint.turn_number,
     )
     return loop
-
-
-async def _ensure_table(storage: Storage) -> None:
-    """Create the checkpoints table if it does not exist."""
-    assert storage._db is not None
-    await storage._db.executescript(_CHECKPOINT_TABLE_SQL)

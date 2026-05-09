@@ -33,23 +33,6 @@ _DURATION_REGRESSION_FACTOR = 2.0  # 2x slower = regression
 _TOKEN_REGRESSION_FACTOR = 2.0  # 2x more tokens = regression
 _TOOL_CALL_REGRESSION_FACTOR = 2.0  # 2x more tool calls = regression
 
-_EVAL_RESULTS_TABLE = """
-CREATE TABLE IF NOT EXISTS eval_results (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    task_name TEXT NOT NULL,
-    model TEXT NOT NULL,
-    config_hash TEXT NOT NULL,
-    task_completed INTEGER NOT NULL,
-    duration_seconds REAL NOT NULL,
-    input_tokens INTEGER NOT NULL,
-    output_tokens INTEGER NOT NULL,
-    tool_calls INTEGER NOT NULL,
-    turns INTEGER NOT NULL,
-    error TEXT,
-    timestamp TEXT NOT NULL
-);
-"""
-
 
 @dataclass
 class EvalMetrics:
@@ -94,16 +77,6 @@ class EvalFramework:
 
     def __init__(self, storage: Storage) -> None:
         self._storage = storage
-        self._table_created = False
-
-    async def _ensure_table(self) -> None:
-        """Create eval_results table if it does not exist."""
-        if self._table_created:
-            return
-        assert self._storage._db is not None
-        await self._storage._db.executescript(_EVAL_RESULTS_TABLE)
-        await self._storage._db.commit()
-        self._table_created = True
 
     async def run_eval(
         self, task: BenchmarkTask, provider: LLMProvider, config_label: str
@@ -190,47 +163,23 @@ class EvalFramework:
 
     async def store_result(self, result: EvalResult) -> None:
         """Persist an eval result to SQLite (REQ-16.5)."""
-        await self._ensure_table()
-        assert self._storage._db is not None
-        await self._storage._db.execute(
-            "INSERT INTO eval_results"
-            " (task_name, model, config_hash, task_completed,"
-            "  duration_seconds, input_tokens, output_tokens,"
-            "  tool_calls, turns, error, timestamp)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (
-                result.task_name,
-                result.model,
-                result.config_hash,
-                int(result.metrics.task_completed),
-                result.metrics.duration_seconds,
-                result.metrics.input_tokens,
-                result.metrics.output_tokens,
-                result.metrics.tool_calls,
-                result.metrics.turns,
-                result.metrics.error,
-                result.timestamp,
-            ),
-        )
-        await self._storage._db.commit()
+        await self._storage.store_eval_result({
+            "task_name": result.task_name,
+            "model": result.model,
+            "config_hash": result.config_hash,
+            "task_completed": int(result.metrics.task_completed),
+            "duration_seconds": result.metrics.duration_seconds,
+            "input_tokens": result.metrics.input_tokens,
+            "output_tokens": result.metrics.output_tokens,
+            "tool_calls": result.metrics.tool_calls,
+            "turns": result.metrics.turns,
+            "error": result.metrics.error,
+            "timestamp": result.timestamp,
+        })
 
     async def get_results(self, task_name: str | None = None, limit: int = 50) -> list[EvalResult]:
         """Retrieve stored eval results (REQ-16.5)."""
-        await self._ensure_table()
-        assert self._storage._db is not None
-
-        if task_name is not None:
-            cursor = await self._storage._db.execute(
-                "SELECT * FROM eval_results" " WHERE task_name = ?" " ORDER BY id DESC LIMIT ?",
-                (task_name, limit),
-            )
-        else:
-            cursor = await self._storage._db.execute(
-                "SELECT * FROM eval_results ORDER BY id DESC LIMIT ?",
-                (limit,),
-            )
-
-        rows = await cursor.fetchall()
+        rows = await self._storage.list_eval_results(task_name=task_name, limit=limit)
         return [self._row_to_result(row) for row in rows]
 
     def detect_regression(self, current: EvalResult, baseline: EvalResult) -> tuple[bool, str]:
@@ -326,21 +275,21 @@ class EvalFramework:
 
     @staticmethod
     def _row_to_result(row: Any) -> EvalResult:
-        """Convert a database row to an EvalResult."""
+        """Convert a database row dict to an EvalResult."""
         return EvalResult(
-            task_name=row[1],
-            model=row[2],
-            config_hash=row[3],
+            task_name=row["task_name"],
+            model=row["model"],
+            config_hash=row["config_hash"],
             metrics=EvalMetrics(
-                task_completed=bool(row[4]),
-                duration_seconds=row[5],
-                input_tokens=row[6],
-                output_tokens=row[7],
-                tool_calls=row[8],
-                turns=row[9],
-                error=row[10],
+                task_completed=bool(row["task_completed"]),
+                duration_seconds=row["duration_seconds"],
+                input_tokens=row["input_tokens"],
+                output_tokens=row["output_tokens"],
+                tool_calls=row["tool_calls"],
+                turns=row["turns"],
+                error=row["error"],
             ),
-            timestamp=row[11],
+            timestamp=row["timestamp"],
         )
 
 

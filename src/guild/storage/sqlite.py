@@ -104,6 +104,29 @@ CREATE TABLE IF NOT EXISTS memories (
     last_verified TEXT,
     created_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS checkpoints (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    agent_id TEXT NOT NULL,
+    task_id TEXT,
+    state_json TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS eval_results (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_name TEXT NOT NULL,
+    model TEXT NOT NULL,
+    config_hash TEXT NOT NULL,
+    task_completed INTEGER NOT NULL,
+    duration_seconds REAL NOT NULL,
+    input_tokens INTEGER NOT NULL,
+    output_tokens INTEGER NOT NULL,
+    tool_calls INTEGER NOT NULL,
+    turns INTEGER NOT NULL,
+    error TEXT,
+    timestamp TEXT NOT NULL
+);
 """
 
 
@@ -526,6 +549,193 @@ class Storage:
             (answer, _now(), question_id),
         )
         await self._db.commit()
+
+    # ------------------------------------------------------------------
+    # Checkpoints (REQ-07.2)
+    # ------------------------------------------------------------------
+
+    async def save_checkpoint(self, agent_id: str, task_id: str | None, state_json: str) -> None:
+        """Persist an agent checkpoint."""
+        assert self._db is not None
+        await self._db.execute(
+            "INSERT INTO checkpoints (agent_id, task_id, state_json, created_at)"
+            " VALUES (?, ?, ?, ?)",
+            (agent_id, task_id, state_json, _now()),
+        )
+        await self._db.commit()
+
+    async def load_checkpoint(self, agent_id: str) -> dict | None:
+        """Load the most recent checkpoint for an agent.
+
+        Returns a dict with keys: agent_id, task_id, state_json, created_at;
+        or None if no checkpoint exists.
+        """
+        assert self._db is not None
+        cursor = await self._db.execute(
+            "SELECT agent_id, task_id, state_json, created_at"
+            " FROM checkpoints WHERE agent_id = ? ORDER BY id DESC LIMIT 1",
+            (agent_id,),
+        )
+        row = await cursor.fetchone()
+        if row is None:
+            return None
+        return dict(row)
+
+    # ------------------------------------------------------------------
+    # Memories (REQ-07.5, REQ-07.6, REQ-07.7)
+    # ------------------------------------------------------------------
+
+    async def add_memory(self, summary: str, content: str, category: str) -> str:
+        """Add a new memory entry. Returns the generated ID."""
+        import uuid
+
+        assert self._db is not None
+        memory_id = str(uuid.uuid4())
+        await self._db.execute(
+            "INSERT INTO memories"
+            " (id, summary, content, category, verified, last_verified, created_at)"
+            " VALUES (?, ?, ?, ?, 0, NULL, ?)",
+            (memory_id, summary[:200], content, category, _now()),
+        )
+        await self._db.commit()
+        return memory_id
+
+    async def get_memory(self, memory_id: str) -> dict | None:
+        """Retrieve a single memory by ID."""
+        assert self._db is not None
+        cursor = await self._db.execute(
+            "SELECT id, summary, content, category, verified, last_verified, created_at"
+            " FROM memories WHERE id = ?",
+            (memory_id,),
+        )
+        row = await cursor.fetchone()
+        if row is None:
+            return None
+        return dict(row)
+
+    async def list_memory_summaries(self, limit: int = 200) -> list[dict]:
+        """List memory summaries ordered by last_verified descending.
+
+        Returns list of dicts with keys: id, summary, verified.
+        """
+        assert self._db is not None
+        cursor = await self._db.execute(
+            "SELECT id, summary, verified FROM memories"
+            " ORDER BY last_verified DESC NULLS LAST"
+            " LIMIT ?",
+            (limit,),
+        )
+        rows = await cursor.fetchall()
+        return [dict(r) for r in rows]
+
+    async def verify_memory(self, memory_id: str) -> None:
+        """Mark a memory as verified against current state."""
+        assert self._db is not None
+        await self._db.execute(
+            "UPDATE memories SET verified = 1, last_verified = ? WHERE id = ?",
+            (_now(), memory_id),
+        )
+        await self._db.commit()
+
+    async def consolidate_memories(self, stale_days: int = 30) -> int:
+        """Remove stale unverified memories and merge duplicates.
+
+        Returns count of deleted rows.
+        """
+        assert self._db is not None
+        from datetime import timedelta
+
+        changes = 0
+        cutoff = (datetime.now(UTC) - timedelta(days=stale_days)).isoformat()
+
+        # Remove stale unverified entries
+        cursor = await self._db.execute(
+            "DELETE FROM memories"
+            " WHERE verified = 0"
+            " AND (last_verified IS NULL OR last_verified < ?)"
+            " AND created_at < ?",
+            (cutoff, cutoff),
+        )
+        changes += cursor.rowcount
+
+        # Merge duplicate summaries: keep the most recently created, delete rest
+        dup_cursor = await self._db.execute(
+            "SELECT summary, COUNT(*) as cnt FROM memories"
+            " GROUP BY summary HAVING cnt > 1"
+        )
+        duplicates = await dup_cursor.fetchall()
+        for dup_row in duplicates:
+            summary = dup_row[0]
+            entries_cursor = await self._db.execute(
+                "SELECT id FROM memories WHERE summary = ?"
+                " ORDER BY created_at DESC",
+                (summary,),
+            )
+            entries = await entries_cursor.fetchall()
+            ids_to_delete = [e[0] for e in entries[1:]]
+            if ids_to_delete:
+                placeholders = ",".join("?" * len(ids_to_delete))
+                del_cursor = await self._db.execute(
+                    f"DELETE FROM memories WHERE id IN ({placeholders})",  # noqa: S608
+                    ids_to_delete,
+                )
+                changes += del_cursor.rowcount
+
+        await self._db.commit()
+        return changes
+
+    # ------------------------------------------------------------------
+    # Eval Results (REQ-16.5)
+    # ------------------------------------------------------------------
+
+    async def store_eval_result(self, result_data: dict) -> None:
+        """Persist an eval result.
+
+        Expects keys: task_name, model, config_hash, task_completed,
+        duration_seconds, input_tokens, output_tokens, tool_calls,
+        turns, error, timestamp.
+        """
+        assert self._db is not None
+        await self._db.execute(
+            "INSERT INTO eval_results"
+            " (task_name, model, config_hash, task_completed,"
+            "  duration_seconds, input_tokens, output_tokens,"
+            "  tool_calls, turns, error, timestamp)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                result_data["task_name"],
+                result_data["model"],
+                result_data["config_hash"],
+                result_data["task_completed"],
+                result_data["duration_seconds"],
+                result_data["input_tokens"],
+                result_data["output_tokens"],
+                result_data["tool_calls"],
+                result_data["turns"],
+                result_data["error"],
+                result_data["timestamp"],
+            ),
+        )
+        await self._db.commit()
+
+    async def list_eval_results(
+        self, task_name: str | None = None, limit: int = 50
+    ) -> list[dict]:
+        """List eval results, most recent first, optionally by task_name."""
+        assert self._db is not None
+        if task_name is not None:
+            cursor = await self._db.execute(
+                "SELECT * FROM eval_results"
+                " WHERE task_name = ? ORDER BY id DESC LIMIT ?",
+                (task_name, limit),
+            )
+        else:
+            cursor = await self._db.execute(
+                "SELECT * FROM eval_results ORDER BY id DESC LIMIT ?",
+                (limit,),
+            )
+        rows = await cursor.fetchall()
+        return [dict(r) for r in rows]
 
     # ------------------------------------------------------------------
     # Internal helpers
