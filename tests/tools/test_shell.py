@@ -16,31 +16,26 @@ from guild.tools.shell import (
 class TestShellDenylist:
     """Tests that dangerous commands are blocked."""
 
-    async def test_denylist_blocks_rm_rf_slash(self) -> None:
-        result = await execute_shell({"command": "rm -rf /"}, working_dir="/tmp")
-
-        assert result.success is False
-        assert result.error is not None
-        assert "denied" in result.error.lower() or "blocked" in result.error.lower()
-
-    async def test_denylist_blocks_git_push_force(self) -> None:
-        result = await execute_shell(
-            {"command": "git push --force origin main"}, working_dir="/tmp"
-        )
-
-        assert result.success is False
-        assert result.error is not None
-        assert "denied" in result.error.lower() or "blocked" in result.error.lower()
-
-    async def test_denylist_blocks_git_reset_hard(self) -> None:
-        result = await execute_shell({"command": "git reset --hard"}, working_dir="/tmp")
-
-        assert result.success is False
-        assert result.error is not None
-        assert "denied" in result.error.lower() or "blocked" in result.error.lower()
-
-    async def test_denylist_blocks_fork_bomb(self) -> None:
-        result = await execute_shell({"command": ":(){ :|:& };:"}, working_dir="/tmp")
+    @pytest.mark.parametrize(
+        "command",
+        [
+            "rm -rf /",
+            "git push --force origin main",
+            "git reset --hard",
+            ":(){ :|:& };:",
+            "sudo rm -rf /var",
+        ],
+        ids=[
+            "rm_rf_slash",
+            "git_push_force",
+            "git_reset_hard",
+            "fork_bomb",
+            "sudo_rm",
+        ],
+    )
+    async def test_denylist_blocks_dangerous_command(self, command: str) -> None:
+        """Dangerous commands are denied by the shell denylist."""
+        result = await execute_shell({"command": command}, working_dir="/tmp")
 
         assert result.success is False
         assert result.error is not None
@@ -51,13 +46,6 @@ class TestShellDenylist:
 
         assert result.success is True
         assert "hello" in result.output
-
-    async def test_denylist_blocks_sudo_rm(self) -> None:
-        result = await execute_shell({"command": "sudo rm -rf /var"}, working_dir="/tmp")
-
-        assert result.success is False
-        assert result.error is not None
-        assert "denied" in result.error.lower() or "blocked" in result.error.lower()
 
 
 @pytest.mark.unit

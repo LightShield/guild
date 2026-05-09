@@ -21,6 +21,8 @@ if TYPE_CHECKING:
     from guild.tools.base import ToolResult
 
 __all__ = [
+    "DEFAULT_CACHE_MAX_SIZE",
+    "DEFAULT_CACHE_TTL_SECONDS",
     "PluginLoader",
     "ToolCache",
     "ToolPlugin",
@@ -28,6 +30,10 @@ __all__ = [
 ]
 
 logger = logging.getLogger(__name__)
+
+# Named constants for cache configuration
+DEFAULT_CACHE_TTL_SECONDS: int = 300
+DEFAULT_CACHE_MAX_SIZE: int = 100
 
 
 @dataclass
@@ -37,7 +43,7 @@ class ToolProperties:
     is_read_only: bool = False
     is_concurrency_safe: bool = True
     cacheable: bool = False
-    cache_ttl_seconds: int = 300
+    cache_ttl_seconds: int = DEFAULT_CACHE_TTL_SECONDS
 
 
 @dataclass
@@ -70,7 +76,7 @@ class _CacheEntry:
 class ToolCache:
     """LRU cache for cacheable tool results (REQ-08.11)."""
 
-    def __init__(self, max_size: int = 100) -> None:
+    def __init__(self, max_size: int = DEFAULT_CACHE_MAX_SIZE) -> None:
         self._max_size = max_size
         self._store: OrderedDict[str, _CacheEntry] = OrderedDict()
 
@@ -86,7 +92,7 @@ class ToolCache:
         self._store.move_to_end(key)
         return entry.result
 
-    def put(self, key: str, result: ToolResult, ttl: int = 300) -> None:
+    def put(self, key: str, result: ToolResult, ttl: int = DEFAULT_CACHE_TTL_SECONDS) -> None:
         """Store a result with a TTL in seconds."""
         expires_at = time.time() + ttl
         # If key exists, update it
@@ -154,7 +160,7 @@ class PluginLoader:
             is_read_only=tool_section.get("is_read_only", False),
             is_concurrency_safe=tool_section.get("is_concurrency_safe", True),
             cacheable=tool_section.get("cacheable", False),
-            cache_ttl_seconds=tool_section.get("cache_ttl_seconds", 300),
+            cache_ttl_seconds=tool_section.get("cache_ttl_seconds", DEFAULT_CACHE_TTL_SECONDS),
         )
 
         return ToolPlugin(

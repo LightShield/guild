@@ -26,69 +26,96 @@ class BlockRegistry:
 
     def _load_builtins(self) -> None:
         """Register built-in blocks (planner, coder, reviewer, etc.)."""
-        builtins = [
-            BlockDef(
-                name="planner",
-                role="planner",
-                system_prompt="Break down tasks into actionable plans.",
-                inputs=[PortDef(name="task", type_tag="text")],
-                outputs=[PortDef(name="plan", type_tag="plan")],
-            ),
-            BlockDef(
-                name="coder",
-                role="coder",
-                system_prompt="Implement code changes based on specifications.",
-                tools=["file_read", "file_write", "shell"],
-                inputs=[
-                    PortDef(name="spec", type_tag="plan"),
-                    PortDef(name="context", type_tag="files"),
-                ],
-                outputs=[PortDef(name="changes", type_tag="code-changes")],
-                permission="scoped",
-            ),
-            BlockDef(
-                name="reviewer",
-                role="reviewer",
-                system_prompt="Review code changes for correctness and quality.",
-                inputs=[
-                    PortDef(name="changes", type_tag="code-changes"),
-                    PortDef(name="spec", type_tag="plan"),
-                ],
-                outputs=[PortDef(name="result", type_tag="review")],
-            ),
-            BlockDef(
-                name="tester",
-                role="tester",
-                system_prompt="Write and run tests for code changes.",
-                tools=["file_read", "file_write", "shell"],
-                inputs=[
-                    PortDef(name="changes", type_tag="code-changes"),
-                    PortDef(name="spec", type_tag="plan"),
-                ],
-                outputs=[PortDef(name="result", type_tag="test-results")],
-                permission="scoped",
-            ),
-            BlockDef(
-                name="evaluator",
-                role="evaluator",
-                system_prompt="Evaluate artifacts against quality criteria.",
-                inputs=[
-                    PortDef(name="artifact", type_tag="any"),
-                    PortDef(name="criteria", type_tag="text"),
-                ],
-                outputs=[PortDef(name="result", type_tag="review")],
-            ),
-            BlockDef(
-                name="researcher",
-                role="researcher",
-                system_prompt="Research topics and produce detailed reports.",
-                tools=["file_read", "shell"],
-                inputs=[PortDef(name="question", type_tag="text")],
-                outputs=[PortDef(name="report", type_tag="text")],
-            ),
-        ]
-        for block in builtins:
+        for block in self._builtin_block_definitions():
             self._blocks[block.name] = block
+
+    def _builtin_block_definitions(self) -> list[BlockDef]:
+        """Return the list of built-in block definitions."""
+        return [
+            self._planner_block(),
+            self._coder_block(),
+            self._reviewer_block(),
+            self._tester_block(),
+            self._evaluator_block(),
+            self._researcher_block(),
+        ]
+
+    def _planner_block(self) -> BlockDef:
+        """Define the planner block."""
+        return BlockDef(
+            name="planner",
+            role="planner",
+            system_prompt="Break down tasks into actionable plans.",
+            inputs=[PortDef(name="task", type_tag="text")],
+            outputs=[PortDef(name="plan", type_tag="plan")],
+        )
+
+    def _coder_block(self) -> BlockDef:
+        """Define the coder block."""
+        return BlockDef(
+            name="coder",
+            role="coder",
+            system_prompt="Implement code changes based on specifications.",
+            tools=["file_read", "file_write", "shell"],
+            inputs=[
+                PortDef(name="spec", type_tag="plan"),
+                PortDef(name="context", type_tag="files"),
+            ],
+            outputs=[PortDef(name="changes", type_tag="code-changes")],
+            permission="scoped",
+        )
+
+    def _reviewer_block(self) -> BlockDef:
+        """Define the reviewer block."""
+        return BlockDef(
+            name="reviewer",
+            role="reviewer",
+            system_prompt="Review code changes for correctness and quality.",
+            inputs=[
+                PortDef(name="changes", type_tag="code-changes"),
+                PortDef(name="spec", type_tag="plan"),
+            ],
+            outputs=[PortDef(name="result", type_tag="review")],
+        )
+
+    def _tester_block(self) -> BlockDef:
+        """Define the tester block."""
+        return BlockDef(
+            name="tester",
+            role="tester",
+            system_prompt="Write and run tests for code changes.",
+            tools=["file_read", "file_write", "shell"],
+            inputs=[
+                PortDef(name="changes", type_tag="code-changes"),
+                PortDef(name="spec", type_tag="plan"),
+            ],
+            outputs=[PortDef(name="result", type_tag="test-results")],
+            permission="scoped",
+        )
+
+    def _evaluator_block(self) -> BlockDef:
+        """Define the evaluator block."""
+        return BlockDef(
+            name="evaluator",
+            role="evaluator",
+            system_prompt="Evaluate artifacts against quality criteria.",
+            inputs=[
+                PortDef(name="artifact", type_tag="any"),
+                PortDef(name="criteria", type_tag="text"),
+            ],
+            outputs=[PortDef(name="result", type_tag="review")],
+        )
+
+    def _researcher_block(self) -> BlockDef:
+        """Define the researcher block."""
+        return BlockDef(
+            name="researcher",
+            role="researcher",
+            system_prompt="Research topics and produce detailed reports.",
+            tools=["file_read", "shell"],
+            inputs=[PortDef(name="question", type_tag="text")],
+            outputs=[PortDef(name="report", type_tag="text")],
+        )
 
     def register_block(self, block: BlockDef) -> None:
         """Register a block definition."""

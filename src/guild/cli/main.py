@@ -14,7 +14,7 @@ import logging
 import subprocess
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import typer
 from rich.console import Console
@@ -670,7 +670,7 @@ def _get_counts(db_path: Path) -> tuple[int, int]:
     return asyncio.run(_query())
 
 
-def _create_chat_loop(config, working_dir: str, permission: str):
+def _create_chat_loop(config: Any, working_dir: str, permission: str) -> Any:
     """Create an AgentLoop instance for interactive chat (REQ-06.9)."""
     from guild.agent.loop import AgentLoop
     from guild.permissions.checker import PermissionChecker, PermissionTier
@@ -698,7 +698,7 @@ def _create_chat_loop(config, working_dir: str, permission: str):
     )
 
 
-def _build_provider(config):
+def _build_provider(config: Any) -> Any:
     """Build an LLM provider, with escalation chain if configured."""
     from guild.provider.escalation import EscalatingProvider, EscalationChain
 
@@ -725,8 +725,15 @@ def _build_provider(config):
     return EscalatingProvider(chain)
 
 
+_DEFAULT_MAX_TURNS = 50
+_SECONDS_PER_TURN_ESTIMATE = 10
+_MIN_TURNS = 5
+_MAX_TURNS_CAP = 200
+_LEARNING_MIN_CONFIDENCE = 0.5
+
+
 async def _run_task(
-    config,
+    config: Any,
     working_dir: str,
     description: str,
     permission: str,
@@ -734,19 +741,33 @@ async def _run_task(
     guild_dir: Path,
 ) -> str:
     """Execute a task through the agent loop."""
-    import uuid
-
-    from guild.agent.loop import AgentLoop
-    from guild.permissions.checker import PermissionChecker, PermissionTier
     from guild.storage.sqlite import Storage
+
+    db_path = guild_dir / "guild.db"
+    store = Storage(db_path)
+    await store.connect()
+
+    try:
+        loop = _create_task_agent_loop(config, working_dir, timeout)
+        system_prompt = await _build_system_prompt_with_learnings(store)
+        result = await loop.run(system_prompt, description)
+        await _persist_task_result(store, loop, description, result, config)
+        await _extract_post_task_learnings(store, loop, config)
+    finally:
+        await store.close()
+
+    return result
+
+
+def _create_task_agent_loop(config: Any, working_dir: str, timeout: int) -> Any:
+    """Build an AgentLoop configured for task execution."""
+    from guild.agent.loop import AgentLoop
+    from guild.agent.stuck import StuckDetector
     from guild.tools.file_ops import execute_file_read, execute_file_write
     from guild.tools.search import execute_glob, execute_search
     from guild.tools.shell import execute_shell
 
-    # Create provider with escalation chain if configured
     provider = _build_provider(config)
-
-    # Build tool executors
     tool_executors = {
         "file_read": execute_file_read,
         "file_write": execute_file_write,
@@ -755,25 +776,14 @@ async def _run_task(
         "glob": execute_glob,
     }
 
-    # Permission checker
-    tier = PermissionTier(permission)
-    _checker = PermissionChecker(tier=tier)
-
-    # Determine max_turns from timeout (rough: 1 turn ~ 10s)
-    max_turns = 50
-    if timeout > 0:
-        max_turns = min(max(timeout // 10, 5), 200)
-
-    # Create agent loop with stuck detector
-    from guild.agent.stuck import StuckDetector
-
+    max_turns = _compute_max_turns(timeout)
     stuck_detector = StuckDetector(
         max_repeated_errors=config.stuck_max_repeated_errors,
         max_no_progress_turns=config.stuck_max_no_progress_turns,
         max_repeated_calls=config.stuck_max_repeated_calls,
     )
 
-    loop = AgentLoop(
+    return AgentLoop(
         provider=provider,
         tool_executors=tool_executors,
         working_dir=working_dir,
@@ -781,26 +791,38 @@ async def _run_task(
         stuck_detector=stuck_detector,
     )
 
-    # Inject high-confidence learnings into system prompt (REQ-09.4)
-    system_prompt = _GUILD_MASTER_PROMPT
-    db_path = guild_dir / "guild.db"
-    store = Storage(db_path)
-    await store.connect()
 
+def _compute_max_turns(timeout: int) -> int:
+    """Convert a timeout in seconds to a max turn count."""
+    if timeout <= 0:
+        return _DEFAULT_MAX_TURNS
+    return min(max(timeout // _SECONDS_PER_TURN_ESTIMATE, _MIN_TURNS), _MAX_TURNS_CAP)
+
+
+async def _build_system_prompt_with_learnings(store: Any) -> str:
+    """Build the system prompt, injecting high-confidence learnings (REQ-09.4)."""
+    system_prompt = _GUILD_MASTER_PROMPT
     try:
         from guild.agent.learning import format_learnings_for_injection
 
-        existing_learnings = await store.list_learnings(min_confidence=0.5)
+        existing_learnings = await store.list_learnings(min_confidence=_LEARNING_MIN_CONFIDENCE)
         injection = format_learnings_for_injection(existing_learnings)
         if injection:
             system_prompt = f"{system_prompt}\n\n{injection}"
     except Exception:
         logger.debug("Learning injection failed (non-critical)", exc_info=True)
+    return system_prompt
 
-    result = await loop.run(system_prompt, description)
+
+async def _persist_task_result(
+    store: Any, loop: Any, description: str, result: str, config: Any
+) -> None:
+    """Save task, agent, messages, and audit entry to storage."""
+    import uuid
 
     task_id = str(uuid.uuid4())
     agent_id = f"guild-master-{task_id[:8]}"
+
     await store.create_task(task_id, description)
     await store.update_task(task_id, status="completed", result=result, assigned_agent=agent_id)
     await store.register_agent(agent_id, "master")
@@ -809,7 +831,7 @@ async def _run_task(
         token_input=str(loop.total_input_tokens),
         token_output=str(loop.total_output_tokens),
     )
-    # Store messages from the loop for learning extraction
+
     for msg in loop.messages:
         role = msg.get("role", "")
         content = msg.get("content", "")
@@ -823,17 +845,20 @@ async def _run_task(
         f" tokens_out={loop.total_output_tokens}",
     )
 
-    # Post-task learning extraction (REQ-09.1)
+
+async def _extract_post_task_learnings(store: Any, loop: Any, config: Any) -> None:
+    """Extract learnings from the completed task (REQ-09.1)."""
     try:
         from guild.agent.learning import extract_learnings
 
-        await extract_learnings(task_id, store, provider)
+        provider = _build_provider(config)
+        # Use the first task ID from storage — extract_learnings uses it for context
+        tasks = await store.list_tasks()
+        if tasks:
+            task_id = tasks[-1].get("task_id", "")
+            await extract_learnings(task_id, store, provider)
     except Exception:
         logger.debug("Learning extraction failed (non-critical)", exc_info=True)
-
-    await store.close()
-
-    return result
 
 
 async def _fetch_audit(db_path: Path, limit: int) -> list[dict]:
@@ -974,7 +999,7 @@ def _write_toml(path: Path, data: dict) -> None:
     path.write_text("\n".join(lines))
 
 
-def _toml_value(value) -> str:
+def _toml_value(value: Any) -> str:
     """Format a Python value as a TOML literal."""
     if isinstance(value, bool):
         return "true" if value else "false"
