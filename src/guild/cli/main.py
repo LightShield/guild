@@ -644,7 +644,7 @@ def _init_database(db_path: Path) -> None:
     """Create the SQLite database with schema."""
     from guild.storage.sqlite import Storage
 
-    async def _create():
+    async def _create() -> None:
         store = Storage(db_path)
         await store.connect()
         await store.close()
@@ -656,7 +656,7 @@ def _get_counts(db_path: Path) -> tuple[int, int]:
     """Get task and agent counts from the database."""
     from guild.storage.sqlite import Storage
 
-    async def _query():
+    async def _query() -> tuple[int, int]:
         store = Storage(db_path)
         await store.connect()
         tasks = await store.list_tasks()
