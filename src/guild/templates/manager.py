@@ -55,9 +55,7 @@ class TemplateManager:
         """Save a template to disk as JSON."""
         path = self._template_path(template.name)
         data = asdict(template)
-        path.write_text(
-            json.dumps(data, indent=2) + "\n", encoding="utf-8"
-        )
+        path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
         logger.debug("Saved template %s", template.name)
         return path
 

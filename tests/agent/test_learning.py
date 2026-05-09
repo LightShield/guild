@@ -77,9 +77,7 @@ class TestExtractLearnings:
             '{"category": "pattern", "content": "Use early returns"}\n'
             '{"category": "tool_tip", "content": "file_read is fast"}\n'
         )
-        mock_provider.generate.return_value = LLMResponse(
-            content=response_content, model="test"
-        )
+        mock_provider.generate.return_value = LLMResponse(content=response_content, model="test")
 
         result = await extract_learnings("task-1", storage, mock_provider)
 
@@ -93,12 +91,8 @@ class TestExtractLearnings:
     ) -> None:
         """extract_learnings stores parsed learnings in the database."""
         await _setup_task_with_messages(storage)
-        response_content = (
-            '{"category": "pattern", "content": "Validate early"}\n'
-        )
-        mock_provider.generate.return_value = LLMResponse(
-            content=response_content, model="test"
-        )
+        response_content = '{"category": "pattern", "content": "Validate early"}\n'
+        mock_provider.generate.return_value = LLMResponse(content=response_content, model="test")
 
         await extract_learnings("task-1", storage, mock_provider)
 
@@ -120,9 +114,7 @@ class TestExtractLearnings:
             '{"category": "pattern", "content": "Valid one"}\n'
             "another garbage line\n"
         )
-        mock_provider.generate.return_value = LLMResponse(
-            content=response_content, model="test"
-        )
+        mock_provider.generate.return_value = LLMResponse(content=response_content, model="test")
 
         result = await extract_learnings("task-1", storage, mock_provider)
 
@@ -188,8 +180,7 @@ class TestFormatLearningsForInjection:
     def test_injection_respects_max_items(self) -> None:
         """format_learnings_for_injection limits output to max_items."""
         learnings = [
-            {"category": "pattern", "content": f"Item {i}", "confidence": 0.9}
-            for i in range(20)
+            {"category": "pattern", "content": f"Item {i}", "confidence": 0.9} for i in range(20)
         ]
         result = format_learnings_for_injection(learnings, max_items=5)
         # Should have exactly 5 learning items plus the header

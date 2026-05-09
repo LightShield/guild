@@ -67,8 +67,7 @@ class ContextManager:
 
         # Truncate old tool outputs, oldest first, most aggressively
         trimmable = [
-            i for i in range(len(result))
-            if i not in protected and result[i].get("role") == "tool"
+            i for i in range(len(result)) if i not in protected and result[i].get("role") == "tool"
         ]
 
         for idx in trimmable:

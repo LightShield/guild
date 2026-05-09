@@ -45,9 +45,9 @@ class ArtifactManager:
             return 0
         prefix = f"{name}.v"
         versions = [
-            int(p.name[len(prefix):])
+            int(p.name[len(prefix) :])
             for p in task_dir.iterdir()
-            if p.name.startswith(prefix) and p.name[len(prefix):].isdigit()
+            if p.name.startswith(prefix) and p.name[len(prefix) :].isdigit()
         ]
         return max(versions) if versions else 0
 
@@ -59,9 +59,7 @@ class ArtifactManager:
         path.write_text(content, encoding="utf-8")
         now = datetime.now(UTC).isoformat()
         logger.debug("Saved artifact %s/%s v1", task_id, name)
-        return Artifact(
-            task_id=task_id, name=name, path=path, version=1, created_at=now
-        )
+        return Artifact(task_id=task_id, name=name, path=path, version=1, created_at=now)
 
     def save_version(self, task_id: str, name: str, content: str) -> Artifact:
         """Save a new version (auto-increment version number)."""
@@ -72,9 +70,7 @@ class ArtifactManager:
         path = self._version_path(task_id, name, new_version)
         path.write_text(content, encoding="utf-8")
         now = datetime.now(UTC).isoformat()
-        logger.debug(
-            "Saved artifact %s/%s v%d", task_id, name, new_version
-        )
+        logger.debug("Saved artifact %s/%s v%d", task_id, name, new_version)
         return Artifact(
             task_id=task_id,
             name=name,
@@ -94,14 +90,10 @@ class ArtifactManager:
             if len(parts) != 2 or not parts[1].isdigit():
                 continue
             name, ver = parts[0], int(parts[1])
-            artifacts.append(
-                Artifact(task_id=task_id, name=name, path=p, version=ver)
-            )
+            artifacts.append(Artifact(task_id=task_id, name=name, path=p, version=ver))
         return artifacts
 
-    def get(
-        self, task_id: str, name: str, version: int | None = None
-    ) -> str | None:
+    def get(self, task_id: str, name: str, version: int | None = None) -> str | None:
         """Get artifact content. Returns latest version if version is None."""
         if version is None:
             version = self._latest_version(task_id, name)

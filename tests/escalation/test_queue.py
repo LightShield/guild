@@ -75,9 +75,7 @@ class TestPostQuestion:
         pending = await queue.get_pending()
         assert len(pending) == 0
 
-    async def test_get_answer_returns_none_when_unanswered(
-        self, queue: QuestionQueue
-    ) -> None:
+    async def test_get_answer_returns_none_when_unanswered(self, queue: QuestionQueue) -> None:
         """get_answer returns None for unanswered questions."""
         qid = await queue.post_question(
             question="Pending question",
@@ -86,9 +84,7 @@ class TestPostQuestion:
         answer = await queue.get_answer(qid)
         assert answer is None
 
-    async def test_get_answer_returns_answer_when_answered(
-        self, queue: QuestionQueue
-    ) -> None:
+    async def test_get_answer_returns_answer_when_answered(self, queue: QuestionQueue) -> None:
         """get_answer returns the answer text after answering."""
         qid = await queue.post_question(
             question="What should I do?",
@@ -129,9 +125,7 @@ class TestEscalationContext:
 class TestBatchAnswer:
     """Batch approval of multiple questions."""
 
-    async def test_batch_answer_multiple_questions(
-        self, queue: QuestionQueue
-    ) -> None:
+    async def test_batch_answer_multiple_questions(self, queue: QuestionQueue) -> None:
         """batch_answer answers multiple questions at once."""
         qid1 = await queue.post_question(question="Q1", context="C1")
         qid2 = await queue.post_question(question="Q2", context="C2")
@@ -157,19 +151,13 @@ class TestBatchAnswer:
 class TestPriorityOrdering:
     """Questions are returned in priority order."""
 
-    async def test_pending_ordered_by_priority(
-        self, queue: QuestionQueue
-    ) -> None:
+    async def test_pending_ordered_by_priority(self, queue: QuestionQueue) -> None:
         """get_pending returns highest priority first."""
-        await queue.post_question(
-            question="Low", context="C", priority=QuestionPriority.LOW
-        )
+        await queue.post_question(question="Low", context="C", priority=QuestionPriority.LOW)
         await queue.post_question(
             question="Blocking", context="C", priority=QuestionPriority.BLOCKING
         )
-        await queue.post_question(
-            question="Normal", context="C", priority=QuestionPriority.NORMAL
-        )
+        await queue.post_question(question="Normal", context="C", priority=QuestionPriority.NORMAL)
 
         pending = await queue.get_pending()
         assert pending[0].question == "Blocking"

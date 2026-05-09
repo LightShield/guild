@@ -42,9 +42,7 @@ class PendingQuestion:
     question: str
     context: str
     priority: QuestionPriority = QuestionPriority.NORMAL
-    created_at: str = field(
-        default_factory=lambda: datetime.now(UTC).isoformat()
-    )
+    created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     answered: bool = False
     answer: str | None = None
 

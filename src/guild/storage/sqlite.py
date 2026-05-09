@@ -505,9 +505,7 @@ class Storage:
     async def get_question(self, question_id: str) -> dict | None:
         """Retrieve a single question by ID."""
         assert self._db is not None
-        cursor = await self._db.execute(
-            "SELECT * FROM questions WHERE id = ?", (question_id,)
-        )
+        cursor = await self._db.execute("SELECT * FROM questions WHERE id = ?", (question_id,))
         row = await cursor.fetchone()
         if row is None:
             return None
@@ -517,8 +515,7 @@ class Storage:
         """Mark a question as answered and store the response."""
         assert self._db is not None
         await self._db.execute(
-            "UPDATE questions SET answered = 1, answer = ?, answered_at = ?"
-            " WHERE id = ?",
+            "UPDATE questions SET answered = 1, answer = ?, answered_at = ?" " WHERE id = ?",
             (answer, _now(), question_id),
         )
         await self._db.commit()

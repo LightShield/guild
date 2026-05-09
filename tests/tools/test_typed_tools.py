@@ -121,9 +121,7 @@ class TestFileWriteValidation:
 
     async def test_handles_unwritable_path_gracefully(self) -> None:
         """file_write returns structured error for impossible paths."""
-        result = await execute_file_write(
-            {"path": "/dev/null/subdir/file.txt", "content": "x"}
-        )
+        result = await execute_file_write({"path": "/dev/null/subdir/file.txt", "content": "x"})
         assert result.success is False
         assert result.error is not None
         assert isinstance(result, ToolResult)

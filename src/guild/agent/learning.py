@@ -24,8 +24,8 @@ logger = logging.getLogger(__name__)
 
 LEARNER_PROMPT = (
     "Review the session log below. Extract useful knowledge as JSON lines.\n"
-    "Each line: {\"category\": \"pattern|anti_pattern|tool_tip|domain_knowledge\","
-    " \"content\": \"...\"}\n"
+    'Each line: {"category": "pattern|anti_pattern|tool_tip|domain_knowledge",'
+    ' "content": "..."}\n'
     "Only extract genuinely reusable insights. Skip trivial observations.\n"
     "Output ONLY valid JSON lines, one per line. No other text."
 )
@@ -87,12 +87,14 @@ async def extract_learnings(
             confidence=_DEFAULT_CONFIDENCE,
             source_task_id=task_id,
         )
-        stored.append({
-            "id": learning_id,
-            "category": parsed["category"],
-            "content": parsed["content"],
-            "confidence": _DEFAULT_CONFIDENCE,
-        })
+        stored.append(
+            {
+                "id": learning_id,
+                "category": parsed["category"],
+                "content": parsed["content"],
+                "confidence": _DEFAULT_CONFIDENCE,
+            }
+        )
 
     logger.info(
         "Extracted %d learnings from task %s (%d lines skipped)",

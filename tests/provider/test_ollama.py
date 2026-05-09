@@ -155,9 +155,7 @@ class TestGenerateEdgeCases:
             model="gemma4-4b-dense-med",
         )
         mock_client = AsyncMock()
-        mock_client.chat = AsyncMock(
-            side_effect=ConnectionError("Connection refused")
-        )
+        mock_client.chat = AsyncMock(side_effect=ConnectionError("Connection refused"))
         provider._client = mock_client
 
         messages = [{"role": "user", "content": "Hi"}]
@@ -171,9 +169,7 @@ class TestGenerateEdgeCases:
             model="gemma4-4b-dense-med",
         )
         mock_client = AsyncMock()
-        mock_client.chat = AsyncMock(
-            side_effect=TimeoutError("Request timed out")
-        )
+        mock_client.chat = AsyncMock(side_effect=TimeoutError("Request timed out"))
         provider._client = mock_client
 
         messages = [{"role": "user", "content": "Hi"}]

@@ -155,9 +155,7 @@ TOOL_SCHEMAS: dict[str, dict] = {
                 },
                 "system_prompt": {
                     "type": "string",
-                    "description": (
-                        "System prompt for the sub-agent (optional)."
-                    ),
+                    "description": ("System prompt for the sub-agent (optional)."),
                 },
             },
             "required": ["task"],

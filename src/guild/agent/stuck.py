@@ -65,9 +65,7 @@ class StuckDetector:
             return True
 
         if self._no_progress_count >= self._max_no_progress_turns:
-            self._reason = (
-                f"No progress for {self._no_progress_count} consecutive turns"
-            )
+            self._reason = f"No progress for {self._no_progress_count} consecutive turns"
             return True
 
         if self._is_repeated_calls():

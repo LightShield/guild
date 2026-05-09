@@ -34,22 +34,16 @@ class TestSpawnCreatesAgent:
         """spawn() registers the agent in the active agents list."""
         provider = _make_provider()
         bus = MessageBus()
-        spawner = AgentSpawner(
-            provider=provider, storage=None, bus=bus
-        )
+        spawner = AgentSpawner(provider=provider, storage=None, bus=bus)
 
-        await spawner.spawn(
-            task="Write a haiku", agent_id="test-agent-1"
-        )
+        await spawner.spawn(task="Write a haiku", agent_id="test-agent-1")
         assert "test-agent-1" in spawner.active_agents
 
     async def test_spawn_returns_agent_result(self) -> None:
         """spawn() returns the final text output from the sub-agent."""
         provider = _make_provider("The answer is 42.")
         bus = MessageBus()
-        spawner = AgentSpawner(
-            provider=provider, storage=None, bus=bus
-        )
+        spawner = AgentSpawner(provider=provider, storage=None, bus=bus)
 
         result = await spawner.spawn(task="What is the answer?")
         assert result == "The answer is 42."
@@ -79,9 +73,7 @@ class TestSpawnedAgentExecution:
         """The sub-agent calls the provider with the given task."""
         provider = _make_provider("Done!")
         bus = MessageBus()
-        spawner = AgentSpawner(
-            provider=provider, storage=None, bus=bus
-        )
+        spawner = AgentSpawner(provider=provider, storage=None, bus=bus)
 
         result = await spawner.spawn(task="Do something useful")
         assert result == "Done!"
@@ -97,9 +89,7 @@ class TestSpawnedAgentExecution:
         """Multiple agents can be spawned and tracked simultaneously."""
         provider = _make_provider("Result")
         bus = MessageBus()
-        spawner = AgentSpawner(
-            provider=provider, storage=None, bus=bus
-        )
+        spawner = AgentSpawner(provider=provider, storage=None, bus=bus)
 
         await spawner.spawn(task="Task A", agent_id="worker-1")
         await spawner.spawn(task="Task B", agent_id="worker-2")
@@ -114,9 +104,7 @@ class TestSpawnedAgentExecution:
         """get_agent() returns the AgentLoop for a spawned agent."""
         provider = _make_provider()
         bus = MessageBus()
-        spawner = AgentSpawner(
-            provider=provider, storage=None, bus=bus
-        )
+        spawner = AgentSpawner(provider=provider, storage=None, bus=bus)
 
         await spawner.spawn(task="Test", agent_id="a1")
         agent = spawner.get_agent("a1")
@@ -126,9 +114,7 @@ class TestSpawnedAgentExecution:
         """get_agent() returns None for unknown agent IDs."""
         provider = _make_provider()
         bus = MessageBus()
-        spawner = AgentSpawner(
-            provider=provider, storage=None, bus=bus
-        )
+        spawner = AgentSpawner(provider=provider, storage=None, bus=bus)
 
         assert spawner.get_agent("nonexistent") is None
 
@@ -136,13 +122,9 @@ class TestSpawnedAgentExecution:
         """handle_tool_call() executes spawn and returns ToolResult."""
         provider = _make_provider("Sub-agent done.")
         bus = MessageBus()
-        spawner = AgentSpawner(
-            provider=provider, storage=None, bus=bus
-        )
+        spawner = AgentSpawner(provider=provider, storage=None, bus=bus)
 
-        result = await spawner.handle_tool_call(
-            {"task": "Sub-task"}, None
-        )
+        result = await spawner.handle_tool_call({"task": "Sub-task"}, None)
         assert result.success is True
         assert result.output == "Sub-agent done."
 
@@ -150,9 +132,7 @@ class TestSpawnedAgentExecution:
         """handle_tool_call() returns error if task is missing."""
         provider = _make_provider()
         bus = MessageBus()
-        spawner = AgentSpawner(
-            provider=provider, storage=None, bus=bus
-        )
+        spawner = AgentSpawner(provider=provider, storage=None, bus=bus)
 
         result = await spawner.handle_tool_call({}, None)
         assert result.success is False

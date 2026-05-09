@@ -65,7 +65,8 @@ class OfflineManager:
         """List locally available Ollama models via CLI."""
         try:
             proc = await asyncio.create_subprocess_exec(
-                "ollama", "list",
+                "ollama",
+                "list",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
@@ -91,7 +92,9 @@ class OfflineManager:
             return False
         try:
             proc = await asyncio.create_subprocess_exec(
-                "ollama", "pull", model_name,
+                "ollama",
+                "pull",
+                model_name,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )

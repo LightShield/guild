@@ -284,9 +284,7 @@ class TestHardcodedNever:
     def test_hardcoded_never_blocks_dd(self) -> None:
         """dd if= commands are blocked."""
         checker = PermissionChecker(tier=PermissionTier.AUTOPILOT)
-        result = checker.check(
-            "shell", "agent-1", {"command": "dd if=/dev/zero of=/dev/sda bs=1M"}
-        )
+        result = checker.check("shell", "agent-1", {"command": "dd if=/dev/zero of=/dev/sda bs=1M"})
         assert result is False
 
     def test_hardcoded_never_blocks_sudo_rm(self) -> None:
@@ -384,9 +382,7 @@ class TestPermissionDecisionAuditable:
     def test_hardcoded_never_provides_reason_for_audit(self) -> None:
         """check_hardcoded_never returns a descriptive reason for logging."""
         checker = PermissionChecker(tier=PermissionTier.AUTOPILOT)
-        allowed, reason = checker.check_hardcoded_never(
-            "shell", {"command": "rm -rf /"}
-        )
+        allowed, reason = checker.check_hardcoded_never("shell", {"command": "rm -rf /"})
         assert allowed is False
         assert len(reason) > 0
         # Reason is suitable for writing to audit log
@@ -435,6 +431,4 @@ class TestReversibilitySafeOperations:
 
             for cmd in safe_commands:
                 result = checker.check("shell", "agent-1", {"command": cmd})
-                assert result is True, (
-                    f"Safe command '{cmd}' was blocked in tier {tier.value}"
-                )
+                assert result is True, f"Safe command '{cmd}' was blocked in tier {tier.value}"

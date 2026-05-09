@@ -92,18 +92,14 @@ class AgentSpawner:
         """List IDs of all tracked agents."""
         return list(self._agents.keys())
 
-    async def handle_tool_call(
-        self, args: dict, working_dir: str | None = None
-    ) -> ToolResult:
+    async def handle_tool_call(self, args: dict, working_dir: str | None = None) -> ToolResult:
         """Tool executor interface for the spawn_agent tool.
 
         Called by AgentLoop when the model invokes the spawn_agent tool.
         """
         task = args.get("task", "")
         if not task:
-            return ToolResult(
-                success=False, output="", error="Missing required 'task' parameter"
-            )
+            return ToolResult(success=False, output="", error="Missing required 'task' parameter")
 
         system_prompt = args.get("system_prompt")
         result = await self.spawn(task=task, system_prompt=system_prompt)

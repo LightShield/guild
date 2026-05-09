@@ -1211,9 +1211,7 @@ async def _fetch_pending_questions(db_path: Path) -> list:
     return pending
 
 
-async def _answer_pending_question(
-    db_path: Path, question_id: str, response: str
-) -> None:
+async def _answer_pending_question(db_path: Path, question_id: str, response: str) -> None:
     """Answer a pending escalation question."""
     from guild.escalation.queue import QuestionQueue
     from guild.storage.sqlite import Storage

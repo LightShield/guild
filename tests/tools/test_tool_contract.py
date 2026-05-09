@@ -21,18 +21,16 @@ class TestToolSchemaStructure:
         """Every tool schema must declare a 'name' matching its key."""
         for key, schema in TOOL_SCHEMAS.items():
             assert "name" in schema, f"Tool '{key}' missing 'name' field"
-            assert schema["name"] == key, (
-                f"Tool key '{key}' does not match schema name '{schema['name']}'"
-            )
+            assert (
+                schema["name"] == key
+            ), f"Tool key '{key}' does not match schema name '{schema['name']}'"
 
     def test_all_schemas_have_description_field(self) -> None:
         """Every tool schema must have a non-empty 'description'."""
         for key, schema in TOOL_SCHEMAS.items():
             assert "description" in schema, f"Tool '{key}' missing 'description' field"
             assert isinstance(schema["description"], str)
-            assert len(schema["description"]) > 0, (
-                f"Tool '{key}' has empty description"
-            )
+            assert len(schema["description"]) > 0, f"Tool '{key}' has empty description"
 
     def test_all_schemas_have_parameters_with_type_object(self) -> None:
         """Every tool schema must have a 'parameters' dict with type 'object'."""
@@ -40,47 +38,39 @@ class TestToolSchemaStructure:
             assert "parameters" in schema, f"Tool '{key}' missing 'parameters' field"
             params = schema["parameters"]
             assert isinstance(params, dict)
-            assert params.get("type") == "object", (
-                f"Tool '{key}' parameters must have type 'object'"
-            )
+            assert (
+                params.get("type") == "object"
+            ), f"Tool '{key}' parameters must have type 'object'"
 
     def test_all_schemas_have_properties_in_parameters(self) -> None:
         """Every tool schema's parameters must have a 'properties' dict."""
         for key, schema in TOOL_SCHEMAS.items():
             params = schema["parameters"]
-            assert "properties" in params, (
-                f"Tool '{key}' parameters missing 'properties'"
-            )
+            assert "properties" in params, f"Tool '{key}' parameters missing 'properties'"
             assert isinstance(params["properties"], dict)
-            assert len(params["properties"]) > 0, (
-                f"Tool '{key}' has no properties defined"
-            )
+            assert len(params["properties"]) > 0, f"Tool '{key}' has no properties defined"
 
     def test_all_schemas_have_required_fields_list(self) -> None:
         """Every tool schema must declare 'required' as a list of strings."""
         for key, schema in TOOL_SCHEMAS.items():
             params = schema["parameters"]
-            assert "required" in params, (
-                f"Tool '{key}' parameters missing 'required' field"
-            )
+            assert "required" in params, f"Tool '{key}' parameters missing 'required' field"
             assert isinstance(params["required"], list)
             # All required fields must exist in properties
             for req_field in params["required"]:
-                assert req_field in params["properties"], (
-                    f"Tool '{key}': required field '{req_field}' not in properties"
-                )
+                assert (
+                    req_field in params["properties"]
+                ), f"Tool '{key}': required field '{req_field}' not in properties"
 
     def test_all_property_definitions_have_type_and_description(self) -> None:
         """Each property within a tool schema must have type and description."""
         for key, schema in TOOL_SCHEMAS.items():
             props = schema["parameters"]["properties"]
             for prop_name, prop_def in props.items():
-                assert "type" in prop_def, (
-                    f"Tool '{key}' property '{prop_name}' missing 'type'"
-                )
-                assert "description" in prop_def, (
-                    f"Tool '{key}' property '{prop_name}' missing 'description'"
-                )
+                assert "type" in prop_def, f"Tool '{key}' property '{prop_name}' missing 'type'"
+                assert (
+                    "description" in prop_def
+                ), f"Tool '{key}' property '{prop_name}' missing 'description'"
 
     def test_schemas_contain_expected_tools(self) -> None:
         """We expect at least file_read and file_write in the registry."""
@@ -184,9 +174,7 @@ class TestToolExecutorsReturnToolResult:
         """execute_file_write returns ToolResult with success=False on bad path."""
         from guild.tools.file_ops import execute_file_write
 
-        result = await execute_file_write(
-            {"path": "/dev/null/impossible/file.txt", "content": "x"}
-        )
+        result = await execute_file_write({"path": "/dev/null/impossible/file.txt", "content": "x"})
         assert isinstance(result, ToolResult)
         assert result.success is False
         assert result.error is not None

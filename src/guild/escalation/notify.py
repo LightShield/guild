@@ -67,19 +67,20 @@ class Notifier:
     async def _desktop(self, message: str) -> None:
         """Desktop notification (platform-specific)."""
         if sys.platform == "darwin":
-            script = (
-                f'display notification "{message}" '
-                f'with title "Guild"'
-            )
+            script = f'display notification "{message}" ' f'with title "Guild"'
             proc = await asyncio.create_subprocess_exec(
-                "osascript", "-e", script,
+                "osascript",
+                "-e",
+                script,
                 stdout=asyncio.subprocess.DEVNULL,
                 stderr=asyncio.subprocess.DEVNULL,
             )
             await proc.wait()
         elif sys.platform == "linux":
             proc = await asyncio.create_subprocess_exec(
-                "notify-send", "Guild", message,
+                "notify-send",
+                "Guild",
+                message,
                 stdout=asyncio.subprocess.DEVNULL,
                 stderr=asyncio.subprocess.DEVNULL,
             )
