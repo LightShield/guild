@@ -67,7 +67,9 @@ Decisions made during the v0.2 rebuild that aren't covered in REQUIREMENTS.md or
 
 **Why:** Cross-platform OS notifications require different code for macOS (IOKit), Linux (systemd-logind D-Bus), and Windows (power events). Time-drift works everywhere with zero platform code. It's slightly less responsive (detects sleep after wake, not before) but correct enough.
 
-**Reassess when:** Platform adapters are built for idle detection (REQ-02.4).
+**Known limitation:** This is a temporary approach. OS-specific code is inevitable and should be abstracted behind a `PlatformAdapter` interface — centralized, minimal, and the single source of truth for all platform-specific behavior (idle detection, sleep/wake, thermal state). Time-drift will be replaced with proper OS notifications when the platform adapter is built.
+
+**Reassess when:** Platform adapters are built (REQ-02.4).
 
 ---
 
@@ -76,5 +78,7 @@ Decisions made during the v0.2 rebuild that aren't covered in REQUIREMENTS.md or
 **Decision:** For MVP, user "activity" is detected via CPU utilization threshold. Not via actual input device monitoring.
 
 **Why:** True idle detection requires platform-specific APIs (IOKit on macOS, /proc/interrupts on Linux, GetLastInputInfo on Windows). CPU load is a rough proxy but works cross-platform with `psutil`. False positives (background compile = "active") are acceptable — they just add delays, not failures.
+
+**TODO:** Validate this claim with real-world testing. Measure how often CPU-as-proxy correctly identifies user activity vs. false positives from background processes (compilers, downloads, updates). If false positive rate is too high, prioritize platform-specific idle detection.
 
 **Reassess when:** Platform adapters are built (REQ-02.4).
