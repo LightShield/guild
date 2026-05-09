@@ -1,0 +1,11 @@
+
+[provider]
+provider_name = "ollama"
+base_url = "http://192.168.0.114:11434"
+model = "gemma4-26b-moe-agent"
+temperature = 0.7
+max_tokens = 4096
+
+[guild]
+default_permission = "autopilot"
+max_concurrent_agents = 1

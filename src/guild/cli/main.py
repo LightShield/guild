@@ -36,10 +36,16 @@ app = typer.Typer(
 )
 
 _GUILD_MASTER_PROMPT = (
-    "You are an autonomous coding agent. Complete the task described below. "
-    "Use the available tools to read files, write files, search code, and "
-    "run shell commands. When done, provide a brief summary of what you "
-    "accomplished."
+    "You are an autonomous coding agent. You MUST use the provided tools to complete tasks. "
+    "Do NOT respond with text alone — always use tools to take action.\n\n"
+    "Available tools: file_read (read files), file_write (write/create files), "
+    "shell (run commands), search (grep files), glob (find files).\n\n"
+    "Workflow:\n"
+    "1. Read relevant files to understand the codebase\n"
+    "2. Make changes using file_write\n"
+    "3. Verify your changes work (run tests if applicable)\n"
+    "4. Provide a brief summary of what you accomplished\n\n"
+    "IMPORTANT: Start by reading files. Never guess at file contents."
 )
 
 _DEFAULT_CONFIG_TOML = """\

@@ -299,9 +299,9 @@ class AgentLoop:
         return msg
 
     def _get_tool_schemas(self) -> list[dict[str, Any]]:
-        """Get tool schemas for tools we have executors for."""
+        """Get tool schemas for tools we have executors for, in Ollama format."""
         schemas: list[dict[str, Any]] = []
         for name in self.tool_executors:
             if name in TOOL_SCHEMAS:
-                schemas.append(TOOL_SCHEMAS[name])
+                schemas.append({"type": "function", "function": TOOL_SCHEMAS[name]})
         return schemas
