@@ -92,7 +92,7 @@ def create_app(
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         """Manage Storage lifecycle: connect on startup, close on shutdown."""
-        if _injected_storage is not None:
+        if _injected_storage is not None:  # pragma: no cover — injected storage path for testing
             app.state.storage = _injected_storage
             app.state.guild_dir = _guild_dir
             logger.info("API using injected storage")

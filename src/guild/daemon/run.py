@@ -16,7 +16,7 @@ __all__: list[str] = []
 logger = logging.getLogger(__name__)
 
 
-async def _run_task(task_id: str, guild_dir: Path) -> None:
+async def _run_task(task_id: str, guild_dir: Path) -> None:  # pragma: no cover — daemon subprocess entry point, tested via integration
     """Load config, create provider, wrap in supervisor, and execute."""
     from guild.agent.loop import AgentLoop
     from guild.config.loader import load_config
@@ -87,7 +87,7 @@ async def _run_task(task_id: str, guild_dir: Path) -> None:
         await store.close()
 
 
-def main() -> None:
+def main() -> None:  # pragma: no cover — CLI entry point boilerplate
     """CLI entry point for the daemon runner."""
     if len(sys.argv) < 3:
         logger.error("Usage: python -m guild.daemon.run <task_id> <guild_dir>")
@@ -105,4 +105,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    main()  # pragma: no cover — CLI entry point boilerplate

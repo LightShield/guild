@@ -281,6 +281,59 @@ class TestThresholds:
 
 
 @pytest.mark.unit
+@pytest.mark.req("REQ-24.9")
+class TestGetStatus:
+    """ResourceMonitor.get_status() returns full status snapshot."""
+
+    def test_get_status_returns_throttled_when_active_polite(self) -> None:
+        """get_status reports throttled=True in polite mode with active user."""
+        monitor = ResourceMonitor(
+            mode=SchedulingMode.POLITE,
+            activity_detector=lambda: ActivityState.ACTIVE,
+            cpu_reader=lambda: 85.0,
+        )
+        status = monitor.get_status()
+        assert status.mode == SchedulingMode.POLITE
+        assert status.activity == ActivityState.ACTIVE
+        assert status.cpu_percent == 85.0
+        assert status.is_throttled is True
+        assert "polite" in status.reason.lower()
+
+    def test_get_status_returns_not_throttled_when_idle(self) -> None:
+        """get_status reports throttled=False in polite mode with idle user."""
+        monitor = ResourceMonitor(
+            mode=SchedulingMode.POLITE,
+            activity_detector=lambda: ActivityState.IDLE,
+            cpu_reader=lambda: 20.0,
+        )
+        status = monitor.get_status()
+        assert status.is_throttled is False
+        assert status.reason == ""
+
+    def test_get_status_stealth_active_gives_paused_reason(self) -> None:
+        """get_status reports 'paused until idle' reason in stealth mode."""
+        monitor = ResourceMonitor(
+            mode=SchedulingMode.STEALTH,
+            activity_detector=lambda: ActivityState.ACTIVE,
+            cpu_reader=lambda: 75.0,
+        )
+        status = monitor.get_status()
+        assert status.is_throttled is True
+        assert "paused" in status.reason.lower()
+
+    def test_get_status_full_mode_never_throttled(self) -> None:
+        """get_status reports throttled=False in full mode regardless."""
+        monitor = ResourceMonitor(
+            mode=SchedulingMode.FULL,
+            activity_detector=lambda: ActivityState.ACTIVE,
+            cpu_reader=lambda: 99.0,
+        )
+        status = monitor.get_status()
+        assert status.is_throttled is False
+        assert status.reason == ""
+
+
+@pytest.mark.unit
 @pytest.mark.req("REQ-24.10")
 class TestMonitorPolling:
     """Resource monitor polling interval."""

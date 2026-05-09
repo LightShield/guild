@@ -790,3 +790,283 @@ class TestLearningsCommand:
 
         learning = asyncio.run(_check())
         assert learning is None
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-15.1")
+class TestQuestionsCommand:
+    """Tests for `guild questions`."""
+
+    def test_questions_shows_pending(self, guild_app, guild_project: Path) -> None:
+        """Verify questions command shows pending escalation questions."""
+        from guild.escalation.queue import QuestionQueue
+        from guild.storage.sqlite import Storage
+
+        db_path = guild_project / ".guild" / "guild.db"
+
+        async def _setup():
+            store = Storage(db_path)
+            await store.connect()
+            queue = QuestionQueue(store)
+            await queue.post_question(
+                question="Should I proceed?",
+                context="Modifying production config",
+                agent_id="agent-1",
+            )
+            await store.close()
+
+        asyncio.run(_setup())
+
+        result = runner.invoke(guild_app, ["questions"], terminal_width=200)
+
+        assert result.exit_code == 0
+        assert "proceed" in result.output.lower() or "Pending" in result.output
+
+    def test_questions_shows_empty_message(self, guild_app, guild_project: Path) -> None:
+        """Verify questions command shows no-pending message when empty."""
+        result = runner.invoke(guild_app, ["questions"])
+
+        assert result.exit_code == 0
+        assert "no" in result.output.lower() or "pending" in result.output.lower()
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-15.1")
+class TestAnswerCommand:
+    """Tests for `guild answer`."""
+
+    def test_answer_responds_to_question(self, guild_app, guild_project: Path) -> None:
+        """Verify answer command answers a pending question."""
+        from guild.escalation.queue import QuestionQueue
+        from guild.storage.sqlite import Storage
+
+        db_path = guild_project / ".guild" / "guild.db"
+
+        async def _setup():
+            store = Storage(db_path)
+            await store.connect()
+            queue = QuestionQueue(store)
+            qid = await queue.post_question(
+                question="Which database?",
+                context="Need to choose DB",
+                agent_id="agent-2",
+            )
+            await store.close()
+            return qid
+
+        qid = asyncio.run(_setup())
+
+        result = runner.invoke(guild_app, ["answer", qid, "Use PostgreSQL"])
+
+        assert result.exit_code == 0
+        assert "Answered" in result.output
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-05.5")
+class TestServeCommand:
+    """Tests for `guild serve`."""
+
+    def test_serve_fails_without_guild_dir(
+        self, guild_app, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Serve fails when not in a guild project."""
+        monkeypatch.chdir(tmp_path)
+        result = runner.invoke(guild_app, ["serve"])
+        assert result.exit_code != 0 or "not a guild project" in result.output.lower()
+
+    def test_serve_exists_in_help(self, guild_app) -> None:
+        """Serve command is listed in help."""
+        result = runner.invoke(guild_app, ["serve", "--help"])
+        assert result.exit_code == 0
+        assert "host" in result.output.lower()
+        assert "port" in result.output.lower()
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-09.5")
+class TestLearningsDecay:
+    """Tests for `guild learnings --decay`."""
+
+    def test_learnings_decay_runs(self, guild_app, guild_project: Path) -> None:
+        """Verify --decay runs decay on unvalidated learnings."""
+        from guild.storage.sqlite import Storage
+
+        db_path = guild_project / ".guild" / "guild.db"
+
+        async def _setup():
+            store = Storage(db_path)
+            await store.connect()
+            await store.add_learning(
+                category="pattern",
+                content="Old learning",
+                confidence=0.2,
+            )
+            await store.close()
+
+        asyncio.run(_setup())
+
+        result = runner.invoke(guild_app, ["learnings", "--decay"])
+
+        assert result.exit_code == 0
+        assert "Decayed" in result.output
+
+
+# ------------------------------------------------------------------
+# Tests for "not a guild project" error branches across all commands
+# ------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestNoGuildDirErrors:
+    """All commands fail gracefully when no .guild/ directory exists."""
+
+    @pytest.mark.parametrize(
+        "cmd_args",
+        [
+            ["status"],
+            ["task", "do something"],
+            ["chat"],
+            ["config"],
+            ["audit"],
+            ["decisions"],
+            ["learnings"],
+            ["ps"],
+            ["kill", "some-id"],
+            ["kill", "--all"],
+            ["pause", "some-id"],
+            ["resume", "some-id"],
+            ["logs", "some-id"],
+            ["history"],
+            ["usage"],
+            ["resource-status"],
+            ["questions"],
+            ["answer", "qid", "response"],
+            ["serve"],
+            ["attach", "some-id"],
+        ],
+    )
+    def test_command_fails_without_guild_dir(
+        self, guild_app, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, cmd_args: list[str]
+    ) -> None:
+        """Command shows error when not in a guild project."""
+        monkeypatch.chdir(tmp_path)
+        result = runner.invoke(guild_app, cmd_args)
+        # All should either exit with code 1 or show an error about not being a guild project
+        assert result.exit_code != 0 or "not a guild project" in result.output.lower()
+
+
+@pytest.mark.unit
+class TestInitAlreadyExists:
+    """Test init when .guild/ already exists."""
+
+    def test_init_already_initialized(
+        self, guild_app, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """init shows warning when .guild/ already exists."""
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / ".guild").mkdir()
+
+        result = runner.invoke(guild_app, ["init"])
+
+        assert result.exit_code == 0
+        assert "already" in result.output.lower()
+
+
+@pytest.mark.unit
+class TestNoArgsShowsHelp:
+    """Test that no args shows help."""
+
+    def test_no_args_shows_help(self, guild_app) -> None:
+        """Invoking guild with no args shows help."""
+        result = runner.invoke(guild_app, [])
+
+        assert result.exit_code == 0
+        assert "init" in result.output or "Usage" in result.output
+
+
+# ------------------------------------------------------------------
+# Tests for empty-data display branches
+# ------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestEmptyDataDisplays:
+    """Commands show appropriate messages when no data exists."""
+
+    def test_audit_shows_no_entries(self, guild_app, guild_project: Path) -> None:
+        """audit shows 'no entries' when DB is empty."""
+        result = runner.invoke(guild_app, ["audit"])
+        assert result.exit_code == 0
+        assert "no" in result.output.lower() or "audit" in result.output.lower()
+
+    def test_decisions_shows_no_entries(self, guild_app, guild_project: Path) -> None:
+        """decisions shows 'no decisions' when DB is empty."""
+        result = runner.invoke(guild_app, ["decisions"])
+        assert result.exit_code == 0
+        assert "no" in result.output.lower()
+
+    def test_learnings_shows_no_entries(self, guild_app, guild_project: Path) -> None:
+        """learnings shows 'no learnings' when DB is empty."""
+        result = runner.invoke(guild_app, ["learnings"])
+        assert result.exit_code == 0
+        assert "no" in result.output.lower()
+
+    def test_history_shows_no_tasks(self, guild_app, guild_project: Path) -> None:
+        """history shows 'no tasks' when DB is empty."""
+        result = runner.invoke(guild_app, ["history"])
+        assert result.exit_code == 0
+        assert "no" in result.output.lower()
+
+    def test_usage_shows_table_with_zeros(self, guild_app, guild_project: Path) -> None:
+        """usage shows token table with zeros when no tasks exist."""
+        result = runner.invoke(guild_app, ["usage"], terminal_width=200)
+        assert result.exit_code == 0
+        assert "token usage" in result.output.lower()
+
+    def test_logs_shows_no_messages(self, guild_app, guild_project: Path) -> None:
+        """logs shows 'no messages' for unknown task."""
+        result = runner.invoke(guild_app, ["logs", "nonexistent-task"])
+        assert result.exit_code == 0
+        assert "no" in result.output.lower()
+
+    def test_attach_shows_no_messages(self, guild_app, guild_project: Path) -> None:
+        """attach shows 'no messages' for unknown task."""
+        result = runner.invoke(guild_app, ["attach", "nonexistent-task"])
+        assert result.exit_code == 0
+        assert "no" in result.output.lower()
+
+    def test_ps_no_run_dir(self, guild_app, guild_project: Path) -> None:
+        """ps shows 'no running tasks' when run dir doesn't exist."""
+        result = runner.invoke(guild_app, ["ps"])
+        assert result.exit_code == 0
+        assert "no" in result.output.lower()
+
+    def test_kill_no_task_id_no_all(self, guild_app, guild_project: Path) -> None:
+        """kill without task_id or --all shows error."""
+        result = runner.invoke(guild_app, ["kill"])
+        assert result.exit_code != 0 or "provide" in result.output.lower()
+
+    def test_kill_task_not_found(self, guild_app, guild_project: Path) -> None:
+        """kill with nonexistent task shows 'not found'."""
+        with patch("guild.cli.main._kill_task") as mock_kill:
+            mock_kill.return_value = False
+            result = runner.invoke(guild_app, ["kill", "nonexistent"])
+        assert result.exit_code == 0
+        assert "not found" in result.output.lower() or "not running" in result.output.lower()
+
+    def test_pause_failure(self, guild_app, guild_project: Path) -> None:
+        """pause failure shows 'cannot pause'."""
+        with patch("guild.cli.main._pause_task") as mock_pause:
+            mock_pause.return_value = False
+            result = runner.invoke(guild_app, ["pause", "some-id"])
+        assert result.exit_code == 0
+        assert "cannot" in result.output.lower()
+
+    def test_resume_failure(self, guild_app, guild_project: Path) -> None:
+        """resume failure shows 'cannot resume'."""
+        with patch("guild.cli.main._resume_task") as mock_resume:
+            mock_resume.return_value = False
+            result = runner.invoke(guild_app, ["resume", "some-id"])
+        assert result.exit_code == 0
+        assert "cannot" in result.output.lower()

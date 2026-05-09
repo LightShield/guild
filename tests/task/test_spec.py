@@ -373,3 +373,121 @@ class TestTaskDependencies:
         ready = graph.get_ready_tasks()
         ready_ids = [t.task_id for t in ready]
         assert "c" in ready_ids
+
+
+# ------------------------------------------------------------------
+# REQ-12.2: file_contains verification and unknown type
+# ------------------------------------------------------------------
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-12.2")
+class TestVerificationFileContains:
+    """Verification steps that check file content."""
+
+    async def test_file_contains_passes_when_text_found(self, tmp_path: Path) -> None:
+        """file_contains passes when expected text is present in file."""
+        target_file = tmp_path / "config.txt"
+        target_file.write_text("debug=true\nverbose=false\n")
+
+        spec = TaskSpec(
+            description="test",
+            verification_steps=[
+                VerificationStep(
+                    type="file_contains",
+                    target="config.txt",
+                    expected="debug=true",
+                ),
+            ],
+        )
+        passed, results = await run_verification(spec, str(tmp_path))
+        assert passed is True
+        assert "PASS" in results[0]
+        assert "contains expected" in results[0]
+
+    async def test_file_contains_fails_when_text_missing(self, tmp_path: Path) -> None:
+        """file_contains fails when expected text is not in file."""
+        target_file = tmp_path / "config.txt"
+        target_file.write_text("debug=false\nverbose=false\n")
+
+        spec = TaskSpec(
+            description="test",
+            verification_steps=[
+                VerificationStep(
+                    type="file_contains",
+                    target="config.txt",
+                    expected="debug=true",
+                ),
+            ],
+        )
+        passed, results = await run_verification(spec, str(tmp_path))
+        assert passed is False
+        assert "FAIL" in results[0]
+        assert "missing expected" in results[0]
+
+    async def test_file_contains_fails_when_file_missing(self, tmp_path: Path) -> None:
+        """file_contains fails when target file does not exist."""
+        spec = TaskSpec(
+            description="test",
+            verification_steps=[
+                VerificationStep(
+                    type="file_contains",
+                    target="nonexistent.txt",
+                    expected="anything",
+                ),
+            ],
+        )
+        passed, results = await run_verification(spec, str(tmp_path))
+        assert passed is False
+        assert "FAIL" in results[0]
+        assert "not found" in results[0]
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-12.2")
+class TestVerificationUnknownType:
+    """Verification step with an unknown type."""
+
+    async def test_unknown_verification_type_fails(self, tmp_path: Path) -> None:
+        """An unknown verification type returns failure."""
+        spec = TaskSpec(
+            description="test",
+            verification_steps=[
+                VerificationStep(type="magic", target="something"),
+            ],
+        )
+        passed, results = await run_verification(spec, str(tmp_path))
+        assert passed is False
+        assert "Unknown verification type" in results[0]
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-12.2")
+class TestVerificationNoSteps:
+    """Verification with no steps defined."""
+
+    async def test_no_verification_steps_passes(self, tmp_path: Path) -> None:
+        """No verification steps means verification passes trivially."""
+        spec = TaskSpec(description="test", verification_steps=[])
+        passed, results = await run_verification(spec, str(tmp_path))
+        assert passed is True
+        assert "No verification steps" in results[0]
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-12.2")
+class TestVerificationCommandEdgeCases:
+    """Additional command verification tests."""
+
+    async def test_command_failure_includes_stderr(self, tmp_path: Path) -> None:
+        """Failed command includes stderr output in the result message."""
+        spec = TaskSpec(
+            description="test",
+            verification_steps=[
+                VerificationStep(type="command", target="echo 'error' >&2 && exit 1"),
+            ],
+        )
+        passed, results = await run_verification(spec, str(tmp_path))
+        assert passed is False
+        assert "FAIL" in results[0]
+        assert "exited 1" in results[0]

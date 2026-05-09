@@ -103,3 +103,69 @@ class TestPresenceAware:
                 priority=QuestionPriority.HIGH,
             )
             mock_stdout.write.assert_called_once_with("\a")
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-15.5")
+class TestWebhookEdgeCases:
+    """Edge cases for webhook notification."""
+
+    async def test_webhook_without_url_logs_warning(self) -> None:
+        """Webhook notification without URL logs warning and returns."""
+        notifier = Notifier(
+            channels=[NotificationChannel.WEBHOOK],
+            webhook_url=None,
+        )
+        # Should not raise, just log a warning
+        with patch("guild.escalation.notify.logger") as mock_logger:
+            await notifier.notify("test")
+            mock_logger.warning.assert_called_once_with("Webhook URL not configured")
+
+    async def test_webhook_exception_is_handled(self) -> None:
+        """Webhook failure is caught and logged, not raised."""
+        notifier = Notifier(
+            channels=[NotificationChannel.WEBHOOK],
+            webhook_url="https://hooks.example.com/bad",
+        )
+        with patch("guild.escalation.notify.asyncio.get_event_loop") as mock_loop:
+            mock_executor = AsyncMock(side_effect=Exception("connection error"))
+            mock_loop.return_value.run_in_executor = mock_executor
+            # Should not raise
+            with patch("guild.escalation.notify.logger"):
+                await notifier.notify("failing message")
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-15.5")
+class TestDesktopNotification:
+    """Desktop notification tests."""
+
+    async def test_desktop_notification_calls_osascript_on_darwin(self) -> None:
+        """Desktop notification uses osascript on macOS."""
+        notifier = Notifier(channels=[NotificationChannel.DESKTOP])
+        with patch("sys.platform", "darwin"):
+            with patch(
+                "guild.escalation.notify.asyncio.create_subprocess_exec",
+                new_callable=AsyncMock,
+            ) as mock_proc:
+                mock_proc.return_value.wait = AsyncMock()
+                await notifier.notify("macOS test")
+                mock_proc.assert_called_once()
+                # First arg should be osascript
+                call_args = mock_proc.call_args[0]
+                assert call_args[0] == "osascript"
+
+    async def test_desktop_notification_calls_notify_send_on_linux(self) -> None:
+        """Desktop notification uses notify-send on Linux."""
+        notifier = Notifier(channels=[NotificationChannel.DESKTOP])
+        with patch("guild.escalation.notify.sys") as mock_sys:
+            mock_sys.platform = "linux"
+            with patch(
+                "guild.escalation.notify.asyncio.create_subprocess_exec",
+                new_callable=AsyncMock,
+            ) as mock_proc:
+                mock_proc.return_value.wait = AsyncMock()
+                await notifier.notify("Linux test")
+                mock_proc.assert_called_once()
+                call_args = mock_proc.call_args[0]
+                assert call_args[0] == "notify-send"

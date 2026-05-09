@@ -327,3 +327,110 @@ class TestSelfDevBenchmarks:
         assert "read_and_report" in names
         assert "modify_existing" in names
         assert "multi_step" in names
+
+
+# ------------------------------------------------------------------
+# REQ-16.1: A/B Comparison Scoring (compare_results / _determine_winner)
+# ------------------------------------------------------------------
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-16.1")
+class TestCompareResults:
+    """Tests for compare_results and _determine_winner scoring logic."""
+
+    async def test_a_wins_when_a_completes_and_b_does_not(self, storage: Storage) -> None:
+        """A wins outright when it completes but B does not."""
+        framework = EvalFramework(storage)
+
+        result_a = _make_result(completed=True, duration=10.0, input_tokens=200)
+        result_b = _make_result(completed=False, duration=5.0, input_tokens=100)
+
+        comparison = framework.compare_results(result_a, result_b)
+
+        assert comparison["winner"] == "a"
+        assert comparison["a_completed"] is True
+        assert comparison["b_completed"] is False
+
+    async def test_b_wins_when_b_completes_and_a_does_not(self, storage: Storage) -> None:
+        """B wins outright when it completes but A does not."""
+        framework = EvalFramework(storage)
+
+        result_a = _make_result(completed=False, duration=5.0, input_tokens=100)
+        result_b = _make_result(completed=True, duration=10.0, input_tokens=200)
+
+        comparison = framework.compare_results(result_a, result_b)
+
+        assert comparison["winner"] == "b"
+        assert comparison["a_completed"] is False
+        assert comparison["b_completed"] is True
+
+    async def test_a_wins_on_better_duration_and_tokens(self, storage: Storage) -> None:
+        """A wins when it has better duration and fewer tokens."""
+        framework = EvalFramework(storage)
+
+        result_a = _make_result(completed=True, duration=5.0, input_tokens=100, output_tokens=50)
+        result_b = _make_result(completed=True, duration=10.0, input_tokens=200, output_tokens=100)
+
+        comparison = framework.compare_results(result_a, result_b)
+
+        assert comparison["winner"] == "a"
+
+    async def test_b_wins_on_better_duration_and_tokens(self, storage: Storage) -> None:
+        """B wins when it has better duration and fewer tokens."""
+        framework = EvalFramework(storage)
+
+        result_a = _make_result(completed=True, duration=10.0, input_tokens=200, output_tokens=100)
+        result_b = _make_result(completed=True, duration=5.0, input_tokens=100, output_tokens=50)
+
+        comparison = framework.compare_results(result_a, result_b)
+
+        assert comparison["winner"] == "b"
+
+    async def test_tie_when_metrics_equal(self, storage: Storage) -> None:
+        """Tie when both complete with identical duration and tokens."""
+        framework = EvalFramework(storage)
+
+        result_a = _make_result(completed=True, duration=5.0, input_tokens=100, output_tokens=50)
+        result_b = _make_result(completed=True, duration=5.0, input_tokens=100, output_tokens=50)
+
+        comparison = framework.compare_results(result_a, result_b)
+
+        assert comparison["winner"] == "tie"
+
+    async def test_tie_when_one_metric_each_wins(self, storage: Storage) -> None:
+        """Tie when A wins on duration but B wins on tokens."""
+        framework = EvalFramework(storage)
+
+        # A has better duration, B has fewer tokens
+        result_a = _make_result(completed=True, duration=3.0, input_tokens=300, output_tokens=200)
+        result_b = _make_result(completed=True, duration=10.0, input_tokens=50, output_tokens=50)
+
+        comparison = framework.compare_results(result_a, result_b)
+
+        assert comparison["winner"] == "tie"
+
+    async def test_compare_results_includes_all_fields(self, storage: Storage) -> None:
+        """compare_results dict includes all expected fields."""
+        framework = EvalFramework(storage)
+
+        result_a = _make_result(
+            task_name="my_task", model="model-a", completed=True,
+            duration=5.0, input_tokens=100, output_tokens=50, tool_calls=3,
+        )
+        result_b = _make_result(
+            task_name="my_task", model="model-b", completed=True,
+            duration=8.0, input_tokens=200, output_tokens=100, tool_calls=5,
+        )
+
+        comparison = framework.compare_results(result_a, result_b)
+
+        assert comparison["task_name"] == "my_task"
+        assert comparison["a_model"] == "model-a"
+        assert comparison["b_model"] == "model-b"
+        assert comparison["a_duration"] == 5.0
+        assert comparison["b_duration"] == 8.0
+        assert comparison["a_tokens"] == 150
+        assert comparison["b_tokens"] == 300
+        assert comparison["a_tool_calls"] == 3
+        assert comparison["b_tool_calls"] == 5

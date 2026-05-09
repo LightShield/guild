@@ -176,3 +176,36 @@ class TestCLIGenerate:
             messages = [{"role": "user", "content": "Hello"}]
             with pytest.raises(TimeoutError, match="timed out"):
                 await provider.generate(messages)
+
+
+@pytest.mark.req("REQ-17.6")
+class TestCLIExtractPrompt:
+    """Tests for _extract_prompt fallback behavior."""
+
+    def test_extract_prompt_no_user_message_concatenates_all(self) -> None:
+        """When no user message exists, concatenates all content."""
+        provider = CLIToolProvider(command="gemini")
+        messages = [
+            {"role": "system", "content": "Be helpful"},
+            {"role": "assistant", "content": "OK I will help"},
+        ]
+        result = provider._extract_prompt(messages)
+        assert "Be helpful" in result
+        assert "OK I will help" in result
+        assert "\n" in result
+
+    def test_extract_prompt_empty_messages(self) -> None:
+        """Empty messages list returns empty string."""
+        provider = CLIToolProvider(command="gemini")
+        result = provider._extract_prompt([])
+        assert result == ""
+
+    def test_extract_prompt_skips_empty_content(self) -> None:
+        """Fallback path skips messages with empty content."""
+        provider = CLIToolProvider(command="gemini")
+        messages = [
+            {"role": "system", "content": ""},
+            {"role": "assistant", "content": "Only this"},
+        ]
+        result = provider._extract_prompt(messages)
+        assert result == "Only this"

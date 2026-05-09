@@ -137,3 +137,95 @@ def test_non_serializable_data_rejected() -> None:
     valid, error = validate_port_data({"func": lambda x: x}, "text")  # type: ignore[dict-item]
     assert valid is False
     assert "not JSON-serializable" in error
+
+
+# ------------------------------------------------------------------
+# Schema validation tests (basic_schema_check + validate_port_data)
+# ------------------------------------------------------------------
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-04.35")
+class TestBasicSchemaCheck:
+    """Tests for _basic_schema_check and validate_port_data with schemas."""
+
+    def test_object_type_check_passes_with_dict(self) -> None:
+        """Object schema type passes when data is a dict."""
+        register_port_type(
+            "object-type-test",
+            json_schema={"type": "object", "properties": {}},
+        )
+        valid, error = validate_port_data({"key": "value"}, "object-type-test")
+        assert valid is True
+        assert error == ""
+
+    def test_object_type_check_fails_with_list(self) -> None:
+        """Object schema type fails when data is a list."""
+        register_port_type(
+            "object-only",
+            json_schema={"type": "object", "properties": {}},
+        )
+        valid, error = validate_port_data([1, 2, 3], "object-only")  # type: ignore[arg-type]
+        assert valid is False
+        assert "does not match schema" in error
+
+    def test_array_type_check_passes_with_list(self) -> None:
+        """Array schema type passes when data is a list."""
+        register_port_type(
+            "array-type-test",
+            json_schema={"type": "array", "items": {"type": "string"}},
+        )
+        valid, error = validate_port_data(["a", "b"], "array-type-test")  # type: ignore[arg-type]
+        assert valid is True
+        assert error == ""
+
+    def test_array_type_check_fails_with_dict(self) -> None:
+        """Array schema type fails when data is a dict."""
+        register_port_type(
+            "array-only",
+            json_schema={"type": "array", "items": {"type": "string"}},
+        )
+        valid, error = validate_port_data({"key": "val"}, "array-only")
+        assert valid is False
+        assert "does not match schema" in error
+
+    def test_required_fields_check_passes(self) -> None:
+        """Object with required fields passes when all present."""
+        register_port_type(
+            "required-fields-pass",
+            json_schema={
+                "type": "object",
+                "properties": {"name": {"type": "string"}, "age": {"type": "number"}},
+                "required": ["name", "age"],
+            },
+        )
+        valid, error = validate_port_data({"name": "Alice", "age": 30}, "required-fields-pass")
+        assert valid is True
+        assert error == ""
+
+    def test_required_fields_check_fails_when_missing(self) -> None:
+        """Object with required fields fails when a required field is missing."""
+        register_port_type(
+            "required-fields-fail",
+            json_schema={
+                "type": "object",
+                "properties": {"name": {"type": "string"}, "email": {"type": "string"}},
+                "required": ["name", "email"],
+            },
+        )
+        valid, error = validate_port_data({"name": "Bob"}, "required-fields-fail")
+        assert valid is False
+        assert "does not match schema" in error
+
+    def test_no_schema_registered_passes(self) -> None:
+        """Type with no schema always passes validation."""
+        valid, error = validate_port_data({"anything": "goes"}, "text")
+        assert valid is True
+        assert error == ""
+
+    def test_schema_with_no_json_schema_passes(self) -> None:
+        """Registered type with json_schema=None passes validation."""
+        register_port_type("no-schema-type", json_schema=None, description="No schema")
+        valid, error = validate_port_data({"data": 123}, "no-schema-type")
+        assert valid is True
+        assert error == ""

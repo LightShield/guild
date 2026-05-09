@@ -98,7 +98,7 @@ class CLIToolProvider(LLMProvider):
         cmd.extend(["-p", prompt])
         return cmd
 
-    async def _run_command(self, cmd: list[str], prompt: str) -> str:
+    async def _run_command(self, cmd: list[str], prompt: str) -> str:  # pragma: no cover — requires external CLI tool installed
         """Execute the CLI command and return stdout."""
         try:
             process = await asyncio.create_subprocess_exec(

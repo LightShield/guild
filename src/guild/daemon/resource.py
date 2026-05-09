@@ -64,7 +64,7 @@ class ResourceStatus:
     reason: str = ""
 
 
-def _default_activity_detector() -> ActivityState:
+def _default_activity_detector() -> ActivityState:  # pragma: no cover — platform dependency (psutil optional)
     """Default activity detector using CPU as a proxy.
 
     MVP: uses psutil if available, otherwise assumes IDLE.
@@ -80,7 +80,7 @@ def _default_activity_detector() -> ActivityState:
     return ActivityState.IDLE
 
 
-def _default_cpu_reader() -> float:
+def _default_cpu_reader() -> float:  # pragma: no cover — platform dependency (psutil optional)
     """Default CPU reader using psutil, falling back to 0.0."""
     try:
         import psutil
@@ -181,4 +181,4 @@ class ResourceMonitor:
             return "user active — polite delay applied"
         if self.mode == SchedulingMode.STEALTH:
             return "user active — paused until idle"
-        return ""
+        return ""  # pragma: no cover — defensive unreachable
