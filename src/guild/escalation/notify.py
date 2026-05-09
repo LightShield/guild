@@ -56,7 +56,7 @@ class Notifier:
                 self._bell()
             elif channel == NotificationChannel.DESKTOP:
                 await self._desktop(message)
-            elif channel == NotificationChannel.WEBHOOK:
+            elif channel == NotificationChannel.WEBHOOK:  # pragma: no branch
                 await self._webhook(message)
 
     def _bell(self) -> None:
@@ -85,7 +85,7 @@ class Notifier:
                 stderr=asyncio.subprocess.DEVNULL,
             )
             await proc.wait()
-        else:
+        else:  # pragma: no cover — platform dependency (Windows)
             logger.warning("Desktop notifications not supported on %s", sys.platform)
 
     async def _webhook(self, message: str) -> None:

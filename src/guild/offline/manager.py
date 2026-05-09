@@ -42,7 +42,7 @@ _OFFLINE_DOCS: dict[str, str] = {
 class LLMProviderProtocol(Protocol):
     """Minimal protocol for the provider dependency."""
 
-    async def health_check(self) -> bool: ...
+    async def health_check(self) -> bool: ...  # pragma: no cover — protocol stub
 
 
 class OfflineManager:

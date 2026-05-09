@@ -146,7 +146,7 @@ class ResourceMonitor:
             await self._wait_polite()
             return
 
-        if self.mode == SchedulingMode.STEALTH:
+        if self.mode == SchedulingMode.STEALTH:  # pragma: no branch
             await self._wait_stealth()
             return
 

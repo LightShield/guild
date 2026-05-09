@@ -151,7 +151,7 @@ def load_config(
     )
 
     # Clean up temp file if we created one
-    if merged_file and "_guild_config_" in str(merged_file):
+    if merged_file and "guild_config_" in str(merged_file):
         import contextlib
 
         with contextlib.suppress(OSError):

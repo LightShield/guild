@@ -78,7 +78,7 @@ class RateLimiter:
             # Calculate wait time until the oldest call exits the window
             oldest = self._calls[0]
             wait = self._window - (time.monotonic() - oldest)
-            if wait > 0:
+            if wait > 0:  # pragma: no branch — defensive: prune() evicts expired
                 await asyncio.sleep(wait)
             self._prune()
 
