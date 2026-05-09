@@ -660,15 +660,13 @@ class Storage:
 
         # Merge duplicate summaries: keep the most recently created, delete rest
         dup_cursor = await self._db.execute(
-            "SELECT summary, COUNT(*) as cnt FROM memories"
-            " GROUP BY summary HAVING cnt > 1"
+            "SELECT summary, COUNT(*) as cnt FROM memories" " GROUP BY summary HAVING cnt > 1"
         )
         duplicates = await dup_cursor.fetchall()
         for dup_row in duplicates:
             summary = dup_row[0]
             entries_cursor = await self._db.execute(
-                "SELECT id FROM memories WHERE summary = ?"
-                " ORDER BY created_at DESC",
+                "SELECT id FROM memories WHERE summary = ?" " ORDER BY created_at DESC",
                 (summary,),
             )
             entries = await entries_cursor.fetchall()
@@ -718,15 +716,12 @@ class Storage:
         )
         await self._db.commit()
 
-    async def list_eval_results(
-        self, task_name: str | None = None, limit: int = 50
-    ) -> list[dict]:
+    async def list_eval_results(self, task_name: str | None = None, limit: int = 50) -> list[dict]:
         """List eval results, most recent first, optionally by task_name."""
         assert self._db is not None
         if task_name is not None:
             cursor = await self._db.execute(
-                "SELECT * FROM eval_results"
-                " WHERE task_name = ? ORDER BY id DESC LIMIT ?",
+                "SELECT * FROM eval_results" " WHERE task_name = ? ORDER BY id DESC LIMIT ?",
                 (task_name, limit),
             )
         else:

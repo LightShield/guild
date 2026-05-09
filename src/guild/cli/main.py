@@ -699,8 +699,9 @@ def _create_chat_loop(config: Any, working_dir: str, permission: str) -> Any:
 
 
 def _build_provider(config: Any) -> Any:
-    """Build an LLM provider, with escalation chain if configured."""
+    """Build an LLM provider, with escalation chain and retry if configured."""
     from guild.provider.escalation import EscalatingProvider, EscalationChain
+    from guild.provider.retry import RetryProvider
 
     primary = create_provider(config.base_url, config.model)
 
@@ -708,7 +709,7 @@ def _build_provider(config: Any) -> Any:
     cli_tools = [t.strip() for t in config.escalation_cli_providers.split(",") if t.strip()]
 
     if not chain_models and not cli_tools:
-        return primary
+        return RetryProvider(primary)
 
     providers = [primary]
     for model_name in chain_models:
@@ -722,7 +723,7 @@ def _build_provider(config: Any) -> Any:
             providers.append(CLIToolProvider(command=tool_cmd))
 
     chain = EscalationChain(providers)
-    return EscalatingProvider(chain)
+    return RetryProvider(EscalatingProvider(chain))
 
 
 _DEFAULT_MAX_TURNS = 50

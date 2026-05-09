@@ -163,19 +163,21 @@ class EvalFramework:
 
     async def store_result(self, result: EvalResult) -> None:
         """Persist an eval result to SQLite (REQ-16.5)."""
-        await self._storage.store_eval_result({
-            "task_name": result.task_name,
-            "model": result.model,
-            "config_hash": result.config_hash,
-            "task_completed": int(result.metrics.task_completed),
-            "duration_seconds": result.metrics.duration_seconds,
-            "input_tokens": result.metrics.input_tokens,
-            "output_tokens": result.metrics.output_tokens,
-            "tool_calls": result.metrics.tool_calls,
-            "turns": result.metrics.turns,
-            "error": result.metrics.error,
-            "timestamp": result.timestamp,
-        })
+        await self._storage.store_eval_result(
+            {
+                "task_name": result.task_name,
+                "model": result.model,
+                "config_hash": result.config_hash,
+                "task_completed": int(result.metrics.task_completed),
+                "duration_seconds": result.metrics.duration_seconds,
+                "input_tokens": result.metrics.input_tokens,
+                "output_tokens": result.metrics.output_tokens,
+                "tool_calls": result.metrics.tool_calls,
+                "turns": result.metrics.turns,
+                "error": result.metrics.error,
+                "timestamp": result.timestamp,
+            }
+        )
 
     async def get_results(self, task_name: str | None = None, limit: int = 50) -> list[EvalResult]:
         """Retrieve stored eval results (REQ-16.5)."""
