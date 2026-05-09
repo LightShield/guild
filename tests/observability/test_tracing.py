@@ -85,6 +85,41 @@ class TestTraceRecording:
 
         assert tracer.events[0].duration_ms == 1234
 
+    def test_trace_captures_tool_call_details(self) -> None:
+        """Trace event preserves full tool call details in the details dict."""
+        tracer = Tracer()
+        tool_details = {
+            "tool_name": "file_write",
+            "arguments": {"path": "/tmp/x.py", "content": "hello"},
+            "result_success": True,
+            "result_output": "Wrote 5 chars",
+        }
+        tracer.trace("tool_call", agent_id="agent-7", details=tool_details)
+
+        event = tracer.events[0]
+        assert event.event_type == "tool_call"
+        assert event.details is not None
+        assert event.details["tool_name"] == "file_write"
+        assert event.details["arguments"]["path"] == "/tmp/x.py"
+        assert event.details["result_success"] is True
+
+    def test_trace_captures_duration(self) -> None:
+        """Trace event records duration_ms=0 for instantaneous events."""
+        tracer = Tracer()
+        tracer.trace("decision", duration_ms=0, details={"choice": "skip"})
+
+        event = tracer.events[0]
+        assert event.duration_ms == 0
+        assert event.details == {"choice": "skip"}
+
+    def test_trace_none_duration_when_not_provided(self) -> None:
+        """When duration_ms is not passed, it defaults to None."""
+        tracer = Tracer()
+        tracer.trace("llm_call", agent_id="a1")
+
+        event = tracer.events[0]
+        assert event.duration_ms is None
+
 
 @pytest.mark.unit
 @pytest.mark.req("REQ-11.3")

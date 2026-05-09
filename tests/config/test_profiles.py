@@ -205,3 +205,39 @@ class TestConfigValidation:
         errors = validate_config(config, guild_dir)
 
         assert any("invalid permission" in e for e in errors)
+
+    def test_validate_catches_missing_model(self, tmp_path: Path) -> None:
+        """Validation catches empty model field as an error."""
+        from guild.config.loader import load_config
+
+        guild_dir = tmp_path / ".guild"
+        guild_dir.mkdir()
+        # Write a config with empty model
+        config_toml = guild_dir / "config.toml"
+        config_toml.write_text('[provider]\nmodel = ""\nbase_url = "http://localhost:11434"\n')
+
+        config = load_config(guild_dir=guild_dir)
+        errors = validate_config(config, guild_dir)
+
+        assert any("model" in e.lower() for e in errors)
+
+    def test_validate_catches_invalid_permission(self, tmp_path: Path) -> None:
+        """Validation catches multiple agents with different invalid permissions."""
+        from guild.config.loader import load_config
+
+        guild_dir = tmp_path / ".guild"
+        guild_dir.mkdir()
+        agents_toml = guild_dir / "agents.toml"
+        agents_toml.write_text(
+            '[agent_a]\npermission = "root"\n\n'
+            '[agent_b]\npermission = "sudo"\n'
+        )
+
+        config = load_config(guild_dir=guild_dir)
+        errors = validate_config(config, guild_dir)
+
+        # Both invalid permissions should be caught
+        permission_errors = [e for e in errors if "invalid permission" in e]
+        assert len(permission_errors) == 2
+        assert any("agent_a" in e for e in permission_errors)
+        assert any("agent_b" in e for e in permission_errors)

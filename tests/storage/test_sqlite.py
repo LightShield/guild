@@ -467,6 +467,25 @@ class TestLearningsConfidence:
         learning = await storage.get_learning(lid)
         assert learning["confidence"] == pytest.approx(0.0)
 
+    async def test_confidence_caps_at_1_after_many_validates(self, storage: Storage) -> None:
+        """Repeated validate_learning calls never push confidence above 1.0."""
+        lid = await storage.add_learning(category="pattern", content="Solid insight")
+        # Start at 0.3, validate 10 times (would be 1.3 without cap)
+        for _ in range(10):
+            await storage.validate_learning(lid)
+        learning = await storage.get_learning(lid)
+        assert learning["confidence"] == pytest.approx(1.0)
+        assert learning["validation_count"] == 10
+
+    async def test_confidence_floors_at_0_after_many_invalidates(self, storage: Storage) -> None:
+        """Repeated invalidate_learning calls never push confidence below 0.0."""
+        lid = await storage.add_learning(category="anti_pattern", content="Bad habit")
+        # Start at 0.3, invalidate 10 times (would be -1.2 without floor)
+        for _ in range(10):
+            await storage.invalidate_learning(lid)
+        learning = await storage.get_learning(lid)
+        assert learning["confidence"] == pytest.approx(0.0)
+
 
 @pytest.mark.unit
 @pytest.mark.req("REQ-09.8")

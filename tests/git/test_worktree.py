@@ -82,6 +82,28 @@ class TestCreateWorktree:
 
 @pytest.mark.unit
 @pytest.mark.req("REQ-04.12")
+class TestWorktreeBranchNaming:
+    """Branch naming convention for worktrees."""
+
+    async def test_create_worktree_branch_naming(self, tmp_path: Path) -> None:
+        """Worktree branch follows the guild/<task_id> convention."""
+        repo = await _init_test_repo(tmp_path)
+        manager = WorktreeManager(repo)
+
+        # Test with various task ID formats
+        info = await manager.create("fix-auth-bug-123")
+
+        assert info.branch == "guild/fix-auth-bug-123"
+        assert info.task_id == "fix-auth-bug-123"
+        # Verify the actual git branch exists
+        exit_code, _ = await manager._run_git(
+            "rev-parse", "--verify", "guild/fix-auth-bug-123"
+        )
+        assert exit_code == 0
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-04.12")
 class TestRemoveWorktree:
     """Test worktree cleanup after task completion."""
 

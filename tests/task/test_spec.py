@@ -81,6 +81,42 @@ target = "src/auth/module.py"
 
 @pytest.mark.unit
 @pytest.mark.req("REQ-12.1")
+class TestTaskSpecFromTomlEdgeCases:
+    """Edge cases for TaskSpec.from_toml loading."""
+
+    async def test_task_spec_from_toml_with_criteria(self, tmp_path: Path) -> None:
+        """TOML with acceptance_criteria but no verification_steps parses correctly."""
+        toml_content = """\
+description = "Refactor auth module"
+acceptance_criteria = ["All tests green", "No regressions", "Code reviewed"]
+"""
+        toml_path = tmp_path / "criteria_only.toml"
+        toml_path.write_text(toml_content)
+
+        spec = TaskSpec.from_toml(toml_path)
+
+        assert spec.description == "Refactor auth module"
+        assert len(spec.acceptance_criteria) == 3
+        assert "No regressions" in spec.acceptance_criteria
+        assert spec.verification_steps == []
+
+    async def test_task_spec_missing_fields_use_defaults(self, tmp_path: Path) -> None:
+        """TOML missing description and criteria yields empty defaults."""
+        # Completely empty TOML (valid but no guild-specific keys)
+        toml_content = """\
+"""
+        toml_path = tmp_path / "empty.toml"
+        toml_path.write_text(toml_content)
+
+        spec = TaskSpec.from_toml(toml_path)
+
+        assert spec.description == ""
+        assert spec.acceptance_criteria == []
+        assert spec.verification_steps == []
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-12.1")
 class TestTaskSpecWithCriteriaAndSteps:
     """TaskSpec constructed directly with all fields."""
 
@@ -219,6 +255,21 @@ class TestStatusTransitions:
 
         # done -> anything should fail
         assert await transition_task(storage, "t3", "pending") is False
+
+    async def test_invalid_transition_from_done_to_in_progress(self, storage: Storage) -> None:
+        """A task in 'done' state cannot transition to 'in_progress'."""
+        await storage.create_task("t-done", "completed task")
+        # Move to done via valid path
+        assert await transition_task(storage, "t-done", "in_progress") is True
+        assert await transition_task(storage, "t-done", "done") is True
+
+        # Attempt invalid transition back
+        result = await transition_task(storage, "t-done", "in_progress")
+        assert result is False
+
+        # Status unchanged
+        task = await storage.get_task("t-done")
+        assert task["status"] == "done"
 
 
 # ------------------------------------------------------------------

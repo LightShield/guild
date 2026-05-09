@@ -81,6 +81,28 @@ class TestRateLimiter:
         await asyncio.sleep(0.15)
         assert limiter.available == 3
 
+    async def test_rate_limiter_window_expires_releases_slots(self) -> None:
+        """After the window passes, previously used slots become available again."""
+        limiter = RateLimiter(max_calls=3, window_seconds=0.1)
+
+        # Use all three slots
+        await limiter.acquire()
+        await limiter.acquire()
+        await limiter.acquire()
+        assert limiter.available == 0
+
+        # Wait for window to expire
+        await asyncio.sleep(0.15)
+
+        # All slots should be available again
+        assert limiter.available == 3
+
+        # Should be able to acquire without blocking
+        start = time.monotonic()
+        await limiter.acquire()
+        elapsed = time.monotonic() - start
+        assert elapsed < 0.05
+
     async def test_default_parameters(self) -> None:
         """Default RateLimiter allows 30 calls in 60 seconds."""
         limiter = RateLimiter()
@@ -129,6 +151,27 @@ class TestToolQueue:
         assert sorted(results) == [0, 1, 2]
         # With max_concurrent=1, tasks should not have overlapped
         assert len(execution_order) == 3
+
+    async def test_tool_queue_allows_within_limit(self) -> None:
+        """ToolQueue permits concurrent executions up to max_concurrent without blocking."""
+        queue = ToolQueue(max_concurrent=3)
+        results: list[str] = []
+
+        async def quick_task(name: str) -> str:
+            results.append(f"start-{name}")
+            await asyncio.sleep(0.01)
+            results.append(f"end-{name}")
+            return name
+
+        # Launch exactly max_concurrent tasks — all should start immediately
+        start = time.monotonic()
+        tasks = [asyncio.create_task(queue.execute(quick_task(f"t{i}"))) for i in range(3)]
+        await asyncio.gather(*tasks)
+        elapsed = time.monotonic() - start
+
+        # All 3 should have run concurrently (~0.01s, not ~0.03s)
+        assert elapsed < 0.05
+        assert len(results) == 6  # 3 starts + 3 ends
 
     async def test_tool_queue_returns_coroutine_result(self) -> None:
         """ToolQueue.execute() returns the result from the coroutine."""

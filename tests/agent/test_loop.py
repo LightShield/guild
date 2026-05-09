@@ -712,6 +712,24 @@ class TestTokenTracking:
 
         assert loop.total_output_tokens == 70  # 30 + 40
 
+    async def test_tokens_accumulate_across_multiple_turns(self) -> None:
+        """Token counters accumulate correctly across many tool-call turns."""
+        read_call = {"function": {"name": "file_read", "arguments": {"path": "a"}}}
+        provider = _make_provider(
+            LLMResponse(
+                content="", tool_calls=[read_call], input_tokens=100, output_tokens=50
+            ),
+            LLMResponse(
+                content="", tool_calls=[read_call], input_tokens=120, output_tokens=60
+            ),
+            LLMResponse(content="Done", tool_calls=None, input_tokens=130, output_tokens=70),
+        )
+        loop = AgentLoop(provider=provider, tool_executors=_make_tool_executors())
+        await loop.run(system_prompt="sys", user_input="read lots")
+
+        assert loop.total_input_tokens == 350  # 100 + 120 + 130
+        assert loop.total_output_tokens == 180  # 50 + 60 + 70
+
     async def test_tracks_tool_call_count(self) -> None:
         """AgentLoop counts total tool calls across all turns."""
         write_call = {
@@ -773,6 +791,46 @@ class TestTokenBudget:
         assert loop.total_input_tokens == 500
         assert loop.total_output_tokens == 500
         assert provider.generate.call_count == 1
+
+    async def test_budget_stops_mid_task_not_between_tasks(self) -> None:
+        """Budget check happens at loop top, stopping BEFORE the next LLM call."""
+        read_call = {"function": {"name": "file_read", "arguments": {"path": "a"}}}
+        write_call = {
+            "function": {"name": "file_write", "arguments": {"path": "b", "content": "x"}}
+        }
+        provider = _make_provider(
+            # Turn 1: uses 600 tokens total, within budget of 700
+            LLMResponse(
+                content="",
+                tool_calls=[read_call],
+                input_tokens=300,
+                output_tokens=300,
+            ),
+            # Turn 2: would use another 400 but budget already exceeded (600 > 700 check)
+            # Actually: after turn 1 total=600 < 700 so turn 2 runs
+            LLMResponse(
+                content="",
+                tool_calls=[write_call],
+                input_tokens=200,
+                output_tokens=200,
+            ),
+            # Turn 3: budget check at top: total=1000 > 700, loop stops
+            LLMResponse(
+                content="Should not reach", tool_calls=None, input_tokens=1, output_tokens=1
+            ),
+        )
+        loop = AgentLoop(
+            provider=provider,
+            tool_executors=_make_tool_executors(),
+            token_budget=700,
+        )
+        result = await loop.run(system_prompt="sys", user_input="multi-step task")
+
+        # Budget exceeded after turn 2 (total = 1000 > 700)
+        # Turn 3 should NOT execute
+        assert provider.generate.call_count == 2
+        # Result is the empty content from turn 2's tool-call response
+        assert result == ""
 
     async def test_zero_budget_means_unlimited(self) -> None:
         """A budget of 0 means no limit — loop runs normally."""

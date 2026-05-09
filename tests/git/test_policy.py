@@ -26,6 +26,26 @@ class TestProtectedBranches:
 
 
 @pytest.mark.unit
+@pytest.mark.req("REQ-04.13")
+class TestStagingProtection:
+    """Staging branch protection defaults."""
+
+    def test_staging_not_protected_by_default(self) -> None:
+        """The default staging branch is NOT in the protected list."""
+        policy = BranchPolicy()
+        # guild/staging is the default staging branch
+        assert not policy.is_protected("guild/staging")
+        # It should allow auto-merge
+        assert policy.can_auto_merge("guild/staging")
+
+    def test_staging_can_be_made_protected(self) -> None:
+        """Staging can be explicitly added to protected branches."""
+        policy = BranchPolicy(protected_branches=["main", "master", "guild/staging"])
+        assert policy.is_protected("guild/staging")
+        assert not policy.can_auto_merge("guild/staging")
+
+
+@pytest.mark.unit
 @pytest.mark.req("REQ-04.15")
 class TestPolicyConfigurable:
     """Test that merge policy is configurable per project."""

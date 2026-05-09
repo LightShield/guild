@@ -30,6 +30,19 @@ class TestMessageBus:
         result = await bus.receive("agent-x", timeout=0.05)
         assert result is None
 
+    async def test_receive_timeout_zero_returns_immediately(self) -> None:
+        """receive() with timeout=0 returns None immediately if no message."""
+        import time
+
+        bus = MessageBus()
+        start = time.monotonic()
+        result = await bus.receive("agent-nobody", timeout=0.0)
+        elapsed = time.monotonic() - start
+
+        assert result is None
+        # Should return near-instantly (asyncio.wait_for with 0 timeout)
+        assert elapsed < 0.1
+
     async def test_has_pending_true_when_messages_queued(self) -> None:
         """has_pending returns True when messages are waiting."""
         bus = MessageBus()

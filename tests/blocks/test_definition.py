@@ -37,6 +37,48 @@ def test_builtin_blocks_registered() -> None:
 
 
 @pytest.mark.unit
+@pytest.mark.req("REQ-04.20")
+def test_block_has_all_required_fields() -> None:
+    """A BlockDef has name, role, and all structural fields accessible."""
+    block = BlockDef(
+        name="coder",
+        role="developer",
+        version="2.0.0",
+        system_prompt="You write code.",
+        model="llama3",
+        tools=["file_read", "file_write", "shell"],
+        inputs=[PortDef(name="plan", type_tag="plan")],
+        outputs=[PortDef(name="code", type_tag="code-changes")],
+        permission="scoped",
+        max_retries=3,
+    )
+    assert block.name == "coder"
+    assert block.role == "developer"
+    assert block.version == "2.0.0"
+    assert block.system_prompt == "You write code."
+    assert block.model == "llama3"
+    assert block.tools == ["file_read", "file_write", "shell"]
+    assert block.permission == "scoped"
+    assert block.max_retries == 3
+    assert len(block.inputs) == 1
+    assert len(block.outputs) == 1
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-04.20")
+def test_block_default_permission() -> None:
+    """A BlockDef without explicit permission defaults to 'ask'."""
+    block = BlockDef(name="minimal", role="worker")
+    assert block.permission == "ask"
+    assert block.model is None
+    assert block.tools == []
+    assert block.inputs == []
+    assert block.outputs == []
+    assert block.max_retries == 1
+    assert block.version == "1.0.0"
+
+
+@pytest.mark.unit
 @pytest.mark.req("REQ-04.22")
 def test_port_compatibility_same_type() -> None:
     """Ports with the same type tag are compatible."""
@@ -61,3 +103,27 @@ def test_port_compatibility_mismatch_rejects() -> None:
     assert check_port_compatibility("plan", "code-changes") is False
     assert check_port_compatibility("text", "review") is False
     assert check_port_compatibility("files", "test-results") is False
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-04.22")
+def test_incompatible_ports_detected() -> None:
+    """Incompatible port types are explicitly detected as False."""
+    # All combinations of non-matching, non-any types
+    assert check_port_compatibility("plan", "text") is False
+    assert check_port_compatibility("code-changes", "review") is False
+    assert check_port_compatibility("test-results", "plan") is False
+    assert check_port_compatibility("files", "code-changes") is False
+    # Symmetric: order should not matter for incompatibility
+    assert check_port_compatibility("review", "plan") is False
+    assert check_port_compatibility("plan", "review") is False
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-04.22")
+def test_any_connects_to_anything() -> None:
+    """'any' type is compatible with all known port types in both directions."""
+    port_types = ["plan", "code-changes", "review", "test-results", "text", "files", "any"]
+    for pt in port_types:
+        assert check_port_compatibility("any", pt) is True
+        assert check_port_compatibility(pt, "any") is True

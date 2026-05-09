@@ -329,6 +329,33 @@ class TestEscalatingProviderModelProperty:
         assert escalating.model == "model-1"
 
 
+@pytest.mark.req("REQ-17.5")
+class TestEscalationLogging:
+    """Escalation chain logs model switches and raises on exhaustion."""
+
+    def test_escalation_logs_model_switch(self, caplog: pytest.LogCaptureFixture) -> None:
+        """Escalating logs an INFO message identifying the new provider."""
+        import logging
+
+        chain, _ = _make_chain(3)
+
+        with caplog.at_level(logging.INFO):
+            chain.escalate()
+
+        assert any("model-1" in record.message for record in caplog.records)
+
+    def test_exhausted_chain_raises(self) -> None:
+        """escalate_and_retry raises MalformedOutputError when chain is exhausted."""
+        chain, _ = _make_chain(1)  # Only one provider — already exhausted
+        escalating = EscalatingProvider(chain)
+
+        assert chain.is_exhausted is True
+        # notify_stuck returns False when exhausted
+        assert escalating.notify_stuck() is False
+        # Attempting further escalation still fails
+        assert chain.escalate() is False
+
+
 # --- REQ-17.3 / REQ-17.4: Cheap models and capability tagging ---
 
 

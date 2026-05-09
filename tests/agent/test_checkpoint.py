@@ -214,3 +214,55 @@ class TestRecoverFromCheckpoint:
             assert result is None
         finally:
             await storage.close()
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-07.2")
+class TestCheckpointTokenPreservation:
+    """Checkpoint preserves token counts across save/load cycles."""
+
+    async def test_checkpoint_preserves_token_counts(self, tmp_path: Path) -> None:
+        """Token counts survive a checkpoint round-trip (save + load)."""
+        storage = Storage(tmp_path / "test.db")
+        await storage.connect()
+        try:
+            cp = Checkpoint(
+                agent_id="agent-tokens",
+                task_id="task-tok",
+                messages=[{"role": "user", "content": "hi"}],
+                turn_number=10,
+                total_input_tokens=99999,
+                total_output_tokens=55555,
+                total_tool_calls=42,
+            )
+            await save_checkpoint(storage, cp)
+            loaded = await load_checkpoint(storage, "agent-tokens")
+
+            assert loaded is not None
+            assert loaded.total_input_tokens == 99999
+            assert loaded.total_output_tokens == 55555
+            assert loaded.total_tool_calls == 42
+        finally:
+            await storage.close()
+
+    async def test_load_nonexistent_agent_returns_none(self, tmp_path: Path) -> None:
+        """Loading a checkpoint for an agent that never had one returns None."""
+        storage = Storage(tmp_path / "test.db")
+        await storage.connect()
+        try:
+            # Save for one agent, load for a different one
+            cp = Checkpoint(
+                agent_id="agent-exists",
+                task_id="t",
+                messages=[],
+                turn_number=1,
+                total_input_tokens=10,
+                total_output_tokens=5,
+                total_tool_calls=0,
+            )
+            await save_checkpoint(storage, cp)
+
+            result = await load_checkpoint(storage, "agent-does-not-exist")
+            assert result is None
+        finally:
+            await storage.close()

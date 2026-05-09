@@ -138,6 +138,31 @@ class TestExtractLearnings:
         assert result == []
         mock_provider.generate.assert_not_called()
 
+    async def test_extract_learnings_skips_when_no_agent(
+        self, storage: Storage, mock_provider: AsyncMock
+    ) -> None:
+        """extract_learnings returns [] and never calls LLM when agent is missing."""
+        # Task exists with status but assigned_agent is empty string
+        await storage.create_task("task-empty-agent", "Has empty agent")
+        await storage.update_task("task-empty-agent", status="completed", assigned_agent="")
+        result = await extract_learnings("task-empty-agent", storage, mock_provider)
+        assert result == []
+        mock_provider.generate.assert_not_called()
+
+    async def test_extract_learnings_handles_empty_response(
+        self, storage: Storage, mock_provider: AsyncMock
+    ) -> None:
+        """extract_learnings returns [] when LLM gives empty/whitespace response."""
+        await _setup_task_with_messages(storage)
+        # LLM returns only whitespace
+        mock_provider.generate.return_value = LLMResponse(content="   \n\n  ", model="test")
+
+        result = await extract_learnings("task-1", storage, mock_provider)
+
+        assert result == []
+        # Verify it did call the provider (agent exists)
+        mock_provider.generate.assert_called_once()
+
 
 @pytest.mark.unit
 @pytest.mark.req("REQ-09.4")
