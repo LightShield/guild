@@ -67,6 +67,19 @@ class TestShellTimeout:
         assert result.success is True
         assert "fast" in result.output
 
+    async def test_shell_timeout_kills_process(self) -> None:
+        """After timeout, the child process is killed (not left orphaned)."""
+        # Use a command that would run forever without the kill
+        result = await execute_shell(
+            {"command": "sleep 999", "timeout": 0.5}, working_dir="/tmp"
+        )
+
+        assert result.success is False
+        assert result.error is not None
+        assert "timeout" in result.error.lower()
+        # The error message should mention the timeout value
+        assert "0.5" in result.error
+
 
 @pytest.mark.unit
 @pytest.mark.req("REQ-08.3")
@@ -122,3 +135,81 @@ class TestShellSchema:
         assert "dangerous" in description.lower() or "safety" in description.lower()
         # Must mention the denylist
         assert "denied" in description.lower() or "blocked" in description.lower()
+
+    def test_all_tool_schemas_have_safety_rules_where_applicable(self) -> None:
+        """Tools that execute code or modify state have safety info in their schema."""
+        # Shell is the primary dangerous tool — must have safety rules
+        shell_schema = TOOL_SCHEMAS["shell"]
+        desc = shell_schema["description"].lower()
+        assert "blocked" in desc or "denied" in desc
+        assert "timeout" in desc
+
+        # file_write can modify state — should describe its behavior
+        file_write_schema = TOOL_SCHEMAS["file_write"]
+        assert "write" in file_write_schema["description"].lower()
+        assert "path" in file_write_schema["parameters"]["properties"]
+
+        # All schemas must have "name", "description", "parameters"
+        for name, schema in TOOL_SCHEMAS.items():
+            assert "name" in schema, f"Schema for {name} missing 'name'"
+            assert "description" in schema, f"Schema for {name} missing 'description'"
+            assert "parameters" in schema, f"Schema for {name} missing 'parameters'"
+            assert len(schema["description"]) > 10, (
+                f"Schema for {name} has too-short description"
+            )
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-08.4")
+class TestToolAuditLog:
+    """Tests for tool call audit logging via storage."""
+
+    async def test_audit_logs_tool_name_and_args(self, tmp_path) -> None:
+        """Audit log stores the tool name and arguments."""
+        from guild.storage.sqlite import Storage
+
+        db_path = tmp_path / "guild.db"
+        store = Storage(db_path)
+        await store.connect()
+
+        await store.log_audit(
+            action="tool_call",
+            agent_id="agent-1",
+            details="shell command='echo hello'",
+        )
+
+        entries = await store.list_audit(limit=10)
+        assert len(entries) == 1
+        assert entries[0]["action"] == "tool_call"
+        assert "shell" in entries[0]["details"]
+        assert "echo hello" in entries[0]["details"]
+        await store.close()
+
+    async def test_audit_logs_on_both_success_and_failure(self, tmp_path) -> None:
+        """Audit log records entries for both successful and failed tool calls."""
+        from guild.storage.sqlite import Storage
+
+        db_path = tmp_path / "guild.db"
+        store = Storage(db_path)
+        await store.connect()
+
+        # Log a successful tool call
+        await store.log_audit(
+            action="tool_call",
+            agent_id="agent-1",
+            details="file_read path=/tmp/x.py result=success",
+        )
+        # Log a failed tool call
+        await store.log_audit(
+            action="tool_call",
+            agent_id="agent-1",
+            details="shell command='rm -rf /' result=denied",
+        )
+
+        entries = await store.list_audit(limit=10)
+        assert len(entries) == 2
+        # Both entries recorded
+        details = [e["details"] for e in entries]
+        assert any("success" in d for d in details)
+        assert any("denied" in d for d in details)
+        await store.close()

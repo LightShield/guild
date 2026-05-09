@@ -28,6 +28,23 @@ class TestNothingTier:
         assert checker.check("file_write", "agent-2", {"path": "a.txt"}) is False
         assert checker.check("any_tool", "agent-3", {}) is False
 
+    def test_nothing_tier_blocks_even_read_only_tools(self) -> None:
+        """Nothing tier blocks read-only tools like file_read and search."""
+        checker = PermissionChecker(tier=PermissionTier.NOTHING)
+        assert checker.check("file_read", "agent-1", {"path": "/tmp/safe.txt"}) is False
+        assert checker.check("search", "agent-1", {"query": "hello"}) is False
+        assert checker.check("glob", "agent-1", {"pattern": "*.py"}) is False
+
+    def test_nothing_tier_returns_false_for_any_args(self) -> None:
+        """Nothing tier blocks regardless of args — empty, missing, or complex."""
+        checker = PermissionChecker(tier=PermissionTier.NOTHING)
+        # Empty args
+        assert checker.check("file_read", "agent-1", {}) is False
+        # Complex nested args
+        assert checker.check("shell", "agent-1", {"command": "ls", "timeout": 5}) is False
+        # None-like values
+        assert checker.check("shell", "agent-1", {"command": ""}) is False
+
 
 # ---------------------------------------------------------------------------
 # REQ-03.2: Tier 1 "Ask" — agent requests, human approves per-tool
@@ -171,6 +188,14 @@ class TestAutopilotTier:
             checker.check("file_write", "agent-1", {"path": "/etc/shadow", "content": "x"}) is True
         )
 
+    def test_autopilot_allows_shell_with_any_command(self) -> None:
+        """Autopilot allows shell execution with any non-destructive command."""
+        checker = PermissionChecker(tier=PermissionTier.AUTOPILOT)
+        # Various commands that are not in the hardcoded-never list
+        assert checker.check("shell", "agent-1", {"command": "curl http://example.com"}) is True
+        assert checker.check("shell", "agent-1", {"command": "python3 -c 'exit(0)'"}) is True
+        assert checker.check("shell", "agent-1", {"command": "cat /etc/hostname"}) is True
+
 
 # ---------------------------------------------------------------------------
 # REQ-03.5: Permission level switchable at runtime
@@ -211,6 +236,21 @@ class TestSetTier:
         # Should re-prompt since approvals were cleared
         checker.check("file_read", "agent-1", {"path": "/b"})
         assert call_count == 2
+
+    def test_switch_from_nothing_to_autopilot_allows_calls(self) -> None:
+        """Switching from NOTHING to AUTOPILOT immediately allows all calls."""
+        checker = PermissionChecker(tier=PermissionTier.NOTHING)
+        # Confirm blocked first
+        assert checker.check("shell", "agent-1", {"command": "echo hi"}) is False
+        assert checker.check("file_write", "agent-1", {"path": "/x", "content": "y"}) is False
+
+        # Switch to autopilot
+        checker.set_tier(PermissionTier.AUTOPILOT)
+
+        # Now everything should be allowed
+        assert checker.check("shell", "agent-1", {"command": "echo hi"}) is True
+        assert checker.check("file_write", "agent-1", {"path": "/x", "content": "y"}) is True
+        assert checker.check("file_read", "agent-1", {"path": "/etc/passwd"}) is True
 
 
 # ---------------------------------------------------------------------------

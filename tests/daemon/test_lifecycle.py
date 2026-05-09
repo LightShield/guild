@@ -277,6 +277,48 @@ class TestStaleLockCleanup:
         assert not (run_dir / "stale-task.sock").exists()
         await storage.close()
 
+    async def test_cleanup_removes_dead_pid_file(self, tmp_path: Path) -> None:
+        """cleanup_stale_locks removes PID file for a dead process even without .sock."""
+        storage = await _make_storage(tmp_path)
+        run_dir = tmp_path / "run"
+        run_dir.mkdir()
+        # Only PID file, no socket file
+        _write_pid_file(run_dir, "dead-only-pid", 66666)
+
+        mgr = LifecycleManager(run_dir=run_dir, storage=storage)
+
+        with patch("guild.daemon.lifecycle._process_alive", return_value=False):
+            count = mgr.cleanup_stale_locks()
+
+        assert count == 1
+        assert not (run_dir / "dead-only-pid.pid").exists()
+        await storage.close()
+
+    async def test_cleanup_keeps_alive_pid_file(self, tmp_path: Path) -> None:
+        """cleanup_stale_locks does NOT remove PID files for alive processes."""
+        import os as _os
+
+        storage = await _make_storage(tmp_path)
+        run_dir = tmp_path / "run"
+        run_dir.mkdir()
+        # Use current PID — always alive
+        _write_pid_file(run_dir, "alive-task", _os.getpid())
+        _write_sock_file(run_dir, "alive-task")
+
+        mgr = LifecycleManager(run_dir=run_dir, storage=storage)
+
+        with patch(
+            "guild.daemon.lifecycle._process_alive",
+            side_effect=lambda pid: pid == _os.getpid(),
+        ):
+            count = mgr.cleanup_stale_locks()
+
+        # No stale files were cleaned
+        assert count == 0
+        assert (run_dir / "alive-task.pid").exists()
+        assert (run_dir / "alive-task.sock").exists()
+        await storage.close()
+
 
 # ------------------------------------------------------------------
 # REQ-25.8: guild kill --all

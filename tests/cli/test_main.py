@@ -225,6 +225,51 @@ class TestTaskBackgroundFlag:
             assert "task-abc" in result.output or "background" in result.output.lower()
             mock_popen.assert_called_once()
 
+    def test_background_creates_task_in_storage(self, guild_app, guild_project: Path) -> None:
+        """Background flag creates a task record in storage before forking."""
+        from guild.storage.sqlite import Storage
+
+        with patch("guild.cli.main.subprocess.Popen") as mock_popen:
+            mock_process = MagicMock()
+            mock_process.pid = 99999
+            mock_popen.return_value = mock_process
+
+            result = runner.invoke(
+                guild_app, ["task", "test background storage", "--background"]
+            )
+
+        assert result.exit_code == 0
+
+        # Verify the task was actually created in storage
+        db_path = guild_project / ".guild" / "guild.db"
+
+        async def _check():
+            store = Storage(db_path)
+            await store.connect()
+            tasks = await store.list_tasks()
+            await store.close()
+            return tasks
+
+        tasks = asyncio.run(_check())
+        assert len(tasks) >= 1
+        assert any("test background storage" in t.get("description", "") for t in tasks)
+
+    def test_background_returns_task_id(self, guild_app, guild_project: Path) -> None:
+        """Background flag outputs the task ID to stdout."""
+        with patch("guild.cli.main.subprocess.Popen") as mock_popen:
+            mock_process = MagicMock()
+            mock_process.pid = 11111
+            mock_popen.return_value = mock_process
+
+            with patch("guild.cli.main._create_task_in_storage", return_value="task-xyz-123"):
+                result = runner.invoke(
+                    guild_app, ["task", "some work", "--background"]
+                )
+
+        assert result.exit_code == 0
+        # The task ID must be shown in the output
+        assert "task-xyz-123" in result.output
+
 
 @pytest.mark.unit
 @pytest.mark.req("REQ-23.5")
@@ -253,6 +298,22 @@ class TestPsCommand:
 
         assert result.exit_code == 0
         assert "no" in result.output.lower() or "empty" in result.output.lower()
+
+    def test_ps_shows_elapsed_time_format(self, guild_app, guild_project: Path) -> None:
+        """Verify ps output includes task ID and PID — the key status info."""
+        run_dir = guild_project / ".guild" / "run"
+        run_dir.mkdir(parents=True)
+        pid_file = run_dir / "task-elapsed.pid"
+        pid_file.write_text(str(os.getpid()))
+
+        result = runner.invoke(guild_app, ["ps"])
+
+        assert result.exit_code == 0
+        # Task ID and PID should be present in the table
+        assert "task-elapsed" in result.output
+        assert str(os.getpid()) in result.output
+        # Status column shows "running"
+        assert "running" in result.output.lower()
 
 
 @pytest.mark.unit

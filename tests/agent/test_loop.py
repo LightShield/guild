@@ -878,6 +878,126 @@ class TestBudgetAlerts:
         assert result2 is None
 
 
+@pytest.mark.unit
+@pytest.mark.req("REQ-06.1")
+class TestAgentDoesNotPause:
+    """REQ-06.1 — agents do NOT unnecessarily pause for confirmation."""
+
+    async def test_agent_continues_after_successful_tool_call(self) -> None:
+        """After a successful tool call, the agent continues without pausing."""
+        provider = _make_provider(
+            LLMResponse(
+                content="",
+                tool_calls=[
+                    {"function": {"name": "file_read", "arguments": {"path": "a.txt"}}}
+                ],
+            ),
+            LLMResponse(
+                content="",
+                tool_calls=[
+                    {
+                        "function": {
+                            "name": "file_write",
+                            "arguments": {"path": "b.txt", "content": "data"},
+                        }
+                    }
+                ],
+            ),
+            LLMResponse(content="All done.", tool_calls=None),
+        )
+        loop = AgentLoop(provider=provider, tool_executors=_make_tool_executors())
+        result = await loop.run(system_prompt="sys", user_input="read then write")
+
+        # Loop ran through all three turns without any external prompting
+        assert result == "All done."
+        assert provider.generate.call_count == 3
+
+    async def test_agent_does_not_prompt_in_scoped_mode(self) -> None:
+        """In scoped mode, tools within scope proceed without prompting."""
+        from guild.permissions.checker import PermissionChecker, PermissionTier
+
+        checker = PermissionChecker(
+            tier=PermissionTier.SCOPED,
+            allowed_tools=["file_read", "file_write"],
+            allowed_paths=["/project"],
+        )
+        # Confirm that permission checks pass without any prompt_fn
+        assert checker.check("file_read", "agent-1", {"path": "/project/a.txt"}) is True
+        assert checker.check("file_write", "agent-1", {"path": "/project/b.txt", "content": "x"}) is True
+        # No prompt function was set — meaning no pausing for confirmation
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-06.7")
+class TestTimeoutBehavior:
+    """REQ-06.7 — timeout affects agent loop behavior."""
+
+    async def test_timeout_zero_means_no_limit(self) -> None:
+        """Timeout of 0 means unlimited — loop uses default max_turns."""
+        from guild.cli.main import _compute_max_turns
+
+        # timeout=0 should return default max turns
+        result = _compute_max_turns(0)
+        assert result == 50  # _DEFAULT_MAX_TURNS
+
+    async def test_timeout_produces_partial_result(self) -> None:
+        """When max_turns reached due to timeout, partial progress is returned."""
+        # A very short timeout produces minimal turns
+        from guild.cli.main import _compute_max_turns
+
+        # timeout=30s => 30/10 = 3 turns (but min 5)
+        result = _compute_max_turns(30)
+        assert result == 5  # Minimum turns cap
+
+        # Verify the agent loop stops at max_turns and returns empty string
+        tool_response = LLMResponse(
+            content="",
+            tool_calls=[{"function": {"name": "file_read", "arguments": {"path": "a.txt"}}}],
+        )
+        provider = _make_provider(tool_response, tool_response, tool_response, tool_response, tool_response)
+        loop = AgentLoop(provider=provider, tool_executors=_make_tool_executors(), max_turns=3)
+        result = await loop.run(system_prompt="sys", user_input="keep reading")
+        # Loop stopped at max_turns with empty content — partial result
+        assert result == ""
+        assert provider.generate.call_count <= 3
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-25.6")
+class TestStatePersistencePerTurn:
+    """REQ-25.6 — messages accumulate in loop state per turn."""
+
+    async def test_messages_accumulate_in_storage_per_turn(self) -> None:
+        """Each turn adds messages to the loop's message list (available for persistence)."""
+        provider = _make_provider(
+            LLMResponse(
+                content="",
+                tool_calls=[
+                    {"function": {"name": "file_read", "arguments": {"path": "a.txt"}}}
+                ],
+            ),
+            LLMResponse(
+                content="",
+                tool_calls=[
+                    {"function": {"name": "file_read", "arguments": {"path": "b.txt"}}}
+                ],
+            ),
+            LLMResponse(content="Done reading both.", tool_calls=None),
+        )
+        loop = AgentLoop(provider=provider, tool_executors=_make_tool_executors())
+        await loop.run(system_prompt="sys", user_input="read both files")
+
+        # Messages should contain: system, user, assistant+tool (turn 1),
+        # assistant+tool (turn 2), assistant (final)
+        assert len(loop.messages) >= 7
+        # Each turn's tool result is persisted
+        tool_msgs = [m for m in loop.messages if m["role"] == "tool"]
+        assert len(tool_msgs) == 2
+        # All assistant messages are persisted
+        assistant_msgs = [m for m in loop.messages if m["role"] == "assistant"]
+        assert len(assistant_msgs) == 3
+
+
 @pytest.mark.integration
 @pytest.mark.req("REQ-06.8")
 class TestRealOllama:

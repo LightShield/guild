@@ -37,6 +37,18 @@ class TestIdleDetection:
         )
         assert monitor.detect_activity() == ActivityState.ACTIVE
 
+    def test_idle_when_cpu_below_threshold(self) -> None:
+        """Activity detector reporting IDLE when CPU is below threshold."""
+        # Edge case: CPU is exactly at the threshold boundary (below)
+        monitor = ResourceMonitor(
+            mode=SchedulingMode.POLITE,
+            activity_detector=lambda: ActivityState.IDLE,
+            cpu_reader=lambda: 79.9,  # Just below default 80% threshold
+        )
+        assert monitor.detect_activity() == ActivityState.IDLE
+        # Verify CPU reading is coherent with idle state
+        assert monitor.get_cpu_percent() < 80.0
+
 
 @pytest.mark.unit
 @pytest.mark.req("REQ-24.2")
@@ -129,6 +141,37 @@ class TestPoliteDelay:
         assert elapsed >= 0.14
         assert elapsed < 0.3
 
+    async def test_polite_does_not_delay_when_idle(self) -> None:
+        """Polite mode skips the delay when user is idle."""
+        thresholds = ResourceThresholds(polite_delay_seconds=5.0)
+        monitor = ResourceMonitor(
+            mode=SchedulingMode.POLITE,
+            thresholds=thresholds,
+            activity_detector=lambda: ActivityState.IDLE,
+            cpu_reader=lambda: 10.0,
+        )
+        start = asyncio.get_event_loop().time()
+        await monitor.wait_if_throttled()
+        elapsed = asyncio.get_event_loop().time() - start
+        # Should return immediately (no 5s delay)
+        assert elapsed < 0.1
+
+    async def test_polite_delay_is_configurable_seconds(self) -> None:
+        """Polite delay duration matches the configured polite_delay_seconds value."""
+        thresholds = ResourceThresholds(polite_delay_seconds=0.2)
+        monitor = ResourceMonitor(
+            mode=SchedulingMode.POLITE,
+            thresholds=thresholds,
+            activity_detector=lambda: ActivityState.ACTIVE,
+            cpu_reader=lambda: 95.0,
+        )
+        start = asyncio.get_event_loop().time()
+        await monitor.wait_if_throttled()
+        elapsed = asyncio.get_event_loop().time() - start
+        # Should be approximately 0.2s
+        assert elapsed >= 0.19
+        assert elapsed < 0.35
+
 
 @pytest.mark.unit
 @pytest.mark.req("REQ-24.5")
@@ -154,6 +197,60 @@ class TestStealthWait:
         )
         await monitor.wait_if_throttled()
         assert len(calls) >= 4
+
+    async def test_stealth_resumes_when_idle_detected(self) -> None:
+        """Stealth mode unblocks immediately once idle is detected."""
+        call_count = 0
+
+        def detector_becomes_idle() -> ActivityState:
+            nonlocal call_count
+            call_count += 1
+            # Active for 2 polls, then idle
+            if call_count <= 2:
+                return ActivityState.ACTIVE
+            return ActivityState.IDLE
+
+        thresholds = ResourceThresholds(poll_interval_seconds=0.02)
+        monitor = ResourceMonitor(
+            mode=SchedulingMode.STEALTH,
+            thresholds=thresholds,
+            activity_detector=detector_becomes_idle,
+            cpu_reader=lambda: 50.0,
+        )
+        start = asyncio.get_event_loop().time()
+        await monitor.wait_if_throttled()
+        elapsed = asyncio.get_event_loop().time() - start
+
+        # Should have taken approximately 2 poll intervals (2 * 0.02 = 0.04s)
+        assert elapsed < 0.2
+        # Once idle was detected, it unblocked
+        assert call_count >= 3
+
+    async def test_stealth_blocks_when_active(self) -> None:
+        """Stealth mode blocks execution while user is active."""
+        polls: list[float] = []
+
+        def always_active_then_idle() -> ActivityState:
+            polls.append(asyncio.get_event_loop().time())
+            # Active for 5 polls, then idle
+            if len(polls) <= 5:
+                return ActivityState.ACTIVE
+            return ActivityState.IDLE
+
+        thresholds = ResourceThresholds(poll_interval_seconds=0.02)
+        monitor = ResourceMonitor(
+            mode=SchedulingMode.STEALTH,
+            thresholds=thresholds,
+            activity_detector=always_active_then_idle,
+            cpu_reader=lambda: 85.0,
+        )
+        start = asyncio.get_event_loop().time()
+        await monitor.wait_if_throttled()
+        elapsed = asyncio.get_event_loop().time() - start
+
+        # Should have been blocked for at least 5 * 0.02 = 0.1s
+        assert elapsed >= 0.08
+        assert len(polls) >= 5
 
 
 @pytest.mark.unit

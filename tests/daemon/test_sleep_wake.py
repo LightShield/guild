@@ -36,6 +36,23 @@ class TestDetectsSleep:
             assert detector.check_for_sleep() is False
             assert detector.sleep_detected is False
 
+    async def test_no_false_positive_on_short_delay(self) -> None:
+        """A delay just below threshold does NOT trigger sleep detection."""
+        # Use a 30s threshold; delay of 29s should not trigger
+        detector = SleepWakeDetector(config=SleepWakeConfig(sleep_threshold_seconds=30.0))
+        with patch("guild.daemon.sleep_wake.time.monotonic", return_value=1000.0):
+            detector.mark_turn_start()
+
+        # 29 seconds later — just below threshold
+        with patch("guild.daemon.sleep_wake.time.monotonic", return_value=1029.0):
+            assert detector.check_for_sleep() is False
+            assert detector.sleep_detected is False
+
+        # But 31 seconds DOES trigger
+        with patch("guild.daemon.sleep_wake.time.monotonic", return_value=1031.0):
+            assert detector.check_for_sleep() is True
+            assert detector.sleep_detected is True
+
 
 @pytest.mark.unit
 @pytest.mark.req("REQ-26.2")

@@ -153,6 +153,25 @@ class TestSignalHandling:
         await supervisor.run(check_shutdown())
         assert shutdown_seen is True
 
+    async def test_sigterm_sets_shutdown_flag(self, tmp_path: Path) -> None:
+        """SIGTERM sets the flag even without on_checkpoint callback."""
+        run_dir = tmp_path / "run"
+        # No on_checkpoint callback
+        supervisor = DaemonSupervisor(run_dir=run_dir, task_id="task-sigterm")
+
+        # Initially not set
+        assert supervisor.shutdown_requested is False
+
+        async def send_signal_and_check() -> str:
+            await asyncio.sleep(0)
+            os.kill(os.getpid(), signal.SIGTERM)
+            await asyncio.sleep(0.01)
+            return "done"
+
+        await supervisor.run(send_signal_and_check())
+        # Flag persists after run() completes
+        assert supervisor.shutdown_requested is True
+
 
 @pytest.mark.unit
 @pytest.mark.req("REQ-25.6")
