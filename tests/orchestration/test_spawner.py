@@ -118,22 +118,22 @@ class TestSpawnedAgentExecution:
 
         assert spawner.get_agent("nonexistent") is None
 
-    async def test_handle_tool_call_success(self) -> None:
-        """handle_tool_call() executes spawn and returns ToolResult."""
+    async def test_execute_spawn_success(self) -> None:
+        """execute_spawn() executes spawn and returns ToolResult."""
         provider = _make_provider("Sub-agent done.")
         bus = MessageBus()
         spawner = AgentSpawner(provider=provider, storage=None, bus=bus)
 
-        result = await spawner.handle_tool_call({"task": "Sub-task"}, None)
+        result = await spawner.execute_spawn({"task": "Sub-task"}, None)
         assert result.success is True
         assert result.output == "Sub-agent done."
 
-    async def test_handle_tool_call_missing_task(self) -> None:
-        """handle_tool_call() returns error if task is missing."""
+    async def test_execute_spawn_missing_task(self) -> None:
+        """execute_spawn() returns error if task is missing."""
         provider = _make_provider()
         bus = MessageBus()
         spawner = AgentSpawner(provider=provider, storage=None, bus=bus)
 
-        result = await spawner.handle_tool_call({}, None)
+        result = await spawner.execute_spawn({}, None)
         assert result.success is False
         assert "task" in (result.error or "").lower()

@@ -744,17 +744,12 @@ async def _run_task(
     from guild.storage.sqlite import Storage
 
     db_path = guild_dir / "guild.db"
-    store = Storage(db_path)
-    await store.connect()
-
-    try:
+    async with Storage(db_path) as store:
         loop = _create_task_agent_loop(config, working_dir, timeout)
         system_prompt = await _build_system_prompt_with_learnings(store)
         result = await loop.run(system_prompt, description)
         await _persist_task_result(store, loop, description, result, config)
         await _extract_post_task_learnings(store, loop, config)
-    finally:
-        await store.close()
 
     return result
 

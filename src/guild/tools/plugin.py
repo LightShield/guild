@@ -138,7 +138,7 @@ class PluginLoader:
             content = path.read_text(encoding="utf-8")
             data = tomllib.loads(content)
         except Exception:
-            logger.warning("Failed to parse plugin file: %s", path)
+            logger.debug("Failed to load %s", path, exc_info=True)
             return None
 
         tool_section = data.get("tool")

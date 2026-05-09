@@ -127,6 +127,13 @@ class Storage:
         self._db_path = db_path
         self._db: aiosqlite.Connection | None = None
 
+    async def __aenter__(self) -> Storage:
+        await self.connect()
+        return self
+
+    async def __aexit__(self, *args: object) -> None:
+        await self.close()
+
     async def connect(self) -> None:
         """Open the database, enable WAL mode, and create schema."""
         self._db_path.parent.mkdir(parents=True, exist_ok=True)

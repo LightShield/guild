@@ -154,7 +154,7 @@ class BlockRegistry:
             try:
                 count += self._load_toml_file(path)
             except Exception:
-                logger.warning("Failed to load block file: %s", path)
+                logger.debug("Failed to load %s", path, exc_info=True)
         return count
 
     def _load_toml_file(self, path: Path) -> int:
@@ -250,7 +250,14 @@ class BlockRegistry:
         elif team.entry_block not in team.blocks:
             errors.append(f"entry_block '{team.entry_block}' not in team blocks")
 
-        # Check all referenced blocks exist
+        self._validate_block_references(team, errors)
+        self._validate_connections(team, errors)
+        self._validate_loops(team, errors)
+
+        return errors
+
+    def _validate_block_references(self, team: TeamDef, errors: list[str]) -> None:
+        """Verify all referenced block types exist in the registry."""
         for instance_name, block_type in team.blocks.items():
             if self.get_block(block_type) is None:
                 errors.append(
@@ -258,15 +265,15 @@ class BlockRegistry:
                     f"'{instance_name}') not found in registry"
                 )
 
-        # Validate connections
+    def _validate_connections(self, team: TeamDef, errors: list[str]) -> None:
+        """Verify all connections reference valid blocks and ports."""
         for conn in team.connections:
             errors.extend(self._validate_connection(conn, team))
 
-        # Validate loops
+    def _validate_loops(self, team: TeamDef, errors: list[str]) -> None:
+        """Verify all loop definitions reference valid blocks."""
         for loop in team.loops:
             errors.extend(self._validate_loop(loop, team))
-
-        return errors
 
     def _validate_connection(self, conn: Connection, team: TeamDef) -> list[str]:
         """Validate a single connection within a team."""

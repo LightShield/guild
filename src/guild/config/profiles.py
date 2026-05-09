@@ -135,7 +135,7 @@ def _load_toml(path: Path) -> dict:
         with open(path, "rb") as f:
             return tomllib.load(f)
     except Exception:
-        logger.warning("Failed to parse TOML file: %s", path)
+        logger.debug("Failed to load %s", path, exc_info=True)
         return {}
 
 

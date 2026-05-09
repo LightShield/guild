@@ -104,7 +104,7 @@ class SkillRegistry:
                 self.register(skill)
                 count += 1
             except Exception:
-                logger.warning("Failed to load skill from: %s", path)
+                logger.debug("Failed to load %s", path, exc_info=True)
 
         return count
 
