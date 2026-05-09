@@ -15,7 +15,7 @@ from guild.agent.completion import (
 )
 from guild.tools.base import TOOL_SCHEMAS, ToolResult
 
-if TYPE_CHECKING:
+if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from guild.agent.stuck import StuckDetector
     from guild.provider.base import LLMProvider, LLMResponse
 

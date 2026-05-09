@@ -7,7 +7,7 @@ import logging
 from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
+if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from guild.storage.sqlite import Storage
 
 __all__ = [

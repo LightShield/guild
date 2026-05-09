@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-if TYPE_CHECKING:
+if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from guild.provider.base import LLMProvider, LLMResponse
     from guild.storage import Storage
 

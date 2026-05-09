@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-if TYPE_CHECKING:
+if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from collections.abc import Awaitable, Callable
 
 __all__ = ["FileSnapshot", "RollbackContext", "try_with_rollback"]

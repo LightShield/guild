@@ -6,7 +6,7 @@ import json
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
+if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from guild.blocks.definition import PortDef, TeamDef
     from guild.blocks.registry import BlockRegistry
 

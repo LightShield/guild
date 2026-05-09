@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from enum import Enum
 from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
+if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from guild.storage.sqlite import Storage
 
 __all__ = ["PendingQuestion", "QuestionPriority", "QuestionQueue"]

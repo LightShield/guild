@@ -14,7 +14,7 @@ from collections import OrderedDict
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-if TYPE_CHECKING:
+if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from collections.abc import Callable
     from pathlib import Path
 
@@ -131,7 +131,7 @@ class PluginLoader:
         """Load a single plugin from a TOML file. Returns None on failure."""
         try:
             import tomllib
-        except ImportError:
+        except ImportError:  # pragma: no cover — Python 3.10 compat
             import tomli as tomllib  # type: ignore[no-redef]
 
         try:

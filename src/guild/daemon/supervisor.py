@@ -7,7 +7,7 @@ import os
 import signal
 from typing import TYPE_CHECKING, Any
 
-if TYPE_CHECKING:
+if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from collections.abc import Callable, Coroutine
     from pathlib import Path
 
@@ -92,7 +92,7 @@ class DaemonSupervisor:
             loop = asyncio.get_event_loop()
             if loop.is_running():
                 loop.create_task(self._on_checkpoint())
-            else:
+            else:  # pragma: no cover — defensive unreachable (signal during async always has running loop)
                 loop.run_until_complete(self._on_checkpoint())
 
     async def run(self, coro: Coroutine[Any, Any, Any]) -> Any:

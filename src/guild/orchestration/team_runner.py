@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any
 
 from guild.agent.loop import AgentLoop
 
-if TYPE_CHECKING:
+if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from guild.blocks.definition import BlockDef, LoopDef, TeamDef
     from guild.blocks.registry import BlockRegistry
     from guild.provider.base import LLMProvider

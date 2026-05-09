@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from pathlib import Path  # noqa: TC003 - used at runtime in function bodies
 from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
+if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from guild.config.models import GuildConfig
 
 __all__ = [

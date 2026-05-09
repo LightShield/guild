@@ -10,7 +10,7 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
+if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from pathlib import Path
 
     from guild.storage.sqlite import Storage

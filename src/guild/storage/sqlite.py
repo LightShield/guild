@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 
 import aiosqlite
 
-if TYPE_CHECKING:
+if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from pathlib import Path
 
 __all__ = ["Storage"]

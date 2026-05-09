@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 from guild.agent.loop import AgentLoop
 from guild.tools.base import ToolResult
 
-if TYPE_CHECKING:
+if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from guild.orchestration.bus import MessageBus
     from guild.provider.base import LLMProvider
     from guild.storage.sqlite import Storage

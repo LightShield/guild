@@ -186,7 +186,7 @@ def _parse_security_toml(config_path: Path) -> SandboxPolicy:
     """Parse a security.toml file into a SandboxPolicy."""
     try:
         import tomllib
-    except ImportError:
+    except ImportError:  # pragma: no cover — Python 3.10 compat
         import tomli as tomllib  # type: ignore[no-redef]
 
     try:

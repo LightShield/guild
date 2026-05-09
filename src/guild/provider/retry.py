@@ -7,7 +7,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-if TYPE_CHECKING:
+if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from collections.abc import Callable, Coroutine
 
 from guild.provider.base import LLMProvider, LLMResponse

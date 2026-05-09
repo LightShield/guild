@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 
 from guild.config.models import GuildConfig
 
-if TYPE_CHECKING:
+if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from collections.abc import Callable
 
 __all__ = ["ConfigWatcher", "find_guild_dir", "load_config"]
