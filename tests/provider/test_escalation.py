@@ -327,3 +327,53 @@ class TestEscalatingProviderModelProperty:
         assert escalating.model == "model-0"
         chain.escalate()
         assert escalating.model == "model-1"
+
+
+# --- REQ-17.3 / REQ-17.4: Cheap models and capability tagging ---
+
+
+@pytest.mark.req("REQ-17.3")
+class TestSelectCheapModel:
+    """Select cheapest model capable of handling the task type."""
+
+    def test_select_cheapest_model_for_simple_task(self) -> None:
+        """Simple QA tasks select the cheapest capable model."""
+        from guild.provider.escalation import (
+            MODEL_CAPABILITIES,
+            select_model_for_task,
+        )
+
+        available = list(MODEL_CAPABILITIES.keys())
+        selected = select_model_for_task("simple_qa", available)
+        # Should pick the cheapest model that has the simple_qa tag
+        cap = MODEL_CAPABILITIES[selected]
+        assert "simple_qa" in cap.tags
+
+    def test_select_stronger_model_for_complex_task(self) -> None:
+        """Complex tasks select a model with the complex_tasks tag."""
+        from guild.provider.escalation import (
+            MODEL_CAPABILITIES,
+            select_model_for_task,
+        )
+
+        available = list(MODEL_CAPABILITIES.keys())
+        selected = select_model_for_task("complex_tasks", available)
+        cap = MODEL_CAPABILITIES[selected]
+        assert "complex_tasks" in cap.tags
+
+
+@pytest.mark.req("REQ-17.4")
+class TestModelCapabilityTagging:
+    """Model capability metadata tagging."""
+
+    def test_model_capability_tagging(self) -> None:
+        """MODEL_CAPABILITIES has tags and cost_tier for each model."""
+        from guild.provider.escalation import MODEL_CAPABILITIES, ModelCapability
+
+        assert len(MODEL_CAPABILITIES) >= 3
+        for _name, cap in MODEL_CAPABILITIES.items():
+            assert isinstance(cap, ModelCapability)
+            assert isinstance(cap.tags, set)
+            assert len(cap.tags) > 0
+            assert cap.cost_tier in ("free", "cheap", "expensive")
+            assert cap.name != ""

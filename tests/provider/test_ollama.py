@@ -234,6 +234,36 @@ class TestGenerateEdgeCases:
         assert result.has_tool_call is False
 
 
+@pytest.mark.req("REQ-01.4")
+class TestProviderPromptFormatting:
+    """Provider-specific prompt formatting handled transparently (REQ-01.4).
+
+    Ollama applies model-specific chat templates server-side, so the client
+    does NOT need to do any prompt formatting. This test documents that contract.
+    """
+
+    async def test_prompt_formatting_handled_by_ollama(self) -> None:
+        """Messages are passed as-is; Ollama applies chat templates per model."""
+        provider = OllamaProvider(
+            base_url="http://localhost:11434",
+            model="gemma4-4b-dense-med",
+        )
+        mock_client = AsyncMock()
+        mock_client.chat = AsyncMock(return_value=_make_chat_response(content="formatted response"))
+        provider._client = mock_client
+
+        messages = [
+            {"role": "system", "content": "You are helpful."},
+            {"role": "user", "content": "Hello!"},
+        ]
+        result = await provider.generate(messages)
+
+        # Verify messages are passed verbatim to the Ollama client
+        # (no client-side template formatting — Ollama does it server-side)
+        assert result.content == "formatted response"
+        mock_client.chat.assert_awaited_once()
+
+
 @pytest.mark.req("REQ-01.2")
 class TestCreateProvider:
     """create_provider factory builds a configured OllamaProvider."""

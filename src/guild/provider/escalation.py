@@ -3,13 +3,92 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass, field
 from typing import Any
 
 from guild.provider.base import LLMProvider, LLMResponse
 
-__all__ = ["EscalationChain", "EscalatingProvider", "MalformedOutputError"]
+__all__ = [
+    "EscalatingProvider",
+    "EscalationChain",
+    "MODEL_CAPABILITIES",
+    "MalformedOutputError",
+    "ModelCapability",
+    "select_model_for_task",
+]
 
 logger = logging.getLogger(__name__)
+
+# --- REQ-17.3 / REQ-17.4: Model capability tagging and cheap selection ---
+
+_COST_TIER_ORDER = {"free": 0, "cheap": 1, "expensive": 2}
+
+
+@dataclass
+class ModelCapability:
+    """Metadata about a model's capabilities and cost (REQ-17.4).
+
+    Attributes:
+        name: Human-readable model name.
+        tags: Set of capability tags (e.g., "code_generation", "simple_qa").
+        cost_tier: One of "free", "cheap", "expensive".
+    """
+
+    name: str
+    tags: set[str] = field(default_factory=set)
+    cost_tier: str = "free"
+
+
+MODEL_CAPABILITIES: dict[str, ModelCapability] = {
+    "gemma4-2b-edge-fast": ModelCapability(
+        name="gemma4-2b",
+        tags={"simple_qa", "tool_calling"},
+        cost_tier="free",
+    ),
+    "gemma4-4b-dense-med": ModelCapability(
+        name="gemma4-4b",
+        tags={"code_generation", "tool_calling", "reasoning"},
+        cost_tier="free",
+    ),
+    "gemma4-26b-moe-agent": ModelCapability(
+        name="gemma4-26b",
+        tags={"code_generation", "reasoning", "complex_tasks"},
+        cost_tier="free",
+    ),
+}
+
+
+def select_model_for_task(
+    task_type: str,
+    available_models: list[str],
+) -> str:
+    """Select the cheapest model that can handle the task type (REQ-17.3).
+
+    Args:
+        task_type: The required capability tag (e.g., "simple_qa").
+        available_models: List of model keys available for selection.
+
+    Returns:
+        The key of the cheapest capable model.
+
+    Raises:
+        ValueError: If no available model supports the task type.
+    """
+    candidates: list[tuple[int, str]] = []
+    for model_key in available_models:
+        cap = MODEL_CAPABILITIES.get(model_key)
+        if cap is None:
+            continue
+        if task_type in cap.tags:
+            cost_rank = _COST_TIER_ORDER.get(cap.cost_tier, 99)
+            candidates.append((cost_rank, model_key))
+
+    if not candidates:
+        raise ValueError(f"No available model supports task type '{task_type}'")
+
+    # Sort by cost (cheapest first), then by name for determinism
+    candidates.sort(key=lambda x: (x[0], x[1]))
+    return candidates[0][1]
 
 
 class MalformedOutputError(Exception):

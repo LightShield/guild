@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
     from guild.storage.sqlite import Storage
 
-__all__ = ["ExitCode", "LifecycleManager"]
+__all__ = ["ExitCode", "LifecycleManager", "TaskQueue"]
 
 logger = logging.getLogger(__name__)
 
@@ -182,3 +182,55 @@ class LifecycleManager:
             if _process_alive(pid):
                 running.append({"task_id": pid_file.stem, "pid": pid})
         return running
+
+
+class TaskQueue:
+    """Queue for background tasks, respecting max_concurrent_agents (REQ-23.7).
+
+    Manages a FIFO queue of task IDs and limits how many can be
+    actively running at once.
+    """
+
+    def __init__(
+        self,
+        max_concurrent: int = 1,
+        storage: Storage | None = None,
+    ) -> None:
+        self._max_concurrent = max_concurrent
+        self._storage = storage
+        self._queue: list[str] = []
+        self._active: list[str] = []
+
+    async def enqueue(self, task_id: str) -> int:
+        """Add task to queue. Returns queue position (0-based)."""
+        position = len(self._queue)
+        self._queue.append(task_id)
+        return position
+
+    async def dequeue(self) -> str | None:
+        """Get next task ready to run.
+
+        Returns None if queue is empty or max_concurrent is reached.
+        """
+        if not self._queue:
+            return None
+        if len(self._active) >= self._max_concurrent:
+            return None
+
+        task_id = self._queue.pop(0)
+        self._active.append(task_id)
+        return task_id
+
+    async def get_queue_state(self) -> list[dict]:
+        """Return the current queue contents as a list of dicts."""
+        return [{"task_id": tid, "position": idx} for idx, tid in enumerate(self._queue)]
+
+    @property
+    def active_count(self) -> int:
+        """Number of currently active (dequeued) tasks."""
+        return len(self._active)
+
+    def complete(self, task_id: str) -> None:
+        """Mark a task as no longer active."""
+        if task_id in self._active:
+            self._active.remove(task_id)

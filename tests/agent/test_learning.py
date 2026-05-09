@@ -189,6 +189,85 @@ class TestFormatLearningsForInjection:
 
 
 @pytest.mark.unit
+@pytest.mark.req("REQ-09.7")
+class TestBlockScopedLearning:
+    """Block-level learning — learnings scoped to specific blocks."""
+
+    async def test_learning_scoped_to_block(self, storage: Storage) -> None:
+        """A learning can be stored with a scope tied to a block name."""
+        learning_id = await storage.add_learning(
+            category="pattern",
+            content="Always validate inputs in coder block",
+            confidence=0.6,
+            scope="coder",
+            source_task_id="task-scope-1",
+        )
+        learning = await storage.get_learning(learning_id)
+        assert learning is not None
+        assert learning["scope"] == "coder"
+        assert learning["content"] == "Always validate inputs in coder block"
+
+    async def test_list_learnings_filters_by_scope(self, storage: Storage) -> None:
+        """list_learnings with scope param returns only that scope."""
+        await storage.add_learning(
+            category="tool_tip",
+            content="Coder tip",
+            confidence=0.7,
+            scope="coder",
+        )
+        await storage.add_learning(
+            category="tool_tip",
+            content="Reviewer tip",
+            confidence=0.7,
+            scope="reviewer",
+        )
+        await storage.add_learning(
+            category="tool_tip",
+            content="Global tip",
+            confidence=0.7,
+            scope=None,
+        )
+
+        coder_learnings = await storage.list_learnings(scope="coder")
+        assert len(coder_learnings) == 1
+        assert coder_learnings[0]["content"] == "Coder tip"
+
+        reviewer_learnings = await storage.list_learnings(scope="reviewer")
+        assert len(reviewer_learnings) == 1
+        assert reviewer_learnings[0]["content"] == "Reviewer tip"
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-09.9")
+class TestPromptRefinementSuggestions:
+    """Prompt refinement suggestions from learnings."""
+
+    async def test_suggest_prompt_refinements_from_anti_patterns(self, storage: Storage) -> None:
+        """suggest_prompt_refinements generates suggestions from anti_patterns."""
+        from guild.agent.learning import suggest_prompt_refinements
+
+        # Add some anti-pattern learnings
+        await storage.add_learning(
+            category="anti_pattern",
+            content="Agent tends to overwrite files without reading first",
+            confidence=0.8,
+            scope="coder",
+        )
+        await storage.add_learning(
+            category="tool_tip",
+            content="Use file_read before file_write",
+            confidence=0.7,
+            scope="coder",
+        )
+
+        suggestions = await suggest_prompt_refinements(storage, block_name="coder")
+        assert len(suggestions) >= 1
+        # Suggestions should reference the anti-pattern content
+        combined = " ".join(suggestions)
+        assert "overwrite" in combined.lower() or "read" in combined.lower()
+
+
+@pytest.mark.unit
 @pytest.mark.req("REQ-09.6")
 class TestCrossTaskLearning:
     """Cross-task learning — patterns from task A inform task B."""

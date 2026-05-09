@@ -219,3 +219,106 @@ class TestStatusTransitions:
 
         # done -> anything should fail
         assert await transition_task(storage, "t3", "pending") is False
+
+
+# ------------------------------------------------------------------
+# REQ-12.3: Task decomposition tracking
+# ------------------------------------------------------------------
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-12.3")
+class TestTaskDecomposition:
+    """Task decomposition into subtasks with parent tracking."""
+
+    def test_task_node_tracks_parent(self) -> None:
+        """TaskNode records its parent_id for decomposition tracking."""
+        from guild.task.spec import TaskNode
+
+        parent = TaskNode(task_id="parent-1", description="Big task")
+        child = TaskNode(
+            task_id="child-1",
+            description="Sub-task A",
+            parent_id="parent-1",
+        )
+
+        assert parent.parent_id is None
+        assert child.parent_id == "parent-1"
+        assert child.task_id == "child-1"
+        assert child.status == "pending"
+
+    def test_get_children_returns_subtasks(self) -> None:
+        """TaskGraph.get_children returns all direct children of a parent."""
+        from guild.task.spec import TaskGraph, TaskNode
+
+        graph = TaskGraph()
+        parent = TaskNode(task_id="root", description="Root task")
+        child_a = TaskNode(task_id="a", description="A", parent_id="root")
+        child_b = TaskNode(task_id="b", description="B", parent_id="root")
+        orphan = TaskNode(task_id="c", description="C")
+
+        graph.add_task(parent)
+        graph.add_task(child_a)
+        graph.add_task(child_b)
+        graph.add_task(orphan)
+
+        children = graph.get_children("root")
+        child_ids = [c.task_id for c in children]
+        assert "a" in child_ids
+        assert "b" in child_ids
+        assert "c" not in child_ids
+
+
+# ------------------------------------------------------------------
+# REQ-12.4: Task dependencies
+# ------------------------------------------------------------------
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-12.4")
+class TestTaskDependencies:
+    """Task dependency graph — do B after A completes."""
+
+    def test_task_graph_respects_dependencies(self) -> None:
+        """Tasks with unmet dependencies are not in get_ready_tasks."""
+        from guild.task.spec import TaskGraph, TaskNode
+
+        graph = TaskGraph()
+        task_a = TaskNode(task_id="a", description="First")
+        task_b = TaskNode(task_id="b", description="Second", depends_on=["a"])
+        graph.add_task(task_a)
+        graph.add_task(task_b)
+
+        ready = graph.get_ready_tasks()
+        ready_ids = [t.task_id for t in ready]
+        assert "a" in ready_ids
+        assert "b" not in ready_ids
+
+    def test_get_ready_tasks_only_when_deps_done(self) -> None:
+        """After dependencies complete, dependent tasks become ready."""
+        from guild.task.spec import TaskGraph, TaskNode
+
+        graph = TaskGraph()
+        task_a = TaskNode(task_id="a", description="First")
+        task_b = TaskNode(task_id="b", description="Second", depends_on=["a"])
+        task_c = TaskNode(task_id="c", description="Third", depends_on=["a", "b"])
+        graph.add_task(task_a)
+        graph.add_task(task_b)
+        graph.add_task(task_c)
+
+        # Only A is ready initially
+        ready = graph.get_ready_tasks()
+        assert [t.task_id for t in ready] == ["a"]
+
+        # Complete A — B becomes ready, but not C
+        graph.mark_completed("a")
+        ready = graph.get_ready_tasks()
+        ready_ids = [t.task_id for t in ready]
+        assert "b" in ready_ids
+        assert "c" not in ready_ids
+
+        # Complete B — now C is ready
+        graph.mark_completed("b")
+        ready = graph.get_ready_tasks()
+        ready_ids = [t.task_id for t in ready]
+        assert "c" in ready_ids

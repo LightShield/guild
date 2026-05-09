@@ -18,6 +18,7 @@ __all__ = [
     "LEARNER_PROMPT",
     "extract_learnings",
     "format_learnings_for_injection",
+    "suggest_prompt_refinements",
 ]
 
 logger = logging.getLogger(__name__)
@@ -132,6 +133,41 @@ def format_learnings_for_injection(
         lines.append(f"- [{category}] (confidence: {confidence:.1f}) {content}")
 
     return "\n".join(lines)
+
+
+async def suggest_prompt_refinements(
+    storage: Storage,
+    block_name: str | None = None,
+) -> list[str]:
+    """Analyze learnings and suggest prompt improvements (REQ-09.9).
+
+    Looks for anti_patterns and tool_tips scoped to the given block,
+    then generates actionable suggestions for prompt refinement.
+
+    Args:
+        storage: Storage instance to query learnings from.
+        block_name: Optional block scope to filter learnings.
+
+    Returns:
+        List of suggestion strings for prompt improvement.
+    """
+    learnings = await storage.list_learnings(
+        min_confidence=0.5,
+        scope=block_name,
+    )
+
+    suggestions: list[str] = []
+
+    for learning in learnings:
+        category = learning.get("category", "")
+        content = learning.get("content", "")
+
+        if category == "anti_pattern":
+            suggestions.append(f"Add guard against: {content}")
+        elif category == "tool_tip":
+            suggestions.append(f"Include tip in prompt: {content}")
+
+    return suggestions
 
 
 def _format_session_log(messages: list[dict]) -> str:

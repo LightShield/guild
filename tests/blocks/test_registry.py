@@ -238,6 +238,76 @@ def test_nested_composite_blocks() -> None:
 
 
 @pytest.mark.unit
+@pytest.mark.req("REQ-14.2")
+def test_team_composition_loaded_as_named_config(tmp_path: object) -> None:
+    """Team compositions are loadable as named configs from TOML (REQ-14.2)."""
+    from pathlib import Path
+
+    blocks_dir = Path(str(tmp_path)) / "teams"
+    blocks_dir.mkdir()
+
+    # Write two named team configurations
+    team_toml_1 = """\
+[team]
+name = "fast-review"
+description = "Quick code review pipeline"
+version = "1.0.0"
+entry_block = "code"
+
+[team.blocks]
+code = "coder"
+review = "reviewer"
+
+[[team.connections]]
+source_block = "code"
+source_port = "changes"
+target_block = "review"
+target_port = "changes"
+"""
+    team_toml_2 = """\
+[team]
+name = "full-pipeline"
+description = "Plan, code, test, review"
+version = "2.0.0"
+entry_block = "plan"
+
+[team.blocks]
+plan = "planner"
+code = "coder"
+test = "tester"
+
+[[team.connections]]
+source_block = "plan"
+source_port = "plan"
+target_block = "code"
+target_port = "spec"
+
+[[team.connections]]
+source_block = "code"
+source_port = "changes"
+target_block = "test"
+target_port = "changes"
+"""
+    (blocks_dir / "fast_review.toml").write_text(team_toml_1)
+    (blocks_dir / "full_pipeline.toml").write_text(team_toml_2)
+
+    registry = BlockRegistry()
+    count = registry.load_from_dir(blocks_dir)
+    assert count == 2
+
+    # Both teams are accessible by name
+    fast = registry.get_team("fast-review")
+    assert fast is not None
+    assert fast.description == "Quick code review pipeline"
+
+    full = registry.get_team("full-pipeline")
+    assert full is not None
+    assert full.version == "2.0.0"
+    assert full.entry_block == "plan"
+    assert len(full.connections) == 2
+
+
+@pytest.mark.unit
 @pytest.mark.req("REQ-04.26")
 def test_block_versioning() -> None:
     """Blocks carry version info that can be compared."""

@@ -17,6 +17,8 @@ if TYPE_CHECKING:
 
 __all__ = [
     "VALID_TRANSITIONS",
+    "TaskGraph",
+    "TaskNode",
     "TaskSpec",
     "VerificationStep",
     "run_verification",
@@ -34,6 +36,68 @@ VALID_TRANSITIONS: dict[str, list[str]] = {
     "failed": ["pending"],
     "blocked": ["pending", "in_progress"],
 }
+
+
+@dataclass
+class TaskNode:
+    """A node in a task decomposition tree (REQ-12.3).
+
+    Attributes:
+        task_id: Unique identifier for this task node.
+        description: Human-readable description.
+        parent_id: ID of parent task (None for root tasks).
+        depends_on: List of task IDs that must complete before this.
+        status: Current status (pending, completed, failed).
+    """
+
+    task_id: str
+    description: str
+    parent_id: str | None = None
+    depends_on: list[str] = field(default_factory=list)
+    status: str = "pending"
+
+
+class TaskGraph:
+    """DAG of task dependencies (REQ-12.4).
+
+    Manages a collection of TaskNodes and resolves which tasks
+    are ready to execute based on dependency completion status.
+    """
+
+    def __init__(self) -> None:
+        self._nodes: dict[str, TaskNode] = {}
+
+    def add_task(self, node: TaskNode) -> None:
+        """Add a task node to the graph."""
+        self._nodes[node.task_id] = node
+
+    def get_ready_tasks(self) -> list[TaskNode]:
+        """Return tasks whose dependencies are all completed.
+
+        A task is ready when:
+        - Its status is "pending"
+        - All task_ids in its depends_on have status "completed"
+        """
+        ready: list[TaskNode] = []
+        for node in self._nodes.values():
+            if node.status != "pending":
+                continue
+            if all(
+                self._nodes[dep].status == "completed"
+                for dep in node.depends_on
+                if dep in self._nodes
+            ):
+                ready.append(node)
+        return ready
+
+    def mark_completed(self, task_id: str) -> None:
+        """Mark a task as completed."""
+        if task_id in self._nodes:
+            self._nodes[task_id].status = "completed"
+
+    def get_children(self, task_id: str) -> list[TaskNode]:
+        """Return tasks whose parent_id matches the given task_id."""
+        return [node for node in self._nodes.values() if node.parent_id == task_id]
 
 
 @dataclass

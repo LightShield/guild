@@ -167,3 +167,71 @@ class TestToolQueue:
         await asyncio.gather(*tasks)
 
         assert max_running <= 4
+
+
+# ------------------------------------------------------------------
+# REQ-20.3: Backpressure — pause low-priority agents when loaded
+# ------------------------------------------------------------------
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-20.3")
+class TestBackpressure:
+    """BackpressureManager pauses low-priority work when loaded."""
+
+    async def test_backpressure_blocks_low_priority(self) -> None:
+        """Low-priority acquire blocks when system is at capacity."""
+        from guild.agent.ratelimit import BackpressureManager
+
+        mgr = BackpressureManager(max_concurrent=1)
+
+        # Acquire a high-priority slot
+        await mgr.acquire(priority=10)
+        assert mgr.is_under_pressure is True
+
+        # Low-priority should not get through immediately
+        acquired = asyncio.Event()
+
+        async def try_low_priority() -> None:
+            await mgr.acquire(priority=1)
+            acquired.set()
+
+        task = asyncio.create_task(try_low_priority())
+        await asyncio.sleep(0.05)
+        assert not acquired.is_set()
+
+        # Release the high-priority slot — low-priority should proceed
+        mgr.release()
+        await asyncio.sleep(0.05)
+        assert acquired.is_set()
+
+        # Clean up
+        import contextlib
+
+        mgr.release()
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+
+    async def test_backpressure_allows_when_released(self) -> None:
+        """After release, the next acquire proceeds immediately."""
+        from guild.agent.ratelimit import BackpressureManager
+
+        mgr = BackpressureManager(max_concurrent=2)
+
+        await mgr.acquire(priority=5)
+        assert mgr.is_under_pressure is False  # 1/2 used
+
+        await mgr.acquire(priority=5)
+        assert mgr.is_under_pressure is True  # 2/2 used
+
+        mgr.release()
+        assert mgr.is_under_pressure is False  # 1/2 used
+
+        # Should acquire without blocking
+        start = time.monotonic()
+        await mgr.acquire(priority=1)
+        elapsed = time.monotonic() - start
+        assert elapsed < 0.05
+        mgr.release()
+        mgr.release()

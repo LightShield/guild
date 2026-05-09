@@ -10,9 +10,46 @@ if TYPE_CHECKING:
     from collections.abc import Coroutine
 
 __all__ = [
+    "BackpressureManager",
     "RateLimiter",
     "ToolQueue",
 ]
+
+
+class BackpressureManager:
+    """Pauses low-priority work when system is loaded (REQ-20.3).
+
+    Uses a semaphore to limit concurrent work. When the semaphore is
+    fully acquired, subsequent acquire() calls block until a slot
+    is released.
+    """
+
+    def __init__(self, max_concurrent: int = 1) -> None:
+        self._max_concurrent = max_concurrent
+        self._semaphore = asyncio.Semaphore(max_concurrent)
+        self._active = 0
+
+    async def acquire(self, priority: int = 0) -> None:
+        """Wait until this priority level can proceed.
+
+        Args:
+            priority: Higher values indicate higher priority (unused
+                      for ordering in this implementation; all waiters
+                      are FIFO via the semaphore).
+        """
+        await self._semaphore.acquire()
+        self._active += 1
+
+    def release(self) -> None:
+        """Release a slot, allowing a waiting acquire to proceed."""
+        if self._active > 0:
+            self._active -= 1
+        self._semaphore.release()
+
+    @property
+    def is_under_pressure(self) -> bool:
+        """True when all concurrent slots are occupied."""
+        return self._active >= self._max_concurrent
 
 
 class RateLimiter:

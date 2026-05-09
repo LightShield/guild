@@ -347,3 +347,78 @@ class TestExitCodes:
     def test_exit_code_crash_recovery(self) -> None:
         """ExitCode.CRASH_RECOVERY is 3."""
         assert ExitCode.CRASH_RECOVERY == 3
+
+
+# ------------------------------------------------------------------
+# REQ-23.7: Multiple concurrent background tasks
+# ------------------------------------------------------------------
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-23.7")
+class TestTaskQueue:
+    """TaskQueue manages concurrent background task execution."""
+
+    async def test_task_queue_enqueue_dequeue(self, tmp_path: Path) -> None:
+        """enqueue adds task, dequeue retrieves it."""
+        from guild.daemon.lifecycle import TaskQueue
+
+        storage = await _make_storage(tmp_path)
+        queue = TaskQueue(max_concurrent=2, storage=storage)
+
+        position = await queue.enqueue("task-1")
+        assert position == 0
+
+        position = await queue.enqueue("task-2")
+        assert position == 1
+
+        task_id = await queue.dequeue()
+        assert task_id == "task-1"
+
+        task_id = await queue.dequeue()
+        assert task_id == "task-2"
+
+        task_id = await queue.dequeue()
+        assert task_id is None
+
+        await storage.close()
+
+    async def test_queue_respects_max_concurrent(self, tmp_path: Path) -> None:
+        """dequeue returns None when max_concurrent active tasks reached."""
+        from guild.daemon.lifecycle import TaskQueue
+
+        storage = await _make_storage(tmp_path)
+        queue = TaskQueue(max_concurrent=1, storage=storage)
+
+        await queue.enqueue("task-a")
+        await queue.enqueue("task-b")
+
+        # Dequeue first — active_count goes to 1
+        task_id = await queue.dequeue()
+        assert task_id == "task-a"
+        assert queue.active_count == 1
+
+        # Second dequeue should return None (at max)
+        task_id = await queue.dequeue()
+        assert task_id is None
+
+        await storage.close()
+
+    async def test_queue_state_persisted(self, tmp_path: Path) -> None:
+        """get_queue_state returns the current queue contents."""
+        from guild.daemon.lifecycle import TaskQueue
+
+        storage = await _make_storage(tmp_path)
+        queue = TaskQueue(max_concurrent=3, storage=storage)
+
+        await queue.enqueue("t1")
+        await queue.enqueue("t2")
+        await queue.enqueue("t3")
+
+        state = await queue.get_queue_state()
+        assert len(state) == 3
+        assert state[0]["task_id"] == "t1"
+        assert state[1]["task_id"] == "t2"
+        assert state[2]["task_id"] == "t3"
+
+        await storage.close()
