@@ -82,3 +82,29 @@ Decisions made during the v0.2 rebuild that aren't covered in REQUIREMENTS.md or
 **TODO:** Validate this claim with real-world testing. Measure how often CPU-as-proxy correctly identifies user activity vs. false positives from background processes (compilers, downloads, updates). If false positive rate is too high, prioritize platform-specific idle detection.
 
 **Reassess when:** Platform adapters are built (REQ-02.4).
+
+---
+
+## D-09: Frontend stack — SvelteKit + Tailwind CSS
+
+**Decision:** The web GUI uses SvelteKit (Svelte 5) with Tailwind CSS, built to static files and served by FastAPI.
+
+**Why:** The GUI needs both a functional dashboard (status, tables, logs) and a visual team composer (drag-and-drop node editor). HTMX could handle the dashboard but not the composer. React is heavier than needed. Svelte is lighter, faster, less boilerplate, and has Svelte Flow for the node editor. Tailwind provides polished design without a designer.
+
+**Trade-off:** Adds a Node.js build step. Acceptable because the UI is optional (`pip install guild[api]`) and development is separate from core Python work.
+
+---
+
+## D-10: Frontend lives in the same repo as backend
+
+**Decision:** The GUI source lives at `ui/` within the guild repo. Built output goes to `ui/dist/` and is served by FastAPI as static files.
+
+**Why:** API and UI evolve together — endpoint changes and UI changes should be in the same commit. One `guild serve` command starts everything. No version coordination between repos. Static files can be bundled into the Python package.
+
+---
+
+## D-11: FastAPI as optional dependency for the API/GUI
+
+**Decision:** `fastapi` and `uvicorn` are optional dependencies (`pip install guild[api]`), not required for core CLI usage.
+
+**Why:** The core value (autonomous agent in terminal) doesn't need a web server. Adding fastapi/uvicorn to the base install would bloat it and add dependencies most users don't need. The API is a wrapper on top of the same Storage/config the CLI uses — it's additive, not fundamental.
