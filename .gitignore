@@ -34,3 +34,8 @@ logs/
 # Secrets
 .env
 .env.*
+
+# UI (Svelte/Node)
+ui/node_modules/
+ui/.svelte-kit/
+ui/dist/

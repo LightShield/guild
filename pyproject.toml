@@ -21,6 +21,12 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+api = [
+    # ASGI web framework for the REST API and WebSocket support
+    "fastapi>=0.109,<1",
+    # ASGI server to run the FastAPI app
+    "uvicorn[standard]>=0.27,<1",
+]
 dev = [
     # Test runner with fixtures, markers, and parametrize
     "pytest>=7.0",
