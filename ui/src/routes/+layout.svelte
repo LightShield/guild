@@ -1,4 +1,6 @@
 <script>
+	import { onMount, onDestroy } from 'svelte';
+	import { connectWebSocket, wsConnected } from '$lib/stores.js';
 	import '../app.css';
 
 	const nav = [
@@ -8,6 +10,18 @@
 		{ href: '/config', label: 'Config', icon: '&#9881;' },
 		{ href: '/composer', label: 'Composer', icon: '&#9830;' }
 	];
+
+	let ws = null;
+
+	onMount(() => {
+		ws = connectWebSocket();
+	});
+
+	onDestroy(() => {
+		if (ws) {
+			ws.close();
+		}
+	});
 </script>
 
 <div class="flex h-screen">
@@ -35,7 +49,13 @@
 
 		<!-- Footer -->
 		<div class="p-4 border-t border-gray-700">
-			<p class="text-xs text-gray-500">Local Agent Harness</p>
+			<div class="flex items-center gap-2">
+				<span class="w-2 h-2 rounded-full {$wsConnected ? 'bg-green-400' : 'bg-red-400'}"></span>
+				<p class="text-xs text-gray-500">
+					{$wsConnected ? 'Connected' : 'Disconnected'}
+				</p>
+			</div>
+			<p class="text-xs text-gray-500 mt-1">Local Agent Harness</p>
 		</div>
 	</aside>
 

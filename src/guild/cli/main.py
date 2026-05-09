@@ -614,6 +614,30 @@ def answer(
 
 
 @app.command()
+def serve(
+    host: str = typer.Option("127.0.0.1", "--host", help="Host to bind to."),
+    port: int = typer.Option(8585, "--port", help="Port to serve on."),
+) -> None:
+    """Start the Guild web GUI and API server (REQ-05.5)."""
+    guild_dir = find_guild_dir()
+    if guild_dir is None:
+        console.print("[red]Error:[/red] Not a guild project (no .guild/ found).")
+        raise typer.Exit(code=1)
+
+    try:
+        import uvicorn  # type: ignore[import-untyped]
+
+        from guild.api.server import create_app as _create_app
+    except ImportError:
+        console.print("[red]Error:[/red] Install API dependencies: pip install guild[api]")
+        raise typer.Exit(code=1) from None
+
+    web_app = _create_app(guild_dir=guild_dir)
+    console.print(f"[bold]Guild GUI[/bold] at http://{host}:{port}")
+    uvicorn.run(web_app, host=host, port=port, log_level="info")
+
+
+@app.command()
 def attach(
     task_id: str = typer.Argument(..., help="Task ID to attach to."),
 ) -> None:

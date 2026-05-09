@@ -1,12 +1,14 @@
-"""REST API server — requires fastapi + uvicorn (REQ-05.4).
+"""REST API server — requires fastapi + uvicorn (REQ-05.4, REQ-05.5).
 
 Serves the Guild web UI (static files from ui/dist/) and provides JSON API
 routes backed by Storage for tasks, agents, config, audit, and learnings.
+Includes WebSocket endpoint for real-time status updates.
 """
 
-from __future__ import annotations
-
+import asyncio
 import logging
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
@@ -36,15 +38,43 @@ API_ROUTES: dict[str, str] = {
 _UI_DIST = Path(__file__).resolve().parent.parent.parent.parent / "ui" / "dist"
 
 
-def create_app(guild_dir: Path | None = None) -> Any:
+async def _get_current_status(storage: Any) -> dict[str, Any]:
+    """Gather current status for WebSocket broadcast."""
+    summary = await storage.get_token_summary()
+    tasks = await storage.list_tasks()
+    agents = await storage.list_agents()
+    return {
+        "status": "ok",
+        "version": "0.2.0",
+        "task_count": summary["task_count"],
+        "agent_count": summary["agent_count"],
+        "total_input_tokens": summary["total_input"],
+        "total_output_tokens": summary["total_output"],
+        "tasks": tasks,
+        "agents": agents,
+    }
+
+
+def create_app(
+    guild_dir: Path | None = None,
+    storage: Any | None = None,
+) -> Any:
     """Create the FastAPI app. Raises ImportError if fastapi not installed.
 
     Args:
         guild_dir: Path to .guild/ directory for accessing Storage.
                    If None, uses .guild/ in current working directory.
+        storage: Optional pre-connected Storage instance (for testing).
+                 When provided, the lifespan will not create/close storage.
     """
     try:
-        from fastapi import FastAPI, HTTPException, Request  # type: ignore[import-untyped]
+        from fastapi import (  # type: ignore[import-untyped]
+            FastAPI,
+            HTTPException,
+            Request,
+            WebSocket,
+            WebSocketDisconnect,
+        )
         from fastapi.responses import FileResponse  # type: ignore[import-untyped]
         from fastapi.staticfiles import StaticFiles  # type: ignore[import-untyped]
     except ImportError as exc:
@@ -53,24 +83,35 @@ def create_app(guild_dir: Path | None = None) -> Any:
     from guild.config.loader import find_guild_dir, load_config
     from guild.storage.sqlite import Storage
 
-    app = FastAPI(title="Guild", version="0.2.0")
-
     # Resolve guild directory
     _guild_dir = guild_dir or find_guild_dir() or Path.cwd() / ".guild"
     _db_path = _guild_dir / "guild.db"
-    _storage: Storage | None = None
 
-    @app.on_event("startup")
-    async def _startup() -> None:
-        nonlocal _storage
-        _storage = Storage(_db_path)
-        await _storage.connect()
+    _injected_storage = storage
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+        """Manage Storage lifecycle: connect on startup, close on shutdown."""
+        if _injected_storage is not None:
+            app.state.storage = _injected_storage
+            app.state.guild_dir = _guild_dir
+            logger.info("API using injected storage")
+            yield
+            return
+        store = Storage(_db_path)
+        await store.connect()
+        app.state.storage = store
+        app.state.guild_dir = _guild_dir
         logger.info("API storage connected: %s", _db_path)
+        yield
+        await store.close()
+        logger.info("API storage closed")
 
-    @app.on_event("shutdown")
-    async def _shutdown() -> None:
-        if _storage:
-            await _storage.close()
+    app = FastAPI(title="Guild", version="0.2.0", lifespan=lifespan)
+
+    def _get_storage() -> Storage:
+        """Retrieve Storage from app state."""
+        return app.state.storage
 
     # ------------------------------------------------------------------
     # API routes
@@ -78,8 +119,8 @@ def create_app(guild_dir: Path | None = None) -> Any:
 
     @app.get("/api/status")
     async def get_status() -> dict[str, Any]:
-        assert _storage is not None
-        summary = await _storage.get_token_summary()
+        storage = _get_storage()
+        summary = await storage.get_token_summary()
         return {
             "status": "ok",
             "version": "0.2.0",
@@ -91,69 +132,68 @@ def create_app(guild_dir: Path | None = None) -> Any:
 
     @app.get("/api/tasks")
     async def list_tasks(status: str | None = None) -> list[dict[str, Any]]:
-        assert _storage is not None
-        return await _storage.list_tasks(status=status)
+        storage = _get_storage()
+        return await storage.list_tasks(status=status)
 
     @app.get("/api/tasks/{task_id}")
     async def get_task(task_id: str) -> dict[str, Any]:
-        assert _storage is not None
-        task = await _storage.get_task(task_id)
+        storage = _get_storage()
+        task = await storage.get_task(task_id)
         if task is None:
             raise HTTPException(status_code=404, detail="Task not found")
         return task
 
     @app.post("/api/tasks")
     async def create_task(request: Request) -> dict[str, Any]:
-        assert _storage is not None
         import uuid
 
+        storage = _get_storage()
         body = await request.json()
         description = body.get("description", "")
         if not description:
             raise HTTPException(status_code=400, detail="description is required")
         task_id = str(uuid.uuid4())
-        await _storage.create_task(task_id, description)
-        await _storage.log_audit("task_created", details=f"task_id={task_id}")
+        await storage.create_task(task_id, description)
+        await storage.log_audit("task_created", details=f"task_id={task_id}")
         return {"id": task_id, "status": "pending", "description": description}
 
     @app.post("/api/tasks/{task_id}/kill")
     async def kill_task(task_id: str) -> dict[str, str]:
-        assert _storage is not None
-        task = await _storage.get_task(task_id)
+        storage = _get_storage()
+        task = await storage.get_task(task_id)
         if task is None:
             raise HTTPException(status_code=404, detail="Task not found")
-        await _storage.update_task(task_id, status="killed")
-        await _storage.log_audit("task_killed", details=f"task_id={task_id}")
+        await storage.update_task(task_id, status="killed")
+        await storage.log_audit("task_killed", details=f"task_id={task_id}")
         return {"id": task_id, "action": "killed"}
 
     @app.post("/api/tasks/{task_id}/pause")
     async def pause_task(task_id: str) -> dict[str, str]:
-        assert _storage is not None
-        task = await _storage.get_task(task_id)
+        storage = _get_storage()
+        task = await storage.get_task(task_id)
         if task is None:
             raise HTTPException(status_code=404, detail="Task not found")
-        await _storage.update_task(task_id, status="paused")
-        await _storage.log_audit("task_paused", details=f"task_id={task_id}")
+        await storage.update_task(task_id, status="paused")
+        await storage.log_audit("task_paused", details=f"task_id={task_id}")
         return {"id": task_id, "action": "paused"}
 
     @app.post("/api/tasks/{task_id}/resume")
     async def resume_task(task_id: str) -> dict[str, str]:
-        assert _storage is not None
-        task = await _storage.get_task(task_id)
+        storage = _get_storage()
+        task = await storage.get_task(task_id)
         if task is None:
             raise HTTPException(status_code=404, detail="Task not found")
-        await _storage.update_task(task_id, status="running")
-        await _storage.log_audit("task_resumed", details=f"task_id={task_id}")
+        await storage.update_task(task_id, status="running")
+        await storage.log_audit("task_resumed", details=f"task_id={task_id}")
         return {"id": task_id, "action": "resumed"}
 
     @app.get("/api/agents")
     async def list_agents() -> list[dict[str, Any]]:
-        assert _storage is not None
-        return await _storage.list_agents()
+        storage = _get_storage()
+        return await storage.list_agents()
 
     @app.get("/api/blocks")
     async def list_blocks() -> list[dict[str, str]]:
-        # Return block definitions from registry if available
         try:
             from guild.blocks.registry import BlockRegistry
 
@@ -164,7 +204,6 @@ def create_app(guild_dir: Path | None = None) -> Any:
 
     @app.get("/api/teams")
     async def list_teams() -> list[dict[str, str]]:
-        # Return team definitions from config if available
         try:
             config = load_config(_guild_dir)
             return [{"name": t.name} for t in (config.teams or [])]
@@ -173,13 +212,13 @@ def create_app(guild_dir: Path | None = None) -> Any:
 
     @app.get("/api/learnings")
     async def list_learnings() -> list[dict[str, Any]]:
-        assert _storage is not None
-        return await _storage.list_learnings()
+        storage = _get_storage()
+        return await storage.list_learnings()
 
     @app.get("/api/audit")
     async def get_audit(limit: int = 50) -> list[dict[str, Any]]:
-        assert _storage is not None
-        return await _storage.list_audit(limit=limit)
+        storage = _get_storage()
+        return await storage.list_audit(limit=limit)
 
     @app.get("/api/config")
     async def get_config() -> dict[str, Any]:
@@ -192,9 +231,27 @@ def create_app(guild_dir: Path | None = None) -> Any:
 
     @app.post("/api/config")
     async def post_config(request: Request) -> dict[str, str]:
-        # Placeholder: in a full implementation this would write to config.toml
         await request.json()
         return {"status": "ok", "message": "Config update not yet implemented"}
+
+    # ------------------------------------------------------------------
+    # WebSocket for real-time updates (REQ-05.5)
+    # ------------------------------------------------------------------
+
+    @app.websocket("/ws")
+    async def websocket_endpoint(websocket: WebSocket) -> None:
+        """Send status updates every 2 seconds to connected clients."""
+        await websocket.accept()
+        try:
+            while True:
+                storage = _get_storage()
+                data = await _get_current_status(storage)
+                await websocket.send_json(data)
+                await asyncio.sleep(2)
+        except WebSocketDisconnect:
+            pass
+        except Exception:
+            logger.debug("WebSocket closed unexpectedly", exc_info=True)
 
     # ------------------------------------------------------------------
     # Static file serving (built Svelte UI)
