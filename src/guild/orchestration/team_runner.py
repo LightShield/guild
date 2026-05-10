@@ -71,6 +71,37 @@ class EvaluatorResult:
     details: dict[str, Any] = field(default_factory=dict)
 
 
+def _topological_sort(nodes: list[str], edges: list[tuple[str, str]]) -> list[str]:
+    """Kahn's algorithm for topological sort.
+
+    Args:
+        nodes: All node identifiers.
+        edges: Directed edges as (source, target) pairs.
+
+    Returns:
+        Nodes in topological order.
+    """
+    graph: dict[str, list[str]] = {name: [] for name in nodes}
+    in_degree: dict[str, int] = dict.fromkeys(nodes, 0)
+
+    for source, target in edges:
+        graph[source].append(target)
+        in_degree[target] += 1
+
+    queue: list[str] = [name for name, degree in in_degree.items() if degree == 0]
+
+    result: list[str] = []
+    while queue:
+        node = queue.pop(0)
+        result.append(node)
+        for neighbor in graph[node]:
+            in_degree[neighbor] -= 1
+            if in_degree[neighbor] == 0:
+                queue.append(neighbor)
+
+    return result
+
+
 class TeamRunner:
     """Executes a team composition by running blocks in topological order.
 
@@ -151,48 +182,24 @@ class TeamRunner:
 
         Entry block is always first (REQ-04.1).
         """
-        loop_edges = set()
-        for loop in self._team.loops:
-            loop_edges.add((loop.evaluator_block, loop.generator_block))
+        loop_edges = {
+            (loop.evaluator_block, loop.generator_block) for loop in self._team.loops
+        }
 
-        # Build adjacency (non-loop edges only)
-        graph: dict[str, list[str]] = {name: [] for name in self._team.blocks}
-        in_degree: dict[str, int] = dict.fromkeys(self._team.blocks, 0)
+        edges = [
+            (conn.source_block, conn.target_block)
+            for conn in self._team.connections
+            if (conn.source_block, conn.target_block) not in loop_edges
+        ]
 
-        for conn in self._team.connections:
-            edge = (conn.source_block, conn.target_block)
-            if edge in loop_edges:
-                continue
-            graph[conn.source_block].append(conn.target_block)
-            in_degree[conn.target_block] += 1
-
-        # Kahn's algorithm with entry_block priority
-        queue: list[str] = []
-        for name, degree in in_degree.items():
-            if degree == 0:
-                queue.append(name)
+        order = _topological_sort(list(self._team.blocks.keys()), edges)
 
         # Ensure entry_block is first
-        if self._team.entry_block in queue:
-            queue.remove(self._team.entry_block)
-            queue.insert(0, self._team.entry_block)
+        if self._team.entry_block in order and order[0] != self._team.entry_block:
+            order.remove(self._team.entry_block)
+            order.insert(0, self._team.entry_block)
 
-        result: list[str] = []
-        while queue:
-            node = queue.pop(0)
-            result.append(node)
-            for neighbor in graph[node]:
-                in_degree[neighbor] -= 1
-                if in_degree[neighbor] == 0:
-                    queue.append(neighbor)
-
-        # If entry_block not at index 0, force it there
-        if result and result[0] != self._team.entry_block:
-            if self._team.entry_block in result:
-                result.remove(self._team.entry_block)
-            result.insert(0, self._team.entry_block)
-
-        return result
+        return order
 
     def _gather_input(self, instance_name: str, fallback: str) -> str:
         """Gather inputs from upstream block outputs for a given block."""
