@@ -52,6 +52,13 @@ class MCPClient:
         self._process: asyncio.subprocess.Process | None = None
         self._request_id = 0
 
+    async def __aenter__(self) -> MCPClient:
+        await self.connect()
+        return self
+
+    async def __aexit__(self, *exc_info: object) -> None:
+        await self.disconnect()
+
     @property
     def config(self) -> MCPServerConfig:
         """Return the server configuration."""

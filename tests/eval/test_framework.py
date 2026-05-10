@@ -444,3 +444,99 @@ class TestCompareResults:
         assert comparison["b_tokens"] == 300
         assert comparison["a_tool_calls"] == 3
         assert comparison["b_tool_calls"] == 5
+
+
+# ------------------------------------------------------------------
+# Eval turn loop exception handling (lines 138-143)
+# ------------------------------------------------------------------
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-16.4")
+class TestEvalTurnLoopExceptionHandling:
+    """Exception during eval turn loop sets completed=False and records error."""
+
+    async def test_connection_error_during_eval_marks_incomplete(
+        self, storage: Storage, sample_task: BenchmarkTask
+    ) -> None:
+        """ConnectionError during provider.generate marks task as not completed."""
+        provider = AsyncMock()
+        provider.generate = AsyncMock(side_effect=ConnectionError("server unreachable"))
+
+        framework = EvalFramework(storage)
+        result = await framework.run_eval(sample_task, provider, "err-test")
+
+        assert result.metrics.task_completed is False
+        assert result.metrics.error is not None
+        assert "server unreachable" in result.metrics.error
+
+    async def test_timeout_error_during_eval_marks_incomplete(
+        self, storage: Storage, sample_task: BenchmarkTask
+    ) -> None:
+        """TimeoutError during provider.generate marks task as not completed."""
+        provider = AsyncMock()
+        provider.generate = AsyncMock(side_effect=TimeoutError("request timed out"))
+
+        framework = EvalFramework(storage)
+        result = await framework.run_eval(sample_task, provider, "timeout-test")
+
+        assert result.metrics.task_completed is False
+        assert result.metrics.error is not None
+        assert "request timed out" in result.metrics.error
+
+    async def test_runtime_error_during_eval_marks_incomplete(
+        self, storage: Storage, sample_task: BenchmarkTask
+    ) -> None:
+        """RuntimeError during provider.generate marks task as not completed."""
+        provider = AsyncMock()
+        provider.generate = AsyncMock(side_effect=RuntimeError("internal failure"))
+
+        framework = EvalFramework(storage)
+        result = await framework.run_eval(sample_task, provider, "runtime-test")
+
+        assert result.metrics.task_completed is False
+        assert "internal failure" in result.metrics.error
+
+    async def test_value_error_during_eval_marks_incomplete(
+        self, storage: Storage, sample_task: BenchmarkTask
+    ) -> None:
+        """ValueError during provider.generate marks task as not completed."""
+        provider = AsyncMock()
+        provider.generate = AsyncMock(side_effect=ValueError("bad input"))
+
+        framework = EvalFramework(storage)
+        result = await framework.run_eval(sample_task, provider, "value-test")
+
+        assert result.metrics.task_completed is False
+        assert "bad input" in result.metrics.error
+
+    async def test_error_after_partial_turns_preserves_partial_metrics(
+        self, storage: Storage, sample_task: BenchmarkTask
+    ) -> None:
+        """Error after partial turns preserves accumulated metrics."""
+        from guild.provider.base import LLMResponse
+
+        provider = AsyncMock()
+        # First call succeeds with a tool call, second call raises
+        provider.generate = AsyncMock(
+            side_effect=[
+                LLMResponse(
+                    content="working...",
+                    tool_calls=[{"name": "file_read", "arguments": {"path": "x"}}],
+                    input_tokens=50,
+                    output_tokens=25,
+                    model="test-model",
+                ),
+                ConnectionError("lost connection"),
+            ]
+        )
+
+        framework = EvalFramework(storage)
+        result = await framework.run_eval(sample_task, provider, "partial-test")
+
+        assert result.metrics.task_completed is False
+        assert result.metrics.turns == 2
+        assert result.metrics.input_tokens == 50
+        assert result.metrics.output_tokens == 25
+        assert result.metrics.tool_calls == 1
+        assert result.metrics.error is not None

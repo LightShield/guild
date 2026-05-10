@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
@@ -171,6 +171,8 @@ class TestCLIGenerate:
 
         mock_process = AsyncMock()
         mock_process.communicate = AsyncMock(side_effect=TimeoutError())
+        mock_process.kill = Mock()
+        mock_process.wait = AsyncMock()
 
         with patch("asyncio.create_subprocess_exec", return_value=mock_process):
             messages = [{"role": "user", "content": "Hello"}]

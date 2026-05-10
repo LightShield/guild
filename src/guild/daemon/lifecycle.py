@@ -69,11 +69,9 @@ class LifecycleManager:
         logger.info("Sending SIGTERM to PID %d (task %s)", pid, task_id)
         os.kill(pid, signal.SIGTERM)
 
-        # Wait for graceful shutdown
         if _process_alive(pid):
             await asyncio.sleep(timeout)
 
-        # Escalate if still alive
         if _process_alive(pid):
             logger.warning(
                 "PID %d still alive after %.1fs, sending SIGKILL",
@@ -173,7 +171,7 @@ class LifecycleManager:
             if sock_file.exists():
                 sock_file.unlink()
             count += 1
-            logger.info("Cleaned stale lock for task %s", task_id)
+            logger.warning("Cleaned stale lock for task %s", task_id)
         return count
 
     def get_running_tasks(self) -> list[dict]:  # pragma: no cover — requires running subprocess

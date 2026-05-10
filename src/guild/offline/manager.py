@@ -59,7 +59,7 @@ class OfflineManager:
         try:
             result = await self._provider.health_check()
             self._is_online = result
-        except Exception:
+        except (ConnectionError, TimeoutError, OSError):
             self._is_online = False
         return self._is_online
 

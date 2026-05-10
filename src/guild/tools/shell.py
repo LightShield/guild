@@ -6,6 +6,7 @@ import asyncio
 import logging
 import re
 
+from guild.config.constants import MAX_SHELL_OUTPUT_CHARS, SHELL_TIMEOUT_SECONDS
 from guild.tools.base import ToolResult
 
 __all__ = [
@@ -16,9 +17,6 @@ __all__ = [
 ]
 
 logger = logging.getLogger(__name__)
-
-SHELL_TIMEOUT_SECONDS: int = 60
-MAX_SHELL_OUTPUT_CHARS: int = 20_000
 
 # Compiled regex patterns for dangerous commands.
 # Each tuple: (compiled_pattern, human-readable reason).
@@ -64,7 +62,7 @@ async def execute_shell(args: dict, working_dir: str | None = None) -> ToolResul
     # Check denylist before execution
     denial = _check_denylist(command)
     if denial:
-        logger.warning("Shell command denied: %s (reason: %s)", command, denial)
+        logger.info("Shell command denied: %s (reason: %s)", command, denial)
         return ToolResult(success=False, output="", error=f"Command blocked: {denial}")
 
     timeout = args.get("timeout", SHELL_TIMEOUT_SECONDS)

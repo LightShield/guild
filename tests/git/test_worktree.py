@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from guild.git.worktree import WorktreeManager
+from guild.git.worktree import BRANCH_PREFIX, STAGING_BRANCH_SUFFIX, WorktreeManager
 
 
 async def _init_test_repo(tmp_path: Path) -> Path:
@@ -206,3 +206,59 @@ class TestMergeToStaging:
         success_b, message_b = await manager.merge_to_staging("task-conflict-b")
         assert success_b is False
         assert "conflict" in message_b.lower()
+
+
+# ---------------------------------------------------------------------------
+# Tests: _create_worktree with existing branch (line 182)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-04.12")
+class TestCreateWorktreeExistingBranch:
+    """Test _create_worktree when the branch already exists (line 182)."""
+
+    async def test_create_worktree_with_existing_branch(self, tmp_path: Path) -> None:
+        """_create_worktree with branch_exists=True uses 'worktree add' without -b."""
+        repo = await _init_test_repo(tmp_path)
+        manager = WorktreeManager(repo)
+
+        staging_branch = f"{BRANCH_PREFIX}{STAGING_BRANCH_SUFFIX}"
+
+        # Create the staging branch manually first
+        await manager._run_git("branch", staging_branch)
+
+        # Now call _create_worktree with branch_exists=True
+        staging_path = manager.worktrees_dir / "_test_existing"
+        staging_path.parent.mkdir(parents=True, exist_ok=True)
+
+        await manager._create_worktree(staging_path, staging_branch, branch_exists=True)
+
+        assert staging_path.exists()
+        assert staging_path.is_dir()
+
+
+# ---------------------------------------------------------------------------
+# Tests: _create_worktree failure raises RuntimeError (line 188)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-04.12")
+class TestCreateWorktreeFailure:
+    """Test _create_worktree raises RuntimeError on git failure (line 188)."""
+
+    async def test_create_worktree_raises_on_invalid_branch(self, tmp_path: Path) -> None:
+        """_create_worktree raises RuntimeError when git worktree add fails."""
+        repo = await _init_test_repo(tmp_path)
+        manager = WorktreeManager(repo)
+
+        worktree_path = manager.worktrees_dir / "bad_worktree"
+        worktree_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # branch_exists=True but the branch does not actually exist in git
+        # This will cause `git worktree add <path> <branch>` to fail
+        with pytest.raises(RuntimeError, match="Failed to create staging worktree"):
+            await manager._create_worktree(
+                worktree_path, "nonexistent-branch", branch_exists=True
+            )

@@ -166,3 +166,27 @@ class TestMCPToolRegistryDisconnectAll:
 
         assert mock_disconnect.await_count == 2
         assert registry.list_all_tools() == []
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-04.3")
+class TestMCPToolRegistryDisconnectOnFailure:
+    """Tests for MCPToolRegistry.add_server() — disconnect on list_tools failure."""
+
+    async def test_disconnect_called_when_list_tools_raises(self) -> None:
+        """When list_tools() raises, disconnect() is called before the exception propagates."""
+        registry = MCPToolRegistry()
+        config = MCPServerConfig(name="fail-server", command="echo", args=[])
+
+        with (
+            patch.object(MCPClient, "connect", new_callable=AsyncMock) as mock_connect,
+            patch.object(MCPClient, "list_tools", new_callable=AsyncMock) as mock_list,
+            patch.object(MCPClient, "disconnect", new_callable=AsyncMock) as mock_disconnect,
+        ):
+            mock_list.side_effect = RuntimeError("server crashed")
+
+            with pytest.raises(RuntimeError, match="server crashed"):
+                await registry.add_server(config)
+
+            mock_connect.assert_awaited_once()
+            mock_disconnect.assert_awaited_once()

@@ -6,6 +6,7 @@ import json
 import logging
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
+from typing import Any
 
 __all__ = [
     "TraceEvent",
@@ -23,7 +24,7 @@ class TraceEvent:
     event_type: str  # "llm_call", "tool_call", "decision", "stuck", "escalation"
     agent_id: str | None = None
     task_id: str | None = None
-    details: dict | None = field(default=None)
+    details: dict[str, Any] | None = field(default=None)
     duration_ms: int | None = None
 
 

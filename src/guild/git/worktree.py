@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+from guild.config.constants import GUILD_DIR_NAME
+
 __all__ = [
     "BRANCH_PREFIX",
     "STAGING_BRANCH_SUFFIX",
@@ -44,7 +46,7 @@ class WorktreeManager:
     @property
     def worktrees_dir(self) -> Path:
         """Base directory for all Guild worktrees."""
-        return self._repo_root / ".guild" / "worktrees"
+        return self._repo_root / GUILD_DIR_NAME / "worktrees"
 
     async def create(self, task_id: str, base_branch: str = "main") -> WorktreeInfo:
         """Create a new worktree for a task.

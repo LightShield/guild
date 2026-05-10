@@ -113,7 +113,7 @@ class SleepWakeDetector:
                 retries,
             )
             await asyncio.sleep(self.config.health_check_retry_delay)
-        logger.error("Provider did not recover after %d attempts", retries)
+        logger.warning("Provider did not recover after %d attempts", retries)
         return False
 
     async def retry_after_sleep(

@@ -54,6 +54,7 @@ def _make_multi_command_app() -> typer.Typer:
 
 
 @pytest.mark.unit
+@pytest.mark.req("REQ-03.1")
 class TestCliRunnerCapturesOutput:
     """Verify CliRunner captures stdout — used for CLI testing."""
 
@@ -71,6 +72,7 @@ class TestCliRunnerCapturesOutput:
 
 
 @pytest.mark.unit
+@pytest.mark.req("REQ-03.1")
 class TestOptionDefaultUsedWhenNotProvided:
     """Verify Option defaults apply — used throughout Guild CLI."""
 
@@ -88,6 +90,7 @@ class TestOptionDefaultUsedWhenNotProvided:
 
 
 @pytest.mark.unit
+@pytest.mark.req("REQ-03.1")
 class TestArgumentRequiredRaisesOnMissing:
     """Verify required Argument raises when missing — contract for positional args."""
 
@@ -106,6 +109,7 @@ class TestArgumentRequiredRaisesOnMissing:
 
 
 @pytest.mark.unit
+@pytest.mark.req("REQ-03.1")
 class TestCallbackInvokeWithoutCommand:
     """Verify no_args_is_help=True shows help — Guild uses this pattern."""
 

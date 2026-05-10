@@ -181,6 +181,7 @@ class TestConfigLoaderInternals:
 
 
 @pytest.mark.unit
+@pytest.mark.req("REQ-09.1")
 class TestWorktreeParseList:
     """Cover worktree list parsing edge cases."""
 
@@ -248,6 +249,7 @@ class TestWorktreeParseList:
 
 
 @pytest.mark.unit
+@pytest.mark.req("REQ-04.3")
 class TestMCPClientEdgeCases:
     """Cover MCP client edge cases."""
 
@@ -284,6 +286,7 @@ class TestMCPClientEdgeCases:
 
 
 @pytest.mark.unit
+@pytest.mark.req("REQ-24.2")
 class TestSleepWakeEdgeCases:
     """Cover sleep/wake detector edge cases."""
 
@@ -387,6 +390,7 @@ class TestSleepWakeEdgeCases:
 
 
 @pytest.mark.unit
+@pytest.mark.req("REQ-21.1")
 class TestReplayEdgeCases:
     """Cover session replay edge cases."""
 
@@ -457,6 +461,7 @@ class TestReplayEdgeCases:
 
 
 @pytest.mark.unit
+@pytest.mark.req("REQ-09.1")
 class TestWorktreeOperations:
     """Test worktree operations with mocked git."""
 
@@ -519,6 +524,7 @@ class TestWorktreeOperations:
 
 
 @pytest.mark.unit
+@pytest.mark.req("REQ-04.3")
 class TestMCPClientProtocol:
     """Test MCP client protocol edge cases."""
 
@@ -563,6 +569,7 @@ class TestMCPClientProtocol:
 
 
 @pytest.mark.unit
+@pytest.mark.req("REQ-07.1")
 class TestBusReceiveNoTimeout:
     """Test bus receive without timeout (blocking)."""
 

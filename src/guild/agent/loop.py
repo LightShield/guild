@@ -14,6 +14,7 @@ from guild.agent.completion import (
     should_nudge_completion,
 )
 from guild.agent.message import Message
+from guild.config.constants import DEFAULT_MAX_TURNS
 from guild.tools.base import TOOL_SCHEMAS, ToolResult
 
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
@@ -26,9 +27,8 @@ __all__ = [
     "ESCALATION_TEMPLATE",
     "SELF_REVIEW_PROMPT",
     "STUCK_RECOVERY_PROMPT",
+    "ToolExecutor",
 ]
-
-DEFAULT_MAX_TURNS = 50
 
 logger = logging.getLogger(__name__)
 
@@ -116,7 +116,6 @@ class AgentLoop:
 
         result = await self._execute_turns()
 
-        # If escalated (result starts with escalation marker), skip self-review
         if self_review and not result.startswith("I'm stuck and need help."):
             result = await self._run_self_review()
 
@@ -145,7 +144,7 @@ class AgentLoop:
             # Budget check (REQ-10.2): stop if token budget exceeded
             if self._budget_exceeded():
                 total = self.total_input_tokens + self.total_output_tokens
-                logger.info(
+                logger.warning(
                     "Token budget exceeded, stopping loop (used=%d, budget=%d)",
                     total,
                     self.token_budget,
@@ -203,7 +202,6 @@ class AgentLoop:
         if not self.stuck_detector:
             return None
 
-        # Record turn outcome for the stuck detector
         any_failure = any(not r.success for r in turn_results)
         error_msg = next((r.error for r in turn_results if not r.success and r.error), None)
         self.stuck_detector.record_turn(success=not any_failure, error=error_msg)
@@ -211,17 +209,15 @@ class AgentLoop:
         if not self.stuck_detector.is_stuck():
             return None
 
-        # Stuck detected
         if not self._recovery_attempted:
             return self._attempt_recovery()
-        # Already tried recovery — escalate
         return self._produce_escalation()
 
     def _attempt_recovery(self) -> str | None:
         """Inject recovery prompt and reset detector. Returns None (continue loop)."""
         self._recovery_attempted = True
         reason = self.stuck_detector.get_reason() if self.stuck_detector else ""
-        logger.info("Stuck detected (%s), attempting recovery", reason)
+        logger.warning("Stuck detected (%s), attempting recovery", reason)
         if self.stuck_detector:
             self.stuck_detector.reset()
         self.messages.append(Message(role="user", content=STUCK_RECOVERY_PROMPT))
@@ -257,16 +253,14 @@ class AgentLoop:
 
             # Fix C: Deduplication guard
             if is_duplicate_call(call, self.recent_tool_calls):
-                logger.info("Skipping duplicate call: %s", tool_name)
+                logger.debug("Skipping duplicate call: %s", tool_name)
                 self.messages.append(Message(role="tool", content=DEDUP_MESSAGE))
                 results.append(ToolResult(success=True, output=DEDUP_MESSAGE))
                 continue
 
-            # Execute the tool
             result = await self._execute_single_tool(tool_name, tool_args)
             results.append(result)
 
-            # Track for dedup (only track successful calls)
             if result.success:
                 self.recent_tool_calls.append(call)
 
@@ -291,8 +285,8 @@ class AgentLoop:
 
         try:
             return await executor(tool_args, self.working_dir)
-        except Exception as exc:
-            logger.exception("Tool %s raised an exception", tool_name)
+        except (OSError, RuntimeError, ValueError, TypeError) as exc:
+            logger.warning("Tool %s raised an exception", tool_name, exc_info=True)
             return ToolResult(success=False, output="", error=f"Tool execution failed: {exc}")
 
     def _build_assistant_message(self, response: LLMResponse) -> Message:

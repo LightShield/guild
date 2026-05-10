@@ -15,6 +15,8 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from guild.config.constants import SECURITY_FILENAME
+
 __all__ = ["SandboxPolicy", "load_sandbox_policy"]
 
 logger = logging.getLogger(__name__)
@@ -26,22 +28,14 @@ _SECRET_PLACEHOLDER_RE = re.compile(r"\$\{([A-Z_][A-Z0-9_]*)\}")
 class SandboxPolicy:
     """Security policy for agent execution.
 
-    Attributes
-    ----------
-    allowed_paths:
-        Filesystem path prefixes the agent may access. Empty = no restriction.
-    denied_paths:
-        Filesystem paths explicitly blocked (takes precedence over allowed).
-    allowed_commands:
-        Shell commands permitted. Empty list = all allowed (minus denylist).
-    denied_commands:
-        Shell commands explicitly blocked (takes precedence over allowlist).
-    network_allowed:
-        Whether network access is permitted at all.
-    network_hosts_allowlist:
-        Specific hosts the agent may contact. Empty = all hosts allowed.
-    secrets:
-        Named secrets (name -> value). Injected into commands, never shown.
+    Attributes:
+        allowed_paths: Filesystem path prefixes the agent may access. Empty = no restriction.
+        denied_paths: Filesystem paths explicitly blocked (takes precedence over allowed).
+        allowed_commands: Shell commands permitted. Empty list = all allowed (minus denylist).
+        denied_commands: Shell commands explicitly blocked (takes precedence over allowlist).
+        network_allowed: Whether network access is permitted at all.
+        network_hosts_allowlist: Specific hosts the agent may contact. Empty = all hosts allowed.
+        secrets: Named secrets (name -> value). Injected into commands, never shown.
     """
 
     allowed_paths: list[str] = field(default_factory=list)
@@ -172,7 +166,7 @@ def load_sandbox_policy(guild_dir: Path) -> SandboxPolicy:
 
     Falls back to a permissive default policy when no config file is present.
     """
-    config_path = guild_dir / "security.toml"
+    config_path = guild_dir / SECURITY_FILENAME
 
     if not config_path.exists():
         logger.debug("No security.toml found at %s, using default policy", config_path)

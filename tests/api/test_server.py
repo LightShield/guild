@@ -188,6 +188,7 @@ def test_guild_serve_command_exists() -> None:
 
 
 @pytest.mark.unit
+@pytest.mark.req("REQ-05.6")
 def test_visual_composer_api_routes_exist() -> None:
     """The API provides blocks/teams data for the composer (backend side only)."""
     # NOTE: REQ-05.6 (visual composer) and REQ-05.7 (communication graph) are
@@ -388,3 +389,201 @@ def test_api_post_config(guild_api_dir: Path) -> None:
         resp = client.post("/api/config", json={"model": "llama3"})
     assert resp.status_code == 200
     assert resp.json()["status"] == "ok"
+
+
+# ------------------------------------------------------------------
+# Branch coverage tests for missing paths
+# ------------------------------------------------------------------
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-05.5")
+def test_api_get_task_by_id_success(guild_api_dir: Path) -> None:
+    """GET /api/tasks/{id} returns the task when it exists (line 87)."""
+    from starlette.testclient import TestClient
+
+    app = create_app(guild_dir=guild_api_dir)
+    with TestClient(app) as client:
+        create_resp = client.post("/api/tasks", json={"description": "lookup task"})
+        task_id = create_resp.json()["id"]
+
+        resp = client.get(f"/api/tasks/{task_id}")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["task_id"] == task_id
+    assert data["description"] == "lookup task"
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-05.5")
+def test_api_list_blocks_import_error(guild_api_dir: Path) -> None:
+    """GET /api/blocks returns [] when BlockRegistry import raises ImportError (lines 184-185)."""
+    from starlette.testclient import TestClient
+
+    app = create_app(guild_dir=guild_api_dir)
+    with (
+        TestClient(app) as client,
+        patch.dict("sys.modules", {"guild.blocks.registry": None}),
+    ):
+        resp = client.get("/api/blocks")
+
+    assert resp.status_code == 200
+    assert resp.json() == []
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-05.5")
+def test_api_list_blocks_os_error(guild_api_dir: Path) -> None:
+    """GET /api/blocks returns [] when BlockRegistry raises OSError (lines 184-185)."""
+    from starlette.testclient import TestClient
+
+    app = create_app(guild_dir=guild_api_dir)
+    with (
+        TestClient(app) as client,
+        patch(
+            "guild.blocks.registry.BlockRegistry.list_blocks",
+            side_effect=OSError("disk error"),
+        ),
+    ):
+        resp = client.get("/api/blocks")
+
+    assert resp.status_code == 200
+    assert resp.json() == []
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-05.5")
+def test_api_get_config_os_error(guild_api_dir: Path) -> None:
+    """GET /api/config returns {} when load_config raises OSError (lines 223-225)."""
+    from starlette.testclient import TestClient
+
+    with patch("guild.config.loader.load_config", side_effect=OSError("config file missing")):
+        app = create_app(guild_dir=guild_api_dir)
+        with TestClient(app) as client:
+            resp = client.get("/api/config")
+
+    assert resp.status_code == 200
+    assert resp.json() == {}
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-05.5")
+def test_api_get_config_value_error(guild_api_dir: Path) -> None:
+    """GET /api/config returns {} when load_config raises ValueError (lines 223-225)."""
+    from starlette.testclient import TestClient
+
+    with patch("guild.config.loader.load_config", side_effect=ValueError("invalid config")):
+        app = create_app(guild_dir=guild_api_dir)
+        with TestClient(app) as client:
+            resp = client.get("/api/config")
+
+    assert resp.status_code == 200
+    assert resp.json() == {}
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-05.5")
+def test_websocket_handles_connection_error(guild_api_dir: Path) -> None:
+    """WebSocket /ws handles ConnectionError gracefully (lines 249, 251)."""
+    from starlette.testclient import TestClient
+
+    app = create_app(guild_dir=guild_api_dir)
+
+    with TestClient(app) as client, client.websocket_connect("/ws") as ws:
+        # The WebSocket test client raises WebSocketDisconnect when we close,
+        # which hits line 248-249. We verify no unhandled exception escapes.
+        data = ws.receive_json()
+        assert data["status"] == "ok"
+        # Closing the websocket triggers WebSocketDisconnect on the server
+        # side, exercising the `except WebSocketDisconnect: pass` path.
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-05.5")
+def test_websocket_handles_runtime_error(guild_api_dir: Path) -> None:
+    """WebSocket /ws handles RuntimeError gracefully (line 251)."""
+    from starlette.testclient import TestClient
+
+    app = create_app(guild_dir=guild_api_dir)
+
+    with (
+        TestClient(app) as client,
+        patch("guild.api.server._get_current_status", side_effect=RuntimeError("broken")),
+        client.websocket_connect("/ws") as _ws,  # noqa: F841
+    ):
+        # The server should catch the RuntimeError and close silently.
+        # The test client may raise or return nothing; either is fine.
+        pass
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-05.5")
+def test_static_file_served_directly(tmp_path: Path) -> None:
+    """SPA route serves an existing file directly instead of index.html (line 272)."""
+    from starlette.testclient import TestClient
+
+    guild_dir = tmp_path / ".guild"
+    guild_dir.mkdir()
+    (guild_dir / "config.toml").write_text(
+        '[provider]\nname = "ollama"\nmodel = "test"\n'
+        'base_url = "http://localhost:11434"\n'
+    )
+
+    # Create a mock ui/dist directory with a specific file
+    dist_dir = tmp_path / "ui" / "dist"
+    dist_dir.mkdir(parents=True)
+    (dist_dir / "index.html").write_text("<html><body>Guild UI</body></html>")
+    (dist_dir / "favicon.ico").write_bytes(b"\x00\x00\x01\x00")
+    (dist_dir / "_app").mkdir()
+    (dist_dir / "_app" / "test.js").write_text("// test")
+
+    with patch("guild.api.server._UI_DIST", dist_dir):
+        app = create_app(guild_dir=guild_dir)
+        with TestClient(app) as client:
+            # Request an existing file — should return that file, not index.html
+            resp = client.get("/favicon.ico")
+
+    assert resp.status_code == 200
+    assert resp.content == b"\x00\x00\x01\x00"
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-05.5")
+def test_no_static_files_when_ui_dist_missing(guild_api_dir: Path) -> None:
+    """When _UI_DIST is not a directory, static file routes are not registered (line 259->exit)."""
+    from pathlib import Path as _Path
+
+    from starlette.testclient import TestClient
+
+    non_existent = _Path("/tmp/guild_nonexistent_ui_dist_xyz")
+    with patch("guild.api.server._UI_DIST", non_existent):
+        app = create_app(guild_dir=guild_api_dir)
+        with TestClient(app) as client:
+            resp = client.get("/some-page")
+
+    # Without static files, the SPA route is not registered — returns 404 or similar
+    assert resp.status_code in (404, 405)
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-05.5")
+def test_websocket_disconnect_path(guild_api_dir: Path) -> None:
+    """WebSocket /ws handles client disconnect via WebSocketDisconnect (line 249)."""
+    import asyncio
+
+    from starlette.testclient import TestClient
+    from starlette.websockets import WebSocketDisconnect
+
+    app = create_app(guild_dir=guild_api_dir)
+
+    # Patch sleep to raise WebSocketDisconnect, simulating client disconnect
+    # during the server's poll loop
+    with (
+        TestClient(app) as client,
+        patch("guild.api.server.asyncio.sleep", side_effect=WebSocketDisconnect()),
+    ):
+        with client.websocket_connect("/ws") as ws:
+            # Server sends one status update then "disconnects"
+            data = ws.receive_json()
+            assert "status" in data

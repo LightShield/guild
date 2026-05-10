@@ -10,6 +10,8 @@ import json
 import logging
 from typing import TYPE_CHECKING
 
+from guild.config.constants import LEARNING_CONTENT_MAX_CHARS, MIN_INJECTION_CONFIDENCE
+
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from guild.provider.base import LLMProvider
     from guild.storage.sqlite import Storage
@@ -24,9 +26,6 @@ __all__ = [
 ]
 
 logger = logging.getLogger(__name__)
-
-LEARNING_CONTENT_MAX_CHARS = 500
-MIN_INJECTION_CONFIDENCE = 0.5
 
 LEARNER_PROMPT = (
     "Review the session log below. Extract useful knowledge as JSON lines.\n"
@@ -60,12 +59,12 @@ async def extract_learnings(
 
     agent_id = task.get("assigned_agent")
     if not agent_id:
-        logger.warning("extract_learnings: task %s has no assigned agent", task_id)
+        logger.debug("extract_learnings: task %s has no assigned agent", task_id)
         return []
 
     messages = await storage.get_messages(agent_id)
     if not messages:
-        logger.warning("extract_learnings: no messages for agent %s", agent_id)
+        logger.debug("extract_learnings: no messages for agent %s", agent_id)
         return []
 
     session_log = _format_session_log(messages)

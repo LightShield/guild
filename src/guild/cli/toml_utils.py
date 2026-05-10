@@ -7,7 +7,7 @@ config/loader.py (the canonical lower-layer implementation).
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from guild.config.loader import toml_literal as toml_value
 from guild.config.loader import write_toml_bytes
@@ -24,7 +24,7 @@ __all__ = [
 ]
 
 
-def load_toml(path: Path) -> dict:
+def load_toml(path: Path) -> dict[str, Any]:
     """Load a TOML file, returning empty dict on failure or missing."""
     import tomllib
 
@@ -33,7 +33,7 @@ def load_toml(path: Path) -> dict:
     try:
         with open(path, "rb") as f:
             return tomllib.load(f)
-    except Exception:  # pragma: no cover — defensive guard for corrupted TOML
+    except (OSError, tomllib.TOMLDecodeError):  # pragma: no cover
         return {}
 
 
@@ -79,7 +79,7 @@ def parse_value(value: str) -> str | int | float | bool:
     return value
 
 
-def write_toml(path: Path, data: dict) -> None:
+def write_toml(path: Path, data: dict[str, Any]) -> None:
     """Write a dict to a TOML file.
 
     Delegates to the canonical write_toml_bytes in config/loader.py.

@@ -6,7 +6,7 @@ data for CLI display are collected here.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from guild.config.loader import DB_FILENAME
 
@@ -148,7 +148,7 @@ async def decay_learnings(db_path: Path) -> int:
 # ------------------------------------------------------------------
 
 
-async def fetch_pending_questions(db_path: Path) -> list:
+async def fetch_pending_questions(db_path: Path) -> list[dict[str, Any]]:
     """Fetch pending escalation questions from the database."""
     from guild.escalation.queue import QuestionQueue
     from guild.storage.sqlite import Storage

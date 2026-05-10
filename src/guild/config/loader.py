@@ -11,11 +11,14 @@ import tomllib
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from guild.config.constants import CONFIG_FILENAME, DB_FILENAME, GUILD_DIR_NAME
 from guild.config.models import GuildConfig
 
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from collections.abc import Callable
-    from typing import IO, Any
+    from typing import IO
+
+from typing import Any
 
 __all__ = [
     "CONFIG_FILENAME",
@@ -27,10 +30,6 @@ __all__ = [
     "toml_literal",
     "write_toml_bytes",
 ]
-
-DB_FILENAME = "guild.db"
-CONFIG_FILENAME = "config.toml"
-GUILD_DIR_NAME = ".guild"
 _TEMP_FILE_PREFIX = "guild_config_"
 
 logger = logging.getLogger(__name__)
@@ -92,19 +91,19 @@ def _merge_toml_files(guild_dir: Path | None) -> Path | None:
     return Path(tmp.name)
 
 
-def _load_toml_file(path: Path | None) -> dict:
+def _load_toml_file(path: Path | None) -> dict[str, Any]:
     """Load a TOML file, returning empty dict on failure or missing file."""
     if path is None or not path.is_file():
         return {}
     try:
         with open(path, "rb") as f:
             return tomllib.load(f)
-    except Exception:
+    except (OSError, tomllib.TOMLDecodeError):
         logger.debug("Failed to load %s", path, exc_info=True)
         return {}
 
 
-def _deep_merge(base: dict, override: dict) -> dict:
+def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
     """Recursively merge *override* into *base*, returning a new dict."""
     result = base.copy()
     for key, value in override.items():
@@ -115,7 +114,7 @@ def _deep_merge(base: dict, override: dict) -> dict:
     return result
 
 
-def write_toml_bytes(f: IO[bytes], data: dict) -> None:
+def write_toml_bytes(f: IO[bytes], data: dict[str, Any]) -> None:
     """Write a dict as TOML bytes to a file handle.
 
     This is the canonical TOML serialization for Guild config.
@@ -191,7 +190,7 @@ class ConfigWatcher:
     If the file's mtime has changed, reloads config and invokes the callback.
     """
 
-    def __init__(self, config_path: Path, callback: Callable) -> None:
+    def __init__(self, config_path: Path, callback: Callable[[], None]) -> None:
         self._config_path = config_path
         self._callback = callback
         self._last_mtime: float | None = self._get_mtime()

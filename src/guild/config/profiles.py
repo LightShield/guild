@@ -10,7 +10,7 @@ import logging
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path  # noqa: TC003 - used at runtime in function bodies
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from guild.agent.loop import DEFAULT_MAX_TURNS
 from guild.permissions.checker import PermissionTier
@@ -135,19 +135,19 @@ def validate_config(config: GuildConfig, guild_dir: Path) -> list[str]:
     return errors
 
 
-def _load_toml(path: Path) -> dict:
+def _load_toml(path: Path) -> dict[str, Any]:
     """Load a TOML file, returning empty dict on failure or missing file."""
     if not path.is_file():
         return {}
     try:
         with open(path, "rb") as f:
             return tomllib.load(f)
-    except Exception:
+    except (OSError, tomllib.TOMLDecodeError):
         logger.debug("Failed to load %s", path, exc_info=True)
         return {}
 
 
-def _parse_agent_profile(name: str, values: dict) -> AgentProfile:
+def _parse_agent_profile(name: str, values: dict[str, Any]) -> AgentProfile:
     """Parse a dict of TOML values into an AgentProfile."""
     return AgentProfile(
         name=name,
@@ -160,7 +160,7 @@ def _parse_agent_profile(name: str, values: dict) -> AgentProfile:
     )
 
 
-def _parse_permission_profile(name: str, values: dict) -> PermissionProfile:
+def _parse_permission_profile(name: str, values: dict[str, Any]) -> PermissionProfile:
     """Parse a dict of TOML values into a PermissionProfile."""
     return PermissionProfile(
         name=name,

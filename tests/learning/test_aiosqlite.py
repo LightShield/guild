@@ -16,6 +16,7 @@ import pytest
 
 
 @pytest.mark.unit
+@pytest.mark.req("REQ-03.1")
 class TestWalModeCanBeSet:
     """Verify PRAGMA journal_mode=WAL works — used in Storage.connect()."""
 
@@ -38,6 +39,7 @@ class TestWalModeCanBeSet:
 
 
 @pytest.mark.unit
+@pytest.mark.req("REQ-03.1")
 class TestRowFactoryMakesDictRows:
     """Verify aiosqlite.Row lets us call dict(row) — used everywhere in Storage."""
 
@@ -73,6 +75,7 @@ class TestRowFactoryMakesDictRows:
 
 
 @pytest.mark.unit
+@pytest.mark.req("REQ-03.1")
 class TestExecutescriptCreatesTables:
     """Verify executescript works for multi-statement DDL — used in Storage.connect()."""
 
@@ -110,6 +113,7 @@ class TestExecutescriptCreatesTables:
 
 
 @pytest.mark.unit
+@pytest.mark.req("REQ-03.1")
 class TestConcurrentReadsWorkInWalMode:
     """Verify concurrent reads work in WAL mode — core assumption for Guild."""
 

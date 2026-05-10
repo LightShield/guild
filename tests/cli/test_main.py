@@ -914,6 +914,7 @@ class TestLearningsDecay:
 
 
 @pytest.mark.unit
+@pytest.mark.req("REQ-05.1")
 class TestNoGuildDirErrors:
     """All commands fail gracefully when no .guild/ directory exists."""
 
@@ -953,6 +954,7 @@ class TestNoGuildDirErrors:
 
 
 @pytest.mark.unit
+@pytest.mark.req("REQ-05.1")
 class TestInitAlreadyExists:
     """Test init when .guild/ already exists."""
 
@@ -970,6 +972,7 @@ class TestInitAlreadyExists:
 
 
 @pytest.mark.unit
+@pytest.mark.req("REQ-05.1")
 class TestNoArgsShowsHelp:
     """Test that no args shows help."""
 
@@ -987,6 +990,7 @@ class TestNoArgsShowsHelp:
 
 
 @pytest.mark.unit
+@pytest.mark.req("REQ-05.2")
 class TestEmptyDataDisplays:
     """Commands show appropriate messages when no data exists."""
 
@@ -1066,3 +1070,113 @@ class TestEmptyDataDisplays:
             result = runner.invoke(guild_app, ["resume", "some-id"])
         assert result.exit_code == 0
         assert "cannot" in result.output.lower()
+
+
+# ------------------------------------------------------------------
+# Tests for previously uncovered branches
+# ------------------------------------------------------------------
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-05.2")
+class TestConfigSetInvalidFormat:
+    """config --set with invalid format shows error (lines 280-282)."""
+
+    def test_config_set_invalid_format(self, guild_app, guild_project: Path) -> None:
+        """config --set without '=' raises ValueError and exits with code 1."""
+        result = runner.invoke(guild_app, ["config", "--set", "provider.model"])
+        assert result.exit_code != 0
+        assert "error" in result.output.lower()
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-10.3")
+class TestUsageNoData:
+    """usage command when summary is None (lines 596-597)."""
+
+    def test_usage_shows_no_data_when_summary_none(self, guild_app, guild_project: Path) -> None:
+        """usage shows 'no usage data' when token summary returns None."""
+        with patch("guild.cli.main._fetch_token_summary", return_value=AsyncMock(return_value=None)):
+            # We need to mock the asyncio.run result
+            with patch("guild.cli.main.asyncio.run", return_value=None):
+                result = runner.invoke(guild_app, ["usage"])
+
+        assert result.exit_code == 0
+        assert "no" in result.output.lower()
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-24.8")
+class TestResourceStatusReason:
+    """resource-status shows reason when status.reason is truthy (line 636)."""
+
+    def test_resource_status_shows_reason(self, guild_app, guild_project: Path) -> None:
+        """resource-status displays the reason field when present."""
+        from guild.daemon.resource import ActivityState, ResourceStatus, SchedulingMode
+
+        with patch("guild.daemon.resource.ResourceMonitor") as mock_monitor_cls:
+            mock_monitor = MagicMock()
+            mock_monitor.get_status.return_value = ResourceStatus(
+                mode=SchedulingMode.POLITE,
+                activity=ActivityState.ACTIVE,
+                cpu_percent=85.0,
+                is_throttled=True,
+                reason="CPU usage above threshold",
+            )
+            mock_monitor_cls.return_value = mock_monitor
+
+            result = runner.invoke(guild_app, ["resource-status"])
+
+        assert result.exit_code == 0
+        assert "CPU usage above threshold" in result.output
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-05.5")
+class TestServeImportError:
+    """serve command shows error when API deps missing (lines 706-712)."""
+
+    def test_serve_fails_on_missing_api_deps(self, guild_app, guild_project: Path) -> None:
+        """serve shows install hint when uvicorn/fastapi are not available."""
+        import builtins
+
+        original_import = builtins.__import__
+
+        def mock_import(name, *args, **kwargs):
+            if name == "uvicorn":
+                raise ImportError("No module named 'uvicorn'")
+            return original_import(name, *args, **kwargs)
+
+        with patch("builtins.__import__", side_effect=mock_import):
+            result = runner.invoke(guild_app, ["serve"])
+
+        assert result.exit_code != 0
+        assert "install" in result.output.lower() or "api" in result.output.lower()
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-05.2")
+class TestGetTaskAndAgentCountsNoDb:
+    """_get_task_and_agent_counts returns (0, 0) when db doesn't exist (line 765)."""
+
+    def test_returns_zeros_for_missing_db(self) -> None:
+        """Returns (0, 0) when the database file doesn't exist."""
+        from pathlib import Path
+
+        from guild.cli.main import _get_task_and_agent_counts
+
+        result = _get_task_and_agent_counts(Path("/nonexistent/path/guild.db"))
+        assert result == (0, 0)
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-05.1")
+class TestMainCallbackNoSubcommand:
+    """main_callback shows help when no subcommand is given (lines 137-138)."""
+
+    def test_no_subcommand_shows_help_and_exits(self, guild_app) -> None:
+        """Invoking guild with no subcommand shows help text."""
+        result = runner.invoke(guild_app, [])
+        assert result.exit_code == 0
+        # Should contain help text with available commands
+        assert "init" in result.output or "Usage" in result.output

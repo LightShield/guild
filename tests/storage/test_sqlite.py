@@ -522,3 +522,109 @@ class TestLearningsDecay:
 
         learning = await storage.get_learning(lid)
         assert learning["confidence"] == pytest.approx(0.4)
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-08.1")
+class TestStorageNotConnected:
+    """Every public method raises RuntimeError when called before connect()."""
+
+    @pytest.mark.parametrize(
+        "method, args",
+        [
+            # Tasks
+            ("create_task", ("t1", "desc")),
+            ("get_task", ("t1",)),
+            ("list_tasks", ()),
+            ("update_task", ("t1",)),
+            # Agents
+            ("register_agent", ("a1", "coder")),
+            ("list_agents", ()),
+            ("update_agent", ("a1",)),
+            # Messages
+            ("append_message", ("a1", "user", "hi")),
+            ("get_messages", ("a1",)),
+            # Audit
+            ("log_audit", ("action",)),
+            ("list_audit", ()),
+            # Decisions
+            ("log_decision", (None, None, "dec", "rat")),
+            ("list_decisions", ()),
+            # Learnings
+            ("add_learning", ("pattern", "content")),
+            ("list_learnings", ()),
+            ("validate_learning", (1,)),
+            ("invalidate_learning", (1,)),
+            ("decay_learnings", ()),
+            ("delete_learning", (1,)),
+            ("get_learning", (1,)),
+            # Token summary
+            ("get_token_summary", ()),
+            # Questions
+            ("insert_question", ("q1", "why?", "ctx", "2024-01-01T00:00:00")),
+            ("list_questions", ()),
+            ("get_question", ("q1",)),
+            ("answer_question", ("q1", "because")),
+            # Checkpoints
+            ("save_checkpoint", ("a1", None, "{}")),
+            ("load_checkpoint", ("a1",)),
+            # Memories
+            ("add_memory", ("summary", "content", "category")),
+            ("get_memory", ("m1",)),
+            ("list_memory_summaries", ()),
+            ("verify_memory", ("m1",)),
+            ("consolidate_memories", ()),
+            # Private helpers with guards
+            ("_remove_stale_memories", (30,)),
+            ("_dedup_memories", ()),
+            # Eval results
+            ("store_eval_result", ({"task_name": "t", "model": "m", "config_hash": "h", "task_completed": 1, "duration_seconds": 1.0, "input_tokens": 0, "output_tokens": 0, "tool_calls": 0, "turns": 0, "error": None, "timestamp": "2024-01-01T00:00:00"},)),
+            ("list_eval_results", ()),
+            # Internal helper
+            ("_get_tables", ()),
+        ],
+        ids=[
+            "create_task",
+            "get_task",
+            "list_tasks",
+            "update_task",
+            "register_agent",
+            "list_agents",
+            "update_agent",
+            "append_message",
+            "get_messages",
+            "log_audit",
+            "list_audit",
+            "log_decision",
+            "list_decisions",
+            "add_learning",
+            "list_learnings",
+            "validate_learning",
+            "invalidate_learning",
+            "decay_learnings",
+            "delete_learning",
+            "get_learning",
+            "get_token_summary",
+            "insert_question",
+            "list_questions",
+            "get_question",
+            "answer_question",
+            "save_checkpoint",
+            "load_checkpoint",
+            "add_memory",
+            "get_memory",
+            "list_memory_summaries",
+            "verify_memory",
+            "consolidate_memories",
+            "_remove_stale_memories",
+            "_dedup_memories",
+            "store_eval_result",
+            "list_eval_results",
+            "_get_tables",
+        ],
+    )
+    async def test_method_raises_when_not_connected(self, method: str, args: tuple) -> None:
+        """Calling a method before connect() raises RuntimeError."""
+        store = Storage(":memory:")
+        with pytest.raises(RuntimeError, match="Storage not connected"):
+            await getattr(store, method)(*args)

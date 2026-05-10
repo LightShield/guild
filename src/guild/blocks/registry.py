@@ -2,6 +2,7 @@
 
 import logging
 from pathlib import Path
+from typing import Any
 
 try:
     import tomllib
@@ -155,7 +156,7 @@ class BlockRegistry:
         for path in sorted(blocks_dir.glob("*.toml")):
             try:
                 count += self._load_toml_file(path)
-            except Exception:
+            except (OSError, tomllib.TOMLDecodeError, KeyError, ValueError):
                 logger.debug("Failed to load %s", path, exc_info=True)
         return count
 
@@ -178,7 +179,7 @@ class BlockRegistry:
 
         return count
 
-    def _parse_block(self, data: dict) -> BlockDef:
+    def _parse_block(self, data: dict[str, Any]) -> BlockDef:
         """Parse a block definition from TOML data."""
         inputs = [
             PortDef(
@@ -209,7 +210,7 @@ class BlockRegistry:
             max_retries=data.get("max_retries", 1),
         )
 
-    def _parse_team(self, data: dict) -> TeamDef:
+    def _parse_team(self, data: dict[str, Any]) -> TeamDef:
         """Parse a team definition from TOML data."""
         connections = [
             Connection(

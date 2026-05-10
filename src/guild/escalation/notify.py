@@ -11,6 +11,7 @@ import logging
 import sys
 from enum import Enum
 
+from guild.daemon.platform import get_platform_adapter
 from guild.escalation.queue import QuestionPriority
 
 __all__ = ["NOTIFICATION_TITLE", "NotificationChannel", "Notifier"]
@@ -73,28 +74,9 @@ class Notifier:
         sys.stdout.flush()
 
     async def _desktop(self, message: str) -> None:
-        """Desktop notification (platform-specific)."""
-        if sys.platform == "darwin":
-            script = f'display notification "{message}" with title "{NOTIFICATION_TITLE}"'
-            proc = await asyncio.create_subprocess_exec(
-                "osascript",
-                "-e",
-                script,
-                stdout=asyncio.subprocess.DEVNULL,
-                stderr=asyncio.subprocess.DEVNULL,
-            )
-            await proc.wait()
-        elif sys.platform == "linux":
-            proc = await asyncio.create_subprocess_exec(
-                "notify-send",
-                NOTIFICATION_TITLE,
-                message,
-                stdout=asyncio.subprocess.DEVNULL,
-                stderr=asyncio.subprocess.DEVNULL,
-            )
-            await proc.wait()
-        else:  # pragma: no cover — platform dependency (Windows)
-            logger.warning("Desktop notifications not supported on %s", sys.platform)
+        """Desktop notification (platform-specific, via PlatformAdapter REQ-02.4)."""
+        adapter = get_platform_adapter()
+        adapter.send_desktop_notification(NOTIFICATION_TITLE, message)
 
     async def _webhook(self, message: str) -> None:
         """Send to configured webhook URL via HTTP POST."""
@@ -102,19 +84,28 @@ class Notifier:
             logger.warning("Webhook URL not configured for notification: %s", message[:80])
             return
 
-        import json
-        import urllib.error
-        from urllib.request import Request, urlopen
+        await _post_json(self._webhook_url, {"text": message})
 
-        payload = json.dumps({"text": message}).encode()
-        req = Request(
-            self._webhook_url,
-            data=payload,
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        loop = asyncio.get_event_loop()
-        try:
-            await loop.run_in_executor(None, urlopen, req)
-        except (urllib.error.URLError, OSError):
-            logger.exception("Webhook notification failed")
+
+async def _post_json(url: str, payload: dict) -> None:
+    """HTTP POST a JSON payload to *url*.
+
+    Wraps urllib so the HTTP dependency is isolated in one place and
+    can be swapped for httpx/aiohttp later without touching callers.
+    """
+    import json
+    import urllib.error
+    from urllib.request import Request, urlopen
+
+    data = json.dumps(payload).encode()
+    req = Request(
+        url,
+        data=data,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    loop = asyncio.get_event_loop()
+    try:
+        await loop.run_in_executor(None, urlopen, req)
+    except (urllib.error.URLError, OSError):
+        logger.warning("HTTP POST to %s failed", url, exc_info=True)

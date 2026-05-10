@@ -79,6 +79,32 @@ class GuildConfig(ConfigsLoader):
         description="Comma-separated CLI tool names to use as last-resort providers",
     )
 
+    # Operational constants (guild section)
+    shell_timeout_seconds: int = Field(
+        default=60, section="guild", description="Shell command timeout in seconds"
+    )
+    shell_max_output_chars: int = Field(
+        default=20_000, section="guild", description="Max shell output characters before truncation"
+    )
+    cli_provider_timeout_seconds: int = Field(
+        default=120, section="guild", description="CLI provider command timeout in seconds"
+    )
+    default_max_turns: int = Field(
+        default=50, section="guild", description="Default max agent loop turns"
+    )
+    context_max_tokens: int = Field(
+        default=8000, section="guild", description="Max estimated tokens for context window"
+    )
+    compact_threshold: float = Field(
+        default=0.7, section="guild", description="Context token fraction triggering compaction"
+    )
+    preserve_recent_messages: int = Field(
+        default=4, section="guild", description="Recent messages preserved during compaction"
+    )
+    websocket_poll_seconds: int = Field(
+        default=2, section="guild", description="WebSocket status broadcast interval in seconds"
+    )
+
     # Resource section
     resource_mode: SchedulingMode = Field(
         default=SchedulingMode.POLITE,

@@ -10,21 +10,29 @@ from __future__ import annotations
 import json
 import logging
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import aiosqlite
+
+from guild.config.constants import (
+    CONFIDENCE_DECAY_DECREMENT,
+    CONFIDENCE_INVALIDATE_DECREMENT,
+    CONFIDENCE_VALIDATE_INCREMENT,
+    MEMORY_SUMMARY_MAX_CHARS,
+)
 
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from pathlib import Path
 
-__all__ = ["Storage"]
+__all__ = [
+    "CONFIDENCE_DECAY_DECREMENT",
+    "CONFIDENCE_INVALIDATE_DECREMENT",
+    "CONFIDENCE_VALIDATE_INCREMENT",
+    "MEMORY_SUMMARY_MAX_CHARS",
+    "Storage",
+]
 
 logger = logging.getLogger(__name__)
-
-CONFIDENCE_VALIDATE_INCREMENT = 0.1
-CONFIDENCE_INVALIDATE_DECREMENT = 0.15
-CONFIDENCE_DECAY_DECREMENT = 0.05
-MEMORY_SUMMARY_MAX_CHARS = 200
 
 _SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS tasks (
@@ -418,7 +426,7 @@ class Storage:
         if self._db is None:
             raise RuntimeError("Storage not connected. Call connect() first.")
         query = "SELECT * FROM learnings WHERE confidence >= ?"
-        params: list = [min_confidence]
+        params: list[Any] = [min_confidence]
 
         if category is not None:
             query += " AND category = ?"
@@ -691,7 +699,8 @@ class Storage:
         """Delete unverified memories older than stale_days."""
         from datetime import timedelta
 
-        assert self._db is not None  # caller guarantees
+        if self._db is None:
+            raise RuntimeError("Storage not connected")
         cutoff = (datetime.now(UTC) - timedelta(days=stale_days)).isoformat()
         cursor = await self._db.execute(
             "DELETE FROM memories"
@@ -704,7 +713,8 @@ class Storage:
 
     async def _dedup_memories(self) -> int:
         """Merge duplicate summaries: keep most recent, delete the rest."""
-        assert self._db is not None  # caller guarantees
+        if self._db is None:
+            raise RuntimeError("Storage not connected")
         changes = 0
         dup_cursor = await self._db.execute(
             "SELECT summary, COUNT(*) as cnt FROM memories" " GROUP BY summary HAVING cnt > 1"
@@ -718,7 +728,7 @@ class Storage:
             )
             entries = await entries_cursor.fetchall()
             ids_to_delete = [e[0] for e in entries[1:]]
-            if ids_to_delete:
+            if ids_to_delete:  # pragma: no branch — HAVING cnt>1 guarantees >=2 rows
                 placeholders = ",".join("?" * len(ids_to_delete))
                 del_cursor = await self._db.execute(
                     f"DELETE FROM memories WHERE id IN ({placeholders})",  # noqa: S608

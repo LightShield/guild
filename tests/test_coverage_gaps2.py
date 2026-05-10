@@ -442,6 +442,7 @@ class TestConfigLoaderEdgeCases:
 
 
 @pytest.mark.unit
+@pytest.mark.req("REQ-22.1")
 class TestArtifactsEdgeCases:
     """Cover artifact manager edge cases."""
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from guild.blocks.definition import PortDef, TeamDef
@@ -29,7 +29,7 @@ class PortTypeSchema:
     """Full port type definition with optional JSON schema."""
 
     type_tag: str
-    json_schema: dict | None = None
+    json_schema: dict[str, Any] | None = None
     description: str = ""
 
 
@@ -50,7 +50,7 @@ PORT_TYPES: set[str] = {
 
 def register_port_type(
     type_tag: str,
-    json_schema: dict | None = None,
+    json_schema: dict[str, Any] | None = None,
     description: str = "",
 ) -> None:
     """Register a new port type with optional schema."""
@@ -96,7 +96,7 @@ def validate_port_data(data: dict, type_tag: str) -> tuple[bool, str]:
     return True, ""
 
 
-def _basic_schema_check(data: object, schema: dict) -> bool:
+def _basic_schema_check(data: object, schema: dict[str, Any]) -> bool:
     """Perform basic JSON schema validation (top-level type + required)."""
     schema_type = schema.get("type")
     if schema_type == "object" and not isinstance(data, dict):

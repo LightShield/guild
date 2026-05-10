@@ -223,3 +223,30 @@ class TestMCPClientCallTool:
         req2 = json.loads(calls[1][0][0].decode())
         assert req1["id"] == 1
         assert req2["id"] == 2
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-04.3")
+class TestMCPClientAsyncContextManager:
+    """Tests for MCPClient.__aenter__/__aexit__ — async context manager."""
+
+    @patch("guild.mcp.client.asyncio.create_subprocess_exec", new_callable=AsyncMock)
+    async def test_async_with_calls_connect_and_disconnect(
+        self, mock_exec: AsyncMock
+    ) -> None:
+        """Using `async with MCPClient(...)` calls connect on enter and disconnect on exit."""
+        fake_proc = _make_fake_process([])
+        mock_exec.return_value = fake_proc
+
+        config = MCPServerConfig(name="ctx-server", command="echo", args=[])
+
+        with (
+            patch.object(MCPClient, "connect", new_callable=AsyncMock) as mock_connect,
+            patch.object(MCPClient, "disconnect", new_callable=AsyncMock) as mock_disconnect,
+        ):
+            async with MCPClient(config) as client:
+                assert isinstance(client, MCPClient)
+                mock_connect.assert_awaited_once()
+                mock_disconnect.assert_not_awaited()
+
+            mock_disconnect.assert_awaited_once()

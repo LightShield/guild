@@ -10,9 +10,13 @@ from guild.blocks.definition import BlockDef, Connection, LoopDef, PortDef, Team
 from guild.blocks.registry import BlockRegistry
 from guild.orchestration.team_runner import (
     AgentStatus,
+    BlockError,
+    DECISION_ESCALATE,
+    DECISION_SKIP,
     EscalationError,
     EvaluatorResult,
     TeamRunner,
+    _extract_embedded_json,
 )
 from guild.provider.base import LLMResponse
 
@@ -747,3 +751,361 @@ class TestParallelBranchIsolation:
         assert runner.agent_statuses["branch_b"] == AgentStatus.COMPLETED
         # branch_a should be failed but skipped
         assert runner.agent_statuses["branch_a"] == AgentStatus.FAILED
+
+
+# ---------------------------------------------------------------------------
+# Tests: Missing branches — topological sort with diamond graph (line 122->120)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-04.1")
+class TestTopologicalSortDiamondGraph:
+    """Diamond-shaped graph exercises the in-degree > 0 branch in topo sort."""
+
+    async def test_diamond_graph_orders_correctly(self) -> None:
+        """A diamond graph (A->B, A->C, B->D, C->D) exercises in-degree decrement
+        where the neighbor's in-degree does not immediately reach zero."""
+        team = TeamDef(
+            name="diamond-team",
+            blocks={
+                "orchestrator": "planner",
+                "branch_b": "coder",
+                "branch_c": "researcher",
+                "merge_d": "reviewer",
+            },
+            connections=[
+                Connection(
+                    source_block="orchestrator",
+                    source_port="plan",
+                    target_block="branch_b",
+                    target_port="spec",
+                ),
+                Connection(
+                    source_block="orchestrator",
+                    source_port="plan",
+                    target_block="branch_c",
+                    target_port="question",
+                ),
+                Connection(
+                    source_block="branch_b",
+                    source_port="changes",
+                    target_block="merge_d",
+                    target_port="changes",
+                ),
+                Connection(
+                    source_block="branch_c",
+                    source_port="report",
+                    target_block="merge_d",
+                    target_port="spec",
+                ),
+            ],
+            entry_block="orchestrator",
+        )
+        registry = BlockRegistry()
+        provider = _make_provider()
+        runner = TeamRunner(team, registry, provider)
+        order = runner._execution_order()
+
+        # orchestrator must be first, merge_d must be last
+        assert order[0] == "orchestrator"
+        assert order[-1] == "merge_d"
+        # branch_b and branch_c must come before merge_d
+        assert order.index("branch_b") < order.index("merge_d")
+        assert order.index("branch_c") < order.index("merge_d")
+
+
+# ---------------------------------------------------------------------------
+# Tests: Missing branches — entry block already first (lines 231-232)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-04.1")
+class TestEntryBlockAlreadyFirst:
+    """When topo sort already puts entry_block first, no reordering needed."""
+
+    async def test_entry_block_naturally_first_no_reorder(self) -> None:
+        """Entry block with in-degree 0 is naturally first in topo sort."""
+        # Simple chain: orchestrator -> worker (orchestrator has in-degree 0)
+        team = _make_team_with_entry()
+        registry = BlockRegistry()
+        provider = _make_provider()
+        runner = TeamRunner(team, registry, provider)
+        order = runner._execution_order()
+
+        assert order[0] == "orchestrator"
+        assert len(order) == 2
+
+    async def test_entry_block_not_first_gets_reordered(self) -> None:
+        """Entry block that isn't naturally first gets moved to front."""
+        # Create a team where another root node might sort before entry
+        team = TeamDef(
+            name="reorder-team",
+            blocks={
+                "aaa_first_alpha": "researcher",
+                "orchestrator": "planner",
+                "worker": "coder",
+            },
+            connections=[
+                Connection(
+                    source_block="orchestrator",
+                    source_port="plan",
+                    target_block="worker",
+                    target_port="spec",
+                ),
+            ],
+            entry_block="orchestrator",
+        )
+        registry = BlockRegistry()
+        provider = _make_provider()
+        runner = TeamRunner(team, registry, provider)
+        order = runner._execution_order()
+
+        # Regardless of natural sort order, orchestrator must be first
+        assert order[0] == "orchestrator"
+
+
+# ---------------------------------------------------------------------------
+# Tests: Missing branches — gather_input with no upstream output (line 243->239)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-04.2")
+class TestGatherInputUpstreamEmpty:
+    """When upstream block has no stored output, _gather_input skips it."""
+
+    async def test_gather_input_falls_back_when_upstream_has_no_output(self) -> None:
+        """If upstream block has not produced output, fallback is used."""
+        team = TeamDef(
+            name="noop-upstream",
+            blocks={
+                "orchestrator": "planner",
+                "worker_a": "coder",
+                "worker_b": "reviewer",
+            },
+            connections=[
+                Connection(
+                    source_block="orchestrator",
+                    source_port="plan",
+                    target_block="worker_b",
+                    target_port="changes",
+                ),
+                # worker_a also connects to worker_b but has no output yet
+                Connection(
+                    source_block="worker_a",
+                    source_port="changes",
+                    target_block="worker_b",
+                    target_port="spec",
+                ),
+            ],
+            entry_block="orchestrator",
+        )
+        registry = BlockRegistry()
+        provider = _make_provider()
+        runner = TeamRunner(team, registry, provider)
+
+        # Only orchestrator has output; worker_a does not
+        runner._outputs["orchestrator"] = "Plan output"
+
+        result = runner._gather_input("worker_b", "fallback input")
+
+        # Should include orchestrator output but not fail on missing worker_a
+        assert "Plan output" in result
+
+
+# ---------------------------------------------------------------------------
+# Tests: Missing branches — block type not found (line 263)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-04.50")
+class TestBlockTypeNotFound:
+    """Block type not in registry raises BlockError immediately."""
+
+    async def test_run_block_raises_when_block_type_not_found(self) -> None:
+        """_run_block raises BlockError if the block type is not in the registry."""
+        team = TeamDef(
+            name="missing-type-team",
+            blocks={
+                "orchestrator": "planner",
+                "mystery": "nonexistent_block_type",
+            },
+            connections=[
+                Connection(
+                    source_block="orchestrator",
+                    source_port="plan",
+                    target_block="mystery",
+                    target_port="spec",
+                ),
+            ],
+            entry_block="orchestrator",
+        )
+        registry = BlockRegistry()
+        provider = _make_provider()
+        runner = TeamRunner(team, registry, provider)
+
+        with pytest.raises(BlockError, match="nonexistent_block_type"):
+            await runner._run_block("mystery", "some input")
+
+
+# ---------------------------------------------------------------------------
+# Tests: Missing branches — unknown caller decision (line 307)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-04.52")
+class TestUnknownCallerDecision:
+    """Unknown caller decision falls through to default escalation."""
+
+    async def test_unknown_decision_escalates(self) -> None:
+        """A decision that is neither 'skip' nor 'escalate' triggers default escalation."""
+        team = TeamDef(
+            name="unknown-decision-team",
+            blocks={"orchestrator": "planner", "worker": "coder"},
+            connections=[
+                Connection(
+                    source_block="orchestrator",
+                    source_port="plan",
+                    target_block="worker",
+                    target_port="spec",
+                ),
+            ],
+            entry_block="orchestrator",
+        )
+        registry = _registry_with_retries(max_retries=0)
+
+        provider = AsyncMock()
+        call_count = [0]
+        responses = [
+            LLMResponse(content="Plan", tool_calls=None),
+            RuntimeError("block fails"),
+        ]
+
+        async def mock_generate(messages, tools=None):
+            idx = call_count[0]
+            call_count[0] += 1
+            resp = responses[idx]
+            if isinstance(resp, Exception):
+                raise resp
+            return resp
+
+        provider.generate = mock_generate
+        runner = TeamRunner(team, registry, provider)
+        # Set an unrecognized decision value
+        runner.set_caller_decision("worker", "substitute")
+
+        with pytest.raises(EscalationError, match="worker"):
+            await runner.run("Do work")
+
+
+# ---------------------------------------------------------------------------
+# Tests: Missing branches — evaluator with no system_prompt (lines 343->346, 347->350)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-04.44")
+class TestBuildEvaluatorInputNoCriteria:
+    """Evaluator with no system_prompt yields input without criteria section."""
+
+    async def test_evaluator_input_without_criteria_when_no_system_prompt(self) -> None:
+        """When evaluator block has empty system_prompt, no criteria section appended."""
+        # Register a custom evaluator with no system_prompt
+        registry = BlockRegistry()
+        no_prompt_eval = BlockDef(
+            name="bare_eval",
+            role="evaluator",
+            system_prompt="",
+            inputs=[PortDef(name="artifact", type_tag="any")],
+            outputs=[PortDef(name="result", type_tag="review")],
+        )
+        registry.register_block(no_prompt_eval)
+
+        team = TeamDef(
+            name="no-criteria-team",
+            blocks={
+                "orchestrator": "planner",
+                "gen": "coder",
+                "eval": "bare_eval",
+            },
+            connections=[],
+            loops=[
+                LoopDef(generator_block="gen", evaluator_block="eval"),
+            ],
+            entry_block="orchestrator",
+        )
+        provider = _make_provider()
+        runner = TeamRunner(team, registry, provider)
+
+        eval_input = runner._build_evaluator_input(team.loops[0], "some artifact text")
+
+        assert "Artifact to evaluate:" in eval_input
+        assert "some artifact text" in eval_input
+        # No criteria section should be present
+        assert "Evaluation criteria:" not in eval_input
+
+    async def test_evaluator_input_without_criteria_when_block_not_found(self) -> None:
+        """When evaluator block type is not in registry, no criteria section appended."""
+        registry = BlockRegistry()
+        team = TeamDef(
+            name="missing-eval-team",
+            blocks={
+                "orchestrator": "planner",
+                "gen": "coder",
+                "eval": "unknown_evaluator_type",
+            },
+            connections=[],
+            loops=[
+                LoopDef(generator_block="gen", evaluator_block="eval"),
+            ],
+            entry_block="orchestrator",
+        )
+        provider = _make_provider()
+        runner = TeamRunner(team, registry, provider)
+
+        eval_input = runner._build_evaluator_input(team.loops[0], "artifact data")
+
+        assert "Artifact to evaluate:" in eval_input
+        assert "Evaluation criteria:" not in eval_input
+
+
+# ---------------------------------------------------------------------------
+# Tests: Missing branches — embedded JSON parse failure (lines 397-398)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-04.40")
+class TestParseJsonPermissiveEmbeddedFailure:
+    """Embedded JSON that is malformed returns None from _parse_json_permissive."""
+
+    async def test_embedded_json_malformed_returns_none(self) -> None:
+        """When text has braces but content is not valid JSON, returns None."""
+        team = _make_team_with_entry()
+        registry = BlockRegistry()
+        provider = _make_provider()
+        runner = TeamRunner(team, registry, provider)
+
+        # Text with braces but invalid JSON inside
+        output = "Here is my result: {not valid json at all} done"
+        result = runner._parse_json_permissive(output)
+
+        assert result is None
+
+    async def test_embedded_json_parse_falls_to_heuristic(self) -> None:
+        """When embedded JSON fails, evaluator falls back to heuristic parsing."""
+        team = _make_team_with_entry()
+        registry = BlockRegistry()
+        provider = _make_provider()
+        runner = TeamRunner(team, registry, provider)
+
+        output = "Evaluation: {broken json here} overall the code passes review."
+        result = runner._parse_evaluator_result(output)
+
+        # Falls through to heuristic: "pass" present, "fail" absent -> passed
+        assert result.passed is True
+        assert result.feedback == output

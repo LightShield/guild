@@ -27,7 +27,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 REQUIREMENTS_FILE = PROJECT_ROOT / "REQUIREMENTS.md"
 TESTS_DIR = PROJECT_ROOT / "tests"
 
-REQ_ID_PATTERN = re.compile(r"\bREQ-(\d+\.\d+)\b")
+REQ_ID_PATTERN = re.compile(r"\bREQ-(\d+\.\d+[a-z]?)\b")
 TIER_HEADING_PATTERN = re.compile(r"^##\s+P(\d)\s")
 
 

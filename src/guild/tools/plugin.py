@@ -137,7 +137,7 @@ class PluginLoader:
         try:
             content = path.read_text(encoding="utf-8")
             data = tomllib.loads(content)
-        except Exception:
+        except (OSError, tomllib.TOMLDecodeError, KeyError, ValueError):
             logger.debug("Failed to load %s", path, exc_info=True)
             return None
 

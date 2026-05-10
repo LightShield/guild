@@ -8,10 +8,15 @@ concerns.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+    from guild.agent.loop import AgentLoop
+    from guild.config.models import GuildConfig
+    from guild.provider.base import LLMProvider
+    from guild.storage.sqlite import Storage
 
 from guild.agent.loop import DEFAULT_MAX_TURNS
 from guild.agent.prompts import GUILD_MASTER_PROMPT
@@ -36,14 +41,14 @@ __all__ = [
 logger = logging.getLogger(__name__)
 
 
-def _parse_escalation_config(config: Any) -> tuple[list[str], list[str]]:
+def _parse_escalation_config(config: GuildConfig) -> tuple[list[str], list[str]]:
     """Extract escalation chain models and CLI tool names from config."""
     chain_models = [m.strip() for m in config.escalation_chain.split(",") if m.strip()]
     cli_tools = [t.strip() for t in config.escalation_cli_providers.split(",") if t.strip()]
     return chain_models, cli_tools
 
 
-def create_provider_for_backend(provider_name: str, base_url: str, model: str) -> Any:
+def create_provider_for_backend(provider_name: str, base_url: str, model: str) -> LLMProvider:
     """Create an LLM provider by name, dispatching to the correct backend."""
     if provider_name == OLLAMA_PROVIDER_NAME:
         from guild.provider.ollama import create_provider
@@ -59,7 +64,7 @@ AGENT_ID_PREFIX_LEN = 8
 OLLAMA_PROVIDER_NAME = "ollama"
 
 
-def create_chat_loop(config: Any, working_dir: str, permission: str) -> Any:
+def create_chat_loop(config: GuildConfig, working_dir: str, permission: str) -> AgentLoop:
     """Create an AgentLoop instance for interactive chat (REQ-06.9)."""
     from guild.agent.loop import AgentLoop
     from guild.permissions.checker import PermissionChecker, PermissionTier
@@ -81,7 +86,7 @@ def create_chat_loop(config: Any, working_dir: str, permission: str) -> Any:
     )
 
 
-def create_resilient_provider(config: Any) -> Any:
+def create_resilient_provider(config: GuildConfig) -> LLMProvider:
     """Build an LLM provider, with escalation chain and retry if configured."""
     from guild.provider.escalation import EscalatingProvider, EscalationChain
     from guild.provider.retry import RetryProvider
@@ -120,7 +125,7 @@ def compute_max_turns(timeout: int) -> int:
     return min(max(timeout // _SECONDS_PER_TURN_ESTIMATE, _MIN_TURNS), _MAX_TURNS_CAP)
 
 
-def create_task_agent_loop(config: Any, working_dir: str, timeout: int) -> Any:
+def create_task_agent_loop(config: GuildConfig, working_dir: str, timeout: int) -> AgentLoop:
     """Build an AgentLoop configured for task execution."""
     from guild.agent.loop import AgentLoop
     from guild.agent.stuck import StuckDetector
@@ -146,7 +151,7 @@ def create_task_agent_loop(config: Any, working_dir: str, timeout: int) -> Any:
 
 
 async def run_task(
-    config: Any,
+    config: GuildConfig,
     working_dir: str,
     description: str,
     permission: str,
@@ -172,7 +177,7 @@ async def run_task(
     return result
 
 
-async def build_system_prompt_with_learnings(store: Any) -> str:
+async def build_system_prompt_with_learnings(store: Storage) -> str:
     """Build the system prompt, injecting high-confidence learnings (REQ-09.4)."""
     system_prompt = GUILD_MASTER_PROMPT
     try:
@@ -182,7 +187,7 @@ async def build_system_prompt_with_learnings(store: Any) -> str:
         injection = format_learnings_for_injection(existing_learnings)
         if injection:
             system_prompt = f"{system_prompt}\n\n{injection}"
-    except Exception:  # pragma: no cover — defensive guard for learning injection
+    except (ImportError, OSError, ValueError):  # pragma: no cover
         logger.debug("Learning injection failed (non-critical)", exc_info=True)
     return system_prompt
 
@@ -193,7 +198,7 @@ def _generate_task_ids(task_id: str) -> tuple[str, str]:
     return task_id, agent_id
 
 
-def _format_audit_details(task_id: str, loop: Any) -> str:
+def _format_audit_details(task_id: str, loop: AgentLoop) -> str:
     """Build the audit log details string for a completed task."""
     return (
         f"task={task_id} tokens_in={loop.total_input_tokens}"
@@ -202,7 +207,7 @@ def _format_audit_details(task_id: str, loop: Any) -> str:
 
 
 async def persist_task_result(
-    store: Any, loop: Any, description: str, result: str, config: Any
+    store: Storage, loop: AgentLoop, description: str, result: str, config: GuildConfig
 ) -> None:
     """Save task, agent, messages, and audit entry to storage."""
     import uuid
@@ -232,7 +237,7 @@ async def persist_task_result(
 
 
 async def extract_post_task_learnings(
-    store: Any, loop: Any, config: Any
+    store: Storage, loop: AgentLoop, config: GuildConfig
 ) -> None:  # pragma: no cover — requires LLM for extraction
     """Extract learnings from the completed task (REQ-09.1)."""
     try:
@@ -244,5 +249,5 @@ async def extract_post_task_learnings(
         if tasks:
             task_id = tasks[-1].get("task_id", "")
             await extract_learnings(task_id, store, provider)
-    except Exception:
+    except (ImportError, OSError, ValueError):
         logger.debug("Learning extraction failed (non-critical)", exc_info=True)

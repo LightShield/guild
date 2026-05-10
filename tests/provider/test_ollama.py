@@ -56,7 +56,7 @@ class TestHealthCheck:
             model="gemma4-4b-dense-med",
         )
         mock_client = AsyncMock()
-        mock_client.list = AsyncMock(side_effect=Exception("connection refused"))
+        mock_client.list = AsyncMock(side_effect=ConnectionError("connection refused"))
         provider._client = mock_client
 
         result = await provider.health_check()

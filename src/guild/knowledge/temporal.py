@@ -151,20 +151,27 @@ class TemporalKnowledge:
         return "## Key Past Info\n\n" + "\n\n".join(sections)
 
     async def _run_cmd(self, cmd: str, cwd: str) -> str | None:
-        """Run a shell command and return stdout, or None on failure."""
-        # Direct subprocess — this runs git commands for project state discovery,
-        # not user-requested shell execution. The shell tool's denylist is for
-        # user-initiated commands.
+        """Run a shell command and return stdout, or None on failure.
+
+        Uses create_subprocess_exec to avoid shell injection risks.
+        These are internal git/ls commands for project state discovery,
+        not user-initiated shell execution (the shell tool's denylist
+        does not apply here).
+        """
+        timeout = 10  # seconds — git status/log should be fast
         try:
-            proc = await asyncio.create_subprocess_shell(
-                cmd,
+            argv = cmd.split()
+            proc = await asyncio.create_subprocess_exec(
+                *argv,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 cwd=cwd,
             )
-            stdout, _ = await proc.communicate()
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=timeout)
             if proc.returncode == 0:
                 return stdout.decode().strip()
+        except TimeoutError:
+            logger.debug("Command timed out: %s", cmd)
         except OSError:
             logger.debug("Command failed: %s", cmd)
         return None

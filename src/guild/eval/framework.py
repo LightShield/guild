@@ -122,7 +122,7 @@ class EvalFramework:
         ]
 
         try:
-            for _ in range(_EVAL_MAX_TURNS):
+            for _ in range(_EVAL_MAX_TURNS):  # pragma: no branch
                 turns += 1
                 raw_messages = [m.to_dict() for m in messages]
                 response: LLMResponse = await provider.generate(raw_messages)
@@ -138,7 +138,7 @@ class EvalFramework:
                 tool_calls = response.tool_calls or []
                 total_tool_calls += len(tool_calls)
 
-        except Exception as exc:
+        except (ConnectionError, TimeoutError, RuntimeError, ValueError) as exc:
             completed = False
             error = str(exc)
 
@@ -212,7 +212,6 @@ class EvalFramework:
         if baseline.metrics.task_completed and not current.metrics.task_completed:
             reasons.append("task no longer completes")
 
-        # Duration regression
         if (
             baseline.metrics.duration_seconds > 0
             and current.metrics.duration_seconds
@@ -223,13 +222,11 @@ class EvalFramework:
                 f" vs baseline {baseline.metrics.duration_seconds:.1f}s"
             )
 
-        # Token regression
         baseline_tokens = baseline.metrics.input_tokens + baseline.metrics.output_tokens
         current_tokens = current.metrics.input_tokens + current.metrics.output_tokens
         if baseline_tokens > 0 and current_tokens > baseline_tokens * _TOKEN_REGRESSION_FACTOR:
             reasons.append(f"tokens {current_tokens} vs baseline {baseline_tokens}")
 
-        # Tool call regression
         if (
             baseline.metrics.tool_calls > 0
             and current.metrics.tool_calls

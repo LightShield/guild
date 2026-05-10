@@ -10,17 +10,19 @@ import logging
 from collections.abc import AsyncGenerator, Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from guild.storage.sqlite import Storage
 
 from guild import __version__
+from guild.config.constants import GUILD_DIR_NAME, WEBSOCKET_POLL_SECONDS
 from guild.config.loader import DB_FILENAME
 from guild.task.spec import TaskStatus
 
 __all__ = ["API_ROUTES", "create_app"]
 
 logger = logging.getLogger(__name__)
-
-_WEBSOCKET_POLL_SECONDS = 2
 
 API_ROUTES: dict[str, str] = {
     "GET /api/status": "Project status, tasks, agents",
@@ -44,7 +46,7 @@ API_ROUTES: dict[str, str] = {
 _UI_DIST = Path(__file__).resolve().parent.parent.parent.parent / "ui" / "dist"
 
 
-async def _get_current_status(storage: Any) -> dict[str, Any]:
+async def _get_current_status(storage: "Storage") -> dict[str, Any]:
     """Gather current status for WebSocket broadcast."""
     summary = await storage.get_token_summary()
     tasks = await storage.list_tasks()
@@ -61,13 +63,13 @@ async def _get_current_status(storage: Any) -> dict[str, Any]:
     }
 
 
-def _register_task_routes(app: Any, get_storage: Callable[[], Any]) -> None:
+def _register_task_routes(app: Any, get_storage: Callable[[], "Storage"]) -> None:
     """Register task-related API routes."""
     _register_task_query_routes(app, get_storage)
     _register_task_action_routes(app, get_storage)
 
 
-def _register_task_query_routes(app: Any, get_storage: Callable[[], Any]) -> None:
+def _register_task_query_routes(app: Any, get_storage: Callable[[], "Storage"]) -> None:
     """Register task query (GET/POST create) routes."""
     from fastapi import HTTPException, Request  # type: ignore[import-untyped]
 
@@ -102,7 +104,7 @@ def _register_task_query_routes(app: Any, get_storage: Callable[[], Any]) -> Non
         return {"id": task_id, "status": TaskStatus.PENDING, "description": description}
 
 
-def _register_task_action_routes(app: Any, get_storage: Callable[[], Any]) -> None:
+def _register_task_action_routes(app: Any, get_storage: Callable[[], "Storage"]) -> None:
     """Register task action (kill/pause/resume) routes."""
     from fastapi import HTTPException  # type: ignore[import-untyped]
 
@@ -140,7 +142,7 @@ def _register_task_action_routes(app: Any, get_storage: Callable[[], Any]) -> No
         return {"id": task_id, "action": "resumed"}
 
 
-def _register_agent_routes(app: Any, get_storage: Callable[[], Any]) -> None:
+def _register_agent_routes(app: Any, get_storage: Callable[[], "Storage"]) -> None:
     """Register agent-related API routes."""
 
     @app.get("/api/agents")
@@ -150,13 +152,17 @@ def _register_agent_routes(app: Any, get_storage: Callable[[], Any]) -> None:
         return await storage.list_agents()
 
 
-def _register_config_routes(app: Any, get_storage: Callable[[], Any], guild_dir: Path) -> None:
+def _register_config_routes(
+    app: Any, get_storage: Callable[[], "Storage"], guild_dir: Path
+) -> None:
     """Register config, blocks, teams, learnings, and audit API routes."""
     _register_status_routes(app, get_storage, guild_dir)
     _register_config_crud_routes(app, guild_dir)
 
 
-def _register_status_routes(app: Any, get_storage: Callable[[], Any], guild_dir: Path) -> None:
+def _register_status_routes(
+    app: Any, get_storage: Callable[[], "Storage"], guild_dir: Path
+) -> None:
     """Register status, learnings, and audit routes."""
 
     @app.get("/api/status")
@@ -181,7 +187,7 @@ def _register_status_routes(app: Any, get_storage: Callable[[], Any], guild_dir:
 
             registry = BlockRegistry()
             return [{"name": name} for name in registry.list_blocks()]
-        except Exception:
+        except (ImportError, OSError):
             return []
 
     @app.get("/api/teams")
@@ -192,7 +198,7 @@ def _register_status_routes(app: Any, get_storage: Callable[[], Any], guild_dir:
 
             config = load_config(guild_dir)
             return [{"name": t.name} for t in (config.teams or [])]
-        except Exception:
+        except (ImportError, OSError, AttributeError):
             return []
 
     @app.get("/api/learnings")
@@ -220,7 +226,7 @@ def _register_config_crud_routes(app: Any, guild_dir: Path) -> None:
         try:
             config = load_config(guild_dir)
             return config.model_dump() if hasattr(config, "model_dump") else {}
-        except Exception as exc:
+        except (OSError, ValueError) as exc:
             logger.warning("Failed to load config: %s", exc)
             return {}
 
@@ -231,7 +237,7 @@ def _register_config_crud_routes(app: Any, guild_dir: Path) -> None:
         return {"status": "ok", "message": "Config update not yet implemented"}
 
 
-def _register_websocket(app: Any, get_storage: Callable[[], Any]) -> None:
+def _register_websocket(app: Any, get_storage: Callable[[], "Storage"]) -> None:
     """Register the WebSocket endpoint for real-time updates (REQ-05.5)."""
     from fastapi import WebSocket, WebSocketDisconnect  # type: ignore[import-untyped]
 
@@ -244,10 +250,10 @@ def _register_websocket(app: Any, get_storage: Callable[[], Any]) -> None:
                 storage = get_storage()
                 data = await _get_current_status(storage)
                 await websocket.send_json(data)
-                await asyncio.sleep(_WEBSOCKET_POLL_SECONDS)
+                await asyncio.sleep(WEBSOCKET_POLL_SECONDS)
         except WebSocketDisconnect:
             pass
-        except Exception:
+        except (ConnectionError, OSError, RuntimeError):
             logger.debug("WebSocket closed unexpectedly", exc_info=True)
 
 
@@ -275,7 +281,7 @@ def _register_static_files(app: Any) -> None:
 
 def create_app(
     guild_dir: Path | None = None,
-    storage: Any | None = None,
+    storage: "Storage | None" = None,
 ) -> Any:
     """Create the FastAPI app. Raises ImportError if fastapi not installed.
 
@@ -294,7 +300,7 @@ def create_app(
     from guild.storage.sqlite import Storage
 
     # Resolve guild directory
-    _guild_dir = guild_dir or find_guild_dir() or Path.cwd() / ".guild"
+    _guild_dir = guild_dir or find_guild_dir() or Path.cwd() / GUILD_DIR_NAME
     _db_path = _guild_dir / DB_FILENAME
 
     _injected_storage = storage
@@ -305,17 +311,19 @@ def create_app(
         if _injected_storage is not None:  # pragma: no cover — injected storage path for testing
             app.state.storage = _injected_storage
             app.state.guild_dir = _guild_dir
-            logger.info("API using injected storage for %s", _guild_dir)
+            logger.debug("API using injected storage for %s", _guild_dir)
             yield
             return
         store = Storage(_db_path)
         await store.connect()
-        app.state.storage = store
-        app.state.guild_dir = _guild_dir
-        logger.info("API storage connected: %s", _db_path)
-        yield
-        await store.close()
-        logger.info("API storage closed for %s", _db_path)
+        try:
+            app.state.storage = store
+            app.state.guild_dir = _guild_dir
+            logger.info("API storage connected: %s", _db_path)
+            yield
+        finally:
+            await store.close()
+            logger.info("API storage closed for %s", _db_path)
 
     app = FastAPI(title="Guild", version=__version__, lifespan=lifespan)
 

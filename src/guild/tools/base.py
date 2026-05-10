@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 __all__ = ["ToolResult", "TOOL_SCHEMAS", "resolve_path"]
 
@@ -36,7 +37,7 @@ def resolve_path(path_str: str, working_dir: str | None) -> Path:
     return path.resolve()
 
 
-TOOL_SCHEMAS: dict[str, dict] = {
+TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
     "file_read": {
         "name": "file_read",
         "description": "Read the contents of a file at the given path.",

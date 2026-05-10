@@ -594,6 +594,25 @@ class TestTemporalKnowledgeBranches:
         assert "Present State" in result or "No project state" in result
         await store.close()
 
+    async def test_run_cmd_returns_none_on_timeout(self, tmp_path: Path) -> None:
+        """_run_cmd returns None when command times out (line 174)."""
+        from unittest.mock import patch
+
+        from guild.knowledge.temporal import TemporalKnowledge
+        from guild.storage.sqlite import Storage
+
+        store = Storage(tmp_path / "test.db")
+        await store.connect()
+        guild_dir = tmp_path / ".guild"
+        guild_dir.mkdir()
+
+        tk = TemporalKnowledge(guild_dir, store)
+
+        with patch("guild.knowledge.temporal.asyncio.wait_for", side_effect=TimeoutError()):
+            result = await tk._run_cmd("sleep 100", str(tmp_path))
+        assert result is None
+        await store.close()
+
 
 # ======================================================================
 # 12. observability/replay.py:98->exit, 102->99 — branch exits in replay

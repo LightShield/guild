@@ -72,16 +72,11 @@ class PermissionTier(str, Enum):
 class PermissionChecker:
     """Gate tool execution based on the active permission tier.
 
-    Parameters
-    ----------
-    tier:
-        Active permission level.
-    allowed_paths:
-        Filesystem path prefixes allowed under SCOPED tier.
-    allowed_tools:
-        Tool names permitted under SCOPED tier.
-    prompt_fn:
-        Callback for ASK tier — receives (tool, agent_id, args).
+    Args:
+        tier: Active permission level.
+        allowed_paths: Filesystem path prefixes allowed under SCOPED tier.
+        allowed_tools: Tool names permitted under SCOPED tier.
+        prompt_fn: Callback for ASK tier — receives (tool, agent_id, args).
     """
 
     def __init__(
@@ -126,19 +121,13 @@ class PermissionChecker:
     ) -> tuple[bool, str]:
         """Check against hardcoded-never rules (REQ-03.7).
 
-        Parameters
-        ----------
-        tool_name:
-            The tool being invoked (e.g. "shell").
-        args:
-            Tool arguments — for shell, expects a "command" or "cmd" key.
-        allow_hardcoded_never:
-            Explicit per-action override flag. When True, bypasses the
-            hardcoded-never layer entirely.
+        Args:
+            tool_name: The tool being invoked (e.g. "shell").
+            args: Tool arguments — for shell, expects a "command" or "cmd" key.
+            allow_hardcoded_never: Explicit per-action override flag. When True,
+                bypasses the hardcoded-never layer entirely.
 
-        Returns
-        -------
-        tuple[bool, str]
+        Returns:
             (True, "") if allowed, (False, reason) if blocked.
         """
         if allow_hardcoded_never:

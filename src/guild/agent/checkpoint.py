@@ -86,7 +86,7 @@ async def recover_from_checkpoint(
     storage: Storage,
     agent_id: str,
     provider: LLMProvider,
-    tool_executors: dict,
+    tool_executors: dict[str, Any],
     working_dir: str | None = None,
 ) -> AgentLoop | None:
     """Recover an agent loop from its last checkpoint.

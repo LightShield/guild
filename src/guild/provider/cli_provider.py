@@ -11,14 +11,12 @@ import logging
 import shutil
 from typing import Any
 
+from guild.config.constants import CLI_PROVIDER_TIMEOUT_SECONDS
 from guild.provider.base import LLMProvider, LLMResponse
 
 __all__ = ["CLIToolProvider"]
 
 logger = logging.getLogger(__name__)
-
-# Timeout for CLI tool execution (seconds)
-_CLI_TIMEOUT_SECONDS = 120
 
 
 class CLIToolProvider(LLMProvider):
@@ -33,7 +31,7 @@ class CLIToolProvider(LLMProvider):
         self,
         command: str,
         model: str | None = None,
-        timeout: int = _CLI_TIMEOUT_SECONDS,
+        timeout: int = CLI_PROVIDER_TIMEOUT_SECONDS,
     ) -> None:
         self.command = command
         self.model = model or command
@@ -113,6 +111,8 @@ class CLIToolProvider(LLMProvider):
                 timeout=self._timeout,
             )
         except TimeoutError as exc:
+            process.kill()
+            await process.wait()
             logger.error("CLI provider %s timed out after %ds", self.command, self._timeout)
             raise TimeoutError(
                 f"CLI provider '{self.command}' timed out after {self._timeout}s"

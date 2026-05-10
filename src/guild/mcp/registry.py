@@ -24,7 +24,12 @@ class MCPToolRegistry:
         client = MCPClient(config)
         await client.connect()
 
-        tools = await client.list_tools()
+        try:
+            tools = await client.list_tools()
+        except BaseException:
+            await client.disconnect()
+            raise
+
         self._clients[config.name] = client
 
         for tool in tools:

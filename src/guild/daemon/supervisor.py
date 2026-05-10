@@ -57,13 +57,13 @@ class DaemonSupervisor:
         """Write the current process PID to the PID file."""
         self.run_dir.mkdir(parents=True, exist_ok=True)
         self.pid_path.write_text(str(os.getpid()))
-        logger.info("PID file written: %s (pid=%d)", self.pid_path, os.getpid())
+        logger.debug("PID file written: %s (pid=%d)", self.pid_path, os.getpid())
 
     def remove_pid_file(self) -> None:
         """Remove the PID file if it exists."""
         if self.pid_path.exists():
             self.pid_path.unlink()
-            logger.info("PID file removed: %s", self.pid_path)
+            logger.debug("PID file removed: %s", self.pid_path)
 
     def install_signal_handlers(self) -> None:
         """Install SIGTERM/SIGINT handlers for graceful shutdown."""
@@ -108,7 +108,7 @@ class DaemonSupervisor:
             result = await coro
             return result
         except Exception as exc:
-            logger.error("Agent failed: %s", exc)
+            logger.debug("Agent failed: %s", exc)
             raise
         finally:
             self.restore_signal_handlers()

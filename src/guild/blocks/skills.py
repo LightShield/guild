@@ -105,7 +105,7 @@ class SkillRegistry:
                 skill = SkillDef.from_file(path)
                 self.register(skill)
                 count += 1
-            except Exception:
+            except (OSError, ValueError, KeyError):
                 logger.debug("Failed to load %s", path, exc_info=True)
 
         return count

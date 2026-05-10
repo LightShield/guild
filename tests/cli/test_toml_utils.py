@@ -9,7 +9,7 @@ import pytest
 if TYPE_CHECKING:
     from pathlib import Path
 
-from guild.cli.toml_utils import load_toml, parse_value, toml_value, write_toml
+from guild.cli.toml_utils import load_toml, parse_value, set_config_value, toml_value, write_toml
 
 
 @pytest.mark.unit
@@ -114,3 +114,51 @@ class TestWriteAndLoadToml:
         loaded = load_toml(path)
         assert loaded["verbose"] is True
         assert loaded["quiet"] is False
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-01.3")
+class TestSetConfigValue:
+    """set_config_value handles dotted key=value pairs and edge cases."""
+
+    def test_missing_equals_raises_value_error(self, tmp_path: Path) -> None:
+        """A key_value string without '=' raises ValueError (line 46)."""
+        path = tmp_path / "config.toml"
+        path.write_text("")
+
+        with pytest.raises(ValueError, match="Use format key=value"):
+            set_config_value(path, "provider.model")
+
+    def test_creates_intermediate_section(self, tmp_path: Path) -> None:
+        """Dotted keys create intermediate dict section if missing (line 58)."""
+        path = tmp_path / "config.toml"
+        # Start with no 'provider' section at all
+        path.write_text("[guild]\nname = \"test\"\n")
+
+        set_config_value(path, "provider.model=llama3")
+
+        loaded = load_toml(path)
+        # The 'provider' section was created dynamically (line 58)
+        assert loaded["provider"]["model"] == "llama3"
+        # Existing section is preserved
+        assert loaded["guild"]["name"] == "test"
+
+    def test_creates_section_from_empty_file(self, tmp_path: Path) -> None:
+        """A two-part dotted key creates the section from an empty file."""
+        path = tmp_path / "config.toml"
+        path.write_text("")
+
+        set_config_value(path, "provider.model=llama3")
+
+        loaded = load_toml(path)
+        assert loaded["provider"]["model"] == "llama3"
+
+    def test_updates_existing_value(self, tmp_path: Path) -> None:
+        """Updating an existing key in an existing section works."""
+        path = tmp_path / "config.toml"
+        write_toml(path, {"provider": {"model": "old_model"}})
+
+        set_config_value(path, "provider.model=new_model")
+
+        loaded = load_toml(path)
+        assert loaded["provider"]["model"] == "new_model"

@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from ollama import AsyncClient
+from ollama import AsyncClient, RequestError, ResponseError
 
 from guild.provider.base import LLMProvider, LLMResponse
 
@@ -27,7 +27,7 @@ class OllamaProvider(LLMProvider):
         try:
             await self._client.list()
             return True
-        except Exception as exc:
+        except (ConnectionError, TimeoutError, OSError, RequestError, ResponseError) as exc:
             logger.warning("Ollama health check failed: %s", exc)
             return False
 

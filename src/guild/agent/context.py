@@ -5,6 +5,12 @@ from __future__ import annotations
 import copy
 from typing import TYPE_CHECKING
 
+from guild.config.constants import (
+    DEFAULT_COMPACT_THRESHOLD,
+    DEFAULT_CONTEXT_MAX_TOKENS,
+    DEFAULT_PRESERVE_RECENT,
+)
+
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from guild.agent.message import Message
 
@@ -23,9 +29,6 @@ CHARS_PER_TOKEN = 4
 TRUNCATION_MARKER = "\n...[truncated]..."
 MIN_CONTENT_LEN = 50
 ACTION_SUMMARY_MAX_CHARS = 100
-DEFAULT_CONTEXT_MAX_TOKENS = 8000
-DEFAULT_PRESERVE_RECENT = 4
-DEFAULT_COMPACT_THRESHOLD = 0.7
 
 
 class ContextManager:
@@ -73,7 +76,6 @@ class ContextManager:
         result = copy.deepcopy(messages)
         threshold_tokens = int(self.max_tokens * self.compact_threshold)
 
-        # Identify protected indices: system prompt (index 0) and recent N
         protected = self._protected_indices(result)
 
         # Truncate old tool outputs, oldest first, most aggressively

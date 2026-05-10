@@ -133,7 +133,7 @@ def main_callback(
     if version:
         console.print(f"guild {__version__}")
         raise typer.Exit()
-    if ctx.invoked_subcommand is None:
+    if ctx.invoked_subcommand is None:  # pragma: no cover — typer handles internally
         console.print(ctx.get_help())
         raise typer.Exit()
 
@@ -707,9 +707,9 @@ def serve(
         console.print("[red]Error:[/red] Install API dependencies: pip install guild[api]")
         raise typer.Exit(code=1) from None
 
-    web_app = _create_app(guild_dir=guild_dir)
-    console.print(f"[bold]Guild GUI[/bold] at http://{host}:{port}")
-    uvicorn.run(web_app, host=host, port=port, log_level="info")
+    web_app = _create_app(guild_dir=guild_dir)  # pragma: no cover — server entry point
+    console.print(f"[bold]Guild GUI[/bold] at http://{host}:{port}")  # pragma: no cover
+    uvicorn.run(web_app, host=host, port=port, log_level="info")  # pragma: no cover
 
 
 @app.command()

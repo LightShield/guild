@@ -297,7 +297,7 @@ class TeamRunner:
         decision = self._caller_decisions.get(instance_name, DECISION_ESCALATE)
 
         if decision == DECISION_SKIP:
-            logger.info("Skipping failed block '%s' per caller decision", instance_name)
+            logger.warning("Skipping failed block '%s' per caller decision", instance_name)
             return f"[SKIPPED: {instance_name}]"
         if decision == DECISION_ESCALATE:
             raise EscalationError(

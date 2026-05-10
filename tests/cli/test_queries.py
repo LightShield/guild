@@ -180,3 +180,50 @@ class TestFetchLearnings:
         db_path = tmp_path / "nonexistent.db"
         result = await fetch_learnings(db_path, category=None, limit=10)
         assert result == []
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-06.6")
+class TestFetchTaskMessagesNoAgent:
+    """fetch_task_messages handles tasks with no assigned agent (line 95)."""
+
+    async def test_returns_empty_when_task_has_no_agent(self, tmp_path: Path) -> None:
+        """Returns [] when the task exists but has no assigned_agent (line 95-96)."""
+        guild_dir = tmp_path
+        db_path = guild_dir / "guild.db"
+        db_path.touch()
+        # Task exists but assigned_agent is empty
+        mock_store = _make_mock_storage(get_task={"task_id": "t-1", "assigned_agent": ""})
+
+        with patch("guild.storage.sqlite.Storage", return_value=mock_store):
+            result = await fetch_task_messages(guild_dir, "t-1")
+
+        assert result == []
+
+    async def test_returns_empty_when_task_has_none_agent(self, tmp_path: Path) -> None:
+        """Returns [] when the task exists but assigned_agent is None."""
+        guild_dir = tmp_path
+        db_path = guild_dir / "guild.db"
+        db_path.touch()
+        mock_store = _make_mock_storage(get_task={"task_id": "t-1", "assigned_agent": None})
+
+        with patch("guild.storage.sqlite.Storage", return_value=mock_store):
+            result = await fetch_task_messages(guild_dir, "t-1")
+
+        assert result == []
+
+    async def test_returns_messages_when_task_has_agent(self, tmp_path: Path) -> None:
+        """Returns messages when task has an assigned agent."""
+        guild_dir = tmp_path
+        db_path = guild_dir / "guild.db"
+        db_path.touch()
+        mock_store = _make_mock_storage(
+            get_task={"task_id": "t-1", "assigned_agent": "agent-1"},
+            get_messages=[{"role": "user", "content": "hello"}],
+        )
+
+        with patch("guild.storage.sqlite.Storage", return_value=mock_store):
+            result = await fetch_task_messages(guild_dir, "t-1")
+
+        assert result == [{"role": "user", "content": "hello"}]
+        mock_store.get_messages.assert_awaited_once_with("agent-1")

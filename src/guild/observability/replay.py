@@ -58,7 +58,6 @@ class SessionReplay:
             if raw_tool_calls:
                 self._extract_tool_names(raw_tool_calls, tools_used)
 
-        # Each assistant message is one LLM turn
         turn_count = roles.get("assistant", 0)
 
         return {
@@ -83,7 +82,6 @@ class SessionReplay:
         for msg in messages:
             role = msg.get("role", "unknown").upper()
             content = msg.get("content", "")
-            # Truncate very long content for display
             display_content = (
                 content[:REPLAY_CONTENT_MAX_CHARS]
                 if len(content) > REPLAY_CONTENT_MAX_CHARS

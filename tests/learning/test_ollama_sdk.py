@@ -14,6 +14,7 @@ from ollama import AsyncClient, ChatResponse, ListResponse, Message
 
 
 @pytest.mark.unit
+@pytest.mark.req("REQ-03.1")
 class TestAsyncClientAcceptsHostParam:
     """Verify AsyncClient(host=...) works — used in OllamaProvider.__init__."""
 
@@ -24,6 +25,7 @@ class TestAsyncClientAcceptsHostParam:
 
 
 @pytest.mark.unit
+@pytest.mark.req("REQ-03.1")
 class TestChatResponseHasMessageAttribute:
     """Verify ChatResponse has .message with .content and .tool_calls."""
 
@@ -69,6 +71,7 @@ class TestChatResponseHasMessageAttribute:
 
 
 @pytest.mark.unit
+@pytest.mark.req("REQ-03.1")
 class TestToolCallsHaveFunctionNameAndArguments:
     """Verify tool_calls have .function.name and .function.arguments."""
 
@@ -107,6 +110,7 @@ class TestToolCallsHaveFunctionNameAndArguments:
 
 
 @pytest.mark.unit
+@pytest.mark.req("REQ-03.1")
 class TestListReturnsModelsAttribute:
     """Verify ListResponse has .models attribute — used in health_check."""
 

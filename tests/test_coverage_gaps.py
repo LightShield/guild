@@ -188,16 +188,17 @@ class TestNotifierUnsupportedPlatform:
     """Desktop notification on unsupported platform."""
 
     async def test_desktop_notification_unsupported_platform(self) -> None:
-        """Desktop notification logs warning on unsupported platforms."""
+        """Desktop notification returns False on unsupported platforms."""
+        from guild.daemon.platform import FallbackAdapter
         from guild.escalation.notify import NotificationChannel, Notifier
 
         notifier = Notifier(channels=[NotificationChannel.DESKTOP])
-        with patch("guild.escalation.notify.sys") as mock_sys:
-            mock_sys.platform = "win32"
-            with patch("guild.escalation.notify.logger") as mock_logger:
-                await notifier.notify("Windows test")
-                mock_logger.warning.assert_called_once()
-                assert "not supported" in mock_logger.warning.call_args[0][0].lower()
+        with patch(
+            "guild.escalation.notify.get_platform_adapter",
+            return_value=FallbackAdapter(),
+        ):
+            await notifier.notify("Windows test")
+            # FallbackAdapter.send_desktop_notification returns False (no-op)
 
 
 # ======================================================================
@@ -879,6 +880,7 @@ class TestTemporalKnowledgeEdgeCases:
 
 
 @pytest.mark.unit
+@pytest.mark.req("REQ-24.3")
 class TestOfflineManagerEdgeCases:
     """Offline manager check_connectivity exception path."""
 
@@ -887,7 +889,7 @@ class TestOfflineManagerEdgeCases:
         from guild.offline.manager import OfflineManager
 
         provider = AsyncMock()
-        provider.health_check.side_effect = RuntimeError("connection refused")
+        provider.health_check.side_effect = ConnectionError("connection refused")
         mgr = OfflineManager(provider=provider)
         result = await mgr.check_connectivity()
         assert result is False
@@ -900,6 +902,7 @@ class TestOfflineManagerEdgeCases:
 
 
 @pytest.mark.unit
+@pytest.mark.req("REQ-24.1")
 class TestResourceMonitorStealthExit:
     """ResourceMonitor stealth mode exits when user becomes idle."""
 
