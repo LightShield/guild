@@ -12,6 +12,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
+from guild.config.loader import DB_FILENAME
 from guild.task.spec import TaskStatus
 
 __all__ = ["API_ROUTES", "create_app"]
@@ -87,7 +88,7 @@ def create_app(
 
     # Resolve guild directory
     _guild_dir = guild_dir or find_guild_dir() or Path.cwd() / ".guild"
-    _db_path = _guild_dir / "guild.db"
+    _db_path = _guild_dir / DB_FILENAME
 
     _injected_storage = storage
 

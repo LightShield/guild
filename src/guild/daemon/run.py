@@ -11,6 +11,7 @@ import logging
 import sys
 from pathlib import Path
 
+from guild.config.loader import DB_FILENAME
 from guild.task.spec import TaskStatus
 
 __all__: list[str] = []
@@ -31,7 +32,7 @@ async def _run_task(
 
     config = load_config(guild_dir)
     working_dir = str(guild_dir.parent)
-    db_path = guild_dir / "guild.db"
+    db_path = guild_dir / DB_FILENAME
 
     # Load task from storage
     store = Storage(db_path)

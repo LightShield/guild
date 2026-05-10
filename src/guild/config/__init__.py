@@ -1,6 +1,6 @@
 """Configuration subsystem — ConfigsLoader models and loader (REQ-01.3)."""
 
-from guild.config.loader import find_guild_dir, load_config
+from guild.config.loader import DB_FILENAME, find_guild_dir, load_config
 from guild.config.models import GuildConfig
 from guild.config.profiles import (
     AgentProfile,
@@ -12,6 +12,7 @@ from guild.config.profiles import (
 
 __all__ = [
     "AgentProfile",
+    "DB_FILENAME",
     "GuildConfig",
     "PermissionProfile",
     "find_guild_dir",

@@ -84,7 +84,7 @@ from guild.cli.task_runner import (
     run_task as _run_task,
 )
 from guild.cli.toml_utils import set_config_value as _set_config_value
-from guild.config.loader import find_guild_dir, load_config
+from guild.config.loader import DB_FILENAME, find_guild_dir, load_config
 
 __all__ = ["app"]
 
@@ -152,7 +152,7 @@ def init(
     config_path.write_text(_DEFAULT_CONFIG_TOML)
 
     # Create the database
-    db_path = guild_dir / "guild.db"
+    db_path = guild_dir / DB_FILENAME
     _init_database(db_path)
 
     console.print(f"[green]Initialized guild project:[/green] {guild_dir}")
@@ -170,7 +170,7 @@ def status() -> None:
     config = load_config(guild_dir)
 
     # Get counts from the database
-    db_path = guild_dir / "guild.db"
+    db_path = guild_dir / DB_FILENAME
     task_count, agent_count = _get_counts(db_path)
 
     console.print(f"[bold]Project:[/bold] {project_path}")
@@ -294,7 +294,7 @@ def audit(
         console.print("[red]Error:[/red] Not a guild project (no .guild/ found).")
         raise typer.Exit(code=1)
 
-    db_path = guild_dir / "guild.db"
+    db_path = guild_dir / DB_FILENAME
     entries = asyncio.run(_fetch_audit(db_path, limit))
 
     if not entries:
@@ -329,7 +329,7 @@ def decisions(
         console.print("[red]Error:[/red] Not a guild project (no .guild/ found).")
         raise typer.Exit(code=1)
 
-    db_path = guild_dir / "guild.db"
+    db_path = guild_dir / DB_FILENAME
     entries = asyncio.run(_fetch_decisions(db_path, task_id, limit))
 
     if not entries:
@@ -369,7 +369,7 @@ def learnings(
         console.print("[red]Error:[/red] Not a guild project (no .guild/ found).")
         raise typer.Exit(code=1)
 
-    db_path = guild_dir / "guild.db"
+    db_path = guild_dir / DB_FILENAME
 
     if approve is not None:
         asyncio.run(_approve_learning(db_path, approve))
@@ -534,7 +534,7 @@ def history(
         console.print("[red]Error:[/red] Not a guild project (no .guild/ found).")
         raise typer.Exit(code=1)
 
-    db_path = guild_dir / "guild.db"
+    db_path = guild_dir / DB_FILENAME
     tasks = asyncio.run(_fetch_task_history(db_path, limit, status))
 
     if not tasks:
@@ -568,7 +568,7 @@ def usage() -> None:
         console.print("[red]Error:[/red] Not a guild project (no .guild/ found).")
         raise typer.Exit(code=1)
 
-    db_path = guild_dir / "guild.db"
+    db_path = guild_dir / DB_FILENAME
     summary = asyncio.run(_fetch_token_summary(db_path))
 
     if summary is None:
@@ -625,7 +625,7 @@ def questions(
         console.print("[red]Error:[/red] Not a guild project (no .guild/ found).")
         raise typer.Exit(code=1)
 
-    db_path = guild_dir / "guild.db"
+    db_path = guild_dir / DB_FILENAME
     entries = asyncio.run(_fetch_pending_questions(db_path))
 
     if not entries:
@@ -662,7 +662,7 @@ def answer(
         console.print("[red]Error:[/red] Not a guild project (no .guild/ found).")
         raise typer.Exit(code=1)
 
-    db_path = guild_dir / "guild.db"
+    db_path = guild_dir / DB_FILENAME
     asyncio.run(_answer_pending_question(db_path, question_id, response))
     console.print(f"[green]Answered question:[/green] {question_id[:12]}")
 

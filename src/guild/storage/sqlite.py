@@ -140,7 +140,8 @@ class Storage:
 
     Usage::
 
-        store = Storage(Path(".guild/guild.db"))
+        from guild.config.loader import DB_FILENAME
+        store = Storage(Path(".guild") / DB_FILENAME)
         await store.connect()
         # ... use store ...
         await store.close()

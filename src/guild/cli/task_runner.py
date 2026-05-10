@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from pathlib import Path
 
+from guild.config.loader import DB_FILENAME
 from guild.provider.ollama import create_provider
 from guild.task.spec import TaskStatus
 
@@ -141,7 +142,7 @@ async def run_task(
     """Execute a task through the agent loop."""
     from guild.storage.sqlite import Storage
 
-    db_path = guild_dir / "guild.db"
+    db_path = guild_dir / DB_FILENAME
     async with Storage(db_path) as store:
         loop = create_task_agent_loop(config, working_dir, timeout)
         system_prompt = await build_system_prompt_with_learnings(store)

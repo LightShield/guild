@@ -11,6 +11,8 @@ import subprocess
 import sys
 from typing import TYPE_CHECKING
 
+from guild.config.loader import DB_FILENAME
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -32,7 +34,7 @@ def create_task_in_storage(guild_dir: Path, description: str) -> str:
     from guild.storage.sqlite import Storage
 
     task_id = str(uuid.uuid4())
-    db_path = guild_dir / "guild.db"
+    db_path = guild_dir / DB_FILENAME
 
     async def _create() -> None:
         store = Storage(db_path)
@@ -78,7 +80,7 @@ def kill_task(
     from guild.storage.sqlite import Storage
 
     run_dir = guild_dir / "run"
-    db_path = guild_dir / "guild.db"
+    db_path = guild_dir / DB_FILENAME
 
     async def _do_kill() -> bool:
         store = Storage(db_path)
@@ -97,7 +99,7 @@ def kill_all_tasks(guild_dir: Path) -> int:  # pragma: no cover — requires run
     from guild.storage.sqlite import Storage
 
     run_dir = guild_dir / "run"
-    db_path = guild_dir / "guild.db"
+    db_path = guild_dir / DB_FILENAME
 
     async def _do_kill_all() -> int:
         store = Storage(db_path)
@@ -118,7 +120,7 @@ def pause_task(
     from guild.storage.sqlite import Storage
 
     run_dir = guild_dir / "run"
-    db_path = guild_dir / "guild.db"
+    db_path = guild_dir / DB_FILENAME
 
     async def _do_pause() -> bool:
         store = Storage(db_path)
@@ -139,7 +141,7 @@ def resume_task(
     from guild.storage.sqlite import Storage
 
     run_dir = guild_dir / "run"
-    db_path = guild_dir / "guild.db"
+    db_path = guild_dir / DB_FILENAME
 
     async def _do_resume() -> bool:
         store = Storage(db_path)

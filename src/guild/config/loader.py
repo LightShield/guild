@@ -16,8 +16,9 @@ from guild.config.models import GuildConfig
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from collections.abc import Callable
 
-__all__ = ["ConfigWatcher", "find_guild_dir", "load_config"]
+__all__ = ["ConfigWatcher", "DB_FILENAME", "find_guild_dir", "load_config"]
 
+DB_FILENAME = "guild.db"
 _TEMP_FILE_PREFIX = "guild_config_"
 
 logger = logging.getLogger(__name__)

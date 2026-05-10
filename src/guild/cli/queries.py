@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from guild.config.loader import DB_FILENAME
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -92,7 +94,7 @@ async def fetch_task_messages(guild_dir: Path, task_id: str) -> list[dict]:
     """Fetch messages associated with a task's agent."""
     from guild.storage.sqlite import Storage
 
-    db_path = guild_dir / "guild.db"
+    db_path = guild_dir / DB_FILENAME
     if not db_path.exists():  # pragma: no cover — defensive guard for missing db
         return []
 
