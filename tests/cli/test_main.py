@@ -181,7 +181,7 @@ class TestTaskTimeout:
 
     def test_task_respects_timeout_option(self, guild_app, guild_project: Path) -> None:
         """Verify --timeout is accepted and passed to the agent loop."""
-        with patch("guild.cli.main.create_provider") as mock_provider_factory:
+        with patch("guild.cli.task_runner.create_provider") as mock_provider_factory:
             mock_provider = AsyncMock()
             mock_provider.generate = AsyncMock(
                 return_value=AsyncMock(
@@ -213,7 +213,7 @@ class TestTaskBackgroundFlag:
 
     def test_task_background_flag_exists(self, guild_app, guild_project: Path) -> None:
         """Verify --background/-b flag is accepted and launches in background."""
-        with patch("guild.cli.main.subprocess.Popen") as mock_popen:
+        with patch("guild.cli.daemon_ops.subprocess.Popen") as mock_popen:
             mock_process = MagicMock()
             mock_process.pid = 12345
             mock_popen.return_value = mock_process
@@ -229,7 +229,7 @@ class TestTaskBackgroundFlag:
         """Background flag creates a task record in storage before forking."""
         from guild.storage.sqlite import Storage
 
-        with patch("guild.cli.main.subprocess.Popen") as mock_popen:
+        with patch("guild.cli.daemon_ops.subprocess.Popen") as mock_popen:
             mock_process = MagicMock()
             mock_process.pid = 99999
             mock_popen.return_value = mock_process
@@ -254,7 +254,7 @@ class TestTaskBackgroundFlag:
 
     def test_background_returns_task_id(self, guild_app, guild_project: Path) -> None:
         """Background flag outputs the task ID to stdout."""
-        with patch("guild.cli.main.subprocess.Popen") as mock_popen:
+        with patch("guild.cli.daemon_ops.subprocess.Popen") as mock_popen:
             mock_process = MagicMock()
             mock_process.pid = 11111
             mock_popen.return_value = mock_process
@@ -436,7 +436,7 @@ class TestChatMultiTurn:
             model="test",
         )
 
-        with patch("guild.cli.main.create_provider") as mock_pf:
+        with patch("guild.cli.task_runner.create_provider") as mock_pf:
             mock_provider = AsyncMock()
             mock_provider.generate = AsyncMock(return_value=mock_response)
             mock_pf.return_value = mock_provider
@@ -493,7 +493,7 @@ class TestChatSendsMessages:
             model="test",
         )
 
-        with patch("guild.cli.main.create_provider") as mock_pf:
+        with patch("guild.cli.task_runner.create_provider") as mock_pf:
             mock_provider = AsyncMock()
             mock_provider.generate = AsyncMock(return_value=mock_response)
             mock_pf.return_value = mock_provider
@@ -643,7 +643,7 @@ class TestAutopilotNeverPrompts:
             prompt_called = True
             return True
 
-        with patch("guild.cli.main.create_provider") as mock_pf:
+        with patch("guild.cli.task_runner.create_provider") as mock_pf:
             mock_provider = AsyncMock()
             mock_provider.generate = AsyncMock(return_value=mock_response)
             mock_pf.return_value = mock_provider

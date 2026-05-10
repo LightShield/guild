@@ -1,0 +1,218 @@
+"""Task and chat execution logic for the Guild CLI.
+
+Contains the core agent loop creation, task execution, learning injection,
+and result persistence — extracted from the CLI layer for separation of
+concerns.
+"""
+
+from __future__ import annotations
+
+import logging
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+from guild.provider.ollama import create_provider
+from guild.task.spec import TaskStatus
+
+__all__ = [
+    "GUILD_MASTER_PROMPT",
+    "build_provider",
+    "build_system_prompt_with_learnings",
+    "compute_max_turns",
+    "create_chat_loop",
+    "create_task_agent_loop",
+    "extract_post_task_learnings",
+    "persist_task_result",
+    "run_task",
+]
+
+logger = logging.getLogger(__name__)
+
+GUILD_MASTER_PROMPT = (
+    "You are an autonomous coding agent. Follow the user's instructions precisely.\n\n"
+    "RULES:\n"
+    "- Use tools to complete the task. Do NOT just describe what you would do.\n"
+    "- Do EXACTLY what was asked. Do not explore unrelated files or run "
+    "unrelated commands.\n"
+    "- If the task says 'read file X', use file_read on X. If it says "
+    "'write file Y', use file_write.\n"
+    "- Do not run tests unless the task specifically asks you to.\n"
+    "- When done, provide a one-sentence summary.\n\n"
+    "Available tools: file_read, file_write, shell, search, glob."
+)
+
+_DEFAULT_MAX_TURNS = 50
+_SECONDS_PER_TURN_ESTIMATE = 10
+_MIN_TURNS = 5
+_MAX_TURNS_CAP = 200
+_LEARNING_MIN_CONFIDENCE = 0.5
+
+
+def create_chat_loop(config: Any, working_dir: str, permission: str) -> Any:
+    """Create an AgentLoop instance for interactive chat (REQ-06.9)."""
+    from guild.agent.loop import AgentLoop
+    from guild.permissions.checker import PermissionChecker, PermissionTier
+    from guild.tools.registry import build_tool_executors
+
+    provider = create_provider(config.base_url, config.model)
+    tool_executors = build_tool_executors()
+
+    tier = PermissionTier(permission)
+    _checker = PermissionChecker(tier=tier)
+
+    return AgentLoop(
+        provider=provider,
+        tool_executors=tool_executors,
+        working_dir=working_dir,
+        max_turns=50,
+    )
+
+
+def build_provider(config: Any) -> Any:
+    """Build an LLM provider, with escalation chain and retry if configured."""
+    from guild.provider.escalation import EscalatingProvider, EscalationChain
+    from guild.provider.retry import RetryProvider
+
+    primary = create_provider(config.base_url, config.model)
+
+    chain_models = [m.strip() for m in config.escalation_chain.split(",") if m.strip()]
+    cli_tools = [t.strip() for t in config.escalation_cli_providers.split(",") if t.strip()]
+
+    if not chain_models and not cli_tools:
+        return RetryProvider(primary)
+
+    providers = [primary]  # pragma: no cover — requires escalation chain config
+    for model_name in chain_models:
+        if model_name != config.model:
+            providers.append(create_provider(config.base_url, model_name))
+
+    if cli_tools:
+        from guild.provider.cli_provider import CLIToolProvider
+
+        for tool_cmd in cli_tools:
+            providers.append(CLIToolProvider(command=tool_cmd))
+
+    chain = EscalationChain(providers)
+    return RetryProvider(EscalatingProvider(chain))
+
+
+def compute_max_turns(timeout: int) -> int:
+    """Convert a timeout in seconds to a max turn count."""
+    if timeout <= 0:
+        return _DEFAULT_MAX_TURNS
+    return min(max(timeout // _SECONDS_PER_TURN_ESTIMATE, _MIN_TURNS), _MAX_TURNS_CAP)
+
+
+def create_task_agent_loop(config: Any, working_dir: str, timeout: int) -> Any:
+    """Build an AgentLoop configured for task execution."""
+    from guild.agent.loop import AgentLoop
+    from guild.agent.stuck import StuckDetector
+    from guild.tools.registry import build_tool_executors
+
+    provider = build_provider(config)
+    tool_executors = build_tool_executors()
+
+    max_turns = compute_max_turns(timeout)
+    stuck_detector = StuckDetector(
+        max_repeated_errors=config.stuck_max_repeated_errors,
+        max_no_progress_turns=config.stuck_max_no_progress_turns,
+        max_repeated_calls=config.stuck_max_repeated_calls,
+    )
+
+    return AgentLoop(
+        provider=provider,
+        tool_executors=tool_executors,
+        working_dir=working_dir,
+        max_turns=max_turns,
+        stuck_detector=stuck_detector,
+    )
+
+
+async def run_task(
+    config: Any,
+    working_dir: str,
+    description: str,
+    permission: str,
+    timeout: int,
+    guild_dir: Path,
+) -> str:
+    """Execute a task through the agent loop."""
+    from guild.storage.sqlite import Storage
+
+    db_path = guild_dir / "guild.db"
+    async with Storage(db_path) as store:
+        loop = create_task_agent_loop(config, working_dir, timeout)
+        system_prompt = await build_system_prompt_with_learnings(store)
+        result = await loop.run(system_prompt, description)
+        await persist_task_result(store, loop, description, result, config)
+        await extract_post_task_learnings(store, loop, config)
+
+    return result
+
+
+async def build_system_prompt_with_learnings(store: Any) -> str:
+    """Build the system prompt, injecting high-confidence learnings (REQ-09.4)."""
+    system_prompt = GUILD_MASTER_PROMPT
+    try:
+        from guild.agent.learning import format_learnings_for_injection
+
+        existing_learnings = await store.list_learnings(min_confidence=_LEARNING_MIN_CONFIDENCE)
+        injection = format_learnings_for_injection(existing_learnings)
+        if injection:
+            system_prompt = f"{system_prompt}\n\n{injection}"
+    except Exception:  # pragma: no cover — defensive guard for learning injection
+        logger.debug("Learning injection failed (non-critical)", exc_info=True)
+    return system_prompt
+
+
+async def persist_task_result(
+    store: Any, loop: Any, description: str, result: str, config: Any
+) -> None:
+    """Save task, agent, messages, and audit entry to storage."""
+    import uuid
+
+    task_id = str(uuid.uuid4())
+    agent_id = f"guild-master-{task_id[:8]}"
+
+    await store.create_task(task_id, description)
+    await store.update_task(
+        task_id, status=TaskStatus.COMPLETED, result=result, assigned_agent=agent_id
+    )
+    await store.register_agent(agent_id, "master")
+    await store.update_agent(
+        agent_id,
+        token_input=str(loop.total_input_tokens),
+        token_output=str(loop.total_output_tokens),
+    )
+
+    for msg in loop.messages:
+        role = msg.get("role", "")
+        content = msg.get("content", "")
+        if role and content:
+            await store.append_message(agent_id, role, content)
+
+    await store.log_audit(
+        action="task_completed",
+        agent_id=agent_id,
+        details=f"task={task_id} tokens_in={loop.total_input_tokens}"
+        f" tokens_out={loop.total_output_tokens}",
+    )
+
+
+async def extract_post_task_learnings(
+    store: Any, loop: Any, config: Any
+) -> None:  # pragma: no cover — requires LLM for extraction
+    """Extract learnings from the completed task (REQ-09.1)."""
+    try:
+        from guild.agent.learning import extract_learnings
+
+        provider = build_provider(config)
+        # Use the first task ID from storage — extract_learnings uses it for context
+        tasks = await store.list_tasks()
+        if tasks:
+            task_id = tasks[-1].get("task_id", "")
+            await extract_learnings(task_id, store, provider)
+    except Exception:
+        logger.debug("Learning extraction failed (non-critical)", exc_info=True)

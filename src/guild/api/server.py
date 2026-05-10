@@ -12,6 +12,8 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
+from guild.task.spec import TaskStatus
+
 __all__ = ["API_ROUTES", "create_app"]
 
 logger = logging.getLogger(__name__)
@@ -155,7 +157,7 @@ def create_app(
         task_id = str(uuid.uuid4())
         await storage.create_task(task_id, description)
         await storage.log_audit("task_created", details=f"task_id={task_id}")
-        return {"id": task_id, "status": "pending", "description": description}
+        return {"id": task_id, "status": TaskStatus.PENDING, "description": description}
 
     @app.post("/api/tasks/{task_id}/kill")
     async def kill_task(task_id: str) -> dict[str, str]:
@@ -163,9 +165,9 @@ def create_app(
         task = await storage.get_task(task_id)
         if task is None:
             raise HTTPException(status_code=404, detail="Task not found")
-        await storage.update_task(task_id, status="killed")
+        await storage.update_task(task_id, status=TaskStatus.KILLED)
         await storage.log_audit("task_killed", details=f"task_id={task_id}")
-        return {"id": task_id, "action": "killed"}
+        return {"id": task_id, "action": TaskStatus.KILLED}
 
     @app.post("/api/tasks/{task_id}/pause")
     async def pause_task(task_id: str) -> dict[str, str]:
@@ -173,9 +175,9 @@ def create_app(
         task = await storage.get_task(task_id)
         if task is None:
             raise HTTPException(status_code=404, detail="Task not found")
-        await storage.update_task(task_id, status="paused")
+        await storage.update_task(task_id, status=TaskStatus.PAUSED)
         await storage.log_audit("task_paused", details=f"task_id={task_id}")
-        return {"id": task_id, "action": "paused"}
+        return {"id": task_id, "action": TaskStatus.PAUSED}
 
     @app.post("/api/tasks/{task_id}/resume")
     async def resume_task(task_id: str) -> dict[str, str]:
@@ -183,7 +185,7 @@ def create_app(
         task = await storage.get_task(task_id)
         if task is None:
             raise HTTPException(status_code=404, detail="Task not found")
-        await storage.update_task(task_id, status="running")
+        await storage.update_task(task_id, status=TaskStatus.RUNNING)
         await storage.log_audit("task_resumed", details=f"task_id={task_id}")
         return {"id": task_id, "action": "resumed"}
 

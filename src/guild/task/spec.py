@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass, field
+from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -16,6 +17,7 @@ if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from guild.storage.sqlite import Storage
 
 __all__ = [
+    "TaskStatus",
     "VALID_TRANSITIONS",
     "TaskGraph",
     "TaskNode",
@@ -25,16 +27,37 @@ __all__ = [
     "transition_task",
 ]
 
+
+class TaskStatus(str, Enum):
+    """Canonical task status values used throughout Guild."""
+
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    KILLED = "killed"
+    PAUSED = "paused"
+    BLOCKED = "blocked"
+    IN_PROGRESS = "in_progress"
+    VERIFYING = "verifying"
+    DONE = "done"
+
+
 logger = logging.getLogger(__name__)
 
 # REQ-12.5: Valid status transitions
 VALID_TRANSITIONS: dict[str, list[str]] = {
-    "pending": ["in_progress"],
-    "in_progress": ["verifying", "done", "failed", "blocked"],
-    "verifying": ["done", "failed", "in_progress"],
-    "done": [],
-    "failed": ["pending"],
-    "blocked": ["pending", "in_progress"],
+    TaskStatus.PENDING: [TaskStatus.IN_PROGRESS],
+    TaskStatus.IN_PROGRESS: [
+        TaskStatus.VERIFYING,
+        TaskStatus.DONE,
+        TaskStatus.FAILED,
+        TaskStatus.BLOCKED,
+    ],
+    TaskStatus.VERIFYING: [TaskStatus.DONE, TaskStatus.FAILED, TaskStatus.IN_PROGRESS],
+    TaskStatus.DONE: [],
+    TaskStatus.FAILED: [TaskStatus.PENDING],
+    TaskStatus.BLOCKED: [TaskStatus.PENDING, TaskStatus.IN_PROGRESS],
 }
 
 
@@ -54,7 +77,7 @@ class TaskNode:
     description: str
     parent_id: str | None = None
     depends_on: list[str] = field(default_factory=list)
-    status: str = "pending"
+    status: str = TaskStatus.PENDING
 
 
 class TaskGraph:
@@ -80,10 +103,10 @@ class TaskGraph:
         """
         ready: list[TaskNode] = []
         for node in self._nodes.values():
-            if node.status != "pending":
+            if node.status != TaskStatus.PENDING:
                 continue
             if all(
-                self._nodes[dep].status == "completed"
+                self._nodes[dep].status == TaskStatus.COMPLETED
                 for dep in node.depends_on
                 if dep in self._nodes
             ):
@@ -93,7 +116,7 @@ class TaskGraph:
     def mark_completed(self, task_id: str) -> None:
         """Mark a task as completed."""
         if task_id in self._nodes:
-            self._nodes[task_id].status = "completed"
+            self._nodes[task_id].status = TaskStatus.COMPLETED
 
     def get_children(self, task_id: str) -> list[TaskNode]:
         """Return tasks whose parent_id matches the given task_id."""

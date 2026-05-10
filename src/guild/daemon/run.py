@@ -11,6 +11,8 @@ import logging
 import sys
 from pathlib import Path
 
+from guild.task.spec import TaskStatus
+
 __all__: list[str] = []
 
 logger = logging.getLogger(__name__)
@@ -25,9 +27,7 @@ async def _run_task(
     from guild.daemon.supervisor import DaemonSupervisor
     from guild.provider.ollama import create_provider
     from guild.storage.sqlite import Storage
-    from guild.tools.file_ops import execute_file_read, execute_file_write
-    from guild.tools.search import execute_glob, execute_search
-    from guild.tools.shell import execute_shell
+    from guild.tools.registry import build_tool_executors
 
     config = load_config(guild_dir)
     working_dir = str(guild_dir.parent)
@@ -44,17 +44,11 @@ async def _run_task(
         return
 
     description = task["description"]
-    await store.update_task(task_id, status="running")
+    await store.update_task(task_id, status=TaskStatus.RUNNING)
 
     # Create provider and tools
     provider = create_provider(config.base_url, config.model)
-    tool_executors = {
-        "file_read": execute_file_read,
-        "file_write": execute_file_write,
-        "shell": execute_shell,
-        "search": execute_search,
-        "glob": execute_glob,
-    }
+    tool_executors = build_tool_executors()
 
     system_prompt = (
         "You are an autonomous coding agent. Complete the task described below. "
@@ -76,7 +70,7 @@ async def _run_task(
 
     try:
         result = await supervisor.run(loop.run(system_prompt, description))
-        await store.update_task(task_id, status="completed", result=result)
+        await store.update_task(task_id, status=TaskStatus.COMPLETED, result=result)
         await store.log_audit(
             action="task_completed",
             agent_id="guild-daemon",
@@ -84,7 +78,7 @@ async def _run_task(
         )
     except Exception as exc:
         logger.error("Task %s failed: %s", task_id, exc)
-        await store.update_task(task_id, status="failed", result=str(exc))
+        await store.update_task(task_id, status=TaskStatus.FAILED, result=str(exc))
     finally:
         await store.close()
 

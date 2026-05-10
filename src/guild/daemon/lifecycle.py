@@ -12,6 +12,8 @@ import signal
 from enum import IntEnum
 from typing import TYPE_CHECKING
 
+from guild.task.spec import TaskStatus
+
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from pathlib import Path
 
@@ -87,7 +89,7 @@ class LifecycleManager:
         # Update task status
         task = await self.storage.get_task(task_id)
         if task is not None:
-            await self.storage.update_task(task_id, status="killed")
+            await self.storage.update_task(task_id, status=TaskStatus.KILLED)
 
         return True
 
@@ -112,7 +114,7 @@ class LifecycleManager:
             logger.warning("Task %s not found", task_id)
             return False
 
-        if task["status"] != "running":
+        if task["status"] != TaskStatus.RUNNING:
             logger.warning(
                 "Cannot pause task %s: status is '%s', not 'running'",
                 task_id,
@@ -120,7 +122,7 @@ class LifecycleManager:
             )
             return False
 
-        await self.storage.update_task(task_id, status="paused")
+        await self.storage.update_task(task_id, status=TaskStatus.PAUSED)
         logger.info("Task %s paused", task_id)
         return True
 
@@ -134,7 +136,7 @@ class LifecycleManager:
             logger.warning("Task %s not found", task_id)
             return False
 
-        if task["status"] != "paused":
+        if task["status"] != TaskStatus.PAUSED:
             logger.warning(
                 "Cannot resume task %s: status is '%s', not 'paused'",
                 task_id,
@@ -142,7 +144,7 @@ class LifecycleManager:
             )
             return False
 
-        await self.storage.update_task(task_id, status="running")
+        await self.storage.update_task(task_id, status=TaskStatus.RUNNING)
         logger.info("Task %s resumed", task_id)
         return True
 

@@ -3,6 +3,7 @@
 from guild.tools.base import TOOL_SCHEMAS, ToolResult, resolve_path
 from guild.tools.file_ops import MAX_FILE_READ_CHARS, execute_file_read, execute_file_write
 from guild.tools.plugin import PluginLoader, ToolCache, ToolPlugin, ToolProperties
+from guild.tools.registry import build_tool_executors
 from guild.tools.search import (
     MAX_GLOB_RESULTS,
     MAX_SEARCH_RESULTS,
@@ -29,6 +30,7 @@ __all__ = [
     "ToolPlugin",
     "ToolProperties",
     "ToolResult",
+    "build_tool_executors",
     "execute_file_read",
     "execute_file_write",
     "execute_glob",

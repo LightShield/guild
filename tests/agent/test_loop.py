@@ -989,7 +989,7 @@ class TestTimeoutBehavior:
 
     async def test_timeout_zero_means_no_limit(self) -> None:
         """Timeout of 0 means unlimited — loop uses default max_turns."""
-        from guild.cli.main import _compute_max_turns
+        from guild.cli.task_runner import compute_max_turns as _compute_max_turns
 
         # timeout=0 should return default max turns
         result = _compute_max_turns(0)
@@ -998,7 +998,7 @@ class TestTimeoutBehavior:
     async def test_timeout_produces_partial_result(self) -> None:
         """When max_turns reached due to timeout, partial progress is returned."""
         # A very short timeout produces minimal turns
-        from guild.cli.main import _compute_max_turns
+        from guild.cli.task_runner import compute_max_turns as _compute_max_turns
 
         # timeout=30s => 30/10 = 3 turns (but min 5)
         result = _compute_max_turns(30)

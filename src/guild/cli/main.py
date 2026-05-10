@@ -1,7 +1,8 @@
 """Guild CLI — Typer-based command-line interface (REQ-05.1, REQ-05.2).
 
 Primary entry point for all Guild operations: init, task, chat, status,
-config, and audit commands.
+config, and audit commands.  Each command is a thin wrapper that delegates
+to helper modules (task_runner, daemon_ops, queries, toml_utils).
 """
 
 # ruff: noqa: B008, UP045 — Typer requires function calls in argument defaults
@@ -11,18 +12,79 @@ config, and audit commands.
 
 import asyncio
 import logging
-import subprocess
-import sys
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
 import typer
 from rich.console import Console
 from rich.table import Table
 
 from guild import __version__
+from guild.cli.daemon_ops import (
+    create_task_in_storage as _create_task_in_storage,
+)
+from guild.cli.daemon_ops import (
+    get_running_tasks as _get_running_tasks,
+)
+from guild.cli.daemon_ops import (
+    kill_all_tasks as _kill_all_tasks,
+)
+from guild.cli.daemon_ops import (
+    kill_task as _kill_task,
+)
+from guild.cli.daemon_ops import (
+    launch_background_task as _launch_background_task,
+)
+from guild.cli.daemon_ops import (
+    pause_task as _pause_task,
+)
+from guild.cli.daemon_ops import (
+    resume_task as _resume_task,
+)
+from guild.cli.queries import (
+    answer_pending_question as _answer_pending_question,
+)
+from guild.cli.queries import (
+    approve_learning as _approve_learning,
+)
+from guild.cli.queries import (
+    decay_learnings as _decay_learnings,
+)
+from guild.cli.queries import (
+    fetch_audit as _fetch_audit,
+)
+from guild.cli.queries import (
+    fetch_decisions as _fetch_decisions,
+)
+from guild.cli.queries import (
+    fetch_learnings as _fetch_learnings,
+)
+from guild.cli.queries import (
+    fetch_pending_questions as _fetch_pending_questions,
+)
+from guild.cli.queries import (
+    fetch_task_history as _fetch_task_history,
+)
+from guild.cli.queries import (
+    fetch_task_messages as _fetch_task_messages,
+)
+from guild.cli.queries import (
+    fetch_token_summary as _fetch_token_summary,
+)
+from guild.cli.queries import (
+    reject_learning as _reject_learning,
+)
+from guild.cli.task_runner import (
+    GUILD_MASTER_PROMPT as _GUILD_MASTER_PROMPT,
+)
+from guild.cli.task_runner import (
+    create_chat_loop as _create_chat_loop,
+)
+from guild.cli.task_runner import (
+    run_task as _run_task,
+)
+from guild.cli.toml_utils import set_config_value as _set_config_value
 from guild.config.loader import find_guild_dir, load_config
-from guild.provider.ollama import create_provider
 
 __all__ = ["app"]
 
@@ -33,19 +95,6 @@ app = typer.Typer(
     name="guild",
     help="Guild — autonomous coding agent harness.",
     no_args_is_help=True,
-)
-
-_GUILD_MASTER_PROMPT = (
-    "You are an autonomous coding agent. Follow the user's instructions precisely.\n\n"
-    "RULES:\n"
-    "- Use tools to complete the task. Do NOT just describe what you would do.\n"
-    "- Do EXACTLY what was asked. Do not explore unrelated files or run "
-    "unrelated commands.\n"
-    "- If the task says 'read file X', use file_read on X. If it says "
-    "'write file Y', use file_write.\n"
-    "- Do not run tests unless the task specifically asks you to.\n"
-    "- When done, provide a one-sentence summary.\n\n"
-    "Available tools: file_read, file_write, shell, search, glob."
 )
 
 _DEFAULT_CONFIG_TOML = """\
@@ -60,6 +109,11 @@ max_tokens = 4096
 default_permission = "autopilot"
 max_concurrent_agents = 1
 """
+
+
+# ------------------------------------------------------------------
+# Callbacks and commands
+# ------------------------------------------------------------------
 
 
 @app.callback(invoke_without_command=True)
@@ -660,7 +714,8 @@ def attach(
 
 
 # ------------------------------------------------------------------
-# Internal helpers
+# Lightweight local helpers (kept in main.py because they are tiny
+# and only used by init/status)
 # ------------------------------------------------------------------
 
 
@@ -692,585 +747,3 @@ def _get_counts(db_path: Path) -> tuple[int, int]:
         return 0, 0
 
     return asyncio.run(_query())
-
-
-def _create_chat_loop(config: Any, working_dir: str, permission: str) -> Any:
-    """Create an AgentLoop instance for interactive chat (REQ-06.9)."""
-    from guild.agent.loop import AgentLoop
-    from guild.permissions.checker import PermissionChecker, PermissionTier
-    from guild.tools.file_ops import execute_file_read, execute_file_write
-    from guild.tools.search import execute_glob, execute_search
-    from guild.tools.shell import execute_shell
-
-    provider = create_provider(config.base_url, config.model)
-    tool_executors = {
-        "file_read": execute_file_read,
-        "file_write": execute_file_write,
-        "shell": execute_shell,
-        "search": execute_search,
-        "glob": execute_glob,
-    }
-
-    tier = PermissionTier(permission)
-    _checker = PermissionChecker(tier=tier)
-
-    return AgentLoop(
-        provider=provider,
-        tool_executors=tool_executors,
-        working_dir=working_dir,
-        max_turns=50,
-    )
-
-
-def _build_provider(config: Any) -> Any:
-    """Build an LLM provider, with escalation chain and retry if configured."""
-    from guild.provider.escalation import EscalatingProvider, EscalationChain
-    from guild.provider.retry import RetryProvider
-
-    primary = create_provider(config.base_url, config.model)
-
-    chain_models = [m.strip() for m in config.escalation_chain.split(",") if m.strip()]
-    cli_tools = [t.strip() for t in config.escalation_cli_providers.split(",") if t.strip()]
-
-    if not chain_models and not cli_tools:
-        return RetryProvider(primary)
-
-    providers = [primary]  # pragma: no cover — requires escalation chain config
-    for model_name in chain_models:
-        if model_name != config.model:
-            providers.append(create_provider(config.base_url, model_name))
-
-    if cli_tools:
-        from guild.provider.cli_provider import CLIToolProvider
-
-        for tool_cmd in cli_tools:
-            providers.append(CLIToolProvider(command=tool_cmd))
-
-    chain = EscalationChain(providers)
-    return RetryProvider(EscalatingProvider(chain))
-
-
-_DEFAULT_MAX_TURNS = 50
-_SECONDS_PER_TURN_ESTIMATE = 10
-_MIN_TURNS = 5
-_MAX_TURNS_CAP = 200
-_LEARNING_MIN_CONFIDENCE = 0.5
-
-
-async def _run_task(
-    config: Any,
-    working_dir: str,
-    description: str,
-    permission: str,
-    timeout: int,
-    guild_dir: Path,
-) -> str:
-    """Execute a task through the agent loop."""
-    from guild.storage.sqlite import Storage
-
-    db_path = guild_dir / "guild.db"
-    async with Storage(db_path) as store:
-        loop = _create_task_agent_loop(config, working_dir, timeout)
-        system_prompt = await _build_system_prompt_with_learnings(store)
-        result = await loop.run(system_prompt, description)
-        await _persist_task_result(store, loop, description, result, config)
-        await _extract_post_task_learnings(store, loop, config)
-
-    return result
-
-
-def _create_task_agent_loop(config: Any, working_dir: str, timeout: int) -> Any:
-    """Build an AgentLoop configured for task execution."""
-    from guild.agent.loop import AgentLoop
-    from guild.agent.stuck import StuckDetector
-    from guild.tools.file_ops import execute_file_read, execute_file_write
-    from guild.tools.search import execute_glob, execute_search
-    from guild.tools.shell import execute_shell
-
-    provider = _build_provider(config)
-    tool_executors = {
-        "file_read": execute_file_read,
-        "file_write": execute_file_write,
-        "shell": execute_shell,
-        "search": execute_search,
-        "glob": execute_glob,
-    }
-
-    max_turns = _compute_max_turns(timeout)
-    stuck_detector = StuckDetector(
-        max_repeated_errors=config.stuck_max_repeated_errors,
-        max_no_progress_turns=config.stuck_max_no_progress_turns,
-        max_repeated_calls=config.stuck_max_repeated_calls,
-    )
-
-    return AgentLoop(
-        provider=provider,
-        tool_executors=tool_executors,
-        working_dir=working_dir,
-        max_turns=max_turns,
-        stuck_detector=stuck_detector,
-    )
-
-
-def _compute_max_turns(timeout: int) -> int:
-    """Convert a timeout in seconds to a max turn count."""
-    if timeout <= 0:
-        return _DEFAULT_MAX_TURNS
-    return min(max(timeout // _SECONDS_PER_TURN_ESTIMATE, _MIN_TURNS), _MAX_TURNS_CAP)
-
-
-async def _build_system_prompt_with_learnings(store: Any) -> str:
-    """Build the system prompt, injecting high-confidence learnings (REQ-09.4)."""
-    system_prompt = _GUILD_MASTER_PROMPT
-    try:
-        from guild.agent.learning import format_learnings_for_injection
-
-        existing_learnings = await store.list_learnings(min_confidence=_LEARNING_MIN_CONFIDENCE)
-        injection = format_learnings_for_injection(existing_learnings)
-        if injection:
-            system_prompt = f"{system_prompt}\n\n{injection}"
-    except Exception:  # pragma: no cover — defensive guard for learning injection
-        logger.debug("Learning injection failed (non-critical)", exc_info=True)
-    return system_prompt
-
-
-async def _persist_task_result(
-    store: Any, loop: Any, description: str, result: str, config: Any
-) -> None:
-    """Save task, agent, messages, and audit entry to storage."""
-    import uuid
-
-    task_id = str(uuid.uuid4())
-    agent_id = f"guild-master-{task_id[:8]}"
-
-    await store.create_task(task_id, description)
-    await store.update_task(task_id, status="completed", result=result, assigned_agent=agent_id)
-    await store.register_agent(agent_id, "master")
-    await store.update_agent(
-        agent_id,
-        token_input=str(loop.total_input_tokens),
-        token_output=str(loop.total_output_tokens),
-    )
-
-    for msg in loop.messages:
-        role = msg.get("role", "")
-        content = msg.get("content", "")
-        if role and content:
-            await store.append_message(agent_id, role, content)
-
-    await store.log_audit(
-        action="task_completed",
-        agent_id=agent_id,
-        details=f"task={task_id} tokens_in={loop.total_input_tokens}"
-        f" tokens_out={loop.total_output_tokens}",
-    )
-
-
-async def _extract_post_task_learnings(
-    store: Any, loop: Any, config: Any
-) -> None:  # pragma: no cover — requires LLM for extraction
-    """Extract learnings from the completed task (REQ-09.1)."""
-    try:
-        from guild.agent.learning import extract_learnings
-
-        provider = _build_provider(config)
-        # Use the first task ID from storage — extract_learnings uses it for context
-        tasks = await store.list_tasks()
-        if tasks:
-            task_id = tasks[-1].get("task_id", "")
-            await extract_learnings(task_id, store, provider)
-    except Exception:
-        logger.debug("Learning extraction failed (non-critical)", exc_info=True)
-
-
-async def _fetch_audit(db_path: Path, limit: int) -> list[dict]:
-    """Fetch audit log entries from the database."""
-    from guild.storage.sqlite import Storage
-
-    if not db_path.exists():  # pragma: no cover — defensive guard for missing db
-        return []
-
-    store = Storage(db_path)
-    await store.connect()
-    entries = await store.list_audit(limit=limit)
-    await store.close()
-    return entries
-
-
-async def _fetch_decisions(
-    db_path: Path,
-    task_id: str | None,
-    limit: int,
-) -> list[dict]:
-    """Fetch decision log entries from the database."""
-    from guild.storage.sqlite import Storage
-
-    if not db_path.exists():  # pragma: no cover — defensive guard for missing db
-        return []
-
-    store = Storage(db_path)
-    await store.connect()
-    entries = await store.list_decisions(task_id=task_id, limit=limit)
-    await store.close()
-    return entries
-
-
-async def _fetch_task_history(db_path: Path, limit: int, status: str | None) -> list[dict]:
-    """Fetch task history from the database."""
-    from guild.storage.sqlite import Storage
-
-    if not db_path.exists():  # pragma: no cover — defensive guard for missing db
-        return []
-
-    store = Storage(db_path)
-    await store.connect()
-    tasks = await store.list_tasks(status=status)
-    await store.close()
-    # Return most recent first, capped at limit
-    tasks.sort(key=lambda t: t.get("created_at", ""), reverse=True)
-    return tasks[:limit]
-
-
-async def _fetch_token_summary(db_path: Path) -> dict | None:
-    """Fetch token usage summary from the database."""
-    from guild.storage.sqlite import Storage
-
-    if not db_path.exists():  # pragma: no cover — defensive guard for missing db
-        return None
-
-    store = Storage(db_path)
-    await store.connect()
-    summary = await store.get_token_summary()
-    await store.close()
-    return summary
-
-
-def _load_toml(path: Path) -> dict:
-    """Load a TOML file, returning empty dict on failure or missing."""
-    import tomllib
-
-    if not path.is_file():
-        return {}
-    try:
-        with open(path, "rb") as f:
-            return tomllib.load(f)
-    except Exception:  # pragma: no cover — defensive guard for corrupted TOML
-        return {}
-
-
-def _set_config_value(config_path: Path, key_value: str) -> None:
-    """Set a dotted key=value in a TOML config file.
-
-    Supports dotted keys like 'provider.model=llama3'.
-    """
-    if "=" not in key_value:
-        console.print("[red]Error:[/red] Use format key=value")
-        raise typer.Exit(code=1)
-
-    key, value = key_value.split("=", 1)
-    parts = key.strip().split(".")
-
-    # Load existing TOML data
-    existing = _load_toml(config_path)
-
-    # Navigate to the right nested level
-    current = existing
-    for part in parts[:-1]:
-        if part not in current:
-            current[part] = {}
-        current = current[part]
-
-    # Set the value (try to preserve type)
-    current[parts[-1]] = _parse_value(value.strip())
-
-    # Write back as TOML
-    _write_toml(config_path, existing)
-
-
-def _parse_value(value: str) -> str | int | float | bool:
-    """Parse a string value into its likely Python type."""
-    if value.lower() in ("true", "false"):
-        return value.lower() == "true"
-    try:
-        return int(value)
-    except ValueError:
-        pass
-    try:
-        return float(value)
-    except ValueError:
-        pass
-    return value
-
-
-def _write_toml(path: Path, data: dict) -> None:
-    """Write a dict to a TOML file (simple implementation)."""
-    lines: list[str] = []
-    # Separate top-level scalars from tables
-    scalars = {k: v for k, v in data.items() if not isinstance(v, dict)}
-    tables = {k: v for k, v in data.items() if isinstance(v, dict)}
-
-    for k, v in scalars.items():
-        lines.append(f"{k} = {_toml_value(v)}")
-
-    for section, values in tables.items():
-        lines.append(f"\n[{section}]")
-        for k, v in values.items():
-            lines.append(f"{k} = {_toml_value(v)}")
-
-    lines.append("")  # trailing newline
-    path.write_text("\n".join(lines))
-
-
-def _toml_value(value: Any) -> str:
-    """Format a Python value as a TOML literal."""
-    if isinstance(value, bool):
-        return "true" if value else "false"
-    if isinstance(value, str):
-        return f'"{value}"'
-    return str(value)
-
-
-# ------------------------------------------------------------------
-# Daemon / background helpers
-# ------------------------------------------------------------------
-
-
-def _create_task_in_storage(guild_dir: Path, description: str) -> str:
-    """Create a task record in storage and return its ID."""
-    import uuid
-
-    from guild.storage.sqlite import Storage
-
-    task_id = str(uuid.uuid4())
-    db_path = guild_dir / "guild.db"
-
-    async def _create() -> None:
-        store = Storage(db_path)
-        await store.connect()
-        await store.create_task(task_id, description)
-        await store.close()
-
-    asyncio.run(_create())
-    return task_id
-
-
-def _launch_background_task(guild_dir: Path, task_id: str) -> None:
-    """Fork a background daemon process to run the task."""
-    subprocess.Popen(
-        [sys.executable, "-m", "guild.daemon.run", task_id, str(guild_dir)],
-        start_new_session=True,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        stdin=subprocess.DEVNULL,
-    )
-
-
-def _get_running_tasks(run_dir: Path) -> list[dict]:
-    """List tasks with live PID files in the run directory."""
-    import os as _os
-
-    tasks: list[dict] = []
-    for pid_file in run_dir.glob("*.pid"):
-        try:
-            pid = int(pid_file.read_text().strip())
-            _os.kill(pid, 0)  # Check if alive
-            tasks.append({"task_id": pid_file.stem, "pid": pid})
-        except (OSError, ValueError):
-            continue
-    return tasks
-
-
-def _kill_task(
-    task_id: str, guild_dir: Path
-) -> bool:  # pragma: no cover — requires running daemon process
-    """Kill a task by sending SIGTERM."""
-    from guild.daemon.lifecycle import LifecycleManager
-    from guild.storage.sqlite import Storage
-
-    run_dir = guild_dir / "run"
-    db_path = guild_dir / "guild.db"
-
-    async def _do_kill() -> bool:
-        store = Storage(db_path)
-        await store.connect()
-        mgr = LifecycleManager(run_dir, store)
-        result = await mgr.kill_task(task_id)
-        await store.close()
-        return result
-
-    return asyncio.run(_do_kill())
-
-
-def _kill_all_tasks(guild_dir: Path) -> int:  # pragma: no cover — requires running daemon process
-    """Kill all running tasks."""
-    from guild.daemon.lifecycle import LifecycleManager
-    from guild.storage.sqlite import Storage
-
-    run_dir = guild_dir / "run"
-    db_path = guild_dir / "guild.db"
-
-    async def _do_kill_all() -> int:
-        store = Storage(db_path)
-        await store.connect()
-        mgr = LifecycleManager(run_dir, store)
-        count = await mgr.kill_all()
-        await store.close()
-        return count
-
-    return asyncio.run(_do_kill_all())
-
-
-def _pause_task(
-    task_id: str, guild_dir: Path
-) -> bool:  # pragma: no cover — requires running daemon process
-    """Pause a running task."""
-    from guild.daemon.lifecycle import LifecycleManager
-    from guild.storage.sqlite import Storage
-
-    run_dir = guild_dir / "run"
-    db_path = guild_dir / "guild.db"
-
-    async def _do_pause() -> bool:
-        store = Storage(db_path)
-        await store.connect()
-        mgr = LifecycleManager(run_dir, store)
-        result = await mgr.pause_task(task_id)
-        await store.close()
-        return result
-
-    return asyncio.run(_do_pause())
-
-
-def _resume_task(
-    task_id: str, guild_dir: Path
-) -> bool:  # pragma: no cover — requires running daemon process
-    """Resume a paused task."""
-    from guild.daemon.lifecycle import LifecycleManager
-    from guild.storage.sqlite import Storage
-
-    run_dir = guild_dir / "run"
-    db_path = guild_dir / "guild.db"
-
-    async def _do_resume() -> bool:
-        store = Storage(db_path)
-        await store.connect()
-        mgr = LifecycleManager(run_dir, store)
-        result = await mgr.resume_task(task_id)
-        await store.close()
-        return result
-
-    return asyncio.run(_do_resume())
-
-
-async def _fetch_task_messages(guild_dir: Path, task_id: str) -> list[dict]:
-    """Fetch messages associated with a task's agent."""
-    from guild.storage.sqlite import Storage
-
-    db_path = guild_dir / "guild.db"
-    if not db_path.exists():  # pragma: no cover — defensive guard for missing db
-        return []
-
-    store = Storage(db_path)
-    await store.connect()
-
-    # Check if the task exists and has an assigned agent
-    task = await store.get_task(task_id)
-    if task is None:
-        await store.close()
-        return []
-
-    agent_id = task.get("assigned_agent")
-    if not agent_id:  # pragma: no cover — defensive guard for unassigned task
-        await store.close()
-        return []
-
-    messages = await store.get_messages(agent_id)  # pragma: no cover — requires task with messages
-    await store.close()
-    return messages
-
-
-# ------------------------------------------------------------------
-# Learnings helpers
-# ------------------------------------------------------------------
-
-
-async def _fetch_learnings(
-    db_path: Path,
-    category: str | None,
-    limit: int,
-) -> list[dict]:
-    """Fetch learnings from the database."""
-    from guild.storage.sqlite import Storage
-
-    if not db_path.exists():  # pragma: no cover — defensive guard for missing db
-        return []
-
-    store = Storage(db_path)
-    await store.connect()
-    entries = await store.list_learnings(category=category, limit=limit)
-    await store.close()
-    return entries
-
-
-async def _approve_learning(db_path: Path, learning_id: int) -> None:
-    """Validate (approve) a learning, boosting its confidence."""
-    from guild.storage.sqlite import Storage
-
-    store = Storage(db_path)
-    await store.connect()
-    await store.validate_learning(learning_id)
-    await store.close()
-
-
-async def _reject_learning(db_path: Path, learning_id: int) -> None:
-    """Delete a rejected learning."""
-    from guild.storage.sqlite import Storage
-
-    store = Storage(db_path)
-    await store.connect()
-    await store.delete_learning(learning_id)
-    await store.close()
-
-
-async def _decay_learnings(db_path: Path) -> int:
-    """Run decay on old unvalidated learnings."""
-    from guild.storage.sqlite import Storage
-
-    store = Storage(db_path)
-    await store.connect()
-    count = await store.decay_learnings()
-    await store.close()
-    return count
-
-
-# ------------------------------------------------------------------
-# Escalation helpers (REQ-15.1)
-# ------------------------------------------------------------------
-
-
-async def _fetch_pending_questions(db_path: Path) -> list:
-    """Fetch pending escalation questions from the database."""
-    from guild.escalation.queue import QuestionQueue
-    from guild.storage.sqlite import Storage
-
-    if not db_path.exists():  # pragma: no cover — defensive guard for missing db
-        return []
-
-    store = Storage(db_path)
-    await store.connect()
-    queue = QuestionQueue(store)
-    pending = await queue.get_pending()
-    await store.close()
-    return pending
-
-
-async def _answer_pending_question(db_path: Path, question_id: str, response: str) -> None:
-    """Answer a pending escalation question."""
-    from guild.escalation.queue import QuestionQueue
-    from guild.storage.sqlite import Storage
-
-    store = Storage(db_path)
-    await store.connect()
-    queue = QuestionQueue(store)
-    await queue.answer_question(question_id, response)
-    await store.close()
