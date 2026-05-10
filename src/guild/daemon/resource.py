@@ -10,9 +10,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from collections.abc import Callable
@@ -53,6 +53,7 @@ class ResourceThresholds:
     cpu_threshold_percent: float = 80.0
     polite_delay_seconds: float = 10.0
     poll_interval_seconds: float = 5.0
+    vram_pressure_percent: float = 85.0
 
 
 @dataclass
@@ -64,6 +65,8 @@ class ResourceStatus:
     cpu_percent: float
     is_throttled: bool
     reason: str = ""
+    gpu_status: dict[str, Any] | None = field(default=None)
+    thermal_status: dict[str, Any] | None = field(default=None)
 
 
 def _default_activity_detector() -> (
@@ -109,11 +112,15 @@ class ResourceMonitor:
         thresholds: ResourceThresholds | None = None,
         activity_detector: Callable[[], ActivityState] | None = None,
         cpu_reader: Callable[[], float] | None = None,
+        gpu_reader: Callable[[], dict[str, Any]] | None = None,
+        thermal_reader: Callable[[], dict[str, Any]] | None = None,
     ) -> None:
         self.mode = mode
         self.thresholds = thresholds or ResourceThresholds()
         self._activity_detector = activity_detector or _default_activity_detector
         self._cpu_reader = cpu_reader or _default_cpu_reader
+        self._gpu_reader = gpu_reader
+        self._thermal_reader = thermal_reader
 
     def detect_activity(self) -> ActivityState:
         """Return current user activity state via injected detector."""
@@ -123,18 +130,38 @@ class ResourceMonitor:
         """Return current CPU utilization via injected reader."""
         return self._cpu_reader()
 
+    def get_gpu_status(self) -> dict[str, Any] | None:
+        """Return current GPU/VRAM status, or None if no reader."""
+        if self._gpu_reader is None:
+            return None
+        return self._gpu_reader()
+
+    def get_thermal_status(self) -> dict[str, Any] | None:
+        """Return current thermal status, or None if no reader."""
+        if self._thermal_reader is None:
+            return None
+        return self._thermal_reader()
+
     def get_status(self) -> ResourceStatus:
         """Return a snapshot of current resource and scheduling state."""
         activity = self.detect_activity()
         cpu = self.get_cpu_percent()
-        is_throttled = self._should_throttle(activity)
-        reason = self._throttle_reason(activity, is_throttled)
+        gpu_status = self.get_gpu_status()
+        thermal_status = self.get_thermal_status()
+        is_throttled = self._should_throttle(
+            activity, gpu_status, thermal_status,
+        )
+        reason = self._throttle_reason(
+            activity, is_throttled, gpu_status, thermal_status,
+        )
         return ResourceStatus(
             mode=self.mode,
             activity=activity,
             cpu_percent=cpu,
             is_throttled=is_throttled,
             reason=reason,
+            gpu_status=gpu_status,
+            thermal_status=thermal_status,
         )
 
     async def wait_if_throttled(self) -> None:
@@ -172,18 +199,60 @@ class ResourceMonitor:
             )
             await asyncio.sleep(self.thresholds.poll_interval_seconds)
 
-    def _should_throttle(self, activity: ActivityState) -> bool:
+    def _is_vram_pressure(
+        self, gpu_status: dict[str, Any] | None,
+    ) -> bool:
+        """Check if VRAM usage exceeds the configured threshold."""
+        if gpu_status is None:
+            return False
+        total: float = float(gpu_status.get("vram_total_mb", 0.0))
+        if total <= 0:
+            return False
+        used: float = float(gpu_status.get("vram_used_mb", 0.0))
+        usage_pct: float = (used / total) * 100.0
+        return usage_pct >= self.thresholds.vram_pressure_percent
+
+    def _is_thermal_throttled(
+        self, thermal_status: dict[str, Any] | None,
+    ) -> bool:
+        """Check if the system reports thermal throttling."""
+        if thermal_status is None:
+            return False
+        return bool(thermal_status.get("is_throttled", False))
+
+    def _should_throttle(
+        self,
+        activity: ActivityState,
+        gpu_status: dict[str, Any] | None = None,
+        thermal_status: dict[str, Any] | None = None,
+    ) -> bool:
         """Determine if throttling is active given current state."""
+        if self._is_vram_pressure(gpu_status):
+            return True
+        if self._is_thermal_throttled(thermal_status):
+            return True
         if self.mode == SchedulingMode.FULL:
             return False
         return activity == ActivityState.ACTIVE
 
-    def _throttle_reason(self, activity: ActivityState, is_throttled: bool) -> str:
+    def _throttle_reason(
+        self,
+        activity: ActivityState,
+        is_throttled: bool,
+        gpu_status: dict[str, Any] | None = None,
+        thermal_status: dict[str, Any] | None = None,
+    ) -> str:
         """Generate human-readable reason for current throttle state."""
         if not is_throttled:
             return ""
-        if self.mode == SchedulingMode.POLITE:
-            return "user active — polite delay applied"
-        if self.mode == SchedulingMode.STEALTH:
-            return "user active — paused until idle"
-        return ""  # pragma: no cover — defensive unreachable
+        reasons: list[str] = []
+        if self._is_vram_pressure(gpu_status):
+            reasons.append("VRAM pressure — deferring work")
+        if self._is_thermal_throttled(thermal_status):
+            reasons.append("thermal throttling — reducing rate")
+        if not reasons:
+            if self.mode == SchedulingMode.POLITE:
+                return "user active — polite delay applied"
+            if self.mode == SchedulingMode.STEALTH:
+                return "user active — paused until idle"
+        return "; ".join(reasons)

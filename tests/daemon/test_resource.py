@@ -365,3 +365,167 @@ class TestMonitorPolling:
             gap = timestamps[i] - timestamps[i - 1]
             # Each gap should be approximately poll_interval_seconds
             assert gap >= 0.04  # Allow timing variance
+
+
+def _gpu_high() -> dict[str, object]:
+    return {"gpu_percent": 90.0, "vram_used_mb": 7000, "vram_total_mb": 8192}
+
+
+def _gpu_over_threshold() -> dict[str, object]:
+    return {"gpu_percent": 50.0, "vram_used_mb": 7500, "vram_total_mb": 8192}
+
+
+def _gpu_under_threshold() -> dict[str, object]:
+    return {"gpu_percent": 30.0, "vram_used_mb": 2000, "vram_total_mb": 8192}
+
+
+def _gpu_mid() -> dict[str, object]:
+    return {"gpu_percent": 45.0, "vram_used_mb": 4000, "vram_total_mb": 8192}
+
+
+def _thermal_throttled_hot() -> dict[str, object]:
+    return {"is_throttled": True, "cpu_temp_celsius": 95.0}
+
+
+def _thermal_throttled_critical() -> dict[str, object]:
+    return {"is_throttled": True, "cpu_temp_celsius": 98.0}
+
+
+def _thermal_ok_warm() -> dict[str, object]:
+    return {"is_throttled": False, "cpu_temp_celsius": 60.0}
+
+
+def _thermal_ok_cool() -> dict[str, object]:
+    return {"is_throttled": False, "cpu_temp_celsius": 55.0}
+
+
+@pytest.mark.req("REQ-24.6")
+@pytest.mark.unit
+class TestGpuVramAwareness:
+    """ResourceMonitor detects GPU/VRAM pressure and throttles."""
+
+    def test_gpu_reader_injected(self) -> None:
+        """ResourceMonitor accepts a gpu_reader callable."""
+        from guild.daemon.resource import ResourceMonitor, SchedulingMode
+
+        monitor = ResourceMonitor(
+            mode=SchedulingMode.POLITE, gpu_reader=_gpu_high,
+        )
+        expected = {
+            "gpu_percent": 90.0,
+            "vram_used_mb": 7000,
+            "vram_total_mb": 8192,
+        }
+        assert monitor.get_gpu_status() == expected
+
+    def test_high_vram_triggers_throttle(self) -> None:
+        """When VRAM usage > threshold, monitor recommends deferring."""
+        from guild.daemon.resource import (
+            ResourceMonitor,
+            ResourceThresholds,
+            SchedulingMode,
+        )
+
+        thresholds = ResourceThresholds(vram_pressure_percent=85.0)
+        monitor = ResourceMonitor(
+            mode=SchedulingMode.POLITE,
+            thresholds=thresholds,
+            gpu_reader=_gpu_over_threshold,
+        )
+        status = monitor.get_status()
+        assert status.is_throttled
+        assert "vram" in status.reason.lower()
+
+    def test_low_vram_no_throttle(self) -> None:
+        """When VRAM is below threshold, no GPU-based throttling."""
+        from guild.daemon.resource import (
+            ResourceMonitor,
+            ResourceThresholds,
+            SchedulingMode,
+        )
+
+        thresholds = ResourceThresholds(vram_pressure_percent=85.0)
+        monitor = ResourceMonitor(
+            mode=SchedulingMode.POLITE,
+            thresholds=thresholds,
+            gpu_reader=_gpu_under_threshold,
+        )
+        status = monitor.get_status()
+        assert not status.is_throttled
+
+    def test_no_gpu_reader_returns_none(self) -> None:
+        """Without a gpu_reader, get_gpu_status returns None."""
+        from guild.daemon.resource import ResourceMonitor, SchedulingMode
+
+        monitor = ResourceMonitor(mode=SchedulingMode.POLITE)
+        assert monitor.get_gpu_status() is None
+
+    def test_gpu_status_in_resource_status(self) -> None:
+        """ResourceStatus includes gpu_status field."""
+        from guild.daemon.resource import ResourceMonitor, SchedulingMode
+
+        monitor = ResourceMonitor(
+            mode=SchedulingMode.POLITE, gpu_reader=_gpu_mid,
+        )
+        status = monitor.get_status()
+        assert status.gpu_status is not None
+        assert status.gpu_status["gpu_percent"] == 45.0
+
+
+@pytest.mark.req("REQ-24.7")
+@pytest.mark.unit
+class TestThermalAwareness:
+    """ResourceMonitor detects thermal throttling and reduces rate."""
+
+    def test_thermal_reader_injected(self) -> None:
+        """ResourceMonitor accepts a thermal_reader callable."""
+        from guild.daemon.resource import ResourceMonitor, SchedulingMode
+
+        monitor = ResourceMonitor(
+            mode=SchedulingMode.POLITE,
+            thermal_reader=_thermal_throttled_hot,
+        )
+        expected = {"is_throttled": True, "cpu_temp_celsius": 95.0}
+        assert monitor.get_thermal_status() == expected
+
+    def test_thermal_throttle_triggers_polite_delay(self) -> None:
+        """When thermal throttling detected, monitor is throttled."""
+        from guild.daemon.resource import ResourceMonitor, SchedulingMode
+
+        monitor = ResourceMonitor(
+            mode=SchedulingMode.POLITE,
+            thermal_reader=_thermal_throttled_critical,
+        )
+        status = monitor.get_status()
+        assert status.is_throttled
+        assert "thermal" in status.reason.lower()
+
+    def test_no_thermal_throttle_no_delay(self) -> None:
+        """When thermal is fine, no thermal-based throttling."""
+        from guild.daemon.resource import ResourceMonitor, SchedulingMode
+
+        monitor = ResourceMonitor(
+            mode=SchedulingMode.POLITE,
+            thermal_reader=_thermal_ok_warm,
+        )
+        status = monitor.get_status()
+        assert not status.is_throttled
+
+    def test_no_thermal_reader_returns_none(self) -> None:
+        """Without a thermal_reader, get_thermal_status returns None."""
+        from guild.daemon.resource import ResourceMonitor, SchedulingMode
+
+        monitor = ResourceMonitor(mode=SchedulingMode.POLITE)
+        assert monitor.get_thermal_status() is None
+
+    def test_thermal_status_in_resource_status(self) -> None:
+        """ResourceStatus includes thermal_status field."""
+        from guild.daemon.resource import ResourceMonitor, SchedulingMode
+
+        monitor = ResourceMonitor(
+            mode=SchedulingMode.POLITE,
+            thermal_reader=_thermal_ok_cool,
+        )
+        status = monitor.get_status()
+        assert status.thermal_status is not None
+        assert status.thermal_status["cpu_temp_celsius"] == 55.0
