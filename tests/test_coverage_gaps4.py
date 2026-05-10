@@ -20,6 +20,7 @@ if TYPE_CHECKING:
 # ======================================================================
 
 
+@pytest.mark.req("REQ-10.5")
 @pytest.mark.unit
 class TestRateLimiterWindowExpiredBranch:
     """Cover the branch where wait computes to <= 0 in RateLimiter."""
@@ -60,6 +61,7 @@ class TestRateLimiterWindowExpiredBranch:
 # ======================================================================
 
 
+@pytest.mark.req("REQ-06.8")
 @pytest.mark.unit
 class TestRollbackRestoreExistingFileBranch:
     """Explicitly cover the else branch at line 53->61 in rollback."""
@@ -134,6 +136,7 @@ class TestRollbackRestoreExistingFileBranch:
 # ======================================================================
 
 
+@pytest.mark.req("REQ-04.30")
 @pytest.mark.unit
 class TestSkillsFrontmatterToolsLastLine:
     """Cover the branch where tools: is NOT the last line in frontmatter."""
@@ -184,6 +187,7 @@ class TestSkillsFrontmatterToolsLastLine:
 # ======================================================================
 
 
+@pytest.mark.req("REQ-05.3")
 @pytest.mark.unit
 class TestConfigLoaderGlobalFallback:
     """Cover the branch at line 65 where only global config exists."""
@@ -217,6 +221,7 @@ class TestConfigLoaderGlobalFallback:
 # ======================================================================
 
 
+@pytest.mark.req("REQ-05.3")
 @pytest.mark.unit
 class TestConfigLoaderTempFileCleanup:
     """Cover the temp file cleanup branch at lines 155-158."""
@@ -254,6 +259,7 @@ class TestConfigLoaderTempFileCleanup:
 # ======================================================================
 
 
+@pytest.mark.req("REQ-05.3")
 @pytest.mark.unit
 class TestConfigLoaderCorruptToml:
     """Cover the exception branch in _load_toml_file."""
@@ -274,6 +280,7 @@ class TestConfigLoaderCorruptToml:
 # ======================================================================
 
 
+@pytest.mark.req("REQ-05.3")
 @pytest.mark.unit
 class TestProfilesNonDictValues:
     """Cover branches where non-dict values in TOML are skipped."""
@@ -323,6 +330,7 @@ class TestProfilesNonDictValues:
 # ======================================================================
 
 
+@pytest.mark.req("REQ-05.3")
 @pytest.mark.unit
 class TestProfilesValidateLoopBranch:
     """Cover the loop skip branch in validate_config (line 122->121)."""
@@ -355,6 +363,7 @@ class TestProfilesValidateLoopBranch:
 # ======================================================================
 
 
+@pytest.mark.req("REQ-08.1")
 @pytest.mark.unit
 class TestLifecycleKillAllFailBranch:
     """Cover the branch where kill_task returns False in kill_all loop."""
@@ -402,6 +411,7 @@ class TestLifecycleKillAllFailBranch:
 # ======================================================================
 
 
+@pytest.mark.req("REQ-08.5")
 @pytest.mark.unit
 class TestResourceThrottleStealthExit:
     """Cover the STEALTH mode exit branch in wait_if_throttled."""
@@ -460,6 +470,7 @@ class TestResourceThrottleStealthExit:
 # ======================================================================
 
 
+@pytest.mark.req("REQ-15.1")
 @pytest.mark.unit
 class TestNotifyLoopContinuation:
     """Cover the loop continuation branch when NONE is followed by real channels."""
@@ -516,6 +527,7 @@ class TestNotifyLoopContinuation:
 # ======================================================================
 
 
+@pytest.mark.req("REQ-07.4")
 @pytest.mark.unit
 class TestTemporalKnowledgeBranches:
     """Cover temporal knowledge uncovered branches."""
@@ -588,6 +600,7 @@ class TestTemporalKnowledgeBranches:
 # ======================================================================
 
 
+@pytest.mark.req("REQ-10.1")
 @pytest.mark.unit
 class TestReplayExtractToolNamesBranches:
     """Cover the branch exits in _extract_tool_names."""
@@ -653,6 +666,7 @@ class TestReplayExtractToolNamesBranches:
 # ======================================================================
 
 
+@pytest.mark.req("REQ-14.1")
 @pytest.mark.unit
 class TestOfflineManagerHealthCheckSuccess:
     """Cover the branch where health check succeeds (line 45->exit)."""
@@ -693,6 +707,7 @@ class TestOfflineManagerHealthCheckSuccess:
 # --- agent/context.py:43->41 (content is empty/falsy in estimate_tokens) ---
 
 
+@pytest.mark.req("REQ-07.4")
 @pytest.mark.unit
 class TestContextManagerEmptyContentBranch:
     """Cover context manager branches with empty content."""
@@ -793,6 +808,7 @@ class TestContextManagerEmptyContentBranch:
 # --- agent/learning.py:63-64, 167->161, 190, 199 ---
 
 
+@pytest.mark.req("REQ-09.1")
 @pytest.mark.unit
 class TestLearningEdgeBranches:
     """Cover learning module uncovered branches."""
@@ -902,6 +918,7 @@ class TestLearningEdgeBranches:
 # --- agent/loop.py:305->304 (tool name not in TOOL_SCHEMAS) ---
 
 
+@pytest.mark.req("REQ-04.1")
 @pytest.mark.unit
 class TestAgentLoopUncoveredBranches:
     """Cover agent loop branches where stuck_detector is None and tool schemas miss."""
@@ -940,6 +957,7 @@ class TestAgentLoopUncoveredBranches:
 # ======================================================================
 
 
+@pytest.mark.req("REQ-07.1")
 @pytest.mark.unit
 class TestStorageEdgeCases:
     """Cover storage update edge cases."""
@@ -1024,6 +1042,7 @@ class TestStorageEdgeCases:
 # ======================================================================
 
 
+@pytest.mark.req("REQ-11.1")
 @pytest.mark.unit
 class TestPermissionsCheckerEdges:
     """Cover permissions checker uncovered branches."""
@@ -1068,6 +1087,7 @@ class TestPermissionsCheckerEdges:
 # ======================================================================
 
 
+@pytest.mark.req("REQ-04.3")
 @pytest.mark.unit
 class TestTaskSpecEdges:
     """Cover task/spec.py uncovered branches."""
@@ -1117,6 +1137,7 @@ class TestTaskSpecEdges:
 # ======================================================================
 
 
+@pytest.mark.req("REQ-12.1")
 @pytest.mark.unit
 class TestProviderEscalationEdges:
     """Cover provider/escalation.py uncovered branches."""
@@ -1174,6 +1195,7 @@ class TestProviderEscalationEdges:
 # ======================================================================
 
 
+@pytest.mark.req("REQ-11.5")
 @pytest.mark.unit
 class TestSandboxEdges:
     """Cover security/sandbox.py uncovered branches."""
@@ -1267,6 +1289,7 @@ class TestSandboxEdges:
 # ======================================================================
 
 
+@pytest.mark.req("REQ-06.1")
 @pytest.mark.unit
 class TestToolsPluginEdges:
     """Cover tools/plugin.py uncovered branches."""

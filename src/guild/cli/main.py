@@ -172,7 +172,7 @@ def status() -> None:
 
     # Get counts from the database
     db_path = guild_dir / DB_FILENAME
-    task_count, agent_count = _get_counts(db_path)
+    task_count, agent_count = _get_task_and_agent_counts(db_path)
 
     console.print(f"[bold]Project:[/bold] {project_path}")
     console.print(f"[bold]Provider:[/bold] {config.provider_name}")
@@ -735,7 +735,7 @@ def _init_database(db_path: Path) -> None:
     asyncio.run(_create())
 
 
-def _get_counts(db_path: Path) -> tuple[int, int]:
+def _get_task_and_agent_counts(db_path: Path) -> tuple[int, int]:
     """Get task and agent counts from the database."""
     from guild.storage.sqlite import Storage
 

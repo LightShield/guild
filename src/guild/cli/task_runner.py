@@ -20,7 +20,7 @@ from guild.task.spec import TaskStatus
 
 __all__ = [
     "GUILD_MASTER_PROMPT",
-    "build_provider",
+    "create_resilient_provider",
     "build_system_prompt_with_learnings",
     "compute_max_turns",
     "create_chat_loop",
@@ -78,7 +78,7 @@ def create_chat_loop(config: Any, working_dir: str, permission: str) -> Any:
     )
 
 
-def build_provider(config: Any) -> Any:
+def create_resilient_provider(config: Any) -> Any:
     """Build an LLM provider, with escalation chain and retry if configured."""
     from guild.provider.escalation import EscalatingProvider, EscalationChain
     from guild.provider.retry import RetryProvider
@@ -123,7 +123,7 @@ def create_task_agent_loop(config: Any, working_dir: str, timeout: int) -> Any:
     from guild.agent.stuck import StuckDetector
     from guild.tools.registry import build_tool_executors
 
-    provider = build_provider(config)
+    provider = create_resilient_provider(config)
     tool_executors = build_tool_executors()
 
     max_turns = compute_max_turns(timeout)
@@ -235,7 +235,7 @@ async def extract_post_task_learnings(
     try:
         from guild.agent.learning import extract_learnings
 
-        provider = build_provider(config)
+        provider = create_resilient_provider(config)
         # Use the first task ID from storage — extract_learnings uses it for context
         tasks = await store.list_tasks()
         if tasks:

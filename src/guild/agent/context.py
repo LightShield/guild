@@ -70,7 +70,7 @@ class ContextManager:
 
         # Truncate old tool outputs, oldest first, most aggressively
         trimmable = [
-            i for i in range(len(result)) if i not in protected and result[i].role == "tool"
+            i for i, msg in enumerate(result) if i not in protected and msg.role == "tool"
         ]
 
         for idx in trimmable:

@@ -269,9 +269,9 @@ class TeamRunner:
         try:
             return await self._run_block(instance_name, input_data)
         except BlockError as err:
-            return self._handle_block_failure(instance_name, err)
+            return self._apply_failure_policy(instance_name, err)
 
-    def _handle_block_failure(self, instance_name: str, err: BlockError) -> str:
+    def _apply_failure_policy(self, instance_name: str, err: BlockError) -> str:
         """Handle a failed block per caller decision (REQ-04.52)."""
         decision = self._caller_decisions.get(instance_name, "escalate")
 
