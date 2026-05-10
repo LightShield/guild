@@ -11,6 +11,8 @@ if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from collections.abc import Callable, Coroutine
     from pathlib import Path
 
+from guild.daemon.control_socket import ControlSocket
+
 __all__ = ["DaemonSupervisor"]
 
 logger = logging.getLogger(__name__)
@@ -38,6 +40,7 @@ class DaemonSupervisor:
         self._shutdown_requested = False
         self._original_sigterm: Any = None
         self._original_sigint: Any = None
+        self.control_socket: ControlSocket = ControlSocket(self.socket_path)
 
     @property
     def pid_path(self) -> Path:
@@ -45,9 +48,14 @@ class DaemonSupervisor:
         return self.run_dir / f"{self.task_id}.pid"
 
     @property
+    def socket_path(self) -> Path:
+        """Path to the control socket for this task."""
+        return self.run_dir / f"{self.task_id}.sock"
+
+    @property
     def shutdown_requested(self) -> bool:
-        """Whether a shutdown signal has been received."""
-        return self._shutdown_requested
+        """Whether a shutdown signal has been received (via signal or socket)."""
+        return self._shutdown_requested or self.control_socket.shutdown_requested
 
     def request_shutdown(self) -> None:
         """Mark shutdown as requested (callable from signal handler)."""
@@ -64,6 +72,17 @@ class DaemonSupervisor:
         if self.pid_path.exists():
             self.pid_path.unlink()
             logger.debug("PID file removed: %s", self.pid_path)
+
+    async def start_control_socket(self) -> None:
+        """Start the control socket server for this task."""
+        self.run_dir.mkdir(parents=True, exist_ok=True)
+        await self.control_socket.start()
+        logger.debug("Control socket started: %s", self.socket_path)
+
+    async def stop_control_socket(self) -> None:
+        """Stop the control socket server and clean up."""
+        await self.control_socket.stop()
+        logger.debug("Control socket stopped: %s", self.socket_path)
 
     def install_signal_handlers(self) -> None:
         """Install SIGTERM/SIGINT handlers for graceful shutdown."""

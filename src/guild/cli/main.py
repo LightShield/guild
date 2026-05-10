@@ -717,21 +717,81 @@ def attach(
     task_id: str = typer.Argument(..., help="Task ID to attach to."),
 ) -> None:
     """Attach to a running task (interactive)."""
+    import json
+
     guild_dir = find_guild_dir()
     if guild_dir is None:
         console.print("[red]Error:[/red] Not a guild project (no .guild/ found).")
         raise typer.Exit(code=1)
 
-    # For now, attach behaves like logs --follow
-    messages = asyncio.run(_fetch_task_messages(guild_dir, task_id))
-    if not messages:
-        console.print(f"[dim]No messages for task {task_id}.[/dim]")
-        return
+    run_dir = guild_dir / "run"
+    sock_path = run_dir / f"{task_id}.sock"
 
-    for msg in messages:
-        role = msg.get("role", "")
-        content = msg.get("content", "")
-        console.print(f"[bold]{role}:[/bold] {content}")
+    if not sock_path.exists():
+        console.print(
+            f"[red]Error:[/red] Task not running (no control socket at {sock_path})."
+        )
+        raise typer.Exit(code=1)
+
+    # Connect and enter interactive REPL
+    async def _attach_repl() -> None:  # pragma: no cover — interactive I/O
+        reader, writer = await asyncio.open_unix_connection(str(sock_path))
+        # Subscribe to agent output
+        writer.write(
+            json.dumps({"type": "command", "action": "subscribe"}).encode() + b"\n"
+        )
+        await writer.drain()
+        ack = await reader.readline()
+        ack_data = json.loads(ack)
+        if ack_data.get("status") != "subscribed":
+            console.print("[red]Error:[/red] Failed to subscribe to task output.")
+            writer.close()
+            await writer.wait_closed()
+            return
+
+        console.print(f"[bold green]Attached to task {task_id}[/bold green] (Ctrl+C to detach)")
+
+        import sys
+
+        async def _read_responses() -> None:
+            """Read and display responses from the agent."""
+            while True:
+                line = await reader.readline()
+                if not line:
+                    console.print("[dim]Connection closed.[/dim]")
+                    break
+                data = json.loads(line)
+                msg_type = data.get("type", "")
+                content = data.get("content", "")
+                if msg_type == "agent_message":
+                    console.print(f"[bold]agent:[/bold] {content}")
+                else:
+                    console.print(f"[dim]{data}[/dim]")
+
+        async def _send_input() -> None:
+            """Read user input and send as messages."""
+            loop = asyncio.get_event_loop()
+            while True:
+                try:
+                    line = await loop.run_in_executor(None, sys.stdin.readline)
+                except EOFError:
+                    break
+                if not line:
+                    break
+                msg = json.dumps({"type": "message", "content": line.strip()})
+                writer.write(msg.encode() + b"\n")
+                await writer.drain()
+
+        try:
+            await asyncio.gather(_read_responses(), _send_input())
+        except (KeyboardInterrupt, asyncio.CancelledError):
+            pass
+        finally:
+            writer.close()
+            await writer.wait_closed()
+            console.print("[dim]Detached.[/dim]")
+
+    asyncio.run(_attach_repl())  # pragma: no cover — interactive I/O
 
 
 # ------------------------------------------------------------------

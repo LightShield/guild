@@ -1030,11 +1030,11 @@ class TestEmptyDataDisplays:
         assert result.exit_code == 0
         assert "no" in result.output.lower()
 
-    def test_attach_shows_no_messages(self, guild_app, guild_project: Path) -> None:
-        """attach shows 'no messages' for unknown task."""
+    def test_attach_shows_no_socket(self, guild_app, guild_project: Path) -> None:
+        """attach shows 'not running' error for unknown task."""
         result = runner.invoke(guild_app, ["attach", "nonexistent-task"])
-        assert result.exit_code == 0
-        assert "no" in result.output.lower()
+        assert result.exit_code == 1
+        assert "not running" in result.output.lower()
 
     def test_ps_no_run_dir(self, guild_app, guild_project: Path) -> None:
         """ps shows 'no running tasks' when run dir doesn't exist."""
@@ -1180,3 +1180,29 @@ class TestMainCallbackNoSubcommand:
         assert result.exit_code == 0
         # Should contain help text with available commands
         assert "init" in result.output or "Usage" in result.output
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-05.4a")
+class TestAttachSocketCommand:
+    """guild attach connects to a running task's control socket."""
+
+    def test_attach_no_guild_dir_errors(
+        self, guild_app, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Attach fails with error when not in a guild project."""
+        monkeypatch.chdir(tmp_path)
+        result = runner.invoke(guild_app, ["attach", "task-123"])
+        assert result.exit_code == 1
+        assert "Not a guild project" in result.output
+
+    def test_attach_no_socket_errors(self, guild_app, guild_project) -> None:
+        """Attach fails when the task has no control socket."""
+        # Create run dir but no socket
+        run_dir = guild_project / ".guild" / "run"
+        run_dir.mkdir(parents=True, exist_ok=True)
+        result = runner.invoke(guild_app, ["attach", "nonexistent-task"])
+        assert result.exit_code == 1
+        no_socket = "no control socket" in result.output.lower()
+        not_running = "not running" in result.output.lower()
+        assert no_socket or not_running

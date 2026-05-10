@@ -6,10 +6,12 @@ from __future__ import annotations
 
 import asyncio
 import json
-from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from typing import TYPE_CHECKING
 
 import pytest
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 pytestmark = pytest.mark.unit
 
@@ -285,3 +287,60 @@ class TestControlSocketErrorHandling:
         writer.close()
         await writer.wait_closed()
         await cs.stop()
+
+
+@pytest.mark.req("REQ-23.9")
+class TestSupervisorSocketIntegration:
+    """Supervisor creates and manages control socket for each task."""
+
+    async def test_supervisor_creates_socket(self, tmp_path: Path) -> None:
+        """Supervisor creates a control socket on start_control_socket()."""
+        from guild.daemon.supervisor import DaemonSupervisor
+
+        sup = DaemonSupervisor(run_dir=tmp_path, task_id="task-123")
+        sup.write_pid_file()
+        # After integration, supervisor should have a socket
+        assert hasattr(sup, "control_socket")
+        sock_path = tmp_path / "task-123.sock"
+        await sup.start_control_socket()
+        assert sock_path.exists()
+        await sup.stop_control_socket()
+        sup.remove_pid_file()
+
+    async def test_supervisor_socket_kill_sets_shutdown(self, tmp_path: Path) -> None:
+        """Kill command via socket triggers supervisor shutdown."""
+        import json
+
+        from guild.daemon.supervisor import DaemonSupervisor
+
+        sup = DaemonSupervisor(run_dir=tmp_path, task_id="task-456")
+        await sup.start_control_socket()
+        sock_path = tmp_path / "task-456.sock"
+
+        reader, writer = await asyncio.open_unix_connection(str(sock_path))
+        writer.write(json.dumps({"type": "command", "action": "kill"}).encode() + b"\n")
+        await writer.drain()
+        await reader.readline()
+        writer.close()
+        await writer.wait_closed()
+
+        assert sup.shutdown_requested
+        await sup.stop_control_socket()
+
+    async def test_supervisor_socket_cleaned_on_stop(self, tmp_path: Path) -> None:
+        """Socket file is removed when stop_control_socket() is called."""
+        from guild.daemon.supervisor import DaemonSupervisor
+
+        sup = DaemonSupervisor(run_dir=tmp_path, task_id="task-789")
+        await sup.start_control_socket()
+        sock_path = tmp_path / "task-789.sock"
+        assert sock_path.exists()
+        await sup.stop_control_socket()
+        assert not sock_path.exists()
+
+    async def test_socket_path_property(self, tmp_path: Path) -> None:
+        """socket_path property returns the expected path."""
+        from guild.daemon.supervisor import DaemonSupervisor
+
+        sup = DaemonSupervisor(run_dir=tmp_path, task_id="task-abc")
+        assert sup.socket_path == tmp_path / "task-abc.sock"
