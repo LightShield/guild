@@ -180,7 +180,8 @@ class Storage:
 
     async def create_task(self, task_id: str, description: str) -> None:
         """Insert a new task with pending status."""
-        assert self._db is not None
+        if self._db is None:
+            raise RuntimeError("Storage not connected. Call connect() first.")
         await self._db.execute(
             "INSERT INTO tasks (task_id, description, created_at) VALUES (?, ?, ?)",
             (task_id, description, _now()),
@@ -189,7 +190,8 @@ class Storage:
 
     async def get_task(self, task_id: str) -> dict | None:
         """Retrieve a task by ID, or None if not found."""
-        assert self._db is not None
+        if self._db is None:
+            raise RuntimeError("Storage not connected. Call connect() first.")
         cursor = await self._db.execute("SELECT * FROM tasks WHERE task_id = ?", (task_id,))
         row = await cursor.fetchone()
         if row is None:
@@ -198,7 +200,8 @@ class Storage:
 
     async def list_tasks(self, status: str | None = None) -> list[dict]:
         """List all tasks, optionally filtered by status."""
-        assert self._db is not None
+        if self._db is None:
+            raise RuntimeError("Storage not connected. Call connect() first.")
         if status is None:
             cursor = await self._db.execute("SELECT * FROM tasks")
         else:
@@ -208,7 +211,8 @@ class Storage:
 
     async def update_task(self, task_id: str, **fields: str) -> None:
         """Update one or more fields on an existing task."""
-        assert self._db is not None
+        if self._db is None:
+            raise RuntimeError("Storage not connected. Call connect() first.")
         if not fields:
             return
         allowed = {"status", "assigned_agent", "completed_at", "result"}
@@ -228,7 +232,8 @@ class Storage:
 
     async def register_agent(self, agent_id: str, block_name: str) -> None:
         """Register a new agent."""
-        assert self._db is not None
+        if self._db is None:
+            raise RuntimeError("Storage not connected. Call connect() first.")
         await self._db.execute(
             "INSERT INTO agents (agent_id, block_name, created_at) VALUES (?, ?, ?)",
             (agent_id, block_name, _now()),
@@ -237,14 +242,16 @@ class Storage:
 
     async def list_agents(self) -> list[dict]:
         """List all registered agents."""
-        assert self._db is not None
+        if self._db is None:
+            raise RuntimeError("Storage not connected. Call connect() first.")
         cursor = await self._db.execute("SELECT * FROM agents")
         rows = await cursor.fetchall()
         return [dict(r) for r in rows]
 
     async def update_agent(self, agent_id: str, **fields: str) -> None:
         """Update one or more fields on an existing agent."""
-        assert self._db is not None
+        if self._db is None:
+            raise RuntimeError("Storage not connected. Call connect() first.")
         if not fields:
             return
         allowed = {"status", "token_input", "token_output"}
@@ -264,7 +271,8 @@ class Storage:
 
     async def append_message(self, agent_id: str, role: str, content: str, **kwargs: str) -> None:
         """Append a message to the agent's conversation history."""
-        assert self._db is not None
+        if self._db is None:
+            raise RuntimeError("Storage not connected. Call connect() first.")
         tool_call_id = kwargs.get("tool_call_id")
         tool_calls = kwargs.get("tool_calls")
         await self._db.execute(
@@ -276,7 +284,8 @@ class Storage:
 
     async def get_messages(self, agent_id: str) -> list[dict]:
         """Get all messages for an agent, ordered by insertion."""
-        assert self._db is not None
+        if self._db is None:
+            raise RuntimeError("Storage not connected. Call connect() first.")
         cursor = await self._db.execute(
             "SELECT * FROM messages WHERE agent_id = ? ORDER BY id ASC",
             (agent_id,),
@@ -295,7 +304,8 @@ class Storage:
         details: str | None = None,
     ) -> None:
         """Log an audit event."""
-        assert self._db is not None
+        if self._db is None:
+            raise RuntimeError("Storage not connected. Call connect() first.")
         await self._db.execute(
             "INSERT INTO audit_log (agent_id, action, details, timestamp) VALUES (?, ?, ?, ?)",
             (agent_id, action, details, _now()),
@@ -304,7 +314,8 @@ class Storage:
 
     async def list_audit(self, limit: int = 50) -> list[dict]:
         """List audit entries, most recent first."""
-        assert self._db is not None
+        if self._db is None:
+            raise RuntimeError("Storage not connected. Call connect() first.")
         cursor = await self._db.execute(
             "SELECT * FROM audit_log ORDER BY id DESC LIMIT ?", (limit,)
         )
@@ -326,7 +337,8 @@ class Storage:
         reversible: bool = True,
     ) -> None:
         """Record a non-trivial decision with rationale."""
-        assert self._db is not None
+        if self._db is None:
+            raise RuntimeError("Storage not connected. Call connect() first.")
         alts_json = json.dumps(alternatives) if alternatives else None
         await self._db.execute(
             "INSERT INTO decisions"
@@ -351,7 +363,8 @@ class Storage:
         limit: int = 50,
     ) -> list[dict]:
         """List decisions, most recent first, optionally by task."""
-        assert self._db is not None
+        if self._db is None:
+            raise RuntimeError("Storage not connected. Call connect() first.")
         if task_id is None:
             cursor = await self._db.execute(
                 "SELECT * FROM decisions ORDER BY id DESC LIMIT ?",
@@ -378,7 +391,8 @@ class Storage:
         source_task_id: str | None = None,
     ) -> int:
         """Insert a new learning and return its ID."""
-        assert self._db is not None
+        if self._db is None:
+            raise RuntimeError("Storage not connected. Call connect() first.")
         cursor = await self._db.execute(
             "INSERT INTO learnings"
             " (category, content, confidence, scope, source_task_id, created_at)"
@@ -396,7 +410,8 @@ class Storage:
         limit: int = 50,
     ) -> list[dict]:
         """List learnings filtered by confidence, category, and scope."""
-        assert self._db is not None
+        if self._db is None:
+            raise RuntimeError("Storage not connected. Call connect() first.")
         query = "SELECT * FROM learnings WHERE confidence >= ?"
         params: list = [min_confidence]
 
@@ -416,7 +431,8 @@ class Storage:
 
     async def validate_learning(self, learning_id: int) -> None:
         """Increase confidence by 0.1 (capped at 1.0), update validation."""
-        assert self._db is not None
+        if self._db is None:
+            raise RuntimeError("Storage not connected. Call connect() first.")
         await self._db.execute(
             "UPDATE learnings SET"
             " confidence = MIN(confidence + 0.1, 1.0),"
@@ -429,7 +445,8 @@ class Storage:
 
     async def invalidate_learning(self, learning_id: int) -> None:
         """Decrease confidence by 0.15 (floored at 0.0)."""
-        assert self._db is not None
+        if self._db is None:
+            raise RuntimeError("Storage not connected. Call connect() first.")
         await self._db.execute(
             "UPDATE learnings SET" " confidence = MAX(confidence - 0.15, 0.0)" " WHERE id = ?",
             (learning_id,),
@@ -441,7 +458,8 @@ class Storage:
 
         Returns the number of affected rows.
         """
-        assert self._db is not None
+        if self._db is None:
+            raise RuntimeError("Storage not connected. Call connect() first.")
         from datetime import timedelta
 
         cutoff = (datetime.now(UTC) - timedelta(days=days_since_validation)).isoformat()
@@ -456,13 +474,15 @@ class Storage:
 
     async def delete_learning(self, learning_id: int) -> None:
         """Delete a learning by ID."""
-        assert self._db is not None
+        if self._db is None:
+            raise RuntimeError("Storage not connected. Call connect() first.")
         await self._db.execute("DELETE FROM learnings WHERE id = ?", (learning_id,))
         await self._db.commit()
 
     async def get_learning(self, learning_id: int) -> dict | None:
         """Retrieve a single learning by ID."""
-        assert self._db is not None
+        if self._db is None:
+            raise RuntimeError("Storage not connected. Call connect() first.")
         cursor = await self._db.execute("SELECT * FROM learnings WHERE id = ?", (learning_id,))
         row = await cursor.fetchone()
         if row is None:
@@ -479,7 +499,8 @@ class Storage:
         Returns a dict with total_input, total_output, agent_count,
         and task_count.
         """
-        assert self._db is not None
+        if self._db is None:
+            raise RuntimeError("Storage not connected. Call connect() first.")
         cursor = await self._db.execute(
             "SELECT COALESCE(SUM(token_input), 0) AS total_input,"
             " COALESCE(SUM(token_output), 0) AS total_output,"
@@ -511,7 +532,8 @@ class Storage:
         priority: str = "normal",
     ) -> None:
         """Insert a new question into the escalation queue."""
-        assert self._db is not None
+        if self._db is None:
+            raise RuntimeError("Storage not connected. Call connect() first.")
         await self._db.execute(
             "INSERT INTO questions"
             " (id, task_id, agent_id, question, context, priority, created_at)"
@@ -522,7 +544,8 @@ class Storage:
 
     async def list_questions(self, answered: bool | None = None) -> list[dict]:
         """List questions, optionally filtered by answered status."""
-        assert self._db is not None
+        if self._db is None:
+            raise RuntimeError("Storage not connected. Call connect() first.")
         if answered is None:
             cursor = await self._db.execute("SELECT * FROM questions")
         else:
@@ -535,7 +558,8 @@ class Storage:
 
     async def get_question(self, question_id: str) -> dict | None:
         """Retrieve a single question by ID."""
-        assert self._db is not None
+        if self._db is None:
+            raise RuntimeError("Storage not connected. Call connect() first.")
         cursor = await self._db.execute("SELECT * FROM questions WHERE id = ?", (question_id,))
         row = await cursor.fetchone()
         if row is None:
@@ -544,7 +568,8 @@ class Storage:
 
     async def answer_question(self, question_id: str, answer: str) -> None:
         """Mark a question as answered and store the response."""
-        assert self._db is not None
+        if self._db is None:
+            raise RuntimeError("Storage not connected. Call connect() first.")
         await self._db.execute(
             "UPDATE questions SET answered = 1, answer = ?, answered_at = ?" " WHERE id = ?",
             (answer, _now(), question_id),
@@ -557,7 +582,8 @@ class Storage:
 
     async def save_checkpoint(self, agent_id: str, task_id: str | None, state_json: str) -> None:
         """Persist an agent checkpoint."""
-        assert self._db is not None
+        if self._db is None:
+            raise RuntimeError("Storage not connected. Call connect() first.")
         await self._db.execute(
             "INSERT INTO checkpoints (agent_id, task_id, state_json, created_at)"
             " VALUES (?, ?, ?, ?)",
@@ -571,7 +597,8 @@ class Storage:
         Returns a dict with keys: agent_id, task_id, state_json, created_at;
         or None if no checkpoint exists.
         """
-        assert self._db is not None
+        if self._db is None:
+            raise RuntimeError("Storage not connected. Call connect() first.")
         cursor = await self._db.execute(
             "SELECT agent_id, task_id, state_json, created_at"
             " FROM checkpoints WHERE agent_id = ? ORDER BY id DESC LIMIT 1",
@@ -590,7 +617,8 @@ class Storage:
         """Add a new memory entry. Returns the generated ID."""
         import uuid
 
-        assert self._db is not None
+        if self._db is None:
+            raise RuntimeError("Storage not connected. Call connect() first.")
         memory_id = str(uuid.uuid4())
         await self._db.execute(
             "INSERT INTO memories"
@@ -603,7 +631,8 @@ class Storage:
 
     async def get_memory(self, memory_id: str) -> dict | None:
         """Retrieve a single memory by ID."""
-        assert self._db is not None
+        if self._db is None:
+            raise RuntimeError("Storage not connected. Call connect() first.")
         cursor = await self._db.execute(
             "SELECT id, summary, content, category, verified, last_verified, created_at"
             " FROM memories WHERE id = ?",
@@ -619,7 +648,8 @@ class Storage:
 
         Returns list of dicts with keys: id, summary, verified.
         """
-        assert self._db is not None
+        if self._db is None:
+            raise RuntimeError("Storage not connected. Call connect() first.")
         cursor = await self._db.execute(
             "SELECT id, summary, verified FROM memories"
             " ORDER BY last_verified DESC NULLS LAST"
@@ -631,7 +661,8 @@ class Storage:
 
     async def verify_memory(self, memory_id: str) -> None:
         """Mark a memory as verified against current state."""
-        assert self._db is not None
+        if self._db is None:
+            raise RuntimeError("Storage not connected. Call connect() first.")
         await self._db.execute(
             "UPDATE memories SET verified = 1, last_verified = ? WHERE id = ?",
             (_now(), memory_id),
@@ -643,7 +674,8 @@ class Storage:
 
         Returns count of deleted rows.
         """
-        assert self._db is not None
+        if self._db is None:
+            raise RuntimeError("Storage not connected. Call connect() first.")
         from datetime import timedelta
 
         changes = 0
@@ -694,7 +726,8 @@ class Storage:
         duration_seconds, input_tokens, output_tokens, tool_calls,
         turns, error, timestamp.
         """
-        assert self._db is not None
+        if self._db is None:
+            raise RuntimeError("Storage not connected. Call connect() first.")
         await self._db.execute(
             "INSERT INTO eval_results"
             " (task_name, model, config_hash, task_completed,"
@@ -719,7 +752,8 @@ class Storage:
 
     async def list_eval_results(self, task_name: str | None = None, limit: int = 50) -> list[dict]:
         """List eval results, most recent first, optionally by task_name."""
-        assert self._db is not None
+        if self._db is None:
+            raise RuntimeError("Storage not connected. Call connect() first.")
         if task_name is not None:
             cursor = await self._db.execute(
                 "SELECT * FROM eval_results" " WHERE task_name = ? ORDER BY id DESC LIMIT ?",
@@ -739,7 +773,8 @@ class Storage:
 
     async def _get_tables(self) -> list[str]:
         """Return list of table names (used in tests)."""
-        assert self._db is not None
+        if self._db is None:
+            raise RuntimeError("Storage not connected. Call connect() first.")
         cursor = await self._db.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
         )
