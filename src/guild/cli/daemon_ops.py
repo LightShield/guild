@@ -74,6 +74,11 @@ def kill_task(
     task_id: str, guild_dir: Path
 ) -> bool:  # pragma: no cover — requires running daemon process
     """Kill a task by sending SIGTERM."""
+    if not task_id or not task_id.strip():
+        raise ValueError("task_id cannot be empty")
+    if not guild_dir.is_dir():
+        raise ValueError(f"Guild directory does not exist: {guild_dir}")
+
     from guild.daemon.lifecycle import LifecycleManager
     from guild.storage.sqlite import Storage
 
@@ -90,6 +95,9 @@ def kill_task(
 
 def kill_all_tasks(guild_dir: Path) -> int:  # pragma: no cover — requires running daemon process
     """Kill all running tasks."""
+    if not guild_dir.is_dir():
+        raise ValueError(f"Guild directory does not exist: {guild_dir}")
+
     from guild.daemon.lifecycle import LifecycleManager
     from guild.storage.sqlite import Storage
 
@@ -108,6 +116,11 @@ def pause_task(
     task_id: str, guild_dir: Path
 ) -> bool:  # pragma: no cover — requires running daemon process
     """Pause a running task."""
+    if not task_id or not task_id.strip():
+        raise ValueError("task_id cannot be empty")
+    if not guild_dir.is_dir():
+        raise ValueError(f"Guild directory does not exist: {guild_dir}")
+
     from guild.daemon.lifecycle import LifecycleManager
     from guild.storage.sqlite import Storage
 
@@ -126,6 +139,11 @@ def resume_task(
     task_id: str, guild_dir: Path
 ) -> bool:  # pragma: no cover — requires running daemon process
     """Resume a paused task."""
+    if not task_id or not task_id.strip():
+        raise ValueError("task_id cannot be empty")
+    if not guild_dir.is_dir():
+        raise ValueError(f"Guild directory does not exist: {guild_dir}")
+
     from guild.daemon.lifecycle import LifecycleManager
     from guild.storage.sqlite import Storage
 

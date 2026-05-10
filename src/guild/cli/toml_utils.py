@@ -60,7 +60,6 @@ def set_config_value(config_path: Path, key_value: str) -> None:
             current[part] = {}
         current = current[part]
 
-    # Set the value (try to preserve type)
     current[parts[-1]] = parse_value(value.strip())
 
     # Write back as TOML

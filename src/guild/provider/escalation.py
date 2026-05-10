@@ -222,7 +222,10 @@ class EscalatingProvider(LLMProvider):
 
         Returns True if escalation succeeded, False if exhausted.
         """
-        logger.info("Stuck notification received, escalating model.")
+        logger.info(
+            "Stuck notification received, escalating from model %s",
+            self._chain.current_name,
+        )
         return self._chain.escalate()
 
     async def generate_with_malformed_recovery(

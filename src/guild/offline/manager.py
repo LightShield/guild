@@ -42,7 +42,9 @@ _OFFLINE_DOCS: dict[str, str] = {
 class LLMProviderProtocol(Protocol):
     """Minimal protocol for the provider dependency."""
 
-    async def health_check(self) -> bool: ...  # pragma: no cover — protocol stub
+    async def health_check(self) -> bool:  # pragma: no cover — protocol stub
+        """Check if the provider is reachable."""
+        ...
 
 
 class OfflineManager:
@@ -84,7 +86,7 @@ class OfflineManager:
                     models.append(parts[0])
             return models
         except (FileNotFoundError, OSError):
-            logger.warning("ollama CLI not found")
+            logger.warning("ollama CLI not found while listing local models")
             return []
 
     async def pull_model(
@@ -92,7 +94,7 @@ class OfflineManager:
     ) -> bool:  # pragma: no cover — requires ollama binary installed
         """Pull a model from Ollama registry (requires connectivity)."""
         if not await self.check_connectivity():
-            logger.warning("Cannot pull model: no connectivity")
+            logger.warning("Cannot pull model %r: no connectivity", model_name)
             return False
         try:
             proc = await asyncio.create_subprocess_exec(
@@ -105,7 +107,7 @@ class OfflineManager:
             _, _ = await proc.communicate()
             return proc.returncode == 0
         except (FileNotFoundError, OSError):
-            logger.warning("ollama CLI not found, cannot pull model")
+            logger.warning("ollama CLI not found, cannot pull model %r", model_name)
             return False
 
     def get_help(self, topic: str) -> str | None:

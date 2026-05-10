@@ -71,11 +71,13 @@ def _register_task_query_routes(app: Any, get_storage: Callable[[], Any]) -> Non
 
     @app.get("/api/tasks")
     async def list_tasks(status: str | None = None) -> list[dict[str, Any]]:
+        """List all tasks, optionally filtered by status."""
         storage = get_storage()
         return await storage.list_tasks(status=status)
 
     @app.get("/api/tasks/{task_id}")
     async def get_task(task_id: str) -> dict[str, Any]:
+        """Return a single task by ID."""
         storage = get_storage()
         task = await storage.get_task(task_id)
         if task is None:
@@ -84,6 +86,7 @@ def _register_task_query_routes(app: Any, get_storage: Callable[[], Any]) -> Non
 
     @app.post("/api/tasks")
     async def create_task(request: Request) -> dict[str, Any]:
+        """Create a new task from a JSON body with a 'description' field."""
         import uuid
 
         storage = get_storage()
@@ -103,6 +106,7 @@ def _register_task_action_routes(app: Any, get_storage: Callable[[], Any]) -> No
 
     @app.post("/api/tasks/{task_id}/kill")
     async def kill_task(task_id: str) -> dict[str, str]:
+        """Kill a running task by ID."""
         storage = get_storage()
         task = await storage.get_task(task_id)
         if task is None:
@@ -113,6 +117,7 @@ def _register_task_action_routes(app: Any, get_storage: Callable[[], Any]) -> No
 
     @app.post("/api/tasks/{task_id}/pause")
     async def pause_task(task_id: str) -> dict[str, str]:
+        """Pause a running task by ID."""
         storage = get_storage()
         task = await storage.get_task(task_id)
         if task is None:
@@ -123,6 +128,7 @@ def _register_task_action_routes(app: Any, get_storage: Callable[[], Any]) -> No
 
     @app.post("/api/tasks/{task_id}/resume")
     async def resume_task(task_id: str) -> dict[str, str]:
+        """Resume a paused task by ID."""
         storage = get_storage()
         task = await storage.get_task(task_id)
         if task is None:
@@ -137,6 +143,7 @@ def _register_agent_routes(app: Any, get_storage: Callable[[], Any]) -> None:
 
     @app.get("/api/agents")
     async def list_agents() -> list[dict[str, Any]]:
+        """List all registered agents."""
         storage = get_storage()
         return await storage.list_agents()
 
@@ -156,6 +163,7 @@ def _register_status_routes(
 
     @app.get("/api/status")
     async def get_status() -> dict[str, Any]:
+        """Return project status with token usage summaries."""
         storage = get_storage()
         summary = await storage.get_token_summary()
         return {
@@ -169,6 +177,7 @@ def _register_status_routes(
 
     @app.get("/api/blocks")
     async def list_blocks() -> list[dict[str, str]]:
+        """List available block definitions."""
         try:
             from guild.blocks.registry import BlockRegistry
 
@@ -179,6 +188,7 @@ def _register_status_routes(
 
     @app.get("/api/teams")
     async def list_teams() -> list[dict[str, str]]:
+        """List configured team compositions."""
         try:
             from guild.config.loader import load_config
 
@@ -189,11 +199,13 @@ def _register_status_routes(
 
     @app.get("/api/learnings")
     async def list_learnings() -> list[dict[str, Any]]:
+        """List all stored learnings."""
         storage = get_storage()
         return await storage.list_learnings()
 
     @app.get("/api/audit")
     async def get_audit(limit: int = 50) -> list[dict[str, Any]]:
+        """Return recent audit log entries."""
         storage = get_storage()
         return await storage.list_audit(limit=limit)
 
@@ -206,6 +218,7 @@ def _register_config_crud_routes(app: Any, guild_dir: Path) -> None:
 
     @app.get("/api/config")
     async def get_config() -> dict[str, Any]:
+        """Return the current Guild configuration."""
         try:
             config = load_config(guild_dir)
             return config.model_dump() if hasattr(config, "model_dump") else {}
@@ -215,6 +228,7 @@ def _register_config_crud_routes(app: Any, guild_dir: Path) -> None:
 
     @app.post("/api/config")
     async def post_config(request: Request) -> dict[str, str]:
+        """Update Guild configuration (not yet implemented)."""
         await request.json()
         return {"status": "ok", "message": "Config update not yet implemented"}
 

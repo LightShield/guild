@@ -85,6 +85,29 @@ class EvalFramework:
     ) -> EvalResult:
         """Run a single eval task and return metrics."""
         start = time.monotonic()
+        metrics, model_name = await self._run_eval_turns(task, provider, config_label)
+        duration = time.monotonic() - start
+
+        return EvalResult(
+            task_name=task.name,
+            model=model_name,
+            config_hash=config_label,
+            metrics=EvalMetrics(
+                task_completed=metrics["completed"],
+                duration_seconds=duration,
+                input_tokens=metrics["total_input"],
+                output_tokens=metrics["total_output"],
+                tool_calls=metrics["total_tool_calls"],
+                turns=metrics["turns"],
+                error=metrics["error"],
+            ),
+            timestamp=datetime.now(UTC).isoformat(),
+        )
+
+    async def _run_eval_turns(
+        self, task: BenchmarkTask, provider: LLMProvider, config_label: str
+    ) -> tuple[dict[str, Any], str]:
+        """Execute the eval turn loop and return (metrics_dict, model_name)."""
         total_input = 0
         total_output = 0
         total_tool_calls = 0
@@ -98,7 +121,6 @@ class EvalFramework:
         ]
 
         try:
-            # Run the agent loop (simplified single-turn for eval)
             for _ in range(20):
                 turns += 1
                 raw_messages = [m.to_dict() for m in messages]
@@ -112,7 +134,6 @@ class EvalFramework:
                 if not response.has_tool_call:
                     break
 
-                # Count and process tool calls
                 tool_calls = response.tool_calls or []
                 total_tool_calls += len(tool_calls)
 
@@ -120,23 +141,15 @@ class EvalFramework:
             completed = False
             error = str(exc)
 
-        duration = time.monotonic() - start
-
-        return EvalResult(
-            task_name=task.name,
-            model=model_name,
-            config_hash=config_label,
-            metrics=EvalMetrics(
-                task_completed=completed,
-                duration_seconds=duration,
-                input_tokens=total_input,
-                output_tokens=total_output,
-                tool_calls=total_tool_calls,
-                turns=turns,
-                error=error,
-            ),
-            timestamp=datetime.now(UTC).isoformat(),
-        )
+        metrics = {
+            "completed": completed,
+            "total_input": total_input,
+            "total_output": total_output,
+            "total_tool_calls": total_tool_calls,
+            "turns": turns,
+            "error": error,
+        }
+        return metrics, model_name
 
     async def run_ab_test(
         self,

@@ -144,7 +144,12 @@ class AgentLoop:
         for _turn in range(self.max_turns):
             # Budget check (REQ-10.2): stop if token budget exceeded
             if self._budget_exceeded():
-                logger.info("Token budget exceeded, stopping loop")
+                total = self.total_input_tokens + self.total_output_tokens
+                logger.info(
+                    "Token budget exceeded, stopping loop (used=%d, budget=%d)",
+                    total,
+                    self.token_budget,
+                )
                 break
 
             raw_messages = [m.to_dict() for m in self.messages]

@@ -89,6 +89,7 @@ class MCPToolRegistry:
         """Disconnect from all servers."""
         for client in self._clients.values():
             await client.disconnect()
+        server_count = len(self._clients)
         self._clients.clear()
         self._tools.clear()
-        logger.info("Disconnected from all MCP servers")
+        logger.info("Disconnected from all MCP servers (count=%d)", server_count)

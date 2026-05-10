@@ -219,7 +219,6 @@ class PermissionChecker:
         resolved = PurePosixPath(path)
         for allowed in self._allowed_paths:
             allowed_path = PurePosixPath(allowed)
-            # Check if path starts with the allowed prefix
             if resolved == allowed_path:
                 return True
             try:

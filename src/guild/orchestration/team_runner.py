@@ -102,6 +102,17 @@ def _topological_sort(nodes: list[str], edges: list[tuple[str, str]]) -> list[st
     return result
 
 
+def _format_loop_feedback(
+    initial_input: str, iteration: int, gen_output: str, feedback: str
+) -> str:
+    """Build the input for the next generator iteration from evaluator feedback."""
+    return (
+        f"{initial_input}\n\n"
+        f"Previous attempt (iteration {iteration + 1}):\n{gen_output}\n\n"
+        f"Feedback: {feedback}"
+    )
+
+
 class TeamRunner:
     """Executes a team composition by running blocks in topological order.
 
@@ -283,10 +294,8 @@ class TeamRunner:
         current_input = initial_input
 
         for iteration in range(max_iter):
-            # Run generator
             gen_output = await self._run_block(loop.generator_block, current_input)
 
-            # Run evaluator with criteria from block config
             eval_input = self._build_evaluator_input(loop, gen_output)
             eval_output = await self._run_block(loop.evaluator_block, eval_input)
 
@@ -296,14 +305,11 @@ class TeamRunner:
                 self._outputs[loop.evaluator_block] = eval_output
                 return gen_output
 
-            # Feed feedback back for next iteration
-            current_input = (
-                f"{initial_input}\n\n"
-                f"Previous attempt (iteration {iteration + 1}):\n{gen_output}\n\n"
-                f"Feedback: {result.feedback}"
+            current_input = _format_loop_feedback(
+                initial_input, iteration, gen_output, result.feedback
             )
 
-        # Max iterations reached — return last generator output
+        # Max iterations reached -- return last generator output
         self._outputs[loop.generator_block] = gen_output  # type: ignore[possibly-undefined]
         return gen_output  # type: ignore[possibly-undefined]
 

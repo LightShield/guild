@@ -21,6 +21,7 @@ class LLMResponse:
 
     @property
     def has_tool_call(self) -> bool:
+        """Return True if the response contains tool calls."""
         return bool(self.tool_calls)
 
 

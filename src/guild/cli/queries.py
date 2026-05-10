@@ -88,7 +88,6 @@ async def fetch_task_messages(guild_dir: Path, task_id: str) -> list[dict]:
         return []
 
     async with Storage(db_path) as store:
-        # Check if the task exists and has an assigned agent
         task = await store.get_task(task_id)
         if task is None:
             return []

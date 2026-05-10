@@ -95,11 +95,13 @@ class SessionReplay:
 
         try:
             calls = json.loads(raw_tool_calls)
-            if isinstance(calls, list):
-                for call in calls:
-                    fn_info = call.get("function", {})
-                    name = fn_info.get("name", "")
-                    if name and name not in tools_used:
-                        tools_used.append(name)
         except (json.JSONDecodeError, TypeError):
-            pass
+            return
+
+        if not isinstance(calls, list):
+            return
+
+        for call in calls:
+            name = call.get("function", {}).get("name", "")
+            if name and name not in tools_used:
+                tools_used.append(name)

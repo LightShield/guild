@@ -130,48 +130,39 @@ class WorktreeManager:
             elif line.startswith("branch refs/heads/"):
                 current_branch = line[len("branch refs/heads/") :]
             elif line == "" and current_path and current_branch:
-                # Only include guild-managed worktrees
-                if current_branch.startswith("guild/"):
-                    task_id = current_branch[len("guild/") :]
-                    # Skip the staging worktree itself
-                    if task_id != "staging":
-                        worktrees.append(
-                            WorktreeInfo(
-                                path=current_path,
-                                branch=current_branch,
-                                task_id=task_id,
-                                created_at="",
-                            )
-                        )
+                self._maybe_append_worktree(worktrees, current_path, current_branch)
                 current_path = None
                 current_branch = None
 
         # Handle last entry (porcelain output may not end with blank line)
-        if current_path and current_branch and current_branch.startswith("guild/"):
-            task_id = current_branch[len("guild/") :]
-            if task_id != "staging":
-                worktrees.append(
-                    WorktreeInfo(
-                        path=current_path,
-                        branch=current_branch,
-                        task_id=task_id,
-                        created_at="",
-                    )
-                )
+        if current_path and current_branch:
+            self._maybe_append_worktree(worktrees, current_path, current_branch)
 
         return worktrees
+
+    @staticmethod
+    def _maybe_append_worktree(
+        worktrees: list[WorktreeInfo], path: Path, branch: str
+    ) -> None:
+        """Append a WorktreeInfo if the branch is a guild task (not staging)."""
+        if not branch.startswith("guild/"):
+            return
+        task_id = branch[len("guild/") :]
+        if task_id == "staging":
+            return
+        worktrees.append(
+            WorktreeInfo(path=path, branch=branch, task_id=task_id, created_at="")
+        )
 
     async def _ensure_staging_branch(self, staging_branch: str) -> None:
         """Ensure the staging branch and its worktree exist."""
         staging_path = self.worktrees_dir / "_staging"
 
-        # Check if staging worktree already exists
         if staging_path.exists():
             return
 
         staging_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Check if staging branch exists
         exit_code, _ = await self._run_git("rev-parse", "--verify", staging_branch)
 
         if exit_code != 0:

@@ -50,14 +50,20 @@ class Notifier:
     ) -> None:
         """Send notification through configured channels."""
         for channel in self._channels:
-            if channel == NotificationChannel.NONE:
-                continue
-            if channel == NotificationChannel.TERMINAL_BELL:
-                self._bell()
-            elif channel == NotificationChannel.DESKTOP:
-                await self._desktop(message)
-            elif channel == NotificationChannel.WEBHOOK:  # pragma: no branch
-                await self._webhook(message)
+            await self._dispatch_channel(channel, message)
+
+    async def _dispatch_channel(self, channel: NotificationChannel, message: str) -> None:
+        """Dispatch a notification to a single channel."""
+        if channel == NotificationChannel.NONE:
+            return
+        if channel == NotificationChannel.TERMINAL_BELL:
+            self._bell()
+            return
+        if channel == NotificationChannel.DESKTOP:
+            await self._desktop(message)
+            return
+        if channel == NotificationChannel.WEBHOOK:  # pragma: no branch
+            await self._webhook(message)
 
     def _bell(self) -> None:
         """Terminal bell character."""
@@ -91,7 +97,7 @@ class Notifier:
     async def _webhook(self, message: str) -> None:
         """Send to configured webhook URL via HTTP POST."""
         if not self._webhook_url:
-            logger.warning("Webhook URL not configured")
+            logger.warning("Webhook URL not configured for notification: %s", message[:80])
             return
 
         import json

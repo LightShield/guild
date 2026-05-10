@@ -34,6 +34,13 @@ __all__ = [
 logger = logging.getLogger(__name__)
 
 
+def _parse_escalation_config(config: Any) -> tuple[list[str], list[str]]:
+    """Extract escalation chain models and CLI tool names from config."""
+    chain_models = [m.strip() for m in config.escalation_chain.split(",") if m.strip()]
+    cli_tools = [t.strip() for t in config.escalation_cli_providers.split(",") if t.strip()]
+    return chain_models, cli_tools
+
+
 def create_provider_for_backend(provider_name: str, base_url: str, model: str) -> Any:
     """Create an LLM provider by name, dispatching to the correct backend."""
     if provider_name == "ollama":
@@ -55,6 +62,8 @@ def create_chat_loop(config: Any, working_dir: str, permission: str) -> Any:
     from guild.permissions.checker import PermissionChecker, PermissionTier
     from guild.tools.registry import build_tool_executors
 
+    PermissionTier(permission)  # fail fast on invalid permission tier
+
     provider = create_provider_for_backend(config.provider_name, config.base_url, config.model)
     tool_executors = build_tool_executors()
 
@@ -74,10 +83,12 @@ def build_provider(config: Any) -> Any:
     from guild.provider.escalation import EscalatingProvider, EscalationChain
     from guild.provider.retry import RetryProvider
 
+    if not config.provider_name:
+        raise ValueError("provider_name must be configured")
+
     primary = create_provider_for_backend(config.provider_name, config.base_url, config.model)
 
-    chain_models = [m.strip() for m in config.escalation_chain.split(",") if m.strip()]
-    cli_tools = [t.strip() for t in config.escalation_cli_providers.split(",") if t.strip()]
+    chain_models, cli_tools = _parse_escalation_config(config)
 
     if not chain_models and not cli_tools:
         return RetryProvider(primary)
@@ -140,7 +151,12 @@ async def run_task(
     guild_dir: Path,
 ) -> str:
     """Execute a task through the agent loop."""
+    from guild.permissions.checker import PermissionTier
     from guild.storage.sqlite import Storage
+
+    if not description or not description.strip():
+        raise ValueError("Task description cannot be empty")
+    PermissionTier(permission)  # raises ValueError if invalid
 
     db_path = guild_dir / DB_FILENAME
     async with Storage(db_path) as store:
@@ -168,14 +184,27 @@ async def build_system_prompt_with_learnings(store: Any) -> str:
     return system_prompt
 
 
+def _generate_task_ids(task_id: str) -> tuple[str, str]:
+    """Generate a task ID and its associated agent ID."""
+    agent_id = f"guild-master-{task_id[:8]}"
+    return task_id, agent_id
+
+
+def _format_audit_details(task_id: str, loop: Any) -> str:
+    """Build the audit log details string for a completed task."""
+    return (
+        f"task={task_id} tokens_in={loop.total_input_tokens}"
+        f" tokens_out={loop.total_output_tokens}"
+    )
+
+
 async def persist_task_result(
     store: Any, loop: Any, description: str, result: str, config: Any
 ) -> None:
     """Save task, agent, messages, and audit entry to storage."""
     import uuid
 
-    task_id = str(uuid.uuid4())
-    agent_id = f"guild-master-{task_id[:8]}"
+    task_id, agent_id = _generate_task_ids(str(uuid.uuid4()))
 
     await store.create_task(task_id, description)
     await store.update_task(
@@ -195,8 +224,7 @@ async def persist_task_result(
     await store.log_audit(
         action="task_completed",
         agent_id=agent_id,
-        details=f"task={task_id} tokens_in={loop.total_input_tokens}"
-        f" tokens_out={loop.total_output_tokens}",
+        details=_format_audit_details(task_id, loop),
     )
 
 

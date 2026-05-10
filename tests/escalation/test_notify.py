@@ -119,7 +119,9 @@ class TestWebhookEdgeCases:
         # Should not raise, just log a warning
         with patch("guild.escalation.notify.logger") as mock_logger:
             await notifier.notify("test")
-            mock_logger.warning.assert_called_once_with("Webhook URL not configured")
+            mock_logger.warning.assert_called_once_with(
+                "Webhook URL not configured for notification: %s", "test"
+            )
 
     async def test_webhook_exception_is_handled(self) -> None:
         """Webhook failure is caught and logged, not raised."""

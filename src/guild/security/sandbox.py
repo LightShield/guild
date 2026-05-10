@@ -69,7 +69,6 @@ class SandboxPolicy:
         if not self.allowed_paths:
             return (True, "")
 
-        # Check if path falls within any allowed path
         for allowed in self.allowed_paths:
             allowed_resolved = self._resolve_path(allowed)
             if self._is_subpath(resolved, allowed_resolved):
