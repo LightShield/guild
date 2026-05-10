@@ -23,6 +23,10 @@ dist/
 build/
 *.egg-info/
 
+# Coverage
+.coverage
+htmlcov/
+
 # Logs
 *.log
 logs/
