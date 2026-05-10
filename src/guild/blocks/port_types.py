@@ -73,7 +73,7 @@ def check_port_compatibility(source_type: str, target_type: str) -> bool:
     return source_type == target_type
 
 
-def validate_port_data(data: dict, type_tag: str) -> tuple[bool, str]:
+def validate_port_data(data: dict[str, Any], type_tag: str) -> tuple[bool, str]:
     """Validate port data against type schema.
 
     Returns (valid, error_message). Empty error_message on success.

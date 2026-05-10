@@ -71,15 +71,15 @@ def _register_task_routes(app: Any, get_storage: Callable[[], "Storage"]) -> Non
 
 def _register_task_query_routes(app: Any, get_storage: Callable[[], "Storage"]) -> None:
     """Register task query (GET/POST create) routes."""
-    from fastapi import HTTPException, Request  # type: ignore[import-untyped]
+    from fastapi import HTTPException, Request
 
-    @app.get("/api/tasks")
+    @app.get("/api/tasks")  # type: ignore[untyped-decorator]
     async def list_tasks(status: str | None = None) -> list[dict[str, Any]]:
         """List all tasks, optionally filtered by status."""
         storage = get_storage()
         return await storage.list_tasks(status=status)
 
-    @app.get("/api/tasks/{task_id}")
+    @app.get("/api/tasks/{task_id}")  # type: ignore[untyped-decorator]
     async def get_task(task_id: str) -> dict[str, Any]:
         """Return a single task by ID."""
         storage = get_storage()
@@ -88,7 +88,7 @@ def _register_task_query_routes(app: Any, get_storage: Callable[[], "Storage"]) 
             raise HTTPException(status_code=404, detail="Task not found")
         return task
 
-    @app.post("/api/tasks")
+    @app.post("/api/tasks")  # type: ignore[untyped-decorator]
     async def create_task(request: Request) -> dict[str, Any]:
         """Create a new task from a JSON body with a 'description' field."""
         import uuid
@@ -106,9 +106,9 @@ def _register_task_query_routes(app: Any, get_storage: Callable[[], "Storage"]) 
 
 def _register_task_action_routes(app: Any, get_storage: Callable[[], "Storage"]) -> None:
     """Register task action (kill/pause/resume) routes."""
-    from fastapi import HTTPException  # type: ignore[import-untyped]
+    from fastapi import HTTPException
 
-    @app.post("/api/tasks/{task_id}/kill")
+    @app.post("/api/tasks/{task_id}/kill")  # type: ignore[untyped-decorator]
     async def kill_task(task_id: str) -> dict[str, str]:
         """Kill a running task by ID."""
         storage = get_storage()
@@ -119,7 +119,7 @@ def _register_task_action_routes(app: Any, get_storage: Callable[[], "Storage"])
         await storage.log_audit("task_killed", details=f"task_id={task_id}")
         return {"id": task_id, "action": TaskStatus.KILLED}
 
-    @app.post("/api/tasks/{task_id}/pause")
+    @app.post("/api/tasks/{task_id}/pause")  # type: ignore[untyped-decorator]
     async def pause_task(task_id: str) -> dict[str, str]:
         """Pause a running task by ID."""
         storage = get_storage()
@@ -130,7 +130,7 @@ def _register_task_action_routes(app: Any, get_storage: Callable[[], "Storage"])
         await storage.log_audit("task_paused", details=f"task_id={task_id}")
         return {"id": task_id, "action": TaskStatus.PAUSED}
 
-    @app.post("/api/tasks/{task_id}/resume")
+    @app.post("/api/tasks/{task_id}/resume")  # type: ignore[untyped-decorator]
     async def resume_task(task_id: str) -> dict[str, str]:
         """Resume a paused task by ID."""
         storage = get_storage()
@@ -145,7 +145,7 @@ def _register_task_action_routes(app: Any, get_storage: Callable[[], "Storage"])
 def _register_agent_routes(app: Any, get_storage: Callable[[], "Storage"]) -> None:
     """Register agent-related API routes."""
 
-    @app.get("/api/agents")
+    @app.get("/api/agents")  # type: ignore[untyped-decorator]
     async def list_agents() -> list[dict[str, Any]]:
         """List all registered agents."""
         storage = get_storage()
@@ -165,7 +165,7 @@ def _register_status_routes(
 ) -> None:
     """Register status, learnings, and audit routes."""
 
-    @app.get("/api/status")
+    @app.get("/api/status")  # type: ignore[untyped-decorator]
     async def get_status() -> dict[str, Any]:
         """Return project status with token usage summaries."""
         storage = get_storage()
@@ -179,18 +179,18 @@ def _register_status_routes(
             "total_output_tokens": summary["total_output"],
         }
 
-    @app.get("/api/blocks")
+    @app.get("/api/blocks")  # type: ignore[untyped-decorator]
     async def list_blocks() -> list[dict[str, str]]:
         """List available block definitions."""
         try:
             from guild.blocks.registry import BlockRegistry
 
             registry = BlockRegistry()
-            return [{"name": name} for name in registry.list_blocks()]
+            return [{"name": block.name} for block in registry.list_blocks()]
         except (ImportError, OSError):
             return []
 
-    @app.get("/api/teams")
+    @app.get("/api/teams")  # type: ignore[untyped-decorator]
     async def list_teams() -> list[dict[str, str]]:
         """List configured team compositions."""
         try:
@@ -201,13 +201,13 @@ def _register_status_routes(
         except (ImportError, OSError, AttributeError):
             return []
 
-    @app.get("/api/learnings")
+    @app.get("/api/learnings")  # type: ignore[untyped-decorator]
     async def list_learnings() -> list[dict[str, Any]]:
         """List all stored learnings."""
         storage = get_storage()
         return await storage.list_learnings()
 
-    @app.get("/api/audit")
+    @app.get("/api/audit")  # type: ignore[untyped-decorator]
     async def get_audit(limit: int = 50) -> list[dict[str, Any]]:
         """Return recent audit log entries."""
         storage = get_storage()
@@ -216,11 +216,11 @@ def _register_status_routes(
 
 def _register_config_crud_routes(app: Any, guild_dir: Path) -> None:
     """Register config GET/POST routes."""
-    from fastapi import Request  # type: ignore[import-untyped]
+    from fastapi import Request
 
     from guild.config.loader import load_config
 
-    @app.get("/api/config")
+    @app.get("/api/config")  # type: ignore[untyped-decorator]
     async def get_config() -> dict[str, Any]:
         """Return the current Guild configuration."""
         try:
@@ -230,7 +230,7 @@ def _register_config_crud_routes(app: Any, guild_dir: Path) -> None:
             logger.warning("Failed to load config: %s", exc)
             return {}
 
-    @app.post("/api/config")
+    @app.post("/api/config")  # type: ignore[untyped-decorator]
     async def post_config(request: Request) -> dict[str, str]:
         """Update Guild configuration (not yet implemented)."""
         await request.json()
@@ -239,9 +239,9 @@ def _register_config_crud_routes(app: Any, guild_dir: Path) -> None:
 
 def _register_websocket(app: Any, get_storage: Callable[[], "Storage"]) -> None:
     """Register the WebSocket endpoint for real-time updates (REQ-05.5)."""
-    from fastapi import WebSocket, WebSocketDisconnect  # type: ignore[import-untyped]
+    from fastapi import WebSocket, WebSocketDisconnect
 
-    @app.websocket("/ws")
+    @app.websocket("/ws")  # type: ignore[untyped-decorator]
     async def websocket_endpoint(websocket: WebSocket) -> None:
         """Send status updates every 2 seconds to connected clients."""
         await websocket.accept()
@@ -259,8 +259,8 @@ def _register_websocket(app: Any, get_storage: Callable[[], "Storage"]) -> None:
 
 def _register_static_files(app: Any) -> None:
     """Register static file serving for the built Svelte UI."""
-    from fastapi.responses import FileResponse  # type: ignore[import-untyped]
-    from fastapi.staticfiles import StaticFiles  # type: ignore[import-untyped]
+    from fastapi.responses import FileResponse
+    from fastapi.staticfiles import StaticFiles
 
     if _UI_DIST.is_dir():
         # Serve static assets (JS, CSS, images)
@@ -270,7 +270,7 @@ def _register_static_files(app: Any) -> None:
             name="svelte-app",
         )
 
-        @app.get("/{path:path}")
+        @app.get("/{path:path}")  # type: ignore[untyped-decorator]
         async def serve_spa(path: str) -> FileResponse:
             """Serve the SPA — return index.html for all non-API routes."""
             file_path = _UI_DIST / path
@@ -292,7 +292,7 @@ def create_app(
                  When provided, the lifespan will not create/close storage.
     """
     try:
-        from fastapi import FastAPI  # type: ignore[import-untyped]
+        from fastapi import FastAPI
     except ImportError as exc:
         raise ImportError("Install fastapi for API support: pip install guild[api]") from exc
 
@@ -329,7 +329,7 @@ def create_app(
 
     def _get_storage() -> Storage:
         """Retrieve Storage from app state."""
-        return app.state.storage
+        return app.state.storage  # type: ignore[no-any-return]
 
     # Register route groups
     _register_task_routes(app, _get_storage)

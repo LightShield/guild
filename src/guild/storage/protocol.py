@@ -16,7 +16,7 @@ Usage for type annotations::
 
 from __future__ import annotations
 
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 __all__ = ["StorageProtocol"]
 
@@ -38,11 +38,11 @@ class StorageProtocol(Protocol):
         """Create a new task record."""
         ...
 
-    async def get_task(self, task_id: str) -> dict | None:
+    async def get_task(self, task_id: str) -> dict[str, Any] | None:
         """Retrieve a task by ID, or None if not found."""
         ...
 
-    async def list_tasks(self, status: str | None = None) -> list[dict]:
+    async def list_tasks(self, status: str | None = None) -> list[dict[str, Any]]:
         """List tasks, optionally filtered by status."""
         ...
 
@@ -55,7 +55,7 @@ class StorageProtocol(Protocol):
         """Register a new agent with its block type."""
         ...
 
-    async def list_agents(self) -> list[dict]:
+    async def list_agents(self) -> list[dict[str, Any]]:
         """List all registered agents."""
         ...
 
@@ -68,7 +68,7 @@ class StorageProtocol(Protocol):
         """Append a message to an agent's conversation history."""
         ...
 
-    async def get_messages(self, agent_id: str) -> list[dict]:
+    async def get_messages(self, agent_id: str) -> list[dict[str, Any]]:
         """Retrieve all messages for an agent."""
         ...
 
@@ -82,7 +82,7 @@ class StorageProtocol(Protocol):
         """Write an entry to the audit log."""
         ...
 
-    async def list_audit(self, limit: int = 50) -> list[dict]:
+    async def list_audit(self, limit: int = 50) -> list[dict[str, Any]]:
         """Retrieve recent audit log entries."""
         ...
 
@@ -104,12 +104,12 @@ class StorageProtocol(Protocol):
         category: str | None = None,
         scope: str | None = None,
         limit: int = 50,
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """Retrieve learnings filtered by confidence, category, or scope."""
         ...
 
     # Token usage
-    async def get_token_summary(self) -> dict:
+    async def get_token_summary(self) -> dict[str, Any]:
         """Return aggregate token usage statistics."""
         ...
 
@@ -118,6 +118,6 @@ class StorageProtocol(Protocol):
         """Persist a checkpoint for an agent."""
         ...
 
-    async def load_checkpoint(self, agent_id: str) -> dict | None:
+    async def load_checkpoint(self, agent_id: str) -> dict[str, Any] | None:
         """Load the latest checkpoint for an agent, or None."""
         ...

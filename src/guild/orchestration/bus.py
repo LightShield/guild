@@ -6,6 +6,7 @@ import asyncio
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from typing import Any
 
 __all__ = ["BusMessage", "MessageBus", "SharedContext"]
 
@@ -17,7 +18,7 @@ class BusMessage:
     source_agent: str
     target_agent: str
     port: str
-    data: dict
+    data: dict[str, Any]
     timestamp: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
 
@@ -32,7 +33,7 @@ class MessageBus:
         self._queues: dict[str, asyncio.Queue[BusMessage]] = defaultdict(asyncio.Queue)
         self._log: list[BusMessage] = []
 
-    async def send(self, source: str, target: str, port: str, data: dict) -> None:
+    async def send(self, source: str, target: str, port: str, data: dict[str, Any]) -> None:
         """Send a message from one agent to another."""
         msg = BusMessage(
             source_agent=source,
@@ -64,7 +65,7 @@ class MessageBus:
         self,
         source: str,
         port: str,
-        data: dict,
+        data: dict[str, Any],
         exclude: set[str] | None = None,
     ) -> None:
         """Send a message to all known agents except those in exclude.
@@ -91,13 +92,13 @@ class SharedContext:
     """
 
     def __init__(self) -> None:
-        self._store: dict[str, dict] = {}
+        self._store: dict[str, dict[str, Any]] = {}
 
-    def put(self, key: str, data: dict, agent_id: str) -> None:
+    def put(self, key: str, data: dict[str, Any], agent_id: str) -> None:
         """Store data accessible to all team members."""
         self._store[key] = data
 
-    def get(self, key: str) -> dict | None:
+    def get(self, key: str) -> dict[str, Any] | None:
         """Retrieve shared data by key."""
         return self._store.get(key)
 

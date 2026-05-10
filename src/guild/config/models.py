@@ -6,7 +6,7 @@ and TOML file support.
 
 from __future__ import annotations
 
-from configsloader import ConfigsLoader, Field
+from configsloader import ConfigsLoader, Field  # type: ignore[import-untyped]
 
 from guild.daemon.resource import SchedulingMode
 from guild.permissions.checker import PermissionTier
@@ -14,7 +14,7 @@ from guild.permissions.checker import PermissionTier
 __all__ = ["GuildConfig"]
 
 
-class GuildConfig(ConfigsLoader):
+class GuildConfig(ConfigsLoader):  # type: ignore[misc]
     """Unified Guild configuration — flat fields with section-based TOML layout."""
 
     # Provider section

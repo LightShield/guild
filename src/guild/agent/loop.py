@@ -52,7 +52,7 @@ ESCALATION_TEMPLATE = (
     "What I need: {need}"
 )
 
-ToolExecutor = Callable[[dict, str | None], Awaitable[ToolResult]]
+ToolExecutor = Callable[[dict[str, Any], str | None], Awaitable[ToolResult]]
 
 
 class AgentLoop:
@@ -270,7 +270,7 @@ class AgentLoop:
 
         return results
 
-    async def _execute_single_tool(self, tool_name: str, tool_args: dict) -> ToolResult:
+    async def _execute_single_tool(self, tool_name: str, tool_args: dict[str, Any]) -> ToolResult:
         """Execute a single tool by name, handling unknown tools gracefully."""
         executor = self.tool_executors.get(tool_name)
         if executor is None:

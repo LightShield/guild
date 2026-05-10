@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+from typing import Any
 
 from guild.config.constants import MAX_SHELL_OUTPUT_CHARS, SHELL_TIMEOUT_SECONDS
 from guild.tools.base import ToolResult
@@ -45,7 +46,7 @@ def _check_denylist(command: str) -> str | None:
     return None
 
 
-async def execute_shell(args: dict, working_dir: str | None = None) -> ToolResult:
+async def execute_shell(args: dict[str, Any], working_dir: str | None = None) -> ToolResult:
     """Execute a shell command with denylist check and timeout.
 
     Args:

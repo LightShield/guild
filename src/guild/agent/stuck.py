@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from collections import deque
+from typing import Any
 
 __all__ = ["StuckDetector"]
 
@@ -50,7 +51,7 @@ class StuckDetector:
             self._consecutive_error_count = 1
             self._last_error = error
 
-    def record_tool_call(self, call: dict) -> None:
+    def record_tool_call(self, call: dict[str, Any]) -> None:
         """Record a tool call for repetition detection."""
         serialized = json.dumps(call, sort_keys=True)
         self._recent_calls.append(serialized)

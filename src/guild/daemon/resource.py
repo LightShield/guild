@@ -74,9 +74,9 @@ def _default_activity_detector() -> (
     MVP: uses psutil if available, otherwise assumes IDLE.
     """
     try:
-        import psutil
+        import psutil  # type: ignore[import-untyped]
 
-        cpu = psutil.cpu_percent(interval=0.1)
+        cpu: float = psutil.cpu_percent(interval=0.1)
         if cpu > _DEFAULT_CPU_THRESHOLD:
             return ActivityState.ACTIVE
     except ImportError:
@@ -89,7 +89,8 @@ def _default_cpu_reader() -> float:  # pragma: no cover — platform dependency 
     try:
         import psutil
 
-        return psutil.cpu_percent(interval=0.1)
+        result: float = psutil.cpu_percent(interval=0.1)
+        return result
     except ImportError:
         return 0.0
 

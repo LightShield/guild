@@ -7,6 +7,7 @@ import logging
 import os
 import re
 from pathlib import Path
+from typing import Any
 
 from guild.tools.base import ToolResult, resolve_path
 
@@ -31,7 +32,7 @@ def _should_skip_dir(name: str) -> bool:
     return name in _SKIP_DIRS
 
 
-async def execute_search(args: dict, working_dir: str | None = None) -> ToolResult:
+async def execute_search(args: dict[str, Any], working_dir: str | None = None) -> ToolResult:
     """Search files for lines matching a regex pattern.
 
     Args:
@@ -132,7 +133,7 @@ def _is_relative_to(path: Path, base: Path) -> bool:
         return False
 
 
-async def execute_glob(args: dict, working_dir: str | None = None) -> ToolResult:
+async def execute_glob(args: dict[str, Any], working_dir: str | None = None) -> ToolResult:
     """Find files matching a glob pattern.
 
     Args:

@@ -6,7 +6,7 @@ from the SQLite-backed message store.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from guild.storage.sqlite import Storage
@@ -25,11 +25,11 @@ class SessionReplay:
     def __init__(self, storage: Storage) -> None:
         self._storage = storage
 
-    async def get_session(self, agent_id: str) -> list[dict]:
+    async def get_session(self, agent_id: str) -> list[dict[str, Any]]:
         """Get all messages for an agent session in order."""
         return await self._storage.get_messages(agent_id)
 
-    async def get_session_summary(self, agent_id: str) -> dict:
+    async def get_session_summary(self, agent_id: str) -> dict[str, Any]:
         """Get a summary of the session.
 
         Returns a dict with: turn_count, tool_calls, tools_used,
@@ -68,7 +68,7 @@ class SessionReplay:
             "roles": roles,
         }
 
-    def format_for_display(self, messages: list[dict]) -> str:
+    def format_for_display(self, messages: list[dict[str, Any]]) -> str:
         """Format messages for human-readable replay output.
 
         Each message is formatted as:

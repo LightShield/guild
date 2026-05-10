@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from pathlib import Path
@@ -42,7 +42,7 @@ class TemporalKnowledge:
             return prompt_file.read_text()
         return None
 
-    async def get_decision_history(self, limit: int = 20) -> list[dict]:
+    async def get_decision_history(self, limit: int = 20) -> list[dict[str, Any]]:
         """Get recent decisions with rationale (REQ-27.1).
 
         Returns decisions ordered most-recent-first, up to limit.
@@ -79,7 +79,7 @@ class TemporalKnowledge:
 
         return "\n\n".join(sections)
 
-    def _format_decisions(self, decisions: list[dict]) -> str:
+    def _format_decisions(self, decisions: list[dict[str, Any]]) -> str:
         """Format decision records into readable context."""
         lines: list[str] = []
         for d in decisions[:10]:
@@ -88,7 +88,7 @@ class TemporalKnowledge:
             lines.append(f"- {decision_text}: {rationale}")
         return "\n".join(lines)
 
-    def _format_learnings(self, learnings: list[dict]) -> str:
+    def _format_learnings(self, learnings: list[dict[str, Any]]) -> str:
         """Format learning records into readable context."""
         lines: list[str] = []
         for item in learnings[:10]:

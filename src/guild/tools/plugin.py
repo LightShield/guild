@@ -132,7 +132,7 @@ class PluginLoader:
         try:
             import tomllib
         except ImportError:  # pragma: no cover — Python 3.10 compat
-            import tomli as tomllib  # type: ignore[no-redef]
+            import tomli as tomllib  # type: ignore[no-redef, import-not-found]
 
         try:
             content = path.read_text(encoding="utf-8")

@@ -180,7 +180,7 @@ def load_config(
         with contextlib.suppress(OSError):
             merged_file.unlink()
 
-    return config  # type: ignore[return-value]
+    return config  # type: ignore[no-any-return]
 
 
 class ConfigWatcher:

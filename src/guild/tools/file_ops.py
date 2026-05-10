@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from guild.tools.base import ToolResult, resolve_path
 
@@ -13,7 +14,7 @@ logger = logging.getLogger(__name__)
 MAX_FILE_READ_CHARS: int = 50_000
 
 
-async def execute_file_read(args: dict, working_dir: str | None = None) -> ToolResult:
+async def execute_file_read(args: dict[str, Any], working_dir: str | None = None) -> ToolResult:
     """Read a file and return its contents.
 
     Truncates files exceeding MAX_FILE_READ_CHARS. Handles binary files
@@ -43,7 +44,7 @@ async def execute_file_read(args: dict, working_dir: str | None = None) -> ToolR
     return ToolResult(success=True, output=content)
 
 
-async def execute_file_write(args: dict, working_dir: str | None = None) -> ToolResult:
+async def execute_file_write(args: dict[str, Any], working_dir: str | None = None) -> ToolResult:
     """Write content to a file, creating parent directories as needed."""
     path_str = args.get("path", "")
     if not path_str:

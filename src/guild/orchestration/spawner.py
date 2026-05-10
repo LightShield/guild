@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from guild.agent.loop import AgentLoop
 from guild.tools.base import ToolResult
@@ -70,7 +70,7 @@ class AgentSpawner:
 
         # Build tool executors (empty for now — sub-agents inherit none
         # unless explicitly provided via the tools parameter)
-        tool_executors: dict = {}
+        tool_executors: dict[str, Any] = {}
 
         loop = AgentLoop(
             provider=self._provider,
@@ -94,7 +94,7 @@ class AgentSpawner:
         """List IDs of all tracked agents."""
         return list(self._agents.keys())
 
-    async def execute_spawn(self, args: dict, working_dir: str | None = None) -> ToolResult:
+    async def execute_spawn(self, args: dict[str, Any], working_dir: str | None = None) -> ToolResult:
         """Execute a spawn request from the spawn_agent tool.
 
         Called by AgentLoop when the model invokes the spawn_agent tool.

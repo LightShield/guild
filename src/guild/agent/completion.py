@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from guild.tools.base import ToolResult
@@ -35,7 +35,7 @@ _CLOSURE_HINT: str = "\n\nIf this completes your task, provide your final respon
 _SIMPLE_ACTION_THRESHOLD: int = 2
 
 
-def is_duplicate_call(call: dict, recent_calls: list[dict]) -> bool:
+def is_duplicate_call(call: dict[str, Any], recent_calls: list[dict[str, Any]]) -> bool:
     """Check if a tool call is identical to one already in recent_calls.
 
     Compares function name and arguments for exact match.

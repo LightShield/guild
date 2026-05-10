@@ -11,7 +11,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import Enum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from guild.storage.sqlite import Storage
@@ -95,7 +95,8 @@ class QuestionQueue:
             return None
         if not row["answered"]:
             return None
-        return row["answer"]
+        answer: str | None = row["answer"]
+        return answer
 
     async def batch_answer(self, answers: dict[str, str]) -> int:
         """Answer multiple questions at once. Returns count answered."""
@@ -107,7 +108,7 @@ class QuestionQueue:
         return count
 
     @staticmethod
-    def _row_to_question(row: dict) -> PendingQuestion:
+    def _row_to_question(row: dict[str, Any]) -> PendingQuestion:
         """Convert a database row dict to a PendingQuestion."""
         return PendingQuestion(
             id=row["id"],

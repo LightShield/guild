@@ -16,10 +16,11 @@ import re
 from collections.abc import Callable
 from enum import Enum
 from pathlib import PurePosixPath
+from typing import Any
 
 __all__ = ["HARDCODED_NEVER", "PermissionChecker", "PermissionTier", "PromptFn"]
 
-PromptFn = Callable[[str, str, dict], bool]
+PromptFn = Callable[[str, str, dict[str, Any]], bool]
 
 # Keys in tool args that may contain filesystem paths.
 _PATH_KEYS = ("path", "working_dir", "file", "directory")
@@ -29,7 +30,7 @@ _PATH_KEYS = ("path", "working_dir", "file", "directory")
 # regardless of tier. Overridable only by explicit per-action flag.
 # ---------------------------------------------------------------------------
 
-HARDCODED_NEVER: list[dict] = [
+HARDCODED_NEVER: list[dict[str, str]] = [
     # Git destructive operations
     {"tool": "shell", "pattern": r"\bgit\s+push\s+--force\b", "reason": "git push --force"},
     {"tool": "shell", "pattern": r"\bgit\s+push\s+-f\b", "reason": "git push --force (short flag)"},
@@ -92,7 +93,7 @@ class PermissionChecker:
         self._prompt_fn = prompt_fn
         self._session_approvals: set[str] = set()
 
-    def check(self, tool_name: str, agent_id: str, args: dict) -> bool:
+    def check(self, tool_name: str, agent_id: str, args: dict[str, Any]) -> bool:
         """Return True if the tool call is permitted under the current tier.
 
         The hardcoded-never layer is evaluated FIRST — it blocks destructive
@@ -117,7 +118,7 @@ class PermissionChecker:
         return self._check_scoped(tool_name, args)
 
     def check_hardcoded_never(
-        self, tool_name: str, args: dict, *, allow_hardcoded_never: bool = False
+        self, tool_name: str, args: dict[str, Any], *, allow_hardcoded_never: bool = False
     ) -> tuple[bool, str]:
         """Check against hardcoded-never rules (REQ-03.7).
 
@@ -167,7 +168,7 @@ class PermissionChecker:
         if prompt_fn is not None:
             self._prompt_fn = prompt_fn
 
-    def _check_ask(self, tool_name: str, agent_id: str, args: dict) -> bool:
+    def _check_ask(self, tool_name: str, agent_id: str, args: dict[str, Any]) -> bool:
         """ASK tier: prompt once per tool name, cache approval."""
         if tool_name in self._session_approvals:
             return True
@@ -180,7 +181,7 @@ class PermissionChecker:
             self._session_approvals.add(tool_name)
         return approved
 
-    def _check_scoped(self, tool_name: str, args: dict) -> bool:
+    def _check_scoped(self, tool_name: str, args: dict[str, Any]) -> bool:
         """SCOPED tier: tool must be in allowlist; paths must be in bounds."""
         if tool_name not in self._allowed_tools:
             return False
@@ -195,7 +196,7 @@ class PermissionChecker:
         # All paths must be within at least one allowed path prefix
         return all(self._path_in_bounds(p) for p in paths)
 
-    def _extract_paths(self, args: dict) -> list[str]:
+    def _extract_paths(self, args: dict[str, Any]) -> list[str]:
         """Pull filesystem paths from tool arguments."""
         paths: list[str] = []
         for key in _PATH_KEYS:

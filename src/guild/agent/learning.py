@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from guild.config.constants import LEARNING_CONTENT_MAX_CHARS, MIN_INJECTION_CONFIDENCE
 
@@ -44,7 +44,7 @@ async def extract_learnings(
     task_id: str,
     storage: Storage,
     provider: LLMProvider,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Run the learner on a completed task's messages.
 
     Fetches messages for the task's assigned agent, asks the LLM to
@@ -76,7 +76,7 @@ async def extract_learnings(
     response = await provider.generate(llm_messages)
 
     raw_lines = (response.content or "").strip().splitlines()
-    stored: list[dict] = []
+    stored: list[dict[str, Any]] = []
 
     for line in raw_lines:
         parsed = _parse_learning_line(line)
@@ -108,7 +108,7 @@ async def extract_learnings(
 
 
 def format_learnings_for_injection(
-    learnings: list[dict],
+    learnings: list[dict[str, Any]],
     max_items: int = 10,
 ) -> str:
     """Format top learnings as context for injection into agent prompts.
@@ -169,7 +169,7 @@ async def suggest_prompt_refinements(
     return suggestions
 
 
-def _format_session_log(messages: list[dict]) -> str:
+def _format_session_log(messages: list[dict[str, Any]]) -> str:
     """Format message history into a readable session log."""
     lines: list[str] = []
     for msg in messages:
@@ -182,7 +182,7 @@ def _format_session_log(messages: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def _parse_learning_line(line: str) -> dict | None:
+def _parse_learning_line(line: str) -> dict[str, Any] | None:
     """Parse a single JSON line into a learning dict, or None if invalid."""
     line = line.strip()
     if not line:

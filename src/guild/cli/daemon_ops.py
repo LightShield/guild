@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import subprocess
 import sys
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from guild.config.loader import DB_FILENAME
 
@@ -55,11 +55,11 @@ def launch_background_task(guild_dir: Path, task_id: str) -> None:
     )
 
 
-def get_running_tasks(run_dir: Path) -> list[dict]:
+def get_running_tasks(run_dir: Path) -> list[dict[str, Any]]:
     """List tasks with live PID files in the run directory."""
     import os as _os
 
-    tasks: list[dict] = []
+    tasks: list[dict[str, Any]] = []
     for pid_file in run_dir.glob("*.pid"):
         try:
             pid = int(pid_file.read_text().strip())

@@ -13,6 +13,8 @@ from guild.config.loader import DB_FILENAME
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from guild.escalation.queue import PendingQuestion
+
 __all__ = [
     "answer_pending_question",
     "approve_learning",
@@ -28,7 +30,7 @@ __all__ = [
 ]
 
 
-async def fetch_audit(db_path: Path, limit: int) -> list[dict]:
+async def fetch_audit(db_path: Path, limit: int) -> list[dict[str, Any]]:
     """Fetch audit log entries from the database."""
     from guild.storage.sqlite import Storage
 
@@ -43,7 +45,7 @@ async def fetch_decisions(
     db_path: Path,
     task_id: str | None,
     limit: int,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Fetch decision log entries from the database."""
     from guild.storage.sqlite import Storage
 
@@ -54,7 +56,7 @@ async def fetch_decisions(
         return await store.list_decisions(task_id=task_id, limit=limit)
 
 
-async def fetch_task_history(db_path: Path, limit: int, status: str | None) -> list[dict]:
+async def fetch_task_history(db_path: Path, limit: int, status: str | None) -> list[dict[str, Any]]:
     """Fetch task history from the database."""
     from guild.storage.sqlite import Storage
 
@@ -68,7 +70,7 @@ async def fetch_task_history(db_path: Path, limit: int, status: str | None) -> l
     return tasks[:limit]
 
 
-async def fetch_token_summary(db_path: Path) -> dict | None:
+async def fetch_token_summary(db_path: Path) -> dict[str, Any] | None:
     """Fetch token usage summary from the database."""
     from guild.storage.sqlite import Storage
 
@@ -79,7 +81,7 @@ async def fetch_token_summary(db_path: Path) -> dict | None:
         return await store.get_token_summary()
 
 
-async def fetch_task_messages(guild_dir: Path, task_id: str) -> list[dict]:
+async def fetch_task_messages(guild_dir: Path, task_id: str) -> list[dict[str, Any]]:
     """Fetch messages associated with a task's agent."""
     from guild.storage.sqlite import Storage
 
@@ -108,7 +110,7 @@ async def fetch_learnings(
     db_path: Path,
     category: str | None,
     limit: int,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Fetch learnings from the database."""
     from guild.storage.sqlite import Storage
 
@@ -148,7 +150,7 @@ async def decay_learnings(db_path: Path) -> int:
 # ------------------------------------------------------------------
 
 
-async def fetch_pending_questions(db_path: Path) -> list[dict[str, Any]]:
+async def fetch_pending_questions(db_path: Path) -> list[PendingQuestion]:
     """Fetch pending escalation questions from the database."""
     from guild.escalation.queue import QuestionQueue
     from guild.storage.sqlite import Storage

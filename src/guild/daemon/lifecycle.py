@@ -10,7 +10,7 @@ import logging
 import os
 import signal
 from enum import IntEnum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from guild.task.spec import TaskStatus
 
@@ -174,9 +174,9 @@ class LifecycleManager:
             logger.warning("Cleaned stale lock for task %s", task_id)
         return count
 
-    def get_running_tasks(self) -> list[dict]:  # pragma: no cover — requires running subprocess
+    def get_running_tasks(self) -> list[dict[str, Any]]:  # pragma: no cover — requires running subprocess
         """List all tasks with live PID files."""
-        running: list[dict] = []
+        running: list[dict[str, Any]] = []
         for pid_file in self.run_dir.glob("*.pid"):
             pid = int(pid_file.read_text().strip())
             if _process_alive(pid):
@@ -221,7 +221,7 @@ class TaskQueue:
         self._active.append(task_id)
         return task_id
 
-    async def get_queue_state(self) -> list[dict]:
+    async def get_queue_state(self) -> list[dict[str, Any]]:
         """Return the current queue contents as a list of dicts."""
         return [{"task_id": tid, "position": idx} for idx, tid in enumerate(self._queue)]
 

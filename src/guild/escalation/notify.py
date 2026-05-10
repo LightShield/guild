@@ -10,6 +10,7 @@ import asyncio
 import logging
 import sys
 from enum import Enum
+from typing import Any
 
 from guild.daemon.platform import get_platform_adapter
 from guild.escalation.queue import QuestionPriority
@@ -87,7 +88,7 @@ class Notifier:
         await _post_json(self._webhook_url, {"text": message})
 
 
-async def _post_json(url: str, payload: dict) -> None:
+async def _post_json(url: str, payload: dict[str, Any]) -> None:
     """HTTP POST a JSON payload to *url*.
 
     Wraps urllib so the HTTP dependency is isolated in one place and

@@ -13,7 +13,7 @@ to helper modules (task_runner, daemon_ops, queries, toml_utils).
 import asyncio
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import typer
 from rich.console import Console
@@ -410,7 +410,7 @@ def learnings(
     _display_learnings_table(entries)
 
 
-def _display_learnings_table(entries: list[dict]) -> None:
+def _display_learnings_table(entries: list[dict[str, Any]]) -> None:
     """Render the learnings list as a rich table."""
     table = Table(title="Learnings")
     table.add_column("ID", style="dim")
@@ -700,7 +700,7 @@ def serve(
         raise typer.Exit(code=1)
 
     try:  # pragma: no cover — server entry point
-        import uvicorn  # type: ignore[import-untyped]
+        import uvicorn
 
         from guild.api.server import create_app as _create_app
     except ImportError:

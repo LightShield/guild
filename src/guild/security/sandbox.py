@@ -180,7 +180,7 @@ def _parse_security_toml(config_path: Path) -> SandboxPolicy:
     try:
         import tomllib
     except ImportError:  # pragma: no cover — Python 3.10 compat
-        import tomli as tomllib  # type: ignore[no-redef]
+        import tomli as tomllib  # type: ignore[no-redef, import-not-found]
 
     try:
         with open(config_path, "rb") as f:

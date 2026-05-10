@@ -201,7 +201,7 @@ class Storage:
         )
         await self._db.commit()
 
-    async def get_task(self, task_id: str) -> dict | None:
+    async def get_task(self, task_id: str) -> dict[str, Any] | None:
         """Retrieve a task by ID, or None if not found."""
         if self._db is None:
             raise RuntimeError("Storage not connected. Call connect() first.")
@@ -211,7 +211,7 @@ class Storage:
             return None
         return dict(row)
 
-    async def list_tasks(self, status: str | None = None) -> list[dict]:
+    async def list_tasks(self, status: str | None = None) -> list[dict[str, Any]]:
         """List all tasks, optionally filtered by status."""
         if self._db is None:
             raise RuntimeError("Storage not connected. Call connect() first.")
@@ -253,7 +253,7 @@ class Storage:
         )
         await self._db.commit()
 
-    async def list_agents(self) -> list[dict]:
+    async def list_agents(self) -> list[dict[str, Any]]:
         """List all registered agents."""
         if self._db is None:
             raise RuntimeError("Storage not connected. Call connect() first.")
@@ -295,7 +295,7 @@ class Storage:
         )
         await self._db.commit()
 
-    async def get_messages(self, agent_id: str) -> list[dict]:
+    async def get_messages(self, agent_id: str) -> list[dict[str, Any]]:
         """Get all messages for an agent, ordered by insertion."""
         if self._db is None:
             raise RuntimeError("Storage not connected. Call connect() first.")
@@ -325,7 +325,7 @@ class Storage:
         )
         await self._db.commit()
 
-    async def list_audit(self, limit: int = 50) -> list[dict]:
+    async def list_audit(self, limit: int = 50) -> list[dict[str, Any]]:
         """List audit entries, most recent first."""
         if self._db is None:
             raise RuntimeError("Storage not connected. Call connect() first.")
@@ -374,7 +374,7 @@ class Storage:
         self,
         task_id: str | None = None,
         limit: int = 50,
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """List decisions, most recent first, optionally by task."""
         if self._db is None:
             raise RuntimeError("Storage not connected. Call connect() first.")
@@ -413,7 +413,7 @@ class Storage:
             (category, content, confidence, scope, source_task_id, _now()),
         )
         await self._db.commit()
-        return cursor.lastrowid  # type: ignore[return-value]
+        return cursor.lastrowid or 0
 
     async def list_learnings(
         self,
@@ -421,7 +421,7 @@ class Storage:
         category: str | None = None,
         scope: str | None = None,
         limit: int = 50,
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """List learnings filtered by confidence, category, and scope."""
         if self._db is None:
             raise RuntimeError("Storage not connected. Call connect() first.")
@@ -483,7 +483,7 @@ class Storage:
             (CONFIDENCE_DECAY_DECREMENT, cutoff, cutoff),
         )
         await self._db.commit()
-        return cursor.rowcount
+        return int(cursor.rowcount)
 
     async def delete_learning(self, learning_id: int) -> None:
         """Delete a learning by ID."""
@@ -492,7 +492,7 @@ class Storage:
         await self._db.execute("DELETE FROM learnings WHERE id = ?", (learning_id,))
         await self._db.commit()
 
-    async def get_learning(self, learning_id: int) -> dict | None:
+    async def get_learning(self, learning_id: int) -> dict[str, Any] | None:
         """Retrieve a single learning by ID."""
         if self._db is None:
             raise RuntimeError("Storage not connected. Call connect() first.")
@@ -506,7 +506,7 @@ class Storage:
     # Token usage aggregation (REQ-10.3)
     # ------------------------------------------------------------------
 
-    async def get_token_summary(self) -> dict:
+    async def get_token_summary(self) -> dict[str, Any]:
         """Aggregate token usage across all agents.
 
         Returns a dict with total_input, total_output, agent_count,
@@ -523,6 +523,9 @@ class Storage:
         row = await cursor.fetchone()
         task_cursor = await self._db.execute("SELECT COUNT(*) FROM tasks")
         task_row = await task_cursor.fetchone()
+        # COALESCE/COUNT guarantee non-None rows from aggregate queries
+        assert row is not None  # noqa: S101
+        assert task_row is not None  # noqa: S101
         return {
             "total_input": row[0],
             "total_output": row[1],
@@ -555,7 +558,7 @@ class Storage:
         )
         await self._db.commit()
 
-    async def list_questions(self, answered: bool | None = None) -> list[dict]:
+    async def list_questions(self, answered: bool | None = None) -> list[dict[str, Any]]:
         """List questions, optionally filtered by answered status."""
         if self._db is None:
             raise RuntimeError("Storage not connected. Call connect() first.")
@@ -569,7 +572,7 @@ class Storage:
         rows = await cursor.fetchall()
         return [dict(r) for r in rows]
 
-    async def get_question(self, question_id: str) -> dict | None:
+    async def get_question(self, question_id: str) -> dict[str, Any] | None:
         """Retrieve a single question by ID."""
         if self._db is None:
             raise RuntimeError("Storage not connected. Call connect() first.")
@@ -604,7 +607,7 @@ class Storage:
         )
         await self._db.commit()
 
-    async def load_checkpoint(self, agent_id: str) -> dict | None:
+    async def load_checkpoint(self, agent_id: str) -> dict[str, Any] | None:
         """Load the most recent checkpoint for an agent.
 
         Returns a dict with keys: agent_id, task_id, state_json, created_at;
@@ -642,7 +645,7 @@ class Storage:
         await self._db.commit()
         return memory_id
 
-    async def get_memory(self, memory_id: str) -> dict | None:
+    async def get_memory(self, memory_id: str) -> dict[str, Any] | None:
         """Retrieve a single memory by ID."""
         if self._db is None:
             raise RuntimeError("Storage not connected. Call connect() first.")
@@ -656,7 +659,7 @@ class Storage:
             return None
         return dict(row)
 
-    async def list_memory_summaries(self, limit: int = 200) -> list[dict]:
+    async def list_memory_summaries(self, limit: int = 200) -> list[dict[str, Any]]:
         """List memory summaries ordered by last_verified descending.
 
         Returns list of dicts with keys: id, summary, verified.
@@ -709,7 +712,7 @@ class Storage:
             " AND created_at < ?",
             (cutoff, cutoff),
         )
-        return cursor.rowcount
+        return int(cursor.rowcount)
 
     async def _dedup_memories(self) -> int:
         """Merge duplicate summaries: keep most recent, delete the rest."""
@@ -726,7 +729,7 @@ class Storage:
                 "SELECT id FROM memories WHERE summary = ?" " ORDER BY created_at DESC",
                 (summary,),
             )
-            entries = await entries_cursor.fetchall()
+            entries = list(await entries_cursor.fetchall())
             ids_to_delete = [e[0] for e in entries[1:]]
             if ids_to_delete:  # pragma: no branch — HAVING cnt>1 guarantees >=2 rows
                 placeholders = ",".join("?" * len(ids_to_delete))
@@ -734,14 +737,14 @@ class Storage:
                     f"DELETE FROM memories WHERE id IN ({placeholders})",  # noqa: S608
                     ids_to_delete,
                 )
-                changes += del_cursor.rowcount
+                changes += int(del_cursor.rowcount)
         return changes
 
     # ------------------------------------------------------------------
     # Eval Results (REQ-16.5)
     # ------------------------------------------------------------------
 
-    async def store_eval_result(self, result_data: dict) -> None:
+    async def store_eval_result(self, result_data: dict[str, Any]) -> None:
         """Persist an eval result.
 
         Expects keys: task_name, model, config_hash, task_completed,
@@ -772,7 +775,7 @@ class Storage:
         )
         await self._db.commit()
 
-    async def list_eval_results(self, task_name: str | None = None, limit: int = 50) -> list[dict]:
+    async def list_eval_results(self, task_name: str | None = None, limit: int = 50) -> list[dict[str, Any]]:
         """List eval results, most recent first, optionally by task_name."""
         if self._db is None:
             raise RuntimeError("Storage not connected. Call connect() first.")

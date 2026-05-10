@@ -331,8 +331,8 @@ class TeamRunner:
             )
 
         # Max iterations reached -- return last generator output
-        self._outputs[loop.generator_block] = gen_output  # type: ignore[possibly-undefined]
-        return gen_output  # type: ignore[possibly-undefined]
+        self._outputs[loop.generator_block] = gen_output
+        return gen_output
 
     def _build_evaluator_input(self, loop: LoopDef, artifact: str) -> str:
         """Build evaluator input including criteria from config (REQ-04.44)."""
