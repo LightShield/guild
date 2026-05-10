@@ -252,7 +252,7 @@ class EscalatingProvider(LLMProvider):
         tools: list[dict[str, Any]] | None = None,
     ) -> LLMResponse:
         """Retry on the current provider with a correction hint appended."""
-        corrected = messages + [{"role": "user", "content": MALFORMED_CORRECTION_HINT}]
+        corrected = [*messages, {"role": "user", "content": MALFORMED_CORRECTION_HINT}]
         return await self._chain.current.generate(corrected, tools)
 
     async def escalate_and_retry(

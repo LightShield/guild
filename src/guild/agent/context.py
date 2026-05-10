@@ -3,6 +3,10 @@
 from __future__ import annotations
 
 import copy
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:  # pragma: no cover — type-checking only
+    from guild.agent.message import Message
 
 __all__ = [
     "CHARS_PER_TOKEN",
@@ -35,21 +39,20 @@ class ContextManager:
         self.preserve_recent = preserve_recent
         self.compact_threshold = compact_threshold
 
-    def estimate_tokens(self, messages: list[dict]) -> int:
+    def estimate_tokens(self, messages: list[Message]) -> int:
         """Estimate token count from message content length."""
         total_chars = 0
         for msg in messages:
-            content = msg.get("content", "")
-            if content:
-                total_chars += len(content)
+            if msg.content:
+                total_chars += len(msg.content)
         return total_chars // CHARS_PER_TOKEN
 
-    def needs_compaction(self, messages: list[dict]) -> bool:
+    def needs_compaction(self, messages: list[Message]) -> bool:
         """Check if messages exceed the compact threshold."""
         threshold_tokens = int(self.max_tokens * self.compact_threshold)
         return self.estimate_tokens(messages) >= threshold_tokens
 
-    def compact(self, messages: list[dict]) -> list[dict]:
+    def compact(self, messages: list[Message]) -> list[Message]:
         """Tier 1: MicroCompact -- local trim of old tool outputs.
 
         Strategy: preserve system prompt + recent N messages fully.
@@ -67,19 +70,19 @@ class ContextManager:
 
         # Truncate old tool outputs, oldest first, most aggressively
         trimmable = [
-            i for i in range(len(result)) if i not in protected and result[i].get("role") == "tool"
+            i for i in range(len(result)) if i not in protected and result[i].role == "tool"
         ]
 
         for idx in trimmable:
             if self.estimate_tokens(result) <= threshold_tokens:
                 break
-            result[idx] = self._truncate_message(result[idx])
+            self._truncate_message(result[idx])
 
         return result
 
     def create_handoff_artifact(
         self,
-        messages: list[dict],
+        messages: list[Message],
         task_description: str,
     ) -> str:
         """Create a structured handoff for context reset (REQ-07.8).
@@ -144,11 +147,11 @@ class ContextManager:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _protected_indices(self, messages: list[dict]) -> set[int]:
+    def _protected_indices(self, messages: list[Message]) -> set[int]:
         """Return indices that must not be truncated."""
         protected: set[int] = set()
         # Always protect system prompt (first message if role=system)
-        if messages and messages[0].get("role") == "system":
+        if messages and messages[0].role == "system":
             protected.add(0)
         # Protect recent N messages
         total = len(messages)
@@ -157,36 +160,32 @@ class ContextManager:
             protected.add(i)
         return protected
 
-    def _truncate_message(self, msg: dict) -> dict:
-        """Truncate a message's content to MIN_CONTENT_LEN + marker."""
-        content = msg.get("content", "")
-        if len(content) <= MIN_CONTENT_LEN:
-            return msg
-        msg["content"] = content[:MIN_CONTENT_LEN] + TRUNCATION_MARKER
-        return msg
+    def _truncate_message(self, msg: Message) -> None:
+        """Truncate a message's content to MIN_CONTENT_LEN + marker (in place)."""
+        if len(msg.content) <= MIN_CONTENT_LEN:
+            return
+        msg.content = msg.content[:MIN_CONTENT_LEN] + TRUNCATION_MARKER
 
-    def _extract_decisions(self, messages: list[dict]) -> list[str]:
+    def _extract_decisions(self, messages: list[Message]) -> list[str]:
         """Extract decision-like statements from assistant messages."""
         decisions: list[str] = []
         for msg in messages:
-            if msg.get("role") != "assistant":
+            if msg.role != "assistant":
                 continue
-            content = msg.get("content", "")
-            for line in content.split("\n"):
+            for line in msg.content.split("\n"):
                 lower = line.lower().strip()
                 if lower.startswith("decision:") or lower.startswith("decided:"):
                     decisions.append(line.strip())
         return decisions
 
-    def _extract_completed_actions(self, messages: list[dict]) -> list[str]:
+    def _extract_completed_actions(self, messages: list[Message]) -> list[str]:
         """Extract completed tool actions from tool messages."""
         actions: list[str] = []
         for msg in messages:
-            if msg.get("role") != "tool":
+            if msg.role != "tool":
                 continue
-            content = msg.get("content", "")
             # Use first line as summary of what was done
-            first_line = content.split("\n")[0].strip()
+            first_line = msg.content.split("\n")[0].strip()
             if first_line:
                 actions.append(first_line[:100])
         return actions

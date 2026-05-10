@@ -16,6 +16,7 @@ from guild.agent.checkpoint import (
     recover_from_checkpoint,
     save_checkpoint,
 )
+from guild.agent.message import Message
 from guild.storage.sqlite import Storage
 
 
@@ -25,9 +26,9 @@ def _sample_checkpoint() -> Checkpoint:
         agent_id="agent-001",
         task_id="task-abc",
         messages=[
-            {"role": "system", "content": "You are helpful."},
-            {"role": "user", "content": "Fix the bug."},
-            {"role": "assistant", "content": "I'll look into it."},
+            Message(role="system", content="You are helpful."),
+            Message(role="user", content="Fix the bug."),
+            Message(role="assistant", content="I'll look into it."),
         ],
         turn_number=5,
         total_input_tokens=1200,
@@ -118,7 +119,7 @@ class TestCheckpointPersistence:
             cp1 = Checkpoint(
                 agent_id="agent-001",
                 task_id="task-1",
-                messages=[{"role": "user", "content": "first"}],
+                messages=[Message(role="user", content="first")],
                 turn_number=2,
                 total_input_tokens=100,
                 total_output_tokens=50,
@@ -127,7 +128,7 @@ class TestCheckpointPersistence:
             cp2 = Checkpoint(
                 agent_id="agent-001",
                 task_id="task-1",
-                messages=[{"role": "user", "content": "second"}],
+                messages=[Message(role="user", content="second")],
                 turn_number=7,
                 total_input_tokens=500,
                 total_output_tokens=300,
@@ -139,7 +140,7 @@ class TestCheckpointPersistence:
             loaded = await load_checkpoint(storage, "agent-001")
             assert loaded is not None
             assert loaded.turn_number == 7
-            assert loaded.messages == [{"role": "user", "content": "second"}]
+            assert loaded.messages == [Message(role="user", content="second")]
         finally:
             await storage.close()
 
@@ -168,9 +169,9 @@ class TestRecoverFromCheckpoint:
                 agent_id="agent-crash",
                 task_id="task-42",
                 messages=[
-                    {"role": "system", "content": "You are helpful."},
-                    {"role": "user", "content": "Fix the bug."},
-                    {"role": "assistant", "content": "Working on it."},
+                    Message(role="system", content="You are helpful."),
+                    Message(role="user", content="Fix the bug."),
+                    Message(role="assistant", content="Working on it."),
                 ],
                 turn_number=3,
                 total_input_tokens=500,
@@ -229,7 +230,7 @@ class TestCheckpointTokenPreservation:
             cp = Checkpoint(
                 agent_id="agent-tokens",
                 task_id="task-tok",
-                messages=[{"role": "user", "content": "hi"}],
+                messages=[Message(role="user", content="hi")],
                 turn_number=10,
                 total_input_tokens=99999,
                 total_output_tokens=55555,

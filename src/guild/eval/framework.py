@@ -14,6 +14,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from guild.agent.message import Message
+
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from guild.provider.base import LLMProvider, LLMResponse
     from guild.storage import Storage
@@ -91,20 +93,21 @@ class EvalFramework:
         error: str | None = None
         model_name = ""
 
-        messages: list[dict[str, Any]] = [
-            {"role": "user", "content": task.description},
+        messages: list[Message] = [
+            Message(role="user", content=task.description),
         ]
 
         try:
             # Run the agent loop (simplified single-turn for eval)
             for _ in range(20):
                 turns += 1
-                response: LLMResponse = await provider.generate(messages)
+                raw_messages = [m.to_dict() for m in messages]
+                response: LLMResponse = await provider.generate(raw_messages)
                 total_input += response.input_tokens
                 total_output += response.output_tokens
                 model_name = response.model or config_label
 
-                messages.append({"role": "assistant", "content": response.content or ""})
+                messages.append(Message(role="assistant", content=response.content or ""))
 
                 if not response.has_tool_call:
                     break

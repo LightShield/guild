@@ -82,6 +82,7 @@ class TestSpawnedAgentExecution:
         # The user message should contain the task
         call_args = provider.generate.call_args
         messages = call_args[0][0]
+        # Provider receives raw dicts from Message.to_dict() conversion
         user_msgs = [m for m in messages if m["role"] == "user"]
         assert any("Do something useful" in m["content"] for m in user_msgs)
 

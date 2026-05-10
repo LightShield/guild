@@ -81,9 +81,8 @@ class TestMissingFileRaisesNotReturnsEmpty:
 
     def test_missing_file_raises_not_returns_empty(self, tmp_path) -> None:
         missing = tmp_path / "nonexistent.toml"
-        with pytest.raises(FileNotFoundError):
-            with open(missing, "rb") as f:
-                tomllib.load(f)
+        with pytest.raises(FileNotFoundError), open(missing, "rb") as f:
+            tomllib.load(f)
 
     def test_load_requires_binary_mode(self) -> None:
         """tomllib.load() requires a binary file object — verify the contract."""

@@ -13,7 +13,7 @@
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Optional  # noqa: UP035 — Typer requires Optional at runtime
 
 import pytest
 import typer
@@ -130,7 +130,7 @@ class TestCallbackInvokeWithoutCommand:
 
         @app.callback(invoke_without_command=True)
         def main(
-            version: Optional[bool] = typer.Option(
+            version: Optional[bool] = typer.Option(  # noqa: UP045 — Typer requires Optional
                 None, "--version", callback=version_callback, is_eager=True
             ),
         ) -> None:

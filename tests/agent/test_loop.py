@@ -105,8 +105,9 @@ class TestLoopBasics:
         await loop.run(system_prompt="sys", user_input="read a.txt")
 
         # Check the second generate call includes a tool result message
+        # Provider receives raw dicts via to_dict() conversion
         second_call_messages = provider.generate.call_args_list[1][0][0]
-        tool_msgs = [m for m in second_call_messages if m.get("role") == "tool"]
+        tool_msgs = [m for m in second_call_messages if m["role"] == "tool"]
         assert len(tool_msgs) >= 1
         assert "file contents here" in tool_msgs[0]["content"]
 
@@ -151,7 +152,7 @@ class TestLoopEdgeCases:
         result = await loop.run(system_prompt="sys", user_input="do both")
         assert "Both done" in result
         # Both tool results should be in messages
-        tool_msgs = [m for m in loop.messages if m.get("role") == "tool"]
+        tool_msgs = [m for m in loop.messages if m.role == "tool"]
         assert len(tool_msgs) == 2
 
     async def test_loop_continues_after_tool_failure_mid_sequence(self) -> None:
@@ -183,7 +184,7 @@ class TestLoopEdgeCases:
         loop = AgentLoop(provider=provider, tool_executors=executors)
         result = await loop.run(system_prompt="sys", user_input="read and write")
         assert "Handled" in result
-        tool_msgs = [m for m in loop.messages if m.get("role") == "tool"]
+        tool_msgs = [m for m in loop.messages if m.role == "tool"]
         # Both tools produced a message
         assert len(tool_msgs) == 2
 
@@ -212,9 +213,9 @@ class TestLoopEdgeCases:
         # Should not crash, should get final text
         assert result == "I see the error."
         # The tool error message should be in history
-        tool_msgs = [m for m in loop.messages if m.get("role") == "tool"]
+        tool_msgs = [m for m in loop.messages if m.role == "tool"]
         assert len(tool_msgs) == 1
-        assert "failed" in tool_msgs[0]["content"].lower()
+        assert "failed" in tool_msgs[0].content.lower()
 
     async def test_loop_returns_empty_string_on_max_turns_with_no_text(self) -> None:
         """If max_turns hit and model never gave text content, return empty."""
@@ -246,7 +247,7 @@ class TestLoopEdgeCases:
         loop = AgentLoop(provider=provider, tool_executors=_make_tool_executors())
         await loop.run(system_prompt="sys", user_input="write")
 
-        roles = [m["role"] for m in loop.messages]
+        roles = [m.role for m in loop.messages]
         assert roles[0] == "system"
         assert roles[1] == "user"
         assert roles[2] == "assistant"
@@ -278,7 +279,7 @@ class TestLoopCompletionHeuristics:
 
         # The second time, a dedup message is injected instead
         all_messages = loop.messages
-        dedup_msgs = [m for m in all_messages if "already" in m.get("content", "").lower()]
+        dedup_msgs = [m for m in all_messages if "already" in m.content.lower()]
         assert len(dedup_msgs) >= 1
 
     async def test_loop_injects_completion_nudge_after_success(self) -> None:
@@ -303,10 +304,9 @@ class TestLoopCompletionHeuristics:
         # Check that a nudge message was injected
         all_messages = loop.messages
         nudge_found = any(
-            "summarize" in m.get("content", "").lower()
-            or "complete" in m.get("content", "").lower()
+            "summarize" in m.content.lower() or "complete" in m.content.lower()
             for m in all_messages
-            if m.get("role") == "user" and m != all_messages[1]
+            if m.role == "user" and m != all_messages[1]
         )
         assert nudge_found
 
@@ -331,13 +331,13 @@ class TestMultiTurnConversation:
 
         assert result == "Your name is Alice."
         # Verify system prompt is still at the start
-        assert loop.messages[0]["role"] == "system"
-        assert loop.messages[0]["content"] == "You are helpful."
+        assert loop.messages[0].role == "system"
+        assert loop.messages[0].content == "You are helpful."
         # Verify both user messages are present
-        user_msgs = [m for m in loop.messages if m.get("role") == "user"]
+        user_msgs = [m for m in loop.messages if m.role == "user"]
         assert len(user_msgs) >= 2
-        assert any("Alice" in m["content"] for m in user_msgs)
-        assert any("name" in m["content"] for m in user_msgs)
+        assert any("Alice" in m.content for m in user_msgs)
+        assert any("name" in m.content for m in user_msgs)
 
     async def test_send_after_run_maintains_context(self) -> None:
         """send() sees tool results from the initial run()."""
@@ -357,7 +357,7 @@ class TestMultiTurnConversation:
         result = await loop.send("What did the file contain?")
 
         assert "file contents here" in result
-        # The generate call for send() should include the full history
+        # The generate call for send() should include the full history (raw dicts)
         final_call_messages = provider.generate.call_args_list[-1][0][0]
         # Should include system, user, assistant, tool, assistant, user
         roles = [m["role"] for m in final_call_messages]
@@ -381,8 +381,8 @@ class TestMultiTurnConversation:
 
         assert result == "Response 4"
         # Should have 4 user messages and 4 assistant messages
-        user_msgs = [m for m in loop.messages if m["role"] == "user"]
-        assistant_msgs = [m for m in loop.messages if m["role"] == "assistant"]
+        user_msgs = [m for m in loop.messages if m.role == "user"]
+        assistant_msgs = [m for m in loop.messages if m.role == "assistant"]
         assert len(user_msgs) == 4
         assert len(assistant_msgs) == 4
 
@@ -400,18 +400,18 @@ class TestMultiTurnConversation:
         await loop.send("follow-up")
 
         # At this point we should have 2 user messages
-        user_msgs_before = [m for m in loop.messages if m["role"] == "user"]
+        user_msgs_before = [m for m in loop.messages if m.role == "user"]
         assert len(user_msgs_before) == 2
 
         # Now run() resets
         await loop.run(system_prompt="sys2", user_input="fresh start")
 
         # After run(), only 1 user message (the new one)
-        user_msgs_after = [m for m in loop.messages if m["role"] == "user"]
+        user_msgs_after = [m for m in loop.messages if m.role == "user"]
         assert len(user_msgs_after) == 1
-        assert user_msgs_after[0]["content"] == "fresh start"
+        assert user_msgs_after[0].content == "fresh start"
         # System prompt changed
-        assert loop.messages[0]["content"] == "sys2"
+        assert loop.messages[0].content == "sys2"
 
     async def test_send_without_run_raises_error(self) -> None:
         """send() before run() raises RuntimeError."""
@@ -441,9 +441,9 @@ class TestMultiTurnConversation:
 
         assert result == "Read it again."
         # The tool should have been executed (not deduped)
-        tool_msgs = [m for m in loop.messages if m["role"] == "tool"]
+        tool_msgs = [m for m in loop.messages if m.role == "tool"]
         # Should have 2 real tool results (not dedup messages)
-        real_tool_msgs = [m for m in tool_msgs if "already" not in m.get("content", "").lower()]
+        real_tool_msgs = [m for m in tool_msgs if "already" not in m.content.lower()]
         assert len(real_tool_msgs) == 2
 
 
@@ -477,8 +477,8 @@ class TestStuckRecovery:
         result = await loop.run(system_prompt="sys", user_input="read a.txt")
 
         # Recovery prompt should have been injected
-        user_msgs = [m for m in loop.messages if m["role"] == "user"]
-        recovery_msgs = [m for m in user_msgs if STUCK_RECOVERY_PROMPT in m["content"]]
+        user_msgs = [m for m in loop.messages if m.role == "user"]
+        recovery_msgs = [m for m in user_msgs if STUCK_RECOVERY_PROMPT in m.content]
         assert len(recovery_msgs) == 1
         assert result == "Let me try a different approach."
 
@@ -632,8 +632,8 @@ class TestAdversarialSelfReview:
         result = await loop.run(system_prompt="sys", user_input="Write code", self_review=True)
 
         # The self-review prompt should have been injected
-        user_msgs = [m for m in loop.messages if m["role"] == "user"]
-        review_msgs = [m for m in user_msgs if SELF_REVIEW_PROMPT in m["content"]]
+        user_msgs = [m for m in loop.messages if m.role == "user"]
+        review_msgs = [m for m in user_msgs if SELF_REVIEW_PROMPT in m.content]
         assert len(review_msgs) == 1
         assert result == "Reviewed. Everything looks correct."
 
@@ -648,8 +648,8 @@ class TestAdversarialSelfReview:
         result = await loop.run(system_prompt="sys", user_input="Do task")
 
         # No review prompt should be in messages
-        user_msgs = [m for m in loop.messages if m["role"] == "user"]
-        review_msgs = [m for m in user_msgs if SELF_REVIEW_PROMPT in m["content"]]
+        user_msgs = [m for m in loop.messages if m.role == "user"]
+        review_msgs = [m for m in user_msgs if SELF_REVIEW_PROMPT in m.content]
         assert len(review_msgs) == 0
         assert result == "Task complete."
 
@@ -677,7 +677,7 @@ class TestAdversarialSelfReview:
 
         assert result == "Fixed a bug I found during review."
         # Should have tool calls from the review phase
-        tool_msgs = [m for m in loop.messages if m["role"] == "tool"]
+        tool_msgs = [m for m in loop.messages if m.role == "tool"]
         assert len(tool_msgs) >= 1
 
 
@@ -1044,10 +1044,10 @@ class TestStatePersistencePerTurn:
         # assistant+tool (turn 2), assistant (final)
         assert len(loop.messages) >= 7
         # Each turn's tool result is persisted
-        tool_msgs = [m for m in loop.messages if m["role"] == "tool"]
+        tool_msgs = [m for m in loop.messages if m.role == "tool"]
         assert len(tool_msgs) == 2
         # All assistant messages are persisted
-        assistant_msgs = [m for m in loop.messages if m["role"] == "assistant"]
+        assistant_msgs = [m for m in loop.messages if m.role == "assistant"]
         assert len(assistant_msgs) == 3
 
 
@@ -1102,16 +1102,16 @@ class TestRealOllama:
         assert "Hello, Guild!" in content
 
         # Verify loop completed efficiently (not stuck looping)
-        generate_count = len([m for m in loop.messages if m.get("role") == "assistant"])
+        generate_count = len([m for m in loop.messages if m.role == "assistant"])
         assert generate_count <= 3, (
             f"Loop took {generate_count} turns — expected <= 3. "
-            f"Messages: {[m.get('role') for m in loop.messages]}"
+            f"Messages: {[m.role for m in loop.messages]}"
         )
 
         # Verify no duplicate tool calls
         tool_calls_seen: list[dict] = []
         for msg in loop.messages:
-            if msg.get("role") == "assistant" and msg.get("tool_calls"):
-                for tc in msg["tool_calls"]:
+            if msg.role == "assistant" and msg.tool_calls:
+                for tc in msg.tool_calls:
                     assert tc not in tool_calls_seen, f"Duplicate tool call detected: {tc}"
                     tool_calls_seen.append(tc)

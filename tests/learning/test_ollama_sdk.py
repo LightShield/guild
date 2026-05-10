@@ -9,8 +9,6 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
-
 import pytest
 from ollama import AsyncClient, ChatResponse, ListResponse, Message
 

@@ -189,10 +189,8 @@ async def persist_task_result(
     )
 
     for msg in loop.messages:
-        role = msg.get("role", "")
-        content = msg.get("content", "")
-        if role and content:
-            await store.append_message(agent_id, role, content)
+        if msg.role and msg.content:
+            await store.append_message(agent_id, msg.role, msg.content)
 
     await store.log_audit(
         action="task_completed",

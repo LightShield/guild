@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import copy
+
 import pytest
 
 from guild.agent.context import (
@@ -10,17 +12,18 @@ from guild.agent.context import (
     TRUNCATION_MARKER,
     ContextManager,
 )
+from guild.agent.message import Message
 
 
 def _make_messages(
     tool_content_len: int = 200,
     count: int = 10,
-) -> list[dict]:
+) -> list[Message]:
     """Build a message list with system + alternating assistant/tool messages."""
-    msgs: list[dict] = [{"role": "system", "content": "You are a helpful agent."}]
+    msgs: list[Message] = [Message(role="system", content="You are a helpful agent.")]
     for i in range(count):
-        msgs.append({"role": "assistant", "content": f"Calling tool {i}"})
-        msgs.append({"role": "tool", "content": "x" * tool_content_len})
+        msgs.append(Message(role="assistant", content=f"Calling tool {i}"))
+        msgs.append(Message(role="tool", content="x" * tool_content_len))
     return msgs
 
 
@@ -33,8 +36,8 @@ class TestEstimateTokens:
         """Token count equals total chars / CHARS_PER_TOKEN."""
         cm = ContextManager()
         messages = [
-            {"role": "system", "content": "a" * 100},
-            {"role": "user", "content": "b" * 200},
+            Message(role="system", content="a" * 100),
+            Message(role="user", content="b" * 200),
         ]
         expected = (100 + 200) // CHARS_PER_TOKEN
         assert cm.estimate_tokens(messages) == expected
@@ -54,14 +57,14 @@ class TestNeedsCompaction:
         """Returns False when token count is below 70% of max."""
         cm = ContextManager(max_tokens=1000, compact_threshold=0.7)
         # 100 chars = 25 tokens, well under 700 threshold
-        messages = [{"role": "user", "content": "a" * 100}]
+        messages = [Message(role="user", content="a" * 100)]
         assert cm.needs_compaction(messages) is False
 
     def test_needs_compaction_true_when_over_threshold(self) -> None:
         """Returns True when token count meets or exceeds threshold."""
         cm = ContextManager(max_tokens=100, compact_threshold=0.7)
         # 280 chars = 70 tokens, at the 70% threshold of 100
-        messages = [{"role": "user", "content": "a" * 280}]
+        messages = [Message(role="user", content="a" * 280)]
         assert cm.needs_compaction(messages) is True
 
 
@@ -80,33 +83,33 @@ class TestCompact:
         # Find old (non-protected) tool messages — they should be truncated
         protected_start = len(result) - 2
         for i, msg in enumerate(result):
-            if msg["role"] == "tool" and i < protected_start:
-                assert len(msg["content"]) <= MIN_CONTENT_LEN + len(TRUNCATION_MARKER)
+            if msg.role == "tool" and i < protected_start:
+                assert len(msg.content) <= MIN_CONTENT_LEN + len(TRUNCATION_MARKER)
 
     def test_compact_preserves_system_prompt(self) -> None:
         """System prompt (first message) is never truncated."""
         long_system = "You are a helpful agent. " * 100
         cm = ContextManager(max_tokens=50, preserve_recent=2, compact_threshold=0.7)
         messages = [
-            {"role": "system", "content": long_system},
-            {"role": "assistant", "content": "ok"},
-            {"role": "tool", "content": "x" * 500},
-            {"role": "assistant", "content": "done"},
+            Message(role="system", content=long_system),
+            Message(role="assistant", content="ok"),
+            Message(role="tool", content="x" * 500),
+            Message(role="assistant", content="done"),
         ]
         result = cm.compact(messages)
-        assert result[0]["content"] == long_system
+        assert result[0].content == long_system
 
     def test_compact_preserves_recent_messages(self) -> None:
         """Recent N messages are preserved unchanged."""
         cm = ContextManager(max_tokens=100, preserve_recent=4, compact_threshold=0.7)
         messages = _make_messages(tool_content_len=300, count=6)
-        original_recent = [m.copy() for m in messages[-4:]]
+        original_recent = [copy.copy(m) for m in messages[-4:]]
 
         result = cm.compact(messages)
 
         for orig, compacted in zip(original_recent, result[-4:], strict=True):
-            assert compacted["content"] == orig["content"]
-            assert compacted["role"] == orig["role"]
+            assert compacted.content == orig.content
+            assert compacted.role == orig.role
 
     def test_compact_does_not_remove_messages(self) -> None:
         """Compaction never removes messages from the list."""
@@ -122,11 +125,11 @@ class TestCompact:
         """Compaction creates a deep copy, leaving input unchanged."""
         cm = ContextManager(max_tokens=50, preserve_recent=2, compact_threshold=0.7)
         messages = _make_messages(tool_content_len=500, count=4)
-        original_content = messages[2]["content"]
+        original_content = messages[2].content
 
         cm.compact(messages)
 
-        assert messages[2]["content"] == original_content
+        assert messages[2].content == original_content
 
 
 @pytest.mark.unit
@@ -138,8 +141,8 @@ class TestHandoffArtifact:
         """Handoff artifact contains the original task description."""
         cm = ContextManager()
         messages = [
-            {"role": "system", "content": "sys"},
-            {"role": "user", "content": "do stuff"},
+            Message(role="system", content="sys"),
+            Message(role="user", content="do stuff"),
         ]
         artifact = cm.create_handoff_artifact(messages, "Implement feature X")
         assert "Implement feature X" in artifact
@@ -148,9 +151,9 @@ class TestHandoffArtifact:
         """Handoff artifact includes decisions from assistant messages."""
         cm = ContextManager()
         messages = [
-            {"role": "system", "content": "sys"},
-            {"role": "assistant", "content": "Decision: use async approach"},
-            {"role": "tool", "content": "file written"},
+            Message(role="system", content="sys"),
+            Message(role="assistant", content="Decision: use async approach"),
+            Message(role="tool", content="file written"),
         ]
         artifact = cm.create_handoff_artifact(messages, "Build API")
         assert "Decision: use async approach" in artifact
@@ -159,9 +162,9 @@ class TestHandoffArtifact:
         """Handoff artifact includes completed tool actions."""
         cm = ContextManager()
         messages = [
-            {"role": "system", "content": "sys"},
-            {"role": "tool", "content": "Created file src/main.py"},
-            {"role": "tool", "content": "Wrote 150 chars to config.yaml"},
+            Message(role="system", content="sys"),
+            Message(role="tool", content="Created file src/main.py"),
+            Message(role="tool", content="Wrote 150 chars to config.yaml"),
         ]
         artifact = cm.create_handoff_artifact(messages, "Setup project")
         assert "Created file src/main.py" in artifact

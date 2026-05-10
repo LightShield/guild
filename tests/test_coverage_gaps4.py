@@ -10,6 +10,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from guild.agent.message import Message
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -701,11 +703,11 @@ class TestContextManagerEmptyContentBranch:
 
         cm = ContextManager()
         messages = [
-            {"role": "system", "content": ""},
-            {"role": "user", "content": ""},
-            {"role": "tool", "content": None},
+            Message(role="system", content=""),
+            Message(role="user", content=""),
+            Message(role="tool", content=""),
         ]
-        # All empty/None content — should be 0 tokens
+        # All empty content — should be 0 tokens
         assert cm.estimate_tokens(messages) == 0
 
     def test_compact_empty_messages_returns_empty(self) -> None:
@@ -722,15 +724,15 @@ class TestContextManagerEmptyContentBranch:
 
         cm = ContextManager(max_tokens=10000, preserve_recent=2)
         messages = [
-            {"role": "system", "content": "Hello"},
-            {"role": "tool", "content": "short"},
-            {"role": "user", "content": "hi"},
-            {"role": "assistant", "content": "bye"},
+            Message(role="system", content="Hello"),
+            Message(role="tool", content="short"),
+            Message(role="user", content="hi"),
+            Message(role="assistant", content="bye"),
         ]
         # These are very short — within threshold, so no truncation needed
         result = cm.compact(messages)
         # Content should be unchanged
-        assert result[1]["content"] == "short"
+        assert result[1].content == "short"
 
     def test_protected_indices_no_system_prompt(self) -> None:
         """When first message is not system, index 0 is not protected (151->154)."""
@@ -738,10 +740,10 @@ class TestContextManagerEmptyContentBranch:
 
         cm = ContextManager(preserve_recent=2)
         messages = [
-            {"role": "user", "content": "first"},
-            {"role": "assistant", "content": "second"},
-            {"role": "tool", "content": "third"},
-            {"role": "user", "content": "fourth"},
+            Message(role="user", content="first"),
+            Message(role="assistant", content="second"),
+            Message(role="tool", content="third"),
+            Message(role="user", content="fourth"),
         ]
         protected = cm._protected_indices(messages)
         # Index 0 is NOT protected since role != "system"
@@ -755,10 +757,10 @@ class TestContextManagerEmptyContentBranch:
         from guild.agent.context import MIN_CONTENT_LEN, ContextManager
 
         cm = ContextManager()
-        msg = {"role": "tool", "content": "short"}
+        msg = Message(role="tool", content="short")
         assert len("short") <= MIN_CONTENT_LEN
-        result = cm._truncate_message(msg)
-        assert result["content"] == "short"
+        cm._truncate_message(msg)
+        assert msg.content == "short"
 
     def test_extract_decisions_finds_decision_prefix(self) -> None:
         """_extract_decisions finds lines starting with 'Decision:' (line 177->175)."""
@@ -766,8 +768,8 @@ class TestContextManagerEmptyContentBranch:
 
         cm = ContextManager()
         messages = [
-            {"role": "assistant", "content": "Decision: use SQLite\nOther line"},
-            {"role": "user", "content": "ok"},
+            Message(role="assistant", content="Decision: use SQLite\nOther line"),
+            Message(role="user", content="ok"),
         ]
         decisions = cm._extract_decisions(messages)
         assert len(decisions) == 1
@@ -779,8 +781,8 @@ class TestContextManagerEmptyContentBranch:
 
         cm = ContextManager()
         messages = [
-            {"role": "tool", "content": "\nsecond line here"},
-            {"role": "tool", "content": ""},
+            Message(role="tool", content="\nsecond line here"),
+            Message(role="tool", content=""),
         ]
         actions = cm._extract_completed_actions(messages)
         # First message: first_line is "" (empty after split/strip) — skipped
@@ -930,7 +932,7 @@ class TestAgentLoopUncoveredBranches:
         assert result is None
         assert loop._recovery_attempted is True
         # Should have appended recovery prompt
-        assert any("stuck" in msg.get("content", "").lower() for msg in loop.messages)
+        assert any("stuck" in msg.content.lower() for msg in loop.messages)
 
 
 # ======================================================================

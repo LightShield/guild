@@ -13,6 +13,7 @@ from guild.agent.completion import (
     is_duplicate_call,
     should_nudge_completion,
 )
+from guild.agent.message import Message
 from guild.tools.base import TOOL_SCHEMAS, ToolResult
 
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
@@ -78,7 +79,7 @@ class AgentLoop:
         self.max_turns = max_turns
         self.stuck_detector = stuck_detector
         self.token_budget = token_budget
-        self.messages: list[dict[str, Any]] = []
+        self.messages: list[Message] = []
         self.recent_tool_calls: list[dict[str, Any]] = []
         self._task_description: str = ""
         self._attempted_tools: list[str] = []
@@ -103,8 +104,8 @@ class AgentLoop:
         Returns the final text content from the model.
         """
         self.messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_input},
+            Message(role="system", content=system_prompt),
+            Message(role="user", content=user_input),
         ]
         self.recent_tool_calls = []
         self._task_description = user_input
@@ -131,7 +132,7 @@ class AgentLoop:
         """
         if not self.messages:
             raise RuntimeError("Must call run() before send().")
-        self.messages.append({"role": "user", "content": user_input})
+        self.messages.append(Message(role="user", content=user_input))
         self.recent_tool_calls = []
         return await self._execute_turns()
 
@@ -146,7 +147,8 @@ class AgentLoop:
                 logger.info("Token budget exceeded, stopping loop")
                 break
 
-            response = await self.provider.generate(self.messages, tools=tool_schemas)
+            raw_messages = [m.to_dict() for m in self.messages]
+            response = await self.provider.generate(raw_messages, tools=tool_schemas)
             last_content = response.content or ""
 
             # Track token usage (REQ-10.1)
@@ -176,7 +178,7 @@ class AgentLoop:
 
             # Fix B: Inject completion nudge if appropriate
             if should_nudge_completion(turn_results):
-                self.messages.append({"role": "user", "content": COMPLETION_NUDGE})
+                self.messages.append(Message(role="user", content=COMPLETION_NUDGE))
 
         return last_content
 
@@ -223,7 +225,7 @@ class AgentLoop:
         logger.info("Stuck detected (%s), attempting recovery", reason)
         if self.stuck_detector:
             self.stuck_detector.reset()
-        self.messages.append({"role": "user", "content": STUCK_RECOVERY_PROMPT})
+        self.messages.append(Message(role="user", content=STUCK_RECOVERY_PROMPT))
         return None  # Continue the loop
 
     def _produce_escalation(self) -> str:
@@ -236,12 +238,12 @@ class AgentLoop:
             reason=reason,
             need="Human guidance to resolve the blocking issue",
         )
-        self.messages.append({"role": "assistant", "content": escalation})
+        self.messages.append(Message(role="assistant", content=escalation))
         return escalation
 
     async def _run_self_review(self) -> str:
         """Inject self-review prompt and execute one more round."""
-        self.messages.append({"role": "user", "content": SELF_REVIEW_PROMPT})
+        self.messages.append(Message(role="user", content=SELF_REVIEW_PROMPT))
         self.recent_tool_calls = []
         return await self._execute_turns()
 
@@ -257,7 +259,7 @@ class AgentLoop:
             # Fix C: Deduplication guard
             if is_duplicate_call(call, self.recent_tool_calls):
                 logger.info("Skipping duplicate call: %s", tool_name)
-                self.messages.append({"role": "tool", "content": DEDUP_MESSAGE})
+                self.messages.append(Message(role="tool", content=DEDUP_MESSAGE))
                 results.append(ToolResult(success=True, output=DEDUP_MESSAGE))
                 continue
 
@@ -271,7 +273,7 @@ class AgentLoop:
 
             # Fix A: Format and append result
             formatted = format_tool_result(tool_name, result)
-            self.messages.append({"role": "tool", "content": formatted})
+            self.messages.append(Message(role="tool", content=formatted))
 
         return results
 
@@ -294,12 +296,13 @@ class AgentLoop:
             logger.exception("Tool %s raised an exception", tool_name)
             return ToolResult(success=False, output="", error=f"Tool execution failed: {exc}")
 
-    def _build_assistant_message(self, response: LLMResponse) -> dict[str, Any]:
-        """Build an assistant message dict from the LLM response."""
-        msg: dict[str, Any] = {"role": "assistant", "content": response.content or ""}
-        if response.tool_calls:
-            msg["tool_calls"] = response.tool_calls
-        return msg
+    def _build_assistant_message(self, response: LLMResponse) -> Message:
+        """Build an assistant Message from the LLM response."""
+        return Message(
+            role="assistant",
+            content=response.content or "",
+            tool_calls=response.tool_calls if response.tool_calls else None,
+        )
 
     def _get_tool_schemas(self) -> list[dict[str, Any]]:
         """Get tool schemas for tools we have executors for, in Ollama format."""

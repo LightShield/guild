@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import asdict, dataclass
-from typing import TYPE_CHECKING
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
+
+from guild.agent.message import Message
 
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from guild.storage.sqlite import Storage
@@ -26,7 +28,7 @@ class Checkpoint:
 
     agent_id: str
     task_id: str | None
-    messages: list[dict]
+    messages: list[Message]
     turn_number: int
     total_input_tokens: int
     total_output_tokens: int
@@ -34,7 +36,16 @@ class Checkpoint:
 
     def to_json(self) -> str:
         """Serialize checkpoint to JSON string."""
-        return json.dumps(asdict(self))
+        data: dict[str, Any] = {
+            "agent_id": self.agent_id,
+            "task_id": self.task_id,
+            "messages": [m.to_dict() for m in self.messages],
+            "turn_number": self.turn_number,
+            "total_input_tokens": self.total_input_tokens,
+            "total_output_tokens": self.total_output_tokens,
+            "total_tool_calls": self.total_tool_calls,
+        }
+        return json.dumps(data)
 
     @classmethod
     def from_json(cls, data: str) -> Checkpoint:
@@ -43,7 +54,7 @@ class Checkpoint:
         return cls(
             agent_id=parsed["agent_id"],
             task_id=parsed["task_id"],
-            messages=parsed["messages"],
+            messages=[Message.from_dict(m) for m in parsed["messages"]],
             turn_number=parsed["turn_number"],
             total_input_tokens=parsed["total_input_tokens"],
             total_output_tokens=parsed["total_output_tokens"],
@@ -103,7 +114,7 @@ async def recover_from_checkpoint(
         token_budget=0,
     )
 
-    # Restore state from checkpoint
+    # Restore state from checkpoint (messages are already Message objects)
     loop.messages = list(checkpoint.messages)
     loop.total_input_tokens = checkpoint.total_input_tokens
     loop.total_output_tokens = checkpoint.total_output_tokens
