@@ -21,6 +21,11 @@ __all__ = ["Storage"]
 
 logger = logging.getLogger(__name__)
 
+CONFIDENCE_VALIDATE_INCREMENT = 0.1
+CONFIDENCE_INVALIDATE_DECREMENT = 0.15
+CONFIDENCE_DECAY_DECREMENT = 0.05
+MEMORY_SUMMARY_MAX_CHARS = 200
+
 _SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS tasks (
     task_id TEXT PRIMARY KEY,
@@ -430,31 +435,31 @@ class Storage:
         return [dict(r) for r in rows]
 
     async def validate_learning(self, learning_id: int) -> None:
-        """Increase confidence by 0.1 (capped at 1.0), update validation."""
+        """Increase confidence by CONFIDENCE_VALIDATE_INCREMENT (capped at 1.0)."""
         if self._db is None:
             raise RuntimeError("Storage not connected. Call connect() first.")
         await self._db.execute(
             "UPDATE learnings SET"
-            " confidence = MIN(confidence + 0.1, 1.0),"
+            " confidence = MIN(confidence + ?, 1.0),"
             " last_validated = ?,"
             " validation_count = validation_count + 1"
             " WHERE id = ?",
-            (_now(), learning_id),
+            (CONFIDENCE_VALIDATE_INCREMENT, _now(), learning_id),
         )
         await self._db.commit()
 
     async def invalidate_learning(self, learning_id: int) -> None:
-        """Decrease confidence by 0.15 (floored at 0.0)."""
+        """Decrease confidence by CONFIDENCE_INVALIDATE_DECREMENT (floored at 0.0)."""
         if self._db is None:
             raise RuntimeError("Storage not connected. Call connect() first.")
         await self._db.execute(
-            "UPDATE learnings SET" " confidence = MAX(confidence - 0.15, 0.0)" " WHERE id = ?",
-            (learning_id,),
+            "UPDATE learnings SET confidence = MAX(confidence - ?, 0.0) WHERE id = ?",
+            (CONFIDENCE_INVALIDATE_DECREMENT, learning_id),
         )
         await self._db.commit()
 
     async def decay_learnings(self, days_since_validation: int = 30) -> int:
-        """Decay confidence by 0.05 for learnings unvalidated for N days.
+        """Decay confidence by CONFIDENCE_DECAY_DECREMENT for learnings unvalidated for N days.
 
         Returns the number of affected rows.
         """
@@ -464,10 +469,10 @@ class Storage:
 
         cutoff = (datetime.now(UTC) - timedelta(days=days_since_validation)).isoformat()
         cursor = await self._db.execute(
-            "UPDATE learnings SET confidence = MAX(confidence - 0.05, 0.0)"
+            "UPDATE learnings SET confidence = MAX(confidence - ?, 0.0)"
             " WHERE (last_validated IS NULL OR last_validated < ?)"
             " AND created_at < ?",
-            (cutoff, cutoff),
+            (CONFIDENCE_DECAY_DECREMENT, cutoff, cutoff),
         )
         await self._db.commit()
         return cursor.rowcount
@@ -624,7 +629,7 @@ class Storage:
             "INSERT INTO memories"
             " (id, summary, content, category, verified, last_verified, created_at)"
             " VALUES (?, ?, ?, ?, 0, NULL, ?)",
-            (memory_id, summary[:200], content, category, _now()),
+            (memory_id, summary[:MEMORY_SUMMARY_MAX_CHARS], content, category, _now()),
         )
         await self._db.commit()
         return memory_id

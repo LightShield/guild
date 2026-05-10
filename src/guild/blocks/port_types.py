@@ -11,6 +11,7 @@ if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from guild.blocks.registry import BlockRegistry
 
 __all__ = [
+    "PORT_TYPE_ANY",
     "PORT_TYPE_REGISTRY",
     "PORT_TYPES",
     "PortTypeSchema",
@@ -19,6 +20,8 @@ __all__ = [
     "register_port_type",
     "validate_port_data",
 ]
+
+PORT_TYPE_ANY = "any"
 
 
 @dataclass
@@ -41,7 +44,7 @@ PORT_TYPES: set[str] = {
     "test-results",
     "text",
     "files",
-    "any",
+    PORT_TYPE_ANY,
 }
 
 
@@ -65,7 +68,7 @@ def check_port_compatibility(source_type: str, target_type: str) -> bool:
     'any' is compatible with everything.
     Otherwise types must match exactly.
     """
-    if source_type == "any" or target_type == "any":
+    if source_type == PORT_TYPE_ANY or target_type == PORT_TYPE_ANY:
         return True
     return source_type == target_type
 

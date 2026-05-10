@@ -24,6 +24,8 @@ if TYPE_CHECKING:  # pragma: no cover — type-checking only
 __all__ = [
     "AgentStatus",
     "BlockError",
+    "DECISION_ESCALATE",
+    "DECISION_SKIP",
     "EscalationError",
     "EvaluatorResult",
     "TeamRunner",
@@ -33,6 +35,14 @@ logger = logging.getLogger(__name__)
 
 _DEFAULT_MAX_RETRIES = 1
 _DEFAULT_LOOP_MAX_ITERATIONS = 5
+
+DECISION_SKIP = "skip"
+DECISION_ESCALATE = "escalate"
+
+_EVAL_PASS_KEY = "pass"
+_EVAL_PASSED_KEY = "passed"
+_EVAL_SCORE_KEY = "score"
+_EVAL_FEEDBACK_KEY = "feedback"
 
 
 class AgentStatus(Enum):
@@ -271,12 +281,12 @@ class TeamRunner:
 
     def _apply_failure_policy(self, instance_name: str, err: BlockError) -> str:
         """Handle a failed block per caller decision (REQ-04.52)."""
-        decision = self._caller_decisions.get(instance_name, "escalate")
+        decision = self._caller_decisions.get(instance_name, DECISION_ESCALATE)
 
-        if decision == "skip":
+        if decision == DECISION_SKIP:
             logger.info("Skipping failed block '%s' per caller decision", instance_name)
             return f"[SKIPPED: {instance_name}]"
-        if decision == "escalate":
+        if decision == DECISION_ESCALATE:
             raise EscalationError(
                 f"Block '{instance_name}' failed and requires human intervention: {err}"
             )
@@ -358,10 +368,10 @@ class TeamRunner:
             return None
 
         # Normalize field names
-        passed = data.get("pass", data.get("passed", False))
-        score = int(data.get("score", 0))
-        feedback = str(data.get("feedback", ""))
-        excluded_keys = {"pass", "passed", "score", "feedback"}
+        passed = data.get(_EVAL_PASS_KEY, data.get(_EVAL_PASSED_KEY, False))
+        score = int(data.get(_EVAL_SCORE_KEY, 0))
+        feedback = str(data.get(_EVAL_FEEDBACK_KEY, ""))
+        excluded_keys = {_EVAL_PASS_KEY, _EVAL_PASSED_KEY, _EVAL_SCORE_KEY, _EVAL_FEEDBACK_KEY}
         details = {k: v for k, v in data.items() if k not in excluded_keys}
 
         return EvaluatorResult(

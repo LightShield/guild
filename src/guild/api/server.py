@@ -20,6 +20,8 @@ __all__ = ["API_ROUTES", "create_app"]
 
 logger = logging.getLogger(__name__)
 
+_WEBSOCKET_POLL_SECONDS = 2
+
 API_ROUTES: dict[str, str] = {
     "GET /api/status": "Project status, tasks, agents",
     "GET /api/tasks": "List all tasks",
@@ -242,7 +244,7 @@ def _register_websocket(app: Any, get_storage: Callable[[], Any]) -> None:
                 storage = get_storage()
                 data = await _get_current_status(storage)
                 await websocket.send_json(data)
-                await asyncio.sleep(2)
+                await asyncio.sleep(_WEBSOCKET_POLL_SECONDS)
         except WebSocketDisconnect:
             pass
         except Exception:

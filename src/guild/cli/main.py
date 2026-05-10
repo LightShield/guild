@@ -84,8 +84,15 @@ from guild.cli.task_runner import (
     run_task as _run_task,
 )
 from guild.cli.toml_utils import set_config_value as _set_config_value
-from guild.config.loader import DB_FILENAME, find_guild_dir, load_config
+from guild.config.loader import (
+    CONFIG_FILENAME,
+    DB_FILENAME,
+    GUILD_DIR_NAME,
+    find_guild_dir,
+    load_config,
+)
 from guild.permissions.checker import PermissionTier
+from guild.task.spec import TaskStatus
 
 __all__ = ["app"]
 
@@ -141,7 +148,7 @@ def init(
     """Initialize a new Guild project (.guild/ directory)."""
     target = (path or Path.cwd()).resolve()
 
-    guild_dir = target / ".guild"
+    guild_dir = target / GUILD_DIR_NAME
     if guild_dir.exists():
         console.print(f"[yellow]Already initialized:[/yellow] {guild_dir}")
         raise typer.Exit()
@@ -149,7 +156,7 @@ def init(
     guild_dir.mkdir(parents=True)
 
     # Write default config
-    config_path = guild_dir / "config.toml"
+    config_path = guild_dir / CONFIG_FILENAME
     config_path.write_text(_DEFAULT_CONFIG_TOML)
 
     # Create the database
@@ -265,7 +272,7 @@ def config_cmd(
         console.print("[red]Error:[/red] Not a guild project (no .guild/ found).")
         raise typer.Exit(code=1)
 
-    config_path = guild_dir / "config.toml"
+    config_path = guild_dir / CONFIG_FILENAME
 
     if set_value is not None:
         _set_config_value(config_path, set_value)
@@ -440,7 +447,7 @@ def ps_cmd() -> None:
     table.add_column("Status", style="green")
 
     for t in tasks:
-        table.add_row(t["task_id"], str(t["pid"]), "running")
+        table.add_row(t["task_id"], str(t["pid"]), TaskStatus.RUNNING.value)
 
     console.print(table)
 

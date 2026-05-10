@@ -16,12 +16,17 @@ if TYPE_CHECKING:  # pragma: no cover — type-checking only
 
 __all__ = [
     "LEARNER_PROMPT",
+    "LEARNING_CONTENT_MAX_CHARS",
+    "MIN_INJECTION_CONFIDENCE",
     "extract_learnings",
     "format_learnings_for_injection",
     "suggest_prompt_refinements",
 ]
 
 logger = logging.getLogger(__name__)
+
+LEARNING_CONTENT_MAX_CHARS = 500
+MIN_INJECTION_CONFIDENCE = 0.5
 
 LEARNER_PROMPT = (
     "Review the session log below. Extract useful knowledge as JSON lines.\n"
@@ -116,7 +121,7 @@ def format_learnings_for_injection(
     max_items sorted by confidence descending.
     """
     # Filter by minimum injection confidence
-    eligible = [item for item in learnings if item.get("confidence", 0) >= 0.5]
+    eligible = [item for item in learnings if item.get("confidence", 0) >= MIN_INJECTION_CONFIDENCE]
 
     # Sort by confidence descending and limit
     eligible.sort(key=lambda x: x.get("confidence", 0), reverse=True)
@@ -152,7 +157,7 @@ async def suggest_prompt_refinements(
         List of suggestion strings for prompt improvement.
     """
     learnings = await storage.list_learnings(
-        min_confidence=0.5,
+        min_confidence=MIN_INJECTION_CONFIDENCE,
         scope=block_name,
     )
 
@@ -177,8 +182,8 @@ def _format_session_log(messages: list[dict]) -> str:
         role = msg.get("role", "unknown")
         content = msg.get("content", "")
         # Truncate very long messages to keep prompt manageable
-        if len(content) > 500:
-            content = content[:500] + "..."
+        if len(content) > LEARNING_CONTENT_MAX_CHARS:
+            content = content[:LEARNING_CONTENT_MAX_CHARS] + "..."
         lines.append(f"[{role}] {content}")
     return "\n".join(lines)
 

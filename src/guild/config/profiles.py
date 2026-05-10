@@ -19,7 +19,9 @@ if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from guild.config.models import GuildConfig
 
 __all__ = [
+    "AGENTS_FILENAME",
     "AgentProfile",
+    "PERMISSIONS_FILENAME",
     "PermissionProfile",
     "load_agent_profiles",
     "load_permission_profiles",
@@ -27,6 +29,9 @@ __all__ = [
 ]
 
 logger = logging.getLogger(__name__)
+
+AGENTS_FILENAME = "agents.toml"
+PERMISSIONS_FILENAME = "permissions.toml"
 
 
 @dataclass
@@ -58,7 +63,7 @@ def load_agent_profiles(guild_dir: Path) -> dict[str, AgentProfile]:
     Each top-level key in the TOML is a profile name. Returns
     a dict mapping profile name to AgentProfile.
     """
-    agents_file = guild_dir / "agents.toml"
+    agents_file = guild_dir / AGENTS_FILENAME
     data = _load_toml(agents_file)
     if not data:
         return {}
@@ -77,7 +82,7 @@ def load_permission_profiles(guild_dir: Path) -> dict[str, PermissionProfile]:
     Each top-level key in the TOML is a profile name. Returns
     a dict mapping profile name to PermissionProfile.
     """
-    perms_file = guild_dir / "permissions.toml"
+    perms_file = guild_dir / PERMISSIONS_FILENAME
     data = _load_toml(perms_file)
     if not data:
         return {}

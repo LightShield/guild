@@ -16,9 +16,18 @@ from guild.config.models import GuildConfig
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from collections.abc import Callable
 
-__all__ = ["ConfigWatcher", "DB_FILENAME", "find_guild_dir", "load_config"]
+__all__ = [
+    "CONFIG_FILENAME",
+    "ConfigWatcher",
+    "DB_FILENAME",
+    "GUILD_DIR_NAME",
+    "find_guild_dir",
+    "load_config",
+]
 
 DB_FILENAME = "guild.db"
+CONFIG_FILENAME = "config.toml"
+GUILD_DIR_NAME = ".guild"
 _TEMP_FILE_PREFIX = "guild_config_"
 
 logger = logging.getLogger(__name__)
@@ -32,7 +41,7 @@ def find_guild_dir(start: Path | None = None) -> Path | None:
     current = (start or Path.cwd()).resolve()
 
     while True:
-        candidate = current / ".guild"
+        candidate = current / GUILD_DIR_NAME
         if candidate.is_dir():
             return candidate
 
@@ -52,8 +61,8 @@ def _merge_toml_files(guild_dir: Path | None) -> Path | None:
     Returns path to a merged temp file, or the single available file,
     or None if no config files exist.
     """
-    global_path = Path.home() / ".guild" / "config.toml"
-    project_path = guild_dir / "config.toml" if guild_dir else None
+    global_path = Path.home() / GUILD_DIR_NAME / CONFIG_FILENAME
+    project_path = guild_dir / CONFIG_FILENAME if guild_dir else None
 
     global_data = _load_toml_file(global_path)
     project_data = _load_toml_file(project_path) if project_path else {}

@@ -27,6 +27,8 @@ __all__ = [
 
 logger = logging.getLogger(__name__)
 
+_DEFAULT_CPU_THRESHOLD = 80.0
+
 
 class SchedulingMode(str, Enum):
     """Scheduling aggressiveness mode."""
@@ -75,7 +77,7 @@ def _default_activity_detector() -> (
         import psutil
 
         cpu = psutil.cpu_percent(interval=0.1)
-        if cpu > 80.0:
+        if cpu > _DEFAULT_CPU_THRESHOLD:
             return ActivityState.ACTIVE
     except ImportError:
         pass

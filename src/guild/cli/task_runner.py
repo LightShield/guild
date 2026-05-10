@@ -19,12 +19,14 @@ from guild.config.loader import DB_FILENAME
 from guild.task.spec import TaskStatus
 
 __all__ = [
+    "AGENT_ID_PREFIX_LEN",
     "GUILD_MASTER_PROMPT",
-    "create_resilient_provider",
+    "OLLAMA_PROVIDER_NAME",
     "build_system_prompt_with_learnings",
     "compute_max_turns",
     "create_chat_loop",
     "create_provider_for_backend",
+    "create_resilient_provider",
     "create_task_agent_loop",
     "extract_post_task_learnings",
     "persist_task_result",
@@ -43,7 +45,7 @@ def _parse_escalation_config(config: Any) -> tuple[list[str], list[str]]:
 
 def create_provider_for_backend(provider_name: str, base_url: str, model: str) -> Any:
     """Create an LLM provider by name, dispatching to the correct backend."""
-    if provider_name == "ollama":
+    if provider_name == OLLAMA_PROVIDER_NAME:
         from guild.provider.ollama import create_provider
 
         return create_provider(base_url, model)
@@ -53,7 +55,8 @@ def create_provider_for_backend(provider_name: str, base_url: str, model: str) -
 _SECONDS_PER_TURN_ESTIMATE = 10
 _MIN_TURNS = 5
 _MAX_TURNS_CAP = 200
-_LEARNING_MIN_CONFIDENCE = 0.5
+AGENT_ID_PREFIX_LEN = 8
+OLLAMA_PROVIDER_NAME = "ollama"
 
 
 def create_chat_loop(config: Any, working_dir: str, permission: str) -> Any:
@@ -173,9 +176,9 @@ async def build_system_prompt_with_learnings(store: Any) -> str:
     """Build the system prompt, injecting high-confidence learnings (REQ-09.4)."""
     system_prompt = GUILD_MASTER_PROMPT
     try:
-        from guild.agent.learning import format_learnings_for_injection
+        from guild.agent.learning import MIN_INJECTION_CONFIDENCE, format_learnings_for_injection
 
-        existing_learnings = await store.list_learnings(min_confidence=_LEARNING_MIN_CONFIDENCE)
+        existing_learnings = await store.list_learnings(min_confidence=MIN_INJECTION_CONFIDENCE)
         injection = format_learnings_for_injection(existing_learnings)
         if injection:
             system_prompt = f"{system_prompt}\n\n{injection}"
@@ -186,7 +189,7 @@ async def build_system_prompt_with_learnings(store: Any) -> str:
 
 def _generate_task_ids(task_id: str) -> tuple[str, str]:
     """Generate a task ID and its associated agent ID."""
-    agent_id = f"guild-master-{task_id[:8]}"
+    agent_id = f"guild-master-{task_id[:AGENT_ID_PREFIX_LEN]}"
     return task_id, agent_id
 
 

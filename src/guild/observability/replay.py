@@ -12,8 +12,11 @@ if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from guild.storage.sqlite import Storage
 
 __all__ = [
+    "REPLAY_CONTENT_MAX_CHARS",
     "SessionReplay",
 ]
+
+REPLAY_CONTENT_MAX_CHARS = 500
 
 
 class SessionReplay:
@@ -82,7 +85,11 @@ class SessionReplay:
             role = msg.get("role", "unknown").upper()
             content = msg.get("content", "")
             # Truncate very long content for display
-            display_content = content[:500] if len(content) > 500 else content
+            display_content = (
+                content[:REPLAY_CONTENT_MAX_CHARS]
+                if len(content) > REPLAY_CONTENT_MAX_CHARS
+                else content
+            )
             lines.append(f"[{role}] {display_content}")
             lines.append("---")
 

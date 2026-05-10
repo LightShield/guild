@@ -6,9 +6,19 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
-__all__ = ["WorktreeInfo", "WorktreeManager"]
+__all__ = [
+    "BRANCH_PREFIX",
+    "STAGING_BRANCH_SUFFIX",
+    "STAGING_DIR_NAME",
+    "WorktreeInfo",
+    "WorktreeManager",
+]
 
 logger = logging.getLogger(__name__)
+
+BRANCH_PREFIX = "guild/"
+STAGING_BRANCH_SUFFIX = "staging"
+STAGING_DIR_NAME = "_staging"
 
 
 @dataclass
@@ -42,7 +52,7 @@ class WorktreeManager:
         Creates branch: guild/<task_id>
         Creates worktree at: .guild/worktrees/<task_id>/
         """
-        branch = f"guild/{task_id}"
+        branch = f"{BRANCH_PREFIX}{task_id}"
         worktree_path = self.worktrees_dir / task_id
 
         worktree_path.parent.mkdir(parents=True, exist_ok=True)
@@ -70,7 +80,7 @@ class WorktreeManager:
     async def remove(self, task_id: str) -> None:
         """Remove a worktree after task completion."""
         worktree_path = self.worktrees_dir / task_id
-        branch = f"guild/{task_id}"
+        branch = f"{BRANCH_PREFIX}{task_id}"
 
         exit_code, output = await self._run_git("worktree", "remove", "--force", str(worktree_path))
         if exit_code != 0:
@@ -89,10 +99,10 @@ class WorktreeManager:
         return self._parse_worktree_list(output)
 
     async def merge_to_staging(
-        self, task_id: str, staging_branch: str = "guild/staging"
+        self, task_id: str, staging_branch: str = f"{BRANCH_PREFIX}{STAGING_BRANCH_SUFFIX}"
     ) -> tuple[bool, str]:
         """Merge task branch to staging. Returns (success, message)."""
-        branch = f"guild/{task_id}"
+        branch = f"{BRANCH_PREFIX}{task_id}"
 
         # Ensure staging branch exists
         await self._ensure_staging_branch(staging_branch)
@@ -143,16 +153,16 @@ class WorktreeManager:
     @staticmethod
     def _maybe_append_worktree(worktrees: list[WorktreeInfo], path: Path, branch: str) -> None:
         """Append a WorktreeInfo if the branch is a guild task (not staging)."""
-        if not branch.startswith("guild/"):
+        if not branch.startswith(BRANCH_PREFIX):
             return
-        task_id = branch[len("guild/") :]
-        if task_id == "staging":
+        task_id = branch[len(BRANCH_PREFIX) :]
+        if task_id == STAGING_BRANCH_SUFFIX:
             return
         worktrees.append(WorktreeInfo(path=path, branch=branch, task_id=task_id, created_at=""))
 
     async def _ensure_staging_branch(self, staging_branch: str) -> None:
         """Ensure the staging branch and its worktree exist."""
-        staging_path = self.worktrees_dir / "_staging"
+        staging_path = self.worktrees_dir / STAGING_DIR_NAME
 
         if staging_path.exists():
             return
@@ -185,7 +195,7 @@ class WorktreeManager:
 
     async def _staging_worktree_path(self, staging_branch: str) -> Path:
         """Get or create the staging worktree path."""
-        staging_path = self.worktrees_dir / "_staging"
+        staging_path = self.worktrees_dir / STAGING_DIR_NAME
         if not staging_path.exists():
             await self._ensure_staging_branch(staging_branch)
         return staging_path

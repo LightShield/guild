@@ -34,6 +34,7 @@ logger = logging.getLogger(__name__)
 _DURATION_REGRESSION_FACTOR = 2.0  # 2x slower = regression
 _TOKEN_REGRESSION_FACTOR = 2.0  # 2x more tokens = regression
 _TOOL_CALL_REGRESSION_FACTOR = 2.0  # 2x more tool calls = regression
+_EVAL_MAX_TURNS = 20
 
 
 @dataclass
@@ -121,7 +122,7 @@ class EvalFramework:
         ]
 
         try:
-            for _ in range(20):
+            for _ in range(_EVAL_MAX_TURNS):
                 turns += 1
                 raw_messages = [m.to_dict() for m in messages]
                 response: LLMResponse = await provider.generate(raw_messages)

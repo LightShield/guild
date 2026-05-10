@@ -13,9 +13,11 @@ from enum import Enum
 
 from guild.escalation.queue import QuestionPriority
 
-__all__ = ["NotificationChannel", "Notifier"]
+__all__ = ["NOTIFICATION_TITLE", "NotificationChannel", "Notifier"]
 
 logger = logging.getLogger(__name__)
+
+NOTIFICATION_TITLE = "Guild"
 
 
 class NotificationChannel(str, Enum):
@@ -73,7 +75,7 @@ class Notifier:
     async def _desktop(self, message: str) -> None:
         """Desktop notification (platform-specific)."""
         if sys.platform == "darwin":
-            script = f'display notification "{message}" ' f'with title "Guild"'
+            script = f'display notification "{message}" with title "{NOTIFICATION_TITLE}"'
             proc = await asyncio.create_subprocess_exec(
                 "osascript",
                 "-e",
@@ -85,7 +87,7 @@ class Notifier:
         elif sys.platform == "linux":
             proc = await asyncio.create_subprocess_exec(
                 "notify-send",
-                "Guild",
+                NOTIFICATION_TITLE,
                 message,
                 stdout=asyncio.subprocess.DEVNULL,
                 stderr=asyncio.subprocess.DEVNULL,

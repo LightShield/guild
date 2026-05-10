@@ -6,9 +6,11 @@ import logging
 from dataclasses import dataclass, field
 from pathlib import Path  # noqa: TC003 — used at runtime
 
-__all__ = ["SkillDef", "SkillRegistry"]
+__all__ = ["FRONTMATTER_DELIMITER", "SkillDef", "SkillRegistry"]
 
 logger = logging.getLogger(__name__)
+
+FRONTMATTER_DELIMITER = "---"
 
 
 @dataclass
@@ -29,8 +31,8 @@ class SkillDef:
         tools: list[str] = []
         prompt_content = content
 
-        if content.startswith("---"):
-            parts = content.split("---", 2)
+        if content.startswith(FRONTMATTER_DELIMITER):
+            parts = content.split(FRONTMATTER_DELIMITER, 2)
             if len(parts) >= 3:
                 frontmatter = parts[1]
                 prompt_content = parts[2].strip()

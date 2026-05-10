@@ -9,8 +9,12 @@ if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from guild.agent.message import Message
 
 __all__ = [
+    "ACTION_SUMMARY_MAX_CHARS",
     "CHARS_PER_TOKEN",
     "ContextManager",
+    "DEFAULT_COMPACT_THRESHOLD",
+    "DEFAULT_CONTEXT_MAX_TOKENS",
+    "DEFAULT_PRESERVE_RECENT",
     "MIN_CONTENT_LEN",
     "TRUNCATION_MARKER",
 ]
@@ -18,6 +22,10 @@ __all__ = [
 CHARS_PER_TOKEN = 4
 TRUNCATION_MARKER = "\n...[truncated]..."
 MIN_CONTENT_LEN = 50
+ACTION_SUMMARY_MAX_CHARS = 100
+DEFAULT_CONTEXT_MAX_TOKENS = 8000
+DEFAULT_PRESERVE_RECENT = 4
+DEFAULT_COMPACT_THRESHOLD = 0.7
 
 
 class ContextManager:
@@ -31,9 +39,9 @@ class ContextManager:
 
     def __init__(
         self,
-        max_tokens: int = 8000,
-        preserve_recent: int = 4,
-        compact_threshold: float = 0.7,
+        max_tokens: int = DEFAULT_CONTEXT_MAX_TOKENS,
+        preserve_recent: int = DEFAULT_PRESERVE_RECENT,
+        compact_threshold: float = DEFAULT_COMPACT_THRESHOLD,
     ) -> None:
         self.max_tokens = max_tokens
         self.preserve_recent = preserve_recent
@@ -185,5 +193,5 @@ class ContextManager:
             # Use first line as summary of what was done
             first_line = msg.content.split("\n")[0].strip()
             if first_line:
-                actions.append(first_line[:100])
+                actions.append(first_line[:ACTION_SUMMARY_MAX_CHARS])
         return actions
