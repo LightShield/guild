@@ -272,13 +272,11 @@ class EvalFramework:
         if result_b.metrics.task_completed and not result_a.metrics.task_completed:
             return "b"
 
-        # Compare duration (lower is better)
         if result_a.metrics.duration_seconds < result_b.metrics.duration_seconds:
             score_a += 1
         elif result_b.metrics.duration_seconds < result_a.metrics.duration_seconds:
             score_b += 1
 
-        # Compare tokens (lower is better)
         tokens_a = result_a.metrics.input_tokens + result_a.metrics.output_tokens
         tokens_b = result_b.metrics.input_tokens + result_b.metrics.output_tokens
         if tokens_a < tokens_b:

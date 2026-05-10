@@ -54,12 +54,11 @@ class SessionReplay:
             roles[role] = roles.get(role, 0) + 1
             if role == "tool":
                 tool_calls += 1
-            # Extract tool names from tool_calls JSON
             raw_tool_calls = msg.get("tool_calls")
             if raw_tool_calls:
                 self._extract_tool_names(raw_tool_calls, tools_used)
 
-        # Turn count = number of assistant messages (each is one LLM turn)
+        # Each assistant message is one LLM turn
         turn_count = roles.get("assistant", 0)
 
         return {

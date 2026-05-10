@@ -68,17 +68,14 @@ async def extract_learnings(
         logger.warning("extract_learnings: no messages for agent %s", agent_id)
         return []
 
-    # Build the session log for the learner
     session_log = _format_session_log(messages)
 
-    # Ask the LLM to extract learnings
     llm_messages = [
         {"role": "system", "content": LEARNER_PROMPT},
         {"role": "user", "content": session_log},
     ]
     response = await provider.generate(llm_messages)
 
-    # Parse JSON lines from response
     raw_lines = (response.content or "").strip().splitlines()
     stored: list[dict] = []
 
@@ -120,10 +117,8 @@ def format_learnings_for_injection(
     Filters to learnings with confidence >= 0.5, then takes the top
     max_items sorted by confidence descending.
     """
-    # Filter by minimum injection confidence
     eligible = [item for item in learnings if item.get("confidence", 0) >= MIN_INJECTION_CONFIDENCE]
 
-    # Sort by confidence descending and limit
     eligible.sort(key=lambda x: x.get("confidence", 0), reverse=True)
     eligible = eligible[:max_items]
 

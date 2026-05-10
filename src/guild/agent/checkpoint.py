@@ -114,7 +114,7 @@ async def recover_from_checkpoint(
         token_budget=0,
     )
 
-    # Restore state from checkpoint (messages are already Message objects)
+    # Messages are already Message objects from from_dict()
     loop.messages = list(checkpoint.messages)
     loop.total_input_tokens = checkpoint.total_input_tokens
     loop.total_output_tokens = checkpoint.total_output_tokens

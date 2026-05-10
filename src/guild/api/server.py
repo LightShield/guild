@@ -305,7 +305,7 @@ def create_app(
         if _injected_storage is not None:  # pragma: no cover — injected storage path for testing
             app.state.storage = _injected_storage
             app.state.guild_dir = _guild_dir
-            logger.info("API using injected storage")
+            logger.info("API using injected storage for %s", _guild_dir)
             yield
             return
         store = Storage(_db_path)
@@ -315,7 +315,7 @@ def create_app(
         logger.info("API storage connected: %s", _db_path)
         yield
         await store.close()
-        logger.info("API storage closed")
+        logger.info("API storage closed for %s", _db_path)
 
     app = FastAPI(title="Guild", version=__version__, lifespan=lifespan)
 

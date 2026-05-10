@@ -190,7 +190,6 @@ class ContextManager:
         for msg in messages:
             if msg.role != "tool":
                 continue
-            # Use first line as summary of what was done
             first_line = msg.content.split("\n")[0].strip()
             if first_line:
                 actions.append(first_line[:ACTION_SUMMARY_MAX_CHARS])

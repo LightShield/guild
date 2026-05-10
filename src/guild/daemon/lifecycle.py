@@ -82,11 +82,9 @@ class LifecycleManager:
             )
             os.kill(pid, signal.SIGKILL)
 
-        # Clean up PID file
         if pid_file.exists():
             pid_file.unlink()
 
-        # Update task status
         task = await self.storage.get_task(task_id)
         if task is not None:
             await self.storage.update_task(task_id, status=TaskStatus.KILLED)

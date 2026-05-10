@@ -156,27 +156,21 @@ class AgentLoop:
             response = await self.provider.generate(raw_messages, tools=tool_schemas)
             last_content = response.content or ""
 
-            # Track token usage (REQ-10.1)
             self.total_input_tokens += response.input_tokens
             self.total_output_tokens += response.output_tokens
 
-            # Append the assistant message
             assistant_msg = self._build_assistant_message(response)
             self.messages.append(assistant_msg)
 
-            # If no tool calls, we're done
             if not response.has_tool_call:
                 break
 
-            # Track tool calls for stuck detection and counting
             tool_calls = response.tool_calls or []
             self._track_tool_calls(tool_calls)
             self.total_tool_calls += len(tool_calls)
 
-            # Execute tool calls
             turn_results = await self._execute_tool_calls(tool_calls)
 
-            # Check stuck detection
             escalation = self._check_stuck(turn_results)
             if escalation is not None:
                 return escalation

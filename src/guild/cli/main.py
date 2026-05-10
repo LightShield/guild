@@ -275,7 +275,11 @@ def config_cmd(
     config_path = guild_dir / CONFIG_FILENAME
 
     if set_value is not None:
-        _set_config_value(config_path, set_value)
+        try:
+            _set_config_value(config_path, set_value)
+        except ValueError as exc:
+            console.print(f"[red]Error:[/red] {exc}")
+            raise typer.Exit(code=1) from exc
         console.print(f"[green]Updated:[/green] {set_value}")
         return
 

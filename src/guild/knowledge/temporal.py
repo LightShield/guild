@@ -152,6 +152,9 @@ class TemporalKnowledge:
 
     async def _run_cmd(self, cmd: str, cwd: str) -> str | None:
         """Run a shell command and return stdout, or None on failure."""
+        # Direct subprocess — this runs git commands for project state discovery,
+        # not user-requested shell execution. The shell tool's denylist is for
+        # user-initiated commands.
         try:
             proc = await asyncio.create_subprocess_shell(
                 cmd,

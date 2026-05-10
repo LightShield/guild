@@ -71,7 +71,7 @@ class DaemonSupervisor:
         self._original_sigint = signal.getsignal(signal.SIGINT)
         signal.signal(signal.SIGTERM, self._handle_shutdown_signal)
         signal.signal(signal.SIGINT, self._handle_shutdown_signal)
-        logger.debug("Signal handlers installed for SIGTERM and SIGINT")
+        logger.debug("Signal handlers installed for task %s", self.task_id)
 
     def restore_signal_handlers(self) -> None:
         """Restore original signal handlers."""
@@ -79,7 +79,7 @@ class DaemonSupervisor:
             signal.signal(signal.SIGTERM, self._original_sigterm)
         if self._original_sigint is not None:
             signal.signal(signal.SIGINT, self._original_sigint)
-        logger.debug("Original signal handlers restored")
+        logger.debug("Signal handlers restored for task %s", self.task_id)
 
     def _handle_shutdown_signal(self, signum: int, frame: Any) -> None:  # noqa: ARG002
         """Handle SIGTERM/SIGINT by setting shutdown flag and checkpointing."""

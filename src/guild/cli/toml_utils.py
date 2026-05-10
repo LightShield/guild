@@ -11,9 +11,6 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from pathlib import Path
 
-import typer
-from rich.console import Console
-
 __all__ = [
     "load_toml",
     "parse_value",
@@ -21,8 +18,6 @@ __all__ = [
     "toml_value",
     "write_toml",
 ]
-
-console = Console()
 
 
 def load_toml(path: Path) -> dict:
@@ -44,8 +39,7 @@ def set_config_value(config_path: Path, key_value: str) -> None:
     Supports dotted keys like 'provider.model=llama3'.
     """
     if "=" not in key_value:
-        console.print("[red]Error:[/red] Use format key=value")
-        raise typer.Exit(code=1)
+        raise ValueError("Use format key=value")
 
     key, value = key_value.split("=", 1)
     parts = key.strip().split(".")

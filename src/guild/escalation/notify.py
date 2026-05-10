@@ -103,6 +103,7 @@ class Notifier:
             return
 
         import json
+        import urllib.error
         from urllib.request import Request, urlopen
 
         payload = json.dumps({"text": message}).encode()
@@ -115,5 +116,5 @@ class Notifier:
         loop = asyncio.get_event_loop()
         try:
             await loop.run_in_executor(None, urlopen, req)
-        except Exception:
+        except (urllib.error.URLError, OSError):
             logger.exception("Webhook notification failed")

@@ -130,7 +130,7 @@ class TestWebhookEdgeCases:
             webhook_url="https://hooks.example.com/bad",
         )
         with patch("guild.escalation.notify.asyncio.get_event_loop") as mock_loop:
-            mock_executor = AsyncMock(side_effect=Exception("connection error"))
+            mock_executor = AsyncMock(side_effect=OSError("connection error"))
             mock_loop.return_value.run_in_executor = mock_executor
             # Should not raise
             with patch("guild.escalation.notify.logger"):
