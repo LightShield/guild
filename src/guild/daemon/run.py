@@ -36,46 +36,41 @@ async def _run_task(
     db_path = guild_dir / DB_FILENAME
 
     # Load task from storage
-    store = Storage(db_path)
-    await store.connect()
+    async with Storage(db_path) as store:
+        task = await store.get_task(task_id)
+        if task is None:
+            logger.error("Task %s not found in storage", task_id)
+            return
 
-    task = await store.get_task(task_id)
-    if task is None:
-        logger.error("Task %s not found in storage", task_id)
-        await store.close()
-        return
+        description = task["description"]
+        await store.update_task(task_id, status=TaskStatus.RUNNING)
 
-    description = task["description"]
-    await store.update_task(task_id, status=TaskStatus.RUNNING)
+        # Create provider and tools
+        provider = create_provider_for_backend(config.provider_name, config.base_url, config.model)
+        tool_executors = build_tool_executors()
 
-    # Create provider and tools
-    provider = create_provider_for_backend(config.provider_name, config.base_url, config.model)
-    tool_executors = build_tool_executors()
-
-    loop = AgentLoop(
-        provider=provider,
-        tool_executors=tool_executors,
-        working_dir=working_dir,
-        max_turns=DEFAULT_MAX_TURNS,
-    )
-
-    # Run under supervisor
-    run_dir = guild_dir / "run"
-    supervisor = DaemonSupervisor(run_dir=run_dir, task_id=task_id)
-
-    try:
-        result = await supervisor.run(loop.run(GUILD_MASTER_PROMPT, description))
-        await store.update_task(task_id, status=TaskStatus.COMPLETED, result=result)
-        await store.log_audit(
-            action="task_completed",
-            agent_id="guild-daemon",
-            details=f"task={task_id}",
+        loop = AgentLoop(
+            provider=provider,
+            tool_executors=tool_executors,
+            working_dir=working_dir,
+            max_turns=DEFAULT_MAX_TURNS,
         )
-    except Exception as exc:
-        logger.error("Task %s failed: %s", task_id, exc)
-        await store.update_task(task_id, status=TaskStatus.FAILED, result=str(exc))
-    finally:
-        await store.close()
+
+        # Run under supervisor
+        run_dir = guild_dir / "run"
+        supervisor = DaemonSupervisor(run_dir=run_dir, task_id=task_id)
+
+        try:
+            result = await supervisor.run(loop.run(GUILD_MASTER_PROMPT, description))
+            await store.update_task(task_id, status=TaskStatus.COMPLETED, result=result)
+            await store.log_audit(
+                action="task_completed",
+                agent_id="guild-daemon",
+                details=f"task={task_id}",
+            )
+        except Exception as exc:
+            logger.error("Task %s failed: %s", task_id, exc)
+            await store.update_task(task_id, status=TaskStatus.FAILED, result=str(exc))
 
 
 def main() -> None:  # pragma: no cover — CLI entry point boilerplate

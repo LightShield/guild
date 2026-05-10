@@ -37,10 +37,8 @@ def create_task_in_storage(guild_dir: Path, description: str) -> str:
     db_path = guild_dir / DB_FILENAME
 
     async def _create() -> None:
-        store = Storage(db_path)
-        await store.connect()
-        await store.create_task(task_id, description)
-        await store.close()
+        async with Storage(db_path) as store:
+            await store.create_task(task_id, description)
 
     asyncio.run(_create())
     return task_id
@@ -83,12 +81,9 @@ def kill_task(
     db_path = guild_dir / DB_FILENAME
 
     async def _do_kill() -> bool:
-        store = Storage(db_path)
-        await store.connect()
-        mgr = LifecycleManager(run_dir, store)
-        result = await mgr.kill_task(task_id)
-        await store.close()
-        return result
+        async with Storage(db_path) as store:
+            mgr = LifecycleManager(run_dir, store)
+            return await mgr.kill_task(task_id)
 
     return asyncio.run(_do_kill())
 
@@ -102,12 +97,9 @@ def kill_all_tasks(guild_dir: Path) -> int:  # pragma: no cover — requires run
     db_path = guild_dir / DB_FILENAME
 
     async def _do_kill_all() -> int:
-        store = Storage(db_path)
-        await store.connect()
-        mgr = LifecycleManager(run_dir, store)
-        count = await mgr.kill_all()
-        await store.close()
-        return count
+        async with Storage(db_path) as store:
+            mgr = LifecycleManager(run_dir, store)
+            return await mgr.kill_all()
 
     return asyncio.run(_do_kill_all())
 
@@ -123,12 +115,9 @@ def pause_task(
     db_path = guild_dir / DB_FILENAME
 
     async def _do_pause() -> bool:
-        store = Storage(db_path)
-        await store.connect()
-        mgr = LifecycleManager(run_dir, store)
-        result = await mgr.pause_task(task_id)
-        await store.close()
-        return result
+        async with Storage(db_path) as store:
+            mgr = LifecycleManager(run_dir, store)
+            return await mgr.pause_task(task_id)
 
     return asyncio.run(_do_pause())
 
@@ -144,11 +133,8 @@ def resume_task(
     db_path = guild_dir / DB_FILENAME
 
     async def _do_resume() -> bool:
-        store = Storage(db_path)
-        await store.connect()
-        mgr = LifecycleManager(run_dir, store)
-        result = await mgr.resume_task(task_id)
-        await store.close()
-        return result
+        async with Storage(db_path) as store:
+            mgr = LifecycleManager(run_dir, store)
+            return await mgr.resume_task(task_id)
 
     return asyncio.run(_do_resume())

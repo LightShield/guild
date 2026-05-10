@@ -729,9 +729,8 @@ def _init_database(db_path: Path) -> None:
     from guild.storage.sqlite import Storage
 
     async def _create() -> None:
-        store = Storage(db_path)
-        await store.connect()
-        await store.close()
+        async with Storage(db_path):
+            pass
 
     asyncio.run(_create())
 
@@ -741,12 +740,10 @@ def _get_counts(db_path: Path) -> tuple[int, int]:
     from guild.storage.sqlite import Storage
 
     async def _query() -> tuple[int, int]:
-        store = Storage(db_path)
-        await store.connect()
-        tasks = await store.list_tasks()
-        agents = await store.list_agents()
-        await store.close()
-        return len(tasks), len(agents)
+        async with Storage(db_path) as store:
+            tasks = await store.list_tasks()
+            agents = await store.list_agents()
+            return len(tasks), len(agents)
 
     if not db_path.exists():
         return 0, 0

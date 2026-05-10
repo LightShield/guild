@@ -35,11 +35,8 @@ async def fetch_audit(db_path: Path, limit: int) -> list[dict]:
     if not db_path.exists():  # pragma: no cover — defensive guard for missing db
         return []
 
-    store = Storage(db_path)
-    await store.connect()
-    entries = await store.list_audit(limit=limit)
-    await store.close()
-    return entries
+    async with Storage(db_path) as store:
+        return await store.list_audit(limit=limit)
 
 
 async def fetch_decisions(
@@ -53,11 +50,8 @@ async def fetch_decisions(
     if not db_path.exists():  # pragma: no cover — defensive guard for missing db
         return []
 
-    store = Storage(db_path)
-    await store.connect()
-    entries = await store.list_decisions(task_id=task_id, limit=limit)
-    await store.close()
-    return entries
+    async with Storage(db_path) as store:
+        return await store.list_decisions(task_id=task_id, limit=limit)
 
 
 async def fetch_task_history(db_path: Path, limit: int, status: str | None) -> list[dict]:
@@ -67,10 +61,8 @@ async def fetch_task_history(db_path: Path, limit: int, status: str | None) -> l
     if not db_path.exists():  # pragma: no cover — defensive guard for missing db
         return []
 
-    store = Storage(db_path)
-    await store.connect()
-    tasks = await store.list_tasks(status=status)
-    await store.close()
+    async with Storage(db_path) as store:
+        tasks = await store.list_tasks(status=status)
     # Return most recent first, capped at limit
     tasks.sort(key=lambda t: t.get("created_at", ""), reverse=True)
     return tasks[:limit]
@@ -83,11 +75,8 @@ async def fetch_token_summary(db_path: Path) -> dict | None:
     if not db_path.exists():  # pragma: no cover — defensive guard for missing db
         return None
 
-    store = Storage(db_path)
-    await store.connect()
-    summary = await store.get_token_summary()
-    await store.close()
-    return summary
+    async with Storage(db_path) as store:
+        return await store.get_token_summary()
 
 
 async def fetch_task_messages(guild_dir: Path, task_id: str) -> list[dict]:
@@ -98,23 +87,17 @@ async def fetch_task_messages(guild_dir: Path, task_id: str) -> list[dict]:
     if not db_path.exists():  # pragma: no cover — defensive guard for missing db
         return []
 
-    store = Storage(db_path)
-    await store.connect()
+    async with Storage(db_path) as store:
+        # Check if the task exists and has an assigned agent
+        task = await store.get_task(task_id)
+        if task is None:
+            return []
 
-    # Check if the task exists and has an assigned agent
-    task = await store.get_task(task_id)
-    if task is None:
-        await store.close()
-        return []
+        agent_id = task.get("assigned_agent")
+        if not agent_id:  # pragma: no cover — defensive guard for unassigned task
+            return []
 
-    agent_id = task.get("assigned_agent")
-    if not agent_id:  # pragma: no cover — defensive guard for unassigned task
-        await store.close()
-        return []
-
-    messages = await store.get_messages(agent_id)  # pragma: no cover — requires task with messages
-    await store.close()
-    return messages
+        return await store.get_messages(agent_id)  # pragma: no cover — requires task with messages
 
 
 # ------------------------------------------------------------------
@@ -133,42 +116,32 @@ async def fetch_learnings(
     if not db_path.exists():  # pragma: no cover — defensive guard for missing db
         return []
 
-    store = Storage(db_path)
-    await store.connect()
-    entries = await store.list_learnings(category=category, limit=limit)
-    await store.close()
-    return entries
+    async with Storage(db_path) as store:
+        return await store.list_learnings(category=category, limit=limit)
 
 
 async def approve_learning(db_path: Path, learning_id: int) -> None:
     """Validate (approve) a learning, boosting its confidence."""
     from guild.storage.sqlite import Storage
 
-    store = Storage(db_path)
-    await store.connect()
-    await store.validate_learning(learning_id)
-    await store.close()
+    async with Storage(db_path) as store:
+        await store.validate_learning(learning_id)
 
 
 async def reject_learning(db_path: Path, learning_id: int) -> None:
     """Delete a rejected learning."""
     from guild.storage.sqlite import Storage
 
-    store = Storage(db_path)
-    await store.connect()
-    await store.delete_learning(learning_id)
-    await store.close()
+    async with Storage(db_path) as store:
+        await store.delete_learning(learning_id)
 
 
 async def decay_learnings(db_path: Path) -> int:
     """Run decay on old unvalidated learnings."""
     from guild.storage.sqlite import Storage
 
-    store = Storage(db_path)
-    await store.connect()
-    count = await store.decay_learnings()
-    await store.close()
-    return count
+    async with Storage(db_path) as store:
+        return await store.decay_learnings()
 
 
 # ------------------------------------------------------------------
@@ -184,12 +157,9 @@ async def fetch_pending_questions(db_path: Path) -> list:
     if not db_path.exists():  # pragma: no cover — defensive guard for missing db
         return []
 
-    store = Storage(db_path)
-    await store.connect()
-    queue = QuestionQueue(store)
-    pending = await queue.get_pending()
-    await store.close()
-    return pending
+    async with Storage(db_path) as store:
+        queue = QuestionQueue(store)
+        return await queue.get_pending()
 
 
 async def answer_pending_question(db_path: Path, question_id: str, response: str) -> None:
@@ -197,8 +167,6 @@ async def answer_pending_question(db_path: Path, question_id: str, response: str
     from guild.escalation.queue import QuestionQueue
     from guild.storage.sqlite import Storage
 
-    store = Storage(db_path)
-    await store.connect()
-    queue = QuestionQueue(store)
-    await queue.answer_question(question_id, response)
-    await store.close()
+    async with Storage(db_path) as store:
+        queue = QuestionQueue(store)
+        await queue.answer_question(question_id, response)
