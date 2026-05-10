@@ -1,12 +1,16 @@
 """TOML configuration file utilities for the Guild CLI.
 
 Handles reading, writing, and modifying TOML config files with
-simple type preservation.
+simple type preservation.  Delegates TOML serialization to
+config/loader.py (the canonical lower-layer implementation).
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
+
+from guild.config.loader import toml_literal as toml_value
+from guild.config.loader import write_toml_bytes
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -76,28 +80,12 @@ def parse_value(value: str) -> str | int | float | bool:
 
 
 def write_toml(path: Path, data: dict) -> None:
-    """Write a dict to a TOML file (simple implementation)."""
-    lines: list[str] = []
-    # Separate top-level scalars from tables
-    scalars = {k: v for k, v in data.items() if not isinstance(v, dict)}
-    tables = {k: v for k, v in data.items() if isinstance(v, dict)}
+    """Write a dict to a TOML file.
 
-    for k, v in scalars.items():
-        lines.append(f"{k} = {toml_value(v)}")
+    Delegates to the canonical write_toml_bytes in config/loader.py.
+    """
+    import io
 
-    for section, values in tables.items():
-        lines.append(f"\n[{section}]")
-        for k, v in values.items():
-            lines.append(f"{k} = {toml_value(v)}")
-
-    lines.append("")  # trailing newline
-    path.write_text("\n".join(lines))
-
-
-def toml_value(value: Any) -> str:
-    """Format a Python value as a TOML literal."""
-    if isinstance(value, bool):
-        return "true" if value else "false"
-    if isinstance(value, str):
-        return f'"{value}"'
-    return str(value)
+    buf = io.BytesIO()
+    write_toml_bytes(buf, data)
+    path.write_text(buf.getvalue().decode())

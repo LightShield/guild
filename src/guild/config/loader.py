@@ -15,6 +15,7 @@ from guild.config.models import GuildConfig
 
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from collections.abc import Callable
+    from typing import IO, Any
 
 __all__ = [
     "CONFIG_FILENAME",
@@ -23,6 +24,8 @@ __all__ = [
     "GUILD_DIR_NAME",
     "find_guild_dir",
     "load_config",
+    "toml_literal",
+    "write_toml_bytes",
 ]
 
 DB_FILENAME = "guild.db"
@@ -85,7 +88,7 @@ def _merge_toml_files(guild_dir: Path | None) -> Path | None:
     with tempfile.NamedTemporaryFile(
         mode="wb", suffix=".toml", delete=False, prefix=_TEMP_FILE_PREFIX
     ) as tmp:
-        _write_toml_bytes(tmp, merged)
+        write_toml_bytes(tmp, merged)
     return Path(tmp.name)
 
 
@@ -112,31 +115,40 @@ def _deep_merge(base: dict, override: dict) -> dict:
     return result
 
 
-def _write_toml_bytes(f, data: dict) -> None:
-    """Write a dict as TOML bytes to a file handle."""
+def write_toml_bytes(f: IO[bytes], data: dict) -> None:
+    """Write a dict as TOML bytes to a file handle.
+
+    This is the canonical TOML serialization for Guild config.
+    Used by both the config merger and CLI toml_utils.
+    """
     lines: list[str] = []
     scalars = {k: v for k, v in data.items() if not isinstance(v, dict)}
     tables = {k: v for k, v in data.items() if isinstance(v, dict)}
 
     for k, v in scalars.items():
-        lines.append(f"{k} = {_toml_literal(v)}")
+        lines.append(f"{k} = {toml_literal(v)}")
 
     for section, values in tables.items():
         lines.append(f"\n[{section}]")
         for k, v in values.items():
-            lines.append(f"{k} = {_toml_literal(v)}")
+            lines.append(f"{k} = {toml_literal(v)}")
 
     lines.append("")
     f.write("\n".join(lines).encode())
 
 
-def _toml_literal(value) -> str:
+def toml_literal(value: Any) -> str:
     """Format a Python value as a TOML literal."""
     if isinstance(value, bool):
         return "true" if value else "false"
     if isinstance(value, str):
         return f'"{value}"'
     return str(value)
+
+
+# Backward-compatible aliases for tests/internal usage
+_write_toml_bytes = write_toml_bytes
+_toml_literal = toml_literal
 
 
 def load_config(

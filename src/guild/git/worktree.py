@@ -168,28 +168,22 @@ class WorktreeManager:
             return
 
         staging_path.parent.mkdir(parents=True, exist_ok=True)
+        branch_exists = await self._branch_exists(staging_branch)
+        await self._create_worktree(staging_path, staging_branch, branch_exists)
 
-        exit_code, _ = await self._run_git("rev-parse", "--verify", staging_branch)
+    async def _branch_exists(self, branch: str) -> bool:
+        """Check whether a git branch exists locally."""
+        exit_code, _ = await self._run_git("rev-parse", "--verify", branch)
+        return exit_code == 0
 
-        if exit_code != 0:
-            # Create orphan-style staging branch from current HEAD
-            exit_code, output = await self._run_git(
-                "worktree",
-                "add",
-                "-b",
-                staging_branch,
-                str(staging_path),
-                "HEAD",
-            )
+    async def _create_worktree(self, path: Path, branch: str, branch_exists: bool) -> None:
+        """Create a git worktree, creating the branch if needed."""
+        if branch_exists:
+            exit_code, output = await self._run_git("worktree", "add", str(path), branch)
         else:
-            # Branch exists, just add worktree
             exit_code, output = await self._run_git(
-                "worktree",
-                "add",
-                str(staging_path),
-                staging_branch,
+                "worktree", "add", "-b", branch, str(path), "HEAD"
             )
-
         if exit_code != 0:
             raise RuntimeError(f"Failed to create staging worktree: {output}")
 

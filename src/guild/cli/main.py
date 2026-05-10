@@ -407,6 +407,11 @@ def learnings(
         console.print("[dim]No learnings found.[/dim]")
         return
 
+    _display_learnings_table(entries)
+
+
+def _display_learnings_table(entries: list[dict]) -> None:
+    """Render the learnings list as a rich table."""
     table = Table(title="Learnings")
     table.add_column("ID", style="dim")
     table.add_column("Category", style="cyan")

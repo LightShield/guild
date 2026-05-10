@@ -681,12 +681,18 @@ class Storage:
         """
         if self._db is None:
             raise RuntimeError("Storage not connected. Call connect() first.")
+
+        changes = await self._remove_stale_memories(stale_days)
+        changes += await self._dedup_memories()
+        await self._db.commit()
+        return changes
+
+    async def _remove_stale_memories(self, stale_days: int) -> int:
+        """Delete unverified memories older than stale_days."""
         from datetime import timedelta
 
-        changes = 0
+        assert self._db is not None  # caller guarantees
         cutoff = (datetime.now(UTC) - timedelta(days=stale_days)).isoformat()
-
-        # Remove stale unverified entries
         cursor = await self._db.execute(
             "DELETE FROM memories"
             " WHERE verified = 0"
@@ -694,9 +700,12 @@ class Storage:
             " AND created_at < ?",
             (cutoff, cutoff),
         )
-        changes += cursor.rowcount
+        return cursor.rowcount
 
-        # Merge duplicate summaries: keep the most recently created, delete rest
+    async def _dedup_memories(self) -> int:
+        """Merge duplicate summaries: keep most recent, delete the rest."""
+        assert self._db is not None  # caller guarantees
+        changes = 0
         dup_cursor = await self._db.execute(
             "SELECT summary, COUNT(*) as cnt FROM memories" " GROUP BY summary HAVING cnt > 1"
         )
@@ -716,8 +725,6 @@ class Storage:
                     ids_to_delete,
                 )
                 changes += del_cursor.rowcount
-
-        await self._db.commit()
         return changes
 
     # ------------------------------------------------------------------

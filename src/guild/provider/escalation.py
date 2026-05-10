@@ -233,20 +233,20 @@ class EscalatingProvider(LLMProvider):
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]] | None = None,
     ) -> LLMResponse:
-        """Generate with malformed-output recovery (REQ-17.8).
+        """First attempt of the malformed-output recovery protocol (REQ-17.8).
 
-        Strategy:
-        1. Try current provider.
-        2. On malformed output, retry with correction hint.
-        3. If still malformed, escalate and retry.
-        4. Exhaust chain, then raise MalformedOutputError.
+        This method performs only step 1: a plain generate on the current
+        provider. The caller is responsible for validating the output and
+        orchestrating the full recovery sequence:
 
-        Callers should catch MalformedOutputError to detect this is
-        actually a validation issue rather than a generate failure.
-        The caller is responsible for determining what "malformed" means
-        and calling this method in a retry loop.
+          1. Call this method (first attempt).
+          2. If output is malformed, call retry_with_correction().
+          3. If still malformed, call escalate_and_retry().
+          4. If chain exhausted, raise MalformedOutputError.
+
+        This design lets callers define what "malformed" means for their
+        use-case while keeping the escalation primitives reusable.
         """
-        # First attempt — delegated to the caller's validation
         return await self._chain.current.generate(messages, tools)
 
     async def retry_with_correction(

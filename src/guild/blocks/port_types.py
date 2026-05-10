@@ -103,14 +103,10 @@ def _basic_schema_check(data: object, schema: dict) -> bool:
         return False
     if schema_type == "array" and not isinstance(data, list):
         return False
-
-    if isinstance(data, dict) and schema_type == "object":
-        required = schema.get("required", [])
-        for key in required:
-            if key not in data:
-                return False
-
-    return True
+    if not isinstance(data, dict) or schema_type != "object":
+        return True
+    required = schema.get("required", [])
+    return all(key in data for key in required)
 
 
 def get_composite_ports(

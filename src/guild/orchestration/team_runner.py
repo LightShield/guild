@@ -45,6 +45,19 @@ _EVAL_SCORE_KEY = "score"
 _EVAL_FEEDBACK_KEY = "feedback"
 
 
+def _extract_embedded_json(text: str) -> str | None:
+    """Extract an embedded JSON object from surrounding text.
+
+    Finds the first '{' and last '}' and returns the substring,
+    or None if no valid boundaries exist.
+    """
+    start = text.find("{")
+    end = text.rfind("}")
+    if start < 0 or end <= start:
+        return None
+    return text[start : end + 1]
+
+
 class AgentStatus(Enum):
     """Lifecycle states for a running agent (REQ-04.9)."""
 
@@ -351,19 +364,7 @@ class TeamRunner:
 
     def _try_parse_json(self, output: str) -> EvaluatorResult | None:
         """Attempt to parse output as JSON evaluator result."""
-        try:
-            data = json.loads(output)
-        except (json.JSONDecodeError, TypeError):
-            # Try to find JSON embedded in text
-            start = output.find("{")
-            end = output.rfind("}") + 1
-            if start < 0 or end <= start:
-                return None
-            try:
-                data = json.loads(output[start:end])
-            except (json.JSONDecodeError, TypeError):
-                return None
-
+        data = self._parse_json_permissive(output)
         if not isinstance(data, dict):
             return None
 
@@ -380,6 +381,21 @@ class TeamRunner:
             feedback=feedback,
             details=details,
         )
+
+    @staticmethod
+    def _parse_json_permissive(text: str) -> Any:
+        """Parse JSON from text, trying embedded JSON if direct parse fails."""
+        try:
+            return json.loads(text)
+        except (json.JSONDecodeError, TypeError):
+            pass
+        embedded = _extract_embedded_json(text)
+        if embedded is None:
+            return None
+        try:
+            return json.loads(embedded)
+        except (json.JSONDecodeError, TypeError):
+            return None
 
     def _parse_heuristic(self, output: str) -> EvaluatorResult:
         """Fallback heuristic parsing for evaluator output."""

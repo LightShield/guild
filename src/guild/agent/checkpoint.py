@@ -10,6 +10,8 @@ from typing import TYPE_CHECKING, Any
 from guild.agent.message import Message
 
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
+    from guild.agent.loop import AgentLoop
+    from guild.provider.base import LLMProvider
     from guild.storage.sqlite import Storage
 
 __all__ = [
@@ -83,10 +85,10 @@ async def load_checkpoint(storage: Storage, agent_id: str) -> Checkpoint | None:
 async def recover_from_checkpoint(
     storage: Storage,
     agent_id: str,
-    provider: object,
+    provider: LLMProvider,
     tool_executors: dict,
     working_dir: str | None = None,
-) -> object | None:
+) -> AgentLoop | None:
     """Recover an agent loop from its last checkpoint.
 
     Loads the most recent checkpoint for the given agent and
@@ -107,7 +109,7 @@ async def recover_from_checkpoint(
         return None
 
     loop = AgentLoop(
-        provider=provider,  # type: ignore[arg-type]
+        provider=provider,
         tool_executors=tool_executors,
         working_dir=working_dir,
         max_turns=DEFAULT_MAX_TURNS,
