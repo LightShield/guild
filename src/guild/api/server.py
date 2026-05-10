@@ -148,17 +148,13 @@ def _register_agent_routes(app: Any, get_storage: Callable[[], Any]) -> None:
         return await storage.list_agents()
 
 
-def _register_config_routes(
-    app: Any, get_storage: Callable[[], Any], guild_dir: Path
-) -> None:
+def _register_config_routes(app: Any, get_storage: Callable[[], Any], guild_dir: Path) -> None:
     """Register config, blocks, teams, learnings, and audit API routes."""
     _register_status_routes(app, get_storage, guild_dir)
     _register_config_crud_routes(app, guild_dir)
 
 
-def _register_status_routes(
-    app: Any, get_storage: Callable[[], Any], guild_dir: Path
-) -> None:
+def _register_status_routes(app: Any, get_storage: Callable[[], Any], guild_dir: Path) -> None:
     """Register status, learnings, and audit routes."""
 
     @app.get("/api/status")

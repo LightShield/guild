@@ -64,9 +64,7 @@ class StorageProtocol(Protocol):
         ...
 
     # Messages
-    async def append_message(
-        self, agent_id: str, role: str, content: str, **kwargs: str
-    ) -> None:
+    async def append_message(self, agent_id: str, role: str, content: str, **kwargs: str) -> None:
         """Append a message to an agent's conversation history."""
         ...
 
@@ -116,9 +114,7 @@ class StorageProtocol(Protocol):
         ...
 
     # Checkpoints
-    async def save_checkpoint(
-        self, agent_id: str, task_id: str | None, state_json: str
-    ) -> None:
+    async def save_checkpoint(self, agent_id: str, task_id: str | None, state_json: str) -> None:
         """Persist a checkpoint for an agent."""
         ...
 

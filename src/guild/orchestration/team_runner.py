@@ -193,9 +193,7 @@ class TeamRunner:
 
         Entry block is always first (REQ-04.1).
         """
-        loop_edges = {
-            (loop.evaluator_block, loop.generator_block) for loop in self._team.loops
-        }
+        loop_edges = {(loop.evaluator_block, loop.generator_block) for loop in self._team.loops}
 
         edges = [
             (conn.source_block, conn.target_block)

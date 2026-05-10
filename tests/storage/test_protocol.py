@@ -34,9 +34,9 @@ class TestStorageProtocolStructuralMatch:
             if not name.startswith("_")
         ]
         for method_name in protocol_methods:
-            assert hasattr(Storage, method_name), (
-                f"Storage is missing protocol method: {method_name}"
-            )
+            assert hasattr(
+                Storage, method_name
+            ), f"Storage is missing protocol method: {method_name}"
 
 
 @pytest.mark.unit

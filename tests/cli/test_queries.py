@@ -106,10 +106,7 @@ class TestFetchTaskHistory:
         """Only 'limit' tasks are returned."""
         db_path = tmp_path / "guild.db"
         db_path.touch()
-        tasks = [
-            {"task_id": f"t-{i}", "created_at": f"2025-0{i + 1}-01"}
-            for i in range(5)
-        ]
+        tasks = [{"task_id": f"t-{i}", "created_at": f"2025-0{i + 1}-01"} for i in range(5)]
         mock_store = _make_mock_storage(list_tasks=tasks)
 
         with patch("guild.storage.sqlite.Storage", return_value=mock_store):

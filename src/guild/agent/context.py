@@ -69,9 +69,7 @@ class ContextManager:
         protected = self._protected_indices(result)
 
         # Truncate old tool outputs, oldest first, most aggressively
-        trimmable = [
-            i for i, msg in enumerate(result) if i not in protected and msg.role == "tool"
-        ]
+        trimmable = [i for i, msg in enumerate(result) if i not in protected and msg.role == "tool"]
 
         for idx in trimmable:
             if self.estimate_tokens(result) <= threshold_tokens:

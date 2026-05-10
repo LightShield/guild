@@ -89,9 +89,7 @@ class TestBuildSystemPromptWithLearnings:
         """High-confidence learnings are appended to the system prompt."""
         mock_store = MagicMock()
         mock_store.list_learnings = AsyncMock(
-            return_value=[
-                {"category": "pattern", "content": "always use async", "confidence": 0.9}
-            ]
+            return_value=[{"category": "pattern", "content": "always use async", "confidence": 0.9}]
         )
 
         with patch(

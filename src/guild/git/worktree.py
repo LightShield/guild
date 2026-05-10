@@ -141,18 +141,14 @@ class WorktreeManager:
         return worktrees
 
     @staticmethod
-    def _maybe_append_worktree(
-        worktrees: list[WorktreeInfo], path: Path, branch: str
-    ) -> None:
+    def _maybe_append_worktree(worktrees: list[WorktreeInfo], path: Path, branch: str) -> None:
         """Append a WorktreeInfo if the branch is a guild task (not staging)."""
         if not branch.startswith("guild/"):
             return
         task_id = branch[len("guild/") :]
         if task_id == "staging":
             return
-        worktrees.append(
-            WorktreeInfo(path=path, branch=branch, task_id=task_id, created_at="")
-        )
+        worktrees.append(WorktreeInfo(path=path, branch=branch, task_id=task_id, created_at=""))
 
     async def _ensure_staging_branch(self, staging_branch: str) -> None:
         """Ensure the staging branch and its worktree exist."""
