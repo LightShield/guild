@@ -253,6 +253,6 @@ class ResourceMonitor:
         if not reasons:
             if self.mode == SchedulingMode.POLITE:
                 return "user active — polite delay applied"
-            if self.mode == SchedulingMode.STEALTH:
+            if self.mode == SchedulingMode.STEALTH:  # pragma: no branch
                 return "user active — paused until idle"
         return "; ".join(reasons)

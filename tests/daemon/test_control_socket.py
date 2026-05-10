@@ -344,3 +344,189 @@ class TestSupervisorSocketIntegration:
 
         sup = DaemonSupervisor(run_dir=tmp_path, task_id="task-abc")
         assert sup.socket_path == tmp_path / "task-abc.sock"
+
+
+@pytest.mark.req("REQ-23.9")
+class TestControlSocketEdgeCases:
+    """Cover remaining branches in control_socket.py."""
+
+    async def test_long_path_uses_relative_bind(self, tmp_path: Path) -> None:
+        """Paths >= 104 bytes use relative-path binding (macOS workaround)."""
+        from guild.daemon.control_socket import ControlSocket
+
+        # Create a deeply nested path that exceeds 104 bytes
+        deep_dir = tmp_path / ("a" * 80)
+        deep_dir.mkdir(parents=True)
+        sock_path = deep_dir / "task.sock"
+        assert len(str(sock_path).encode()) >= 104
+
+        cs = ControlSocket(sock_path)
+        await cs.start()
+        assert sock_path.exists()
+        await cs.stop()
+
+    async def test_client_disconnect_during_broadcast(self, tmp_path: Path) -> None:
+        """Disconnected subscribers are removed during broadcast."""
+        from guild.daemon.control_socket import ControlSocket
+
+        sock_path = tmp_path / "test.sock"
+        cs = ControlSocket(sock_path)
+        await cs.start()
+
+        # Connect and subscribe
+        reader, writer = await asyncio.open_unix_connection(str(sock_path))
+        writer.write(json.dumps({"type": "command", "action": "subscribe"}).encode() + b"\n")
+        await writer.drain()
+        await reader.readline()
+
+        # Close client side abruptly
+        writer.close()
+        await writer.wait_closed()
+
+        # Broadcast should handle the dead subscriber gracefully
+        await asyncio.sleep(0.05)
+        await cs.broadcast({"type": "test", "content": "hello"})
+        # Subscriber should be removed (no error raised)
+        assert len(cs._subscribers) == 0
+        await cs.stop()
+
+    async def test_client_connection_reset_handled(self, tmp_path: Path) -> None:
+        """ConnectionResetError during client handling is caught."""
+        from guild.daemon.control_socket import ControlSocket
+
+        sock_path = tmp_path / "test.sock"
+        cs = ControlSocket(sock_path)
+        await cs.start()
+
+        # Connect, then close abruptly (simulates connection reset)
+        reader, writer = await asyncio.open_unix_connection(str(sock_path))
+        writer.close()
+        await writer.wait_closed()
+
+        # Give server time to handle the disconnect
+        await asyncio.sleep(0.05)
+        # Server should still be operational
+        reader2, writer2 = await asyncio.open_unix_connection(str(sock_path))
+        writer2.write(json.dumps({"type": "command", "action": "status"}).encode() + b"\n")
+        await writer2.drain()
+        response = await reader2.readline()
+        assert json.loads(response)["status"] is not None
+        writer2.close()
+        await writer2.wait_closed()
+        await cs.stop()
+
+    async def test_unknown_message_type_returns_error(self, tmp_path: Path) -> None:
+        """Unknown type field gets an error response."""
+        from guild.daemon.control_socket import ControlSocket
+
+        sock_path = tmp_path / "test.sock"
+        cs = ControlSocket(sock_path)
+        await cs.start()
+
+        reader, writer = await asyncio.open_unix_connection(str(sock_path))
+        writer.write(json.dumps({"type": "banana", "data": "hi"}).encode() + b"\n")
+        await writer.drain()
+        response = await reader.readline()
+        data = json.loads(response)
+        assert "error" in data
+        assert "banana" in data["error"]
+        writer.close()
+        await writer.wait_closed()
+        await cs.stop()
+
+    async def test_broadcast_removes_broken_subscriber(self, tmp_path: Path) -> None:
+        """Broadcast removes subscribers that raise on write."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        from guild.daemon.control_socket import ControlSocket
+
+        sock_path = tmp_path / "test.sock"
+        cs = ControlSocket(sock_path)
+        await cs.start()
+
+        # Inject a mock writer that raises on write
+        broken_writer = MagicMock()
+        broken_writer.write = MagicMock(side_effect=BrokenPipeError())
+        broken_writer.drain = AsyncMock()
+        cs._subscribers.append(broken_writer)
+
+        await cs.broadcast({"type": "test"})
+        assert broken_writer not in cs._subscribers
+        await cs.stop()
+
+    async def test_handle_client_connection_error(self, tmp_path: Path) -> None:
+        """Client handler catches ConnectionResetError during response write."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        from guild.daemon.control_socket import ControlSocket
+
+        sock_path = tmp_path / "test.sock"
+        cs = ControlSocket(sock_path)
+        await cs.start()
+
+        # Connect normally then simulate server-side write failure
+        reader, writer = await asyncio.open_unix_connection(str(sock_path))
+        # Subscribe so we're in the subscribers list
+        writer.write(json.dumps({"type": "command", "action": "subscribe"}).encode() + b"\n")
+        await writer.drain()
+        await reader.readline()
+
+        # Force the server's writer.drain to fail on next write
+        # by closing the connection from client side
+        writer.close()
+        await writer.wait_closed()
+        await asyncio.sleep(0.1)
+
+        # Server should have cleaned up the subscriber
+        assert len(cs._subscribers) == 0
+        await cs.stop()
+
+    async def test_writer_close_oserror_handled(self, tmp_path: Path) -> None:
+        """OSError during writer.close() in finally block is caught."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        from guild.daemon.control_socket import ControlSocket
+
+        sock_path = tmp_path / "test.sock"
+        cs = ControlSocket(sock_path)
+        await cs.start()
+
+        # Simulate by directly calling _handle_client with a mock
+        mock_reader = AsyncMock()
+        mock_reader.readline = AsyncMock(return_value=b"")  # EOF immediately
+        mock_writer = MagicMock()
+        mock_writer.close = MagicMock(side_effect=OSError("already closed"))
+        mock_writer.wait_closed = AsyncMock(side_effect=OSError("already closed"))
+
+        # This should not raise
+        await cs._handle_client(mock_reader, mock_writer)
+        await cs.stop()
+
+    async def test_handle_client_catches_connection_reset_on_write(
+        self, tmp_path: Path
+    ) -> None:
+        """ConnectionResetError during response write is caught (lines 111-112)."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        from guild.daemon.control_socket import ControlSocket
+
+        sock_path = tmp_path / "test.sock"
+        cs = ControlSocket(sock_path)
+        await cs.start()
+
+        # Mock reader returns valid JSON, but writer.drain raises on response
+        mock_reader = AsyncMock()
+        mock_reader.readline = AsyncMock(
+            side_effect=[
+                json.dumps({"type": "command", "action": "status"}).encode() + b"\n",
+                b"",  # EOF after first message
+            ]
+        )
+        mock_writer = MagicMock()
+        mock_writer.write = MagicMock()
+        mock_writer.drain = AsyncMock(side_effect=ConnectionResetError("peer reset"))
+        mock_writer.close = MagicMock()
+        mock_writer.wait_closed = AsyncMock()
+
+        await cs._handle_client(mock_reader, mock_writer)
+        await cs.stop()

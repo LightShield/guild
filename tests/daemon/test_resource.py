@@ -529,3 +529,42 @@ class TestThermalAwareness:
         status = monitor.get_status()
         assert status.thermal_status is not None
         assert status.thermal_status["cpu_temp_celsius"] == 55.0
+
+
+@pytest.mark.req("REQ-24.6")
+@pytest.mark.unit
+class TestGpuVramEdgeCases:
+    """Cover remaining branches in GPU/VRAM logic."""
+
+    def test_vram_total_zero_no_throttle(self) -> None:
+        """VRAM total of 0 doesn't divide-by-zero, returns no throttle."""
+        gpu_reader = lambda: {"gpu_percent": 50.0, "vram_used_mb": 100, "vram_total_mb": 0}
+        monitor = ResourceMonitor(
+            mode=SchedulingMode.POLITE,
+            gpu_reader=gpu_reader,
+            activity_detector=lambda: ActivityState.ACTIVE,
+        )
+        status = monitor.get_status()
+        assert not status.is_throttled or "vram" not in status.reason.lower()
+
+    def test_stealth_mode_with_vram_pressure_shows_vram_reason(self) -> None:
+        """In STEALTH mode with VRAM pressure, reason includes VRAM."""
+        gpu_reader = lambda: {"gpu_percent": 90.0, "vram_used_mb": 7500, "vram_total_mb": 8192}
+        monitor = ResourceMonitor(
+            mode=SchedulingMode.STEALTH,
+            gpu_reader=gpu_reader,
+            activity_detector=lambda: ActivityState.ACTIVE,
+        )
+        status = monitor.get_status()
+        assert status.is_throttled
+        assert "vram" in status.reason.lower()
+
+    def test_stealth_no_gpu_or_thermal_shows_stealth_reason(self) -> None:
+        """STEALTH mode without GPU/thermal pressure shows user-active reason."""
+        monitor = ResourceMonitor(
+            mode=SchedulingMode.STEALTH,
+            activity_detector=lambda: ActivityState.ACTIVE,
+        )
+        status = monitor.get_status()
+        assert status.is_throttled
+        assert "paused until idle" in status.reason.lower()
