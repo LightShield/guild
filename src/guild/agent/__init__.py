@@ -15,7 +15,8 @@ from guild.agent.completion import (
 from guild.agent.context import ContextManager
 from guild.agent.cost import COST_TABLE, estimate_cost, format_cost_summary
 from guild.agent.learning import extract_learnings, format_learnings_for_injection
-from guild.agent.loop import AgentLoop
+from guild.agent.loop import DEFAULT_MAX_TURNS, AgentLoop
+from guild.agent.prompts import GUILD_MASTER_PROMPT
 from guild.agent.ratelimit import RateLimiter, ToolQueue
 from guild.agent.rollback import RollbackContext, try_with_rollback
 from guild.agent.stuck import StuckDetector
@@ -23,6 +24,8 @@ from guild.agent.stuck import StuckDetector
 __all__ = [
     "AgentLoop",
     "BUDGET_ALERT_THRESHOLDS",
+    "DEFAULT_MAX_TURNS",
+    "GUILD_MASTER_PROMPT",
     "COST_TABLE",
     "Checkpoint",
     "ContextManager",

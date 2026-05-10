@@ -85,6 +85,7 @@ from guild.cli.task_runner import (
 )
 from guild.cli.toml_utils import set_config_value as _set_config_value
 from guild.config.loader import DB_FILENAME, find_guild_dir, load_config
+from guild.permissions.checker import PermissionTier
 
 __all__ = ["app"]
 
@@ -183,7 +184,9 @@ def status() -> None:
 @app.command()
 def task(
     description: str = typer.Argument(..., help="Task description."),
-    permission: str = typer.Option("autopilot", "--permission", "-p", help="Permission tier."),
+    permission: str = typer.Option(
+        PermissionTier.AUTOPILOT.value, "--permission", "-p", help="Permission tier."
+    ),
     timeout: int = typer.Option(
         0, "--timeout", "-t", help="Autonomy timeout in seconds (0=unlimited)."
     ),
@@ -214,7 +217,9 @@ def task(
 
 @app.command()
 def chat(
-    permission: str = typer.Option("ask", "--permission", "-p", help="Permission tier."),
+    permission: str = typer.Option(
+        PermissionTier.ASK.value, "--permission", "-p", help="Permission tier."
+    ),
 ) -> None:
     """Interactive chat with the agent."""
     guild_dir = find_guild_dir()

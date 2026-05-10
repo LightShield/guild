@@ -12,6 +12,9 @@ from dataclasses import dataclass, field
 from pathlib import Path  # noqa: TC003 - used at runtime in function bodies
 from typing import TYPE_CHECKING
 
+from guild.agent.loop import DEFAULT_MAX_TURNS
+from guild.permissions.checker import PermissionTier
+
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from guild.config.models import GuildConfig
 
@@ -34,8 +37,8 @@ class AgentProfile:
     model: str | None = None
     system_prompt: str = ""
     tools: list[str] = field(default_factory=list)
-    permission: str = "ask"
-    max_turns: int = 50
+    permission: str = PermissionTier.ASK
+    max_turns: int = DEFAULT_MAX_TURNS
     token_budget: int = 0
 
 
@@ -117,7 +120,7 @@ def validate_config(config: GuildConfig, guild_dir: Path) -> list[str]:
 
     # Validate agent profiles reference valid permission tiers
     agent_profiles = load_agent_profiles(guild_dir)
-    valid_tiers = {"nothing", "ask", "scoped", "autopilot"}
+    valid_tiers = {tier.value for tier in PermissionTier}
     for name, profile in agent_profiles.items():
         if profile.permission not in valid_tiers:
             errors.append(
@@ -146,8 +149,8 @@ def _parse_agent_profile(name: str, values: dict) -> AgentProfile:
         model=values.get("model"),
         system_prompt=values.get("system_prompt", ""),
         tools=values.get("tools", []),
-        permission=values.get("permission", "ask"),
-        max_turns=values.get("max_turns", 50),
+        permission=values.get("permission", PermissionTier.ASK),
+        max_turns=values.get("max_turns", DEFAULT_MAX_TURNS),
         token_budget=values.get("token_budget", 0),
     )
 
@@ -156,7 +159,7 @@ def _parse_permission_profile(name: str, values: dict) -> PermissionProfile:
     """Parse a dict of TOML values into a PermissionProfile."""
     return PermissionProfile(
         name=name,
-        tier=values.get("tier", "ask"),
+        tier=values.get("tier", PermissionTier.ASK),
         allowed_paths=values.get("allowed_paths", []),
         allowed_tools=values.get("allowed_tools", []),
     )

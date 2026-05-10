@@ -13,8 +13,9 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from pathlib import Path
 
+from guild.agent.loop import DEFAULT_MAX_TURNS
+from guild.agent.prompts import GUILD_MASTER_PROMPT
 from guild.config.loader import DB_FILENAME
-from guild.provider.ollama import create_provider
 from guild.task.spec import TaskStatus
 
 __all__ = [
@@ -23,6 +24,7 @@ __all__ = [
     "build_system_prompt_with_learnings",
     "compute_max_turns",
     "create_chat_loop",
+    "create_provider_for_backend",
     "create_task_agent_loop",
     "extract_post_task_learnings",
     "persist_task_result",
@@ -31,20 +33,16 @@ __all__ = [
 
 logger = logging.getLogger(__name__)
 
-GUILD_MASTER_PROMPT = (
-    "You are an autonomous coding agent. Follow the user's instructions precisely.\n\n"
-    "RULES:\n"
-    "- Use tools to complete the task. Do NOT just describe what you would do.\n"
-    "- Do EXACTLY what was asked. Do not explore unrelated files or run "
-    "unrelated commands.\n"
-    "- If the task says 'read file X', use file_read on X. If it says "
-    "'write file Y', use file_write.\n"
-    "- Do not run tests unless the task specifically asks you to.\n"
-    "- When done, provide a one-sentence summary.\n\n"
-    "Available tools: file_read, file_write, shell, search, glob."
-)
 
-_DEFAULT_MAX_TURNS = 50
+def create_provider_for_backend(provider_name: str, base_url: str, model: str) -> Any:
+    """Create an LLM provider by name, dispatching to the correct backend."""
+    if provider_name == "ollama":
+        from guild.provider.ollama import create_provider
+
+        return create_provider(base_url, model)
+    raise ValueError(f"Unknown provider: {provider_name}")
+
+
 _SECONDS_PER_TURN_ESTIMATE = 10
 _MIN_TURNS = 5
 _MAX_TURNS_CAP = 200
@@ -57,7 +55,7 @@ def create_chat_loop(config: Any, working_dir: str, permission: str) -> Any:
     from guild.permissions.checker import PermissionChecker, PermissionTier
     from guild.tools.registry import build_tool_executors
 
-    provider = create_provider(config.base_url, config.model)
+    provider = create_provider_for_backend(config.provider_name, config.base_url, config.model)
     tool_executors = build_tool_executors()
 
     tier = PermissionTier(permission)
@@ -67,7 +65,7 @@ def create_chat_loop(config: Any, working_dir: str, permission: str) -> Any:
         provider=provider,
         tool_executors=tool_executors,
         working_dir=working_dir,
-        max_turns=50,
+        max_turns=DEFAULT_MAX_TURNS,
     )
 
 
@@ -76,7 +74,7 @@ def build_provider(config: Any) -> Any:
     from guild.provider.escalation import EscalatingProvider, EscalationChain
     from guild.provider.retry import RetryProvider
 
-    primary = create_provider(config.base_url, config.model)
+    primary = create_provider_for_backend(config.provider_name, config.base_url, config.model)
 
     chain_models = [m.strip() for m in config.escalation_chain.split(",") if m.strip()]
     cli_tools = [t.strip() for t in config.escalation_cli_providers.split(",") if t.strip()]
@@ -87,7 +85,9 @@ def build_provider(config: Any) -> Any:
     providers = [primary]  # pragma: no cover — requires escalation chain config
     for model_name in chain_models:
         if model_name != config.model:
-            providers.append(create_provider(config.base_url, model_name))
+            providers.append(
+                create_provider_for_backend(config.provider_name, config.base_url, model_name)
+            )
 
     if cli_tools:
         from guild.provider.cli_provider import CLIToolProvider
@@ -102,7 +102,7 @@ def build_provider(config: Any) -> Any:
 def compute_max_turns(timeout: int) -> int:
     """Convert a timeout in seconds to a max turn count."""
     if timeout <= 0:
-        return _DEFAULT_MAX_TURNS
+        return DEFAULT_MAX_TURNS
     return min(max(timeout // _SECONDS_PER_TURN_ESTIMATE, _MIN_TURNS), _MAX_TURNS_CAP)
 
 

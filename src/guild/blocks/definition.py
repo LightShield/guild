@@ -2,6 +2,8 @@
 
 from dataclasses import dataclass, field
 
+from guild.permissions.checker import PermissionTier
+
 __all__ = [
     "BlockDef",
     "Connection",
@@ -32,7 +34,7 @@ class BlockDef:
     tools: list[str] = field(default_factory=list)
     inputs: list[PortDef] = field(default_factory=list)
     outputs: list[PortDef] = field(default_factory=list)
-    permission: str = "ask"
+    permission: str = PermissionTier.ASK
     max_retries: int = 1
 
 

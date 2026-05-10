@@ -181,7 +181,7 @@ class TestTaskTimeout:
 
     def test_task_respects_timeout_option(self, guild_app, guild_project: Path) -> None:
         """Verify --timeout is accepted and passed to the agent loop."""
-        with patch("guild.cli.task_runner.create_provider") as mock_provider_factory:
+        with patch("guild.cli.task_runner.create_provider_for_backend") as mock_provider_factory:
             mock_provider = AsyncMock()
             mock_provider.generate = AsyncMock(
                 return_value=AsyncMock(
@@ -436,7 +436,7 @@ class TestChatMultiTurn:
             model="test",
         )
 
-        with patch("guild.cli.task_runner.create_provider") as mock_pf:
+        with patch("guild.cli.task_runner.create_provider_for_backend") as mock_pf:
             mock_provider = AsyncMock()
             mock_provider.generate = AsyncMock(return_value=mock_response)
             mock_pf.return_value = mock_provider
@@ -493,7 +493,7 @@ class TestChatSendsMessages:
             model="test",
         )
 
-        with patch("guild.cli.task_runner.create_provider") as mock_pf:
+        with patch("guild.cli.task_runner.create_provider_for_backend") as mock_pf:
             mock_provider = AsyncMock()
             mock_provider.generate = AsyncMock(return_value=mock_response)
             mock_pf.return_value = mock_provider
@@ -643,7 +643,7 @@ class TestAutopilotNeverPrompts:
             prompt_called = True
             return True
 
-        with patch("guild.cli.task_runner.create_provider") as mock_pf:
+        with patch("guild.cli.task_runner.create_provider_for_backend") as mock_pf:
             mock_provider = AsyncMock()
             mock_provider.generate = AsyncMock(return_value=mock_response)
             mock_pf.return_value = mock_provider

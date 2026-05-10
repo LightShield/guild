@@ -14,7 +14,9 @@ if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from guild.provider.base import LLMProvider
     from guild.storage.sqlite import Storage
 
-__all__ = ["AgentSpawner"]
+__all__ = ["AgentSpawner", "SUB_AGENT_MAX_TURNS"]
+
+SUB_AGENT_MAX_TURNS = 30
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +76,7 @@ class AgentSpawner:
             provider=self._provider,
             tool_executors=tool_executors,
             working_dir=self._working_dir,
-            max_turns=30,
+            max_turns=SUB_AGENT_MAX_TURNS,
         )
         self._agents[agent_id] = loop
 

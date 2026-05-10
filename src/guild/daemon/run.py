@@ -23,10 +23,11 @@ async def _run_task(
     task_id: str, guild_dir: Path
 ) -> None:  # pragma: no cover — daemon subprocess entry point, tested via integration
     """Load config, create provider, wrap in supervisor, and execute."""
-    from guild.agent.loop import AgentLoop
+    from guild.agent.loop import DEFAULT_MAX_TURNS, AgentLoop
+    from guild.agent.prompts import GUILD_MASTER_PROMPT
+    from guild.cli.task_runner import create_provider_for_backend
     from guild.config.loader import load_config
     from guild.daemon.supervisor import DaemonSupervisor
-    from guild.provider.ollama import create_provider
     from guild.storage.sqlite import Storage
     from guild.tools.registry import build_tool_executors
 
@@ -48,21 +49,14 @@ async def _run_task(
     await store.update_task(task_id, status=TaskStatus.RUNNING)
 
     # Create provider and tools
-    provider = create_provider(config.base_url, config.model)
+    provider = create_provider_for_backend(config.provider_name, config.base_url, config.model)
     tool_executors = build_tool_executors()
-
-    system_prompt = (
-        "You are an autonomous coding agent. Complete the task described below. "
-        "Use the available tools to read files, write files, search code, and "
-        "run shell commands. When done, provide a brief summary of what you "
-        "accomplished."
-    )
 
     loop = AgentLoop(
         provider=provider,
         tool_executors=tool_executors,
         working_dir=working_dir,
-        max_turns=50,
+        max_turns=DEFAULT_MAX_TURNS,
     )
 
     # Run under supervisor
@@ -70,7 +64,7 @@ async def _run_task(
     supervisor = DaemonSupervisor(run_dir=run_dir, task_id=task_id)
 
     try:
-        result = await supervisor.run(loop.run(system_prompt, description))
+        result = await supervisor.run(loop.run(GUILD_MASTER_PROMPT, description))
         await store.update_task(task_id, status=TaskStatus.COMPLETED, result=result)
         await store.log_audit(
             action="task_completed",

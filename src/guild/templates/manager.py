@@ -8,6 +8,8 @@ import shutil
 from dataclasses import asdict, dataclass, field
 from pathlib import Path  # noqa: TC003
 
+from guild.permissions.checker import PermissionTier
+
 __all__ = ["Template", "TemplateManager"]
 
 logger = logging.getLogger(__name__)
@@ -22,7 +24,7 @@ class Template:
     team: str | None = None
     task_template: str = ""  # with {placeholders}
     parameters: list[str] = field(default_factory=list)
-    permission: str = "ask"
+    permission: str = PermissionTier.ASK
 
 
 class TemplateManager:

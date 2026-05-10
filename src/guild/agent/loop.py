@@ -21,10 +21,13 @@ if TYPE_CHECKING:  # pragma: no cover — type-checking only
 
 __all__ = [
     "AgentLoop",
+    "DEFAULT_MAX_TURNS",
     "ESCALATION_TEMPLATE",
     "SELF_REVIEW_PROMPT",
     "STUCK_RECOVERY_PROMPT",
 ]
+
+DEFAULT_MAX_TURNS = 50
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +68,7 @@ class AgentLoop:
         provider: LLMProvider,
         tool_executors: dict[str, ToolExecutor],
         working_dir: str | None = None,
-        max_turns: int = 50,
+        max_turns: int = DEFAULT_MAX_TURNS,
         stuck_detector: StuckDetector | None = None,
         token_budget: int = 0,
     ) -> None:

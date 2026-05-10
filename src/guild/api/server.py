@@ -12,6 +12,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
+from guild import __version__
 from guild.config.loader import DB_FILENAME
 from guild.task.spec import TaskStatus
 
@@ -48,7 +49,7 @@ async def _get_current_status(storage: Any) -> dict[str, Any]:
     agents = await storage.list_agents()
     return {
         "status": "ok",
-        "version": "0.2.0",
+        "version": __version__,
         "task_count": summary["task_count"],
         "agent_count": summary["agent_count"],
         "total_input_tokens": summary["total_input"],
@@ -110,7 +111,7 @@ def create_app(
         await store.close()
         logger.info("API storage closed")
 
-    app = FastAPI(title="Guild", version="0.2.0", lifespan=lifespan)
+    app = FastAPI(title="Guild", version=__version__, lifespan=lifespan)
 
     def _get_storage() -> Storage:
         """Retrieve Storage from app state."""
@@ -126,7 +127,7 @@ def create_app(
         summary = await storage.get_token_summary()
         return {
             "status": "ok",
-            "version": "0.2.0",
+            "version": __version__,
             "task_count": summary["task_count"],
             "agent_count": summary["agent_count"],
             "total_input_tokens": summary["total_input"],

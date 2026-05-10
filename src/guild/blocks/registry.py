@@ -8,6 +8,8 @@ try:
 except ModuleNotFoundError:  # pragma: no cover
     import tomli as tomllib  # type: ignore[no-redef]
 
+from guild.permissions.checker import PermissionTier
+
 from .definition import BlockDef, Connection, LoopDef, PortDef, TeamDef
 from .port_types import check_port_compatibility
 
@@ -62,7 +64,7 @@ class BlockRegistry:
                 PortDef(name="context", type_tag="files"),
             ],
             outputs=[PortDef(name="changes", type_tag="code-changes")],
-            permission="scoped",
+            permission=PermissionTier.SCOPED,
         )
 
     def _reviewer_block(self) -> BlockDef:
@@ -90,7 +92,7 @@ class BlockRegistry:
                 PortDef(name="spec", type_tag="plan"),
             ],
             outputs=[PortDef(name="result", type_tag="test-results")],
-            permission="scoped",
+            permission=PermissionTier.SCOPED,
         )
 
     def _evaluator_block(self) -> BlockDef:
@@ -203,7 +205,7 @@ class BlockRegistry:
             tools=data.get("tools", []),
             inputs=inputs,
             outputs=outputs,
-            permission=data.get("permission", "ask"),
+            permission=data.get("permission", PermissionTier.ASK),
             max_retries=data.get("max_retries", 1),
         )
 

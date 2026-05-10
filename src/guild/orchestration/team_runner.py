@@ -13,6 +13,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any
 
 from guild.agent.loop import AgentLoop
+from guild.orchestration.spawner import SUB_AGENT_MAX_TURNS
 
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from guild.blocks.definition import BlockDef, LoopDef, TeamDef
@@ -372,7 +373,7 @@ class TeamRunner:
             provider=self._provider,
             tool_executors={},
             working_dir=self._working_dir,
-            max_turns=30,
+            max_turns=SUB_AGENT_MAX_TURNS,
         )
         result = await loop.run(
             system_prompt=block_def.system_prompt,
