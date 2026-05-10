@@ -866,7 +866,9 @@ async def _persist_task_result(
     )
 
 
-async def _extract_post_task_learnings(store: Any, loop: Any, config: Any) -> None:  # pragma: no cover — requires LLM for extraction
+async def _extract_post_task_learnings(
+    store: Any, loop: Any, config: Any
+) -> None:  # pragma: no cover — requires LLM for extraction
     """Extract learnings from the completed task (REQ-09.1)."""
     try:
         from guild.agent.learning import extract_learnings
@@ -1078,7 +1080,9 @@ def _get_running_tasks(run_dir: Path) -> list[dict]:
     return tasks
 
 
-def _kill_task(task_id: str, guild_dir: Path) -> bool:  # pragma: no cover — requires running daemon process
+def _kill_task(
+    task_id: str, guild_dir: Path
+) -> bool:  # pragma: no cover — requires running daemon process
     """Kill a task by sending SIGTERM."""
     from guild.daemon.lifecycle import LifecycleManager
     from guild.storage.sqlite import Storage
@@ -1116,7 +1120,9 @@ def _kill_all_tasks(guild_dir: Path) -> int:  # pragma: no cover — requires ru
     return asyncio.run(_do_kill_all())
 
 
-def _pause_task(task_id: str, guild_dir: Path) -> bool:  # pragma: no cover — requires running daemon process
+def _pause_task(
+    task_id: str, guild_dir: Path
+) -> bool:  # pragma: no cover — requires running daemon process
     """Pause a running task."""
     from guild.daemon.lifecycle import LifecycleManager
     from guild.storage.sqlite import Storage
@@ -1135,7 +1141,9 @@ def _pause_task(task_id: str, guild_dir: Path) -> bool:  # pragma: no cover — 
     return asyncio.run(_do_pause())
 
 
-def _resume_task(task_id: str, guild_dir: Path) -> bool:  # pragma: no cover — requires running daemon process
+def _resume_task(
+    task_id: str, guild_dir: Path
+) -> bool:  # pragma: no cover — requires running daemon process
     """Resume a paused task."""
     from guild.daemon.lifecycle import LifecycleManager
     from guild.storage.sqlite import Storage

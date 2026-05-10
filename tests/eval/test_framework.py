@@ -415,12 +415,22 @@ class TestCompareResults:
         framework = EvalFramework(storage)
 
         result_a = _make_result(
-            task_name="my_task", model="model-a", completed=True,
-            duration=5.0, input_tokens=100, output_tokens=50, tool_calls=3,
+            task_name="my_task",
+            model="model-a",
+            completed=True,
+            duration=5.0,
+            input_tokens=100,
+            output_tokens=50,
+            tool_calls=3,
         )
         result_b = _make_result(
-            task_name="my_task", model="model-b", completed=True,
-            duration=8.0, input_tokens=200, output_tokens=100, tool_calls=5,
+            task_name="my_task",
+            model="model-b",
+            completed=True,
+            duration=8.0,
+            input_tokens=200,
+            output_tokens=100,
+            tool_calls=5,
         )
 
         comparison = framework.compare_results(result_a, result_b)

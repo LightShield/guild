@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
-import os
 from pathlib import Path
-from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -45,7 +42,10 @@ class TestShellEdgeCases:
         """OSError during subprocess creation returns a descriptive error."""
         from guild.tools.shell import execute_shell
 
-        with patch("guild.tools.shell.asyncio.create_subprocess_shell", side_effect=OSError("no such shell")):
+        with patch(
+            "guild.tools.shell.asyncio.create_subprocess_shell",
+            side_effect=OSError("no such shell"),
+        ):
             result = await execute_shell({"command": "echo test"}, working_dir="/tmp")
         assert result.success is False
         assert "Failed to start" in (result.error or "")
@@ -336,7 +336,7 @@ class TestRegistryValidationEdgeCases:
 
     def test_empty_entry_block_error(self) -> None:
         """Team with empty entry_block produces validation error."""
-        from guild.blocks import BlockRegistry, Connection, TeamDef
+        from guild.blocks import BlockRegistry, TeamDef
 
         registry = BlockRegistry()
         team = TeamDef(
@@ -768,17 +768,17 @@ class TestPluginLoaderEdgeCases:
 
         f = tmp_path / "tool.toml"
         f.write_text(
-            '[tool]\n'
+            "[tool]\n"
             'name = "my-tool"\n'
             'description = "Test tool"\n'
-            '\n'
-            '[tool.parameters]\n'
+            "\n"
+            "[tool.parameters]\n"
             'type = "object"\n'
-            '\n'
-            '[tool.parameters.properties.arg1]\n'
+            "\n"
+            "[tool.parameters.properties.arg1]\n"
             'type = "string"\n'
-            '\n'
-            '[tool.parameters.required]\n'
+            "\n"
+            "[tool.parameters.required]\n"
             'list = ["arg1"]\n'
         )
         loader = PluginLoader(plugin_dirs=[tmp_path])
@@ -941,9 +941,7 @@ class TestNotifierLoopContinue:
         """NONE channel is skipped, bell channel still fires."""
         from guild.escalation.notify import NotificationChannel, Notifier
 
-        notifier = Notifier(
-            channels=[NotificationChannel.NONE, NotificationChannel.TERMINAL_BELL]
-        )
+        notifier = Notifier(channels=[NotificationChannel.NONE, NotificationChannel.TERMINAL_BELL])
         with patch("sys.stdout") as mock_stdout:
             mock_stdout.write = MagicMock()
             mock_stdout.flush = MagicMock()

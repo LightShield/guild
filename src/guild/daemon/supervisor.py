@@ -92,7 +92,7 @@ class DaemonSupervisor:
             loop = asyncio.get_event_loop()
             if loop.is_running():
                 loop.create_task(self._on_checkpoint())
-            else:  # pragma: no cover — defensive unreachable (signal during async always has running loop)
+            else:  # pragma: no cover — defensive
                 loop.run_until_complete(self._on_checkpoint())
 
     async def run(self, coro: Coroutine[Any, Any, Any]) -> Any:

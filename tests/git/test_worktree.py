@@ -96,9 +96,7 @@ class TestWorktreeBranchNaming:
         assert info.branch == "guild/fix-auth-bug-123"
         assert info.task_id == "fix-auth-bug-123"
         # Verify the actual git branch exists
-        exit_code, _ = await manager._run_git(
-            "rev-parse", "--verify", "guild/fix-auth-bug-123"
-        )
+        exit_code, _ = await manager._run_git("rev-parse", "--verify", "guild/fix-auth-bug-123")
         assert exit_code == 0
 
 

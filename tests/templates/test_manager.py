@@ -190,14 +190,18 @@ class TestTemplateImport:
     def test_import_loads_and_saves(self, tmp_path: object) -> None:
         """import_template() loads from file and saves to manager."""
         source = tmp_path / "ext.json"  # type: ignore[operator]
-        source.write_text(json.dumps({
-            "name": "ext-tpl",
-            "description": "External",
-            "team": None,
-            "task_template": "Run {cmd}",
-            "parameters": ["cmd"],
-            "permission": "ask",
-        }))
+        source.write_text(
+            json.dumps(
+                {
+                    "name": "ext-tpl",
+                    "description": "External",
+                    "team": None,
+                    "task_template": "Run {cmd}",
+                    "parameters": ["cmd"],
+                    "permission": "ask",
+                }
+            )
+        )
 
         mgr = TemplateManager(tmp_path / "templates")  # type: ignore[arg-type]
         tpl = mgr.import_template(source)

@@ -16,7 +16,9 @@ __all__: list[str] = []
 logger = logging.getLogger(__name__)
 
 
-async def _run_task(task_id: str, guild_dir: Path) -> None:  # pragma: no cover — daemon subprocess entry point, tested via integration
+async def _run_task(
+    task_id: str, guild_dir: Path
+) -> None:  # pragma: no cover — daemon subprocess entry point, tested via integration
     """Load config, create provider, wrap in supervisor, and execute."""
     from guild.agent.loop import AgentLoop
     from guild.config.loader import load_config

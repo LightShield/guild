@@ -315,11 +315,12 @@ def test_api_list_blocks(guild_api_dir: Path) -> None:
     from starlette.testclient import TestClient
 
     app = create_app(guild_dir=guild_api_dir)
-    with TestClient(app, raise_server_exceptions=False) as client:
-        # Patch BlockRegistry.list_blocks to return strings (fixing serialization)
-        with mock_patch("guild.blocks.registry.BlockRegistry.list_blocks") as mock_lb:
-            mock_lb.return_value = []
-            resp = client.get("/api/blocks")
+    with (
+        TestClient(app, raise_server_exceptions=False) as client,
+        mock_patch("guild.blocks.registry.BlockRegistry.list_blocks") as mock_lb,
+    ):
+        mock_lb.return_value = []
+        resp = client.get("/api/blocks")
     assert resp.status_code == 200
     assert resp.json() == []
 

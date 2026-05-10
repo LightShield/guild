@@ -51,7 +51,9 @@ class LifecycleManager:
         self.run_dir = run_dir
         self.storage = storage
 
-    async def kill_task(self, task_id: str, timeout: float = 10.0) -> bool:  # pragma: no cover — requires running subprocess
+    async def kill_task(
+        self, task_id: str, timeout: float = 10.0
+    ) -> bool:  # pragma: no cover — requires running subprocess
         """Send graceful shutdown, escalate to SIGKILL after timeout.
 
         Returns True if the task was found and signaled, False otherwise.

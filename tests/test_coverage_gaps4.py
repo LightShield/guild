@@ -5,10 +5,13 @@ from __future__ import annotations
 import asyncio
 import json
 import time
-from pathlib import Path
+from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 # ======================================================================
 # 1. agent/ratelimit.py:81->83 — branch where wait <= 0 (window expired)
@@ -232,9 +235,7 @@ class TestConfigLoaderTempFileCleanup:
 
         project_guild = tmp_path / "project" / ".guild"
         project_guild.mkdir(parents=True)
-        (project_guild / "config.toml").write_text(
-            '[provider]\nmodel = "project"\n'
-        )
+        (project_guild / "config.toml").write_text('[provider]\nmodel = "project"\n')
 
         # Patch Path.home() to return our fake home
         monkeypatch.setenv("HOME", str(home))
@@ -304,7 +305,7 @@ class TestProfilesNonDictValues:
         perms_toml = guild_dir / "permissions.toml"
         # Include a scalar value and a proper table
         perms_toml.write_text(
-            'format_version = 2\n\n'  # integer scalar — should be skipped (line 85)
+            "format_version = 2\n\n"  # integer scalar — should be skipped (line 85)
             "[valid_perm]\n"
             'tier = "scoped"\n'
         )
@@ -604,10 +605,12 @@ class TestReplayExtractToolNamesBranches:
 
         tools: list[str] = []
         # A call with empty name — `if name` is False, branch 102->99
-        calls = json.dumps([
-            {"function": {"name": ""}},
-            {"function": {"name": "valid_tool"}},
-        ])
+        calls = json.dumps(
+            [
+                {"function": {"name": ""}},
+                {"function": {"name": "valid_tool"}},
+            ]
+        )
         SessionReplay._extract_tool_names(calls, tools)
         # Only valid_tool should be extracted
         assert tools == ["valid_tool"]
@@ -617,10 +620,12 @@ class TestReplayExtractToolNamesBranches:
         from guild.observability.replay import SessionReplay
 
         tools: list[str] = []
-        calls = json.dumps([
-            {"other_key": "value"},
-            {"function": {"name": "good_tool"}},
-        ])
+        calls = json.dumps(
+            [
+                {"other_key": "value"},
+                {"function": {"name": "good_tool"}},
+            ]
+        )
         SessionReplay._extract_tool_names(calls, tools)
         assert tools == ["good_tool"]
 
@@ -629,10 +634,12 @@ class TestReplayExtractToolNamesBranches:
         from guild.observability.replay import SessionReplay
 
         tools: list[str] = ["existing_tool"]
-        calls = json.dumps([
-            {"function": {"name": "existing_tool"}},
-            {"function": {"name": "new_tool"}},
-        ])
+        calls = json.dumps(
+            [
+                {"function": {"name": "existing_tool"}},
+                {"function": {"name": "new_tool"}},
+            ]
+        )
         SessionReplay._extract_tool_names(calls, tools)
         # existing_tool should NOT be duplicated
         assert tools.count("existing_tool") == 1
@@ -862,9 +869,7 @@ class TestLearningEdgeBranches:
         assert len(result.split("] ")[1]) == 503  # 500 + "..."
         assert result.endswith("...")
 
-    async def test_suggest_prompt_refinements_skips_non_matching(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_suggest_prompt_refinements_skips_non_matching(self, tmp_path: Path) -> None:
         """suggest_prompt_refinements skips categories other than anti_pattern/tool_tip."""
         from guild.agent.learning import suggest_prompt_refinements
         from guild.storage.sqlite import Storage
@@ -873,18 +878,12 @@ class TestLearningEdgeBranches:
         await store.connect()
 
         # Add learnings of various categories
-        await store.add_learning(
-            category="pattern", content="Use async", confidence=0.9
-        )
-        await store.add_learning(
-            category="domain_knowledge", content="API is REST", confidence=0.8
-        )
+        await store.add_learning(category="pattern", content="Use async", confidence=0.9)
+        await store.add_learning(category="domain_knowledge", content="API is REST", confidence=0.8)
         await store.add_learning(
             category="anti_pattern", content="Avoid busy waits", confidence=0.7
         )
-        await store.add_learning(
-            category="tool_tip", content="Use --verbose flag", confidence=0.6
-        )
+        await store.add_learning(category="tool_tip", content="Use --verbose flag", confidence=0.6)
 
         suggestions = await suggest_prompt_refinements(store)
 
@@ -1278,10 +1277,7 @@ class TestToolsPluginEdges:
         plugin_dir.mkdir()
         plugin_file = plugin_dir / "no_name.toml"
         # Valid TOML with [tool] section but no name field
-        plugin_file.write_text(
-            "[tool]\n"
-            'description = "A tool without a name"\n'
-        )
+        plugin_file.write_text("[tool]\n" 'description = "A tool without a name"\n')
 
         loader = PluginLoader(plugin_dirs=[plugin_dir])
         result = loader.load_from_file(plugin_file)
@@ -1310,9 +1306,7 @@ class TestToolsPluginEdges:
         (plugin_dir / "bad.toml").write_text("[metadata]\n")
         # One good plugin
         (plugin_dir / "good.toml").write_text(
-            "[tool]\n"
-            'name = "good_tool"\n'
-            'description = "A good tool"\n'
+            "[tool]\n" 'name = "good_tool"\n' 'description = "A good tool"\n'
         )
 
         loader = PluginLoader(plugin_dirs=[plugin_dir])

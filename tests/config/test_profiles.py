@@ -229,8 +229,7 @@ class TestConfigValidation:
         guild_dir.mkdir()
         agents_toml = guild_dir / "agents.toml"
         agents_toml.write_text(
-            '[agent_a]\npermission = "root"\n\n'
-            '[agent_b]\npermission = "sudo"\n'
+            '[agent_a]\npermission = "root"\n\n' '[agent_b]\npermission = "sudo"\n'
         )
 
         config = load_config(guild_dir=guild_dir)

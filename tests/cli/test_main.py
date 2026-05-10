@@ -234,9 +234,7 @@ class TestTaskBackgroundFlag:
             mock_process.pid = 99999
             mock_popen.return_value = mock_process
 
-            result = runner.invoke(
-                guild_app, ["task", "test background storage", "--background"]
-            )
+            result = runner.invoke(guild_app, ["task", "test background storage", "--background"])
 
         assert result.exit_code == 0
 
@@ -262,9 +260,7 @@ class TestTaskBackgroundFlag:
             mock_popen.return_value = mock_process
 
             with patch("guild.cli.main._create_task_in_storage", return_value="task-xyz-123"):
-                result = runner.invoke(
-                    guild_app, ["task", "some work", "--background"]
-                )
+                result = runner.invoke(guild_app, ["task", "some work", "--background"])
 
         assert result.exit_code == 0
         # The task ID must be shown in the output

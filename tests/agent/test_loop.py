@@ -716,12 +716,8 @@ class TestTokenTracking:
         """Token counters accumulate correctly across many tool-call turns."""
         read_call = {"function": {"name": "file_read", "arguments": {"path": "a"}}}
         provider = _make_provider(
-            LLMResponse(
-                content="", tool_calls=[read_call], input_tokens=100, output_tokens=50
-            ),
-            LLMResponse(
-                content="", tool_calls=[read_call], input_tokens=120, output_tokens=60
-            ),
+            LLMResponse(content="", tool_calls=[read_call], input_tokens=100, output_tokens=50),
+            LLMResponse(content="", tool_calls=[read_call], input_tokens=120, output_tokens=60),
             LLMResponse(content="Done", tool_calls=None, input_tokens=130, output_tokens=70),
         )
         loop = AgentLoop(provider=provider, tool_executors=_make_tool_executors())
@@ -946,9 +942,7 @@ class TestAgentDoesNotPause:
         provider = _make_provider(
             LLMResponse(
                 content="",
-                tool_calls=[
-                    {"function": {"name": "file_read", "arguments": {"path": "a.txt"}}}
-                ],
+                tool_calls=[{"function": {"name": "file_read", "arguments": {"path": "a.txt"}}}],
             ),
             LLMResponse(
                 content="",
@@ -981,7 +975,10 @@ class TestAgentDoesNotPause:
         )
         # Confirm that permission checks pass without any prompt_fn
         assert checker.check("file_read", "agent-1", {"path": "/project/a.txt"}) is True
-        assert checker.check("file_write", "agent-1", {"path": "/project/b.txt", "content": "x"}) is True
+        assert (
+            checker.check("file_write", "agent-1", {"path": "/project/b.txt", "content": "x"})
+            is True
+        )
         # No prompt function was set — meaning no pausing for confirmation
 
 
@@ -1012,7 +1009,9 @@ class TestTimeoutBehavior:
             content="",
             tool_calls=[{"function": {"name": "file_read", "arguments": {"path": "a.txt"}}}],
         )
-        provider = _make_provider(tool_response, tool_response, tool_response, tool_response, tool_response)
+        provider = _make_provider(
+            tool_response, tool_response, tool_response, tool_response, tool_response
+        )
         loop = AgentLoop(provider=provider, tool_executors=_make_tool_executors(), max_turns=3)
         result = await loop.run(system_prompt="sys", user_input="keep reading")
         # Loop stopped at max_turns with empty content — partial result
@@ -1030,15 +1029,11 @@ class TestStatePersistencePerTurn:
         provider = _make_provider(
             LLMResponse(
                 content="",
-                tool_calls=[
-                    {"function": {"name": "file_read", "arguments": {"path": "a.txt"}}}
-                ],
+                tool_calls=[{"function": {"name": "file_read", "arguments": {"path": "a.txt"}}}],
             ),
             LLMResponse(
                 content="",
-                tool_calls=[
-                    {"function": {"name": "file_read", "arguments": {"path": "b.txt"}}}
-                ],
+                tool_calls=[{"function": {"name": "file_read", "arguments": {"path": "b.txt"}}}],
             ),
             LLMResponse(content="Done reading both.", tool_calls=None),
         )

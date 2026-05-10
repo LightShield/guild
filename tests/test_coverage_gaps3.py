@@ -8,7 +8,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-
 # ======================================================================
 # Lifecycle pause/resume/complete edge cases (lifecycle.py 110-111, 132-133, 235-236)
 # ======================================================================
@@ -217,9 +216,7 @@ class TestWorktreeParseList:
 
         mgr = WorktreeManager(repo_root=Path("/tmp"))
         output = (
-            "worktree /repo/.guild/worktrees/_staging\n"
-            "branch refs/heads/guild/staging\n"
-            "\n"
+            "worktree /repo/.guild/worktrees/_staging\n" "branch refs/heads/guild/staging\n" "\n"
         )
         result = mgr._parse_worktree_list(output)
         assert result == []
@@ -230,10 +227,7 @@ class TestWorktreeParseList:
 
         mgr = WorktreeManager(repo_root=Path("/tmp"))
         # No blank line after last entry
-        output = (
-            "worktree /repo/.guild/worktrees/task-2\n"
-            "branch refs/heads/guild/task-2\n"
-        )
+        output = "worktree /repo/.guild/worktrees/task-2\n" "branch refs/heads/guild/task-2\n"
         result = mgr._parse_worktree_list(output)
         assert len(result) == 1
         assert result[0].task_id == "task-2"
@@ -243,11 +237,7 @@ class TestWorktreeParseList:
         from guild.git.worktree import WorktreeManager
 
         mgr = WorktreeManager(repo_root=Path("/tmp"))
-        output = (
-            "worktree /repo\n"
-            "branch refs/heads/feature/my-feature\n"
-            "\n"
-        )
+        output = "worktree /repo\n" "branch refs/heads/feature/my-feature\n" "\n"
         result = mgr._parse_worktree_list(output)
         assert result == []
 
@@ -427,8 +417,9 @@ class TestReplayEdgeCases:
 
     def test_format_for_display_empty(self) -> None:
         """format_for_display returns placeholder for empty session."""
-        from guild.observability.replay import SessionReplay
         from unittest.mock import MagicMock
+
+        from guild.observability.replay import SessionReplay
 
         replay = SessionReplay(MagicMock())
         result = replay.format_for_display([])
@@ -449,10 +440,12 @@ class TestReplayEdgeCases:
         from guild.observability.replay import SessionReplay
 
         tools: list[str] = []
-        calls = json.dumps([
-            {"function": {"name": "shell"}},
-            {"function": {"name": "file_read"}},
-        ])
+        calls = json.dumps(
+            [
+                {"function": {"name": "shell"}},
+                {"function": {"name": "file_read"}},
+            ]
+        )
         SessionReplay._extract_tool_names(calls, tools)
         assert "shell" in tools
         assert "file_read" in tools
@@ -472,18 +465,22 @@ class TestWorktreeOperations:
         from guild.git.worktree import WorktreeManager
 
         mgr = WorktreeManager(repo_root=tmp_path)
-        with patch.object(mgr, "_run_git", return_value=(1, "fatal: error")):
-            with pytest.raises(RuntimeError, match="Failed to create"):
-                await mgr.create("task-1")
+        with (
+            patch.object(mgr, "_run_git", return_value=(1, "fatal: error")),
+            pytest.raises(RuntimeError, match="Failed to create"),
+        ):
+            await mgr.create("task-1")
 
     async def test_remove_fails_raises(self, tmp_path: Path) -> None:
         """remove() raises RuntimeError when git fails."""
         from guild.git.worktree import WorktreeManager
 
         mgr = WorktreeManager(repo_root=tmp_path)
-        with patch.object(mgr, "_run_git", return_value=(1, "fatal: error")):
-            with pytest.raises(RuntimeError, match="Failed to remove"):
-                await mgr.remove("task-1")
+        with (
+            patch.object(mgr, "_run_git", return_value=(1, "fatal: error")),
+            pytest.raises(RuntimeError, match="Failed to remove"),
+        ):
+            await mgr.remove("task-1")
 
     async def test_list_active_on_git_failure(self, tmp_path: Path) -> None:
         """list_active() returns empty list when git fails."""
@@ -571,7 +568,6 @@ class TestBusReceiveNoTimeout:
 
     async def test_receive_without_timeout_gets_message(self) -> None:
         """receive() without timeout returns message immediately if available."""
-        import asyncio
 
         from guild.orchestration.bus import MessageBus
 

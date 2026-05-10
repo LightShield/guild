@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-import logging
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 
 # ======================================================================
 # Skills edge cases (skills.py lines 32->39, 34->39, 59->53, 70, 98, 106-107, 117)
@@ -107,11 +104,11 @@ class TestConfigProfilesEdgeCases:
         guild_dir.mkdir()
         agents_file = guild_dir / "agents.toml"
         agents_file.write_text(
-            '[worker]\n'
+            "[worker]\n"
             'model = "qwen2.5"\n'
             'permission = "scoped"\n'
-            '\n'
-            '# Non-dict top-level key that should be skipped\n'
+            "\n"
+            "# Non-dict top-level key that should be skipped\n"
         )
         profiles = load_agent_profiles(guild_dir)
         assert "worker" in profiles
@@ -134,9 +131,7 @@ class TestConfigProfilesEdgeCases:
         guild_dir.mkdir()
         perms_file = guild_dir / "permissions.toml"
         perms_file.write_text(
-            '[readonly]\n'
-            'tier = "scoped"\n'
-            'allowed_tools = ["file_read", "search"]\n'
+            "[readonly]\n" 'tier = "scoped"\n' 'allowed_tools = ["file_read", "search"]\n'
         )
         profiles = load_permission_profiles(guild_dir)
         assert "readonly" in profiles
@@ -221,10 +216,7 @@ class TestConfigProfilesEdgeCases:
         guild_dir = tmp_path / ".guild"
         guild_dir.mkdir()
         agents_file = guild_dir / "agents.toml"
-        agents_file.write_text(
-            '[badagent]\n'
-            'permission = "invalid_tier"\n'
-        )
+        agents_file.write_text("[badagent]\n" 'permission = "invalid_tier"\n')
         config = GuildConfig(model="test", base_url="http://localhost:11434")
         errors = validate_config(config, guild_dir)
         assert any("invalid" in e.lower() and "permission" in e.lower() for e in errors)
@@ -289,19 +281,19 @@ class TestSandboxEdgeCases:
         guild_dir = tmp_path / ".guild"
         guild_dir.mkdir()
         (guild_dir / "security.toml").write_text(
-            '[filesystem]\n'
+            "[filesystem]\n"
             'allowed_paths = ["/tmp"]\n'
             'denied_paths = ["/etc"]\n'
-            '\n'
-            '[commands]\n'
+            "\n"
+            "[commands]\n"
             'allow = ["git", "ls"]\n'
             'deny = ["rm"]\n'
-            '\n'
-            '[network]\n'
-            'allowed = false\n'
+            "\n"
+            "[network]\n"
+            "allowed = false\n"
             'hosts_allowlist = ["api.example.com"]\n'
-            '\n'
-            '[secrets]\n'
+            "\n"
+            "[secrets]\n"
             'API_KEY = "sk-secret-123"\n'
         )
         policy = load_sandbox_policy(guild_dir)
@@ -513,7 +505,8 @@ class TestArtifactsEdgeCases:
 
 
 # ======================================================================
-# Block registry remaining line: 327 — loop evaluator not in team (already tested but let's hit it directly)
+# Block registry remaining line: 327
+# loop evaluator not in team (already tested but let's hit it directly)
 # ======================================================================
 
 

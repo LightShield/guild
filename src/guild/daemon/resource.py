@@ -64,7 +64,9 @@ class ResourceStatus:
     reason: str = ""
 
 
-def _default_activity_detector() -> ActivityState:  # pragma: no cover — platform dependency (psutil optional)
+def _default_activity_detector() -> (
+    ActivityState
+):  # pragma: no cover — platform dependency (psutil optional)
     """Default activity detector using CPU as a proxy.
 
     MVP: uses psutil if available, otherwise assumes IDLE.

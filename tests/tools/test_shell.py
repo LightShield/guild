@@ -70,9 +70,7 @@ class TestShellTimeout:
     async def test_shell_timeout_kills_process(self) -> None:
         """After timeout, the child process is killed (not left orphaned)."""
         # Use a command that would run forever without the kill
-        result = await execute_shell(
-            {"command": "sleep 999", "timeout": 0.5}, working_dir="/tmp"
-        )
+        result = await execute_shell({"command": "sleep 999", "timeout": 0.5}, working_dir="/tmp")
 
         assert result.success is False
         assert result.error is not None
@@ -154,9 +152,7 @@ class TestShellSchema:
             assert "name" in schema, f"Schema for {name} missing 'name'"
             assert "description" in schema, f"Schema for {name} missing 'description'"
             assert "parameters" in schema, f"Schema for {name} missing 'parameters'"
-            assert len(schema["description"]) > 10, (
-                f"Schema for {name} has too-short description"
-            )
+            assert len(schema["description"]) > 10, f"Schema for {name} has too-short description"
 
 
 @pytest.mark.unit

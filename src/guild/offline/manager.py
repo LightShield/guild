@@ -61,7 +61,9 @@ class OfflineManager:
             self._is_online = False
         return self._is_online
 
-    async def list_local_models(self) -> list[str]:  # pragma: no cover — requires ollama binary installed
+    async def list_local_models(
+        self,
+    ) -> list[str]:  # pragma: no cover — requires ollama binary installed
         """List locally available Ollama models via CLI."""
         try:
             proc = await asyncio.create_subprocess_exec(
@@ -85,7 +87,9 @@ class OfflineManager:
             logger.warning("ollama CLI not found")
             return []
 
-    async def pull_model(self, model_name: str) -> bool:  # pragma: no cover — requires ollama binary installed
+    async def pull_model(
+        self, model_name: str
+    ) -> bool:  # pragma: no cover — requires ollama binary installed
         """Pull a model from Ollama registry (requires connectivity)."""
         if not await self.check_connectivity():
             logger.warning("Cannot pull model: no connectivity")

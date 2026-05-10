@@ -143,17 +143,19 @@ class TestDesktopNotification:
     async def test_desktop_notification_calls_osascript_on_darwin(self) -> None:
         """Desktop notification uses osascript on macOS."""
         notifier = Notifier(channels=[NotificationChannel.DESKTOP])
-        with patch("sys.platform", "darwin"):
-            with patch(
+        with (
+            patch("sys.platform", "darwin"),
+            patch(
                 "guild.escalation.notify.asyncio.create_subprocess_exec",
                 new_callable=AsyncMock,
-            ) as mock_proc:
-                mock_proc.return_value.wait = AsyncMock()
-                await notifier.notify("macOS test")
-                mock_proc.assert_called_once()
-                # First arg should be osascript
-                call_args = mock_proc.call_args[0]
-                assert call_args[0] == "osascript"
+            ) as mock_proc,
+        ):
+            mock_proc.return_value.wait = AsyncMock()
+            await notifier.notify("macOS test")
+            mock_proc.assert_called_once()
+            # First arg should be osascript
+            call_args = mock_proc.call_args[0]
+            assert call_args[0] == "osascript"
 
     async def test_desktop_notification_calls_notify_send_on_linux(self) -> None:
         """Desktop notification uses notify-send on Linux."""
