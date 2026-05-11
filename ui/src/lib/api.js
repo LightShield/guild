@@ -60,6 +60,35 @@ export async function fetchTeams() {
 	return request('/teams');
 }
 
+/**
+ * Save a team configuration to the backend.
+ * @param {string} name - Team name
+ * @param {Array} nodes - Flow nodes (blocks with positions)
+ * @param {Array} edges - Flow edges (connections)
+ * @returns {Promise<any>}
+ */
+export async function saveTeam(name, nodes, edges) {
+	// Convert flow nodes/edges into the team config format the backend expects
+	const blocks = {};
+	for (const node of nodes) {
+		const blockName = node.data?.blockName || node.id;
+		const role = node.data?.role || 'agent';
+		blocks[node.id] = { name: blockName, role };
+	}
+
+	const connections = edges.map((edge) => ({
+		source_block: edge.source,
+		target_block: edge.target,
+		source_port: 'output',
+		target_port: 'input',
+	}));
+
+	return request('/teams', {
+		method: 'POST',
+		body: JSON.stringify({ name, blocks, connections }),
+	});
+}
+
 export async function createTask(description) {
 	return request('/tasks', {
 		method: 'POST',
