@@ -15,7 +15,6 @@ import pytest
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-03.1")
 class TestNestedTablesParseAsNestedDicts:
     """Verify [a.b] becomes {"a": {"b": ...}} — used for guild.toml config."""
 
@@ -45,7 +44,6 @@ key = "value"
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-03.1")
 class TestArrayOfTablesParseCorrectly:
     """Verify [[items]] syntax — used for team block definitions."""
 
@@ -78,7 +76,6 @@ max_size = 1024
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-03.1")
 class TestMissingFileRaisesNotReturnsEmpty:
     """Verify opening a missing file raises — not silently returning {}."""
 
@@ -98,7 +95,6 @@ class TestMissingFileRaisesNotReturnsEmpty:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-03.1")
 class TestInvalidTomlRaisesDecodeError:
     """Verify invalid TOML raises TOMLDecodeError — used for config validation."""
 

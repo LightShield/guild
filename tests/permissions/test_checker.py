@@ -452,7 +452,7 @@ class TestReversibilitySafeOperations:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-11.1")
+@pytest.mark.req("REQ-03.2")
 @pytest.mark.unit
 class TestPermissionsCheckerEdges:
     """Cover permissions checker uncovered branches."""

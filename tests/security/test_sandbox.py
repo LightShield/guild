@@ -408,7 +408,7 @@ class TestSandboxEdgeCases:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-11.5")
+@pytest.mark.req("REQ-13.4")
 @pytest.mark.unit
 class TestSandboxEdges:
     """Cover security/sandbox.py uncovered branches."""

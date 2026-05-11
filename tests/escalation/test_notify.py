@@ -221,7 +221,7 @@ class TestNotifierLoopContinue:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-15.1")
+@pytest.mark.req("REQ-15.5")
 @pytest.mark.unit
 class TestNotifyLoopContinuation:
     """Cover the loop continuation branch when NONE is followed by real channels."""

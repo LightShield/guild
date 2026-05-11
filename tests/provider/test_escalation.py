@@ -411,7 +411,7 @@ class TestModelCapabilityTagging:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-12.1")
+@pytest.mark.req("REQ-17.5")
 @pytest.mark.unit
 class TestProviderEscalationEdges:
     """Cover provider/escalation.py uncovered branches."""

@@ -498,7 +498,7 @@ class TestVerificationCommandEdgeCases:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-04.3")
+@pytest.mark.req("REQ-12.5")
 @pytest.mark.unit
 class TestTaskSpecEdges:
     """Cover task/spec.py uncovered branches."""

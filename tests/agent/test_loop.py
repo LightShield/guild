@@ -1122,7 +1122,7 @@ class TestRealOllama:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-04.1")
+@pytest.mark.req("REQ-06.8")
 @pytest.mark.unit
 class TestAgentLoopUncoveredBranches:
     """Cover agent loop branches where stuck_detector is None and tool schemas miss."""

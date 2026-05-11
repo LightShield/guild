@@ -208,7 +208,7 @@ class TestWakeBehaviorConfigurable:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-24.2")
+@pytest.mark.req("REQ-26.1")
 class TestSleepWakeEdgeCases:
     """Cover sleep/wake detector edge cases."""
 

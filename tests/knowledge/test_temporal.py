@@ -301,7 +301,7 @@ class TestTemporalKnowledgeEdgeCases:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-07.4")
+@pytest.mark.req("REQ-27.1")
 @pytest.mark.unit
 class TestTemporalKnowledgeBranches:
     """Cover temporal knowledge uncovered branches."""

@@ -306,7 +306,7 @@ class TestBackpressureReleaseBranch:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-10.5")
+@pytest.mark.req("REQ-20.1")
 @pytest.mark.unit
 class TestRateLimiterWindowExpiredBranch:
     """Cover the branch where wait computes to <= 0 in RateLimiter."""

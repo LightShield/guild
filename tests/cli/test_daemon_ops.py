@@ -16,7 +16,7 @@ from guild.cli.daemon_ops import (
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-06.5")
+@pytest.mark.req("REQ-23.5")
 class TestGetRunningTasks:
     """get_running_tasks reads PID files and checks liveness."""
 
@@ -64,7 +64,7 @@ class TestGetRunningTasks:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-06.5")
+@pytest.mark.req("REQ-23.1")
 class TestLaunchBackgroundTask:
     """launch_background_task forks a subprocess."""
 
@@ -84,7 +84,7 @@ class TestLaunchBackgroundTask:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-06.5")
+@pytest.mark.req("REQ-23.2")
 class TestCreateTaskInStorage:
     """create_task_in_storage creates a task record and returns an ID."""
 

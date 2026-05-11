@@ -270,7 +270,7 @@ class TestCreateWorktreeFailure:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-09.1")
+@pytest.mark.req("REQ-04.12")
 class TestWorktreeParseList:
     """Cover worktree list parsing edge cases."""
 
@@ -328,7 +328,7 @@ class TestWorktreeParseList:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-09.1")
+@pytest.mark.req("REQ-04.12")
 class TestWorktreeOperations:
     """Test worktree operations with mocked git."""
 

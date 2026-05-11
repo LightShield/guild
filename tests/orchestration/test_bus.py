@@ -220,7 +220,7 @@ class TestMessageBusTimeout:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-07.1")
+@pytest.mark.req("REQ-04.7")
 class TestBusReceiveNoTimeout:
     """Test bus receive without timeout (blocking)."""
 

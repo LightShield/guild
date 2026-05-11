@@ -175,7 +175,7 @@ class TestSkillsEdgeCases:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-04.30")
+@pytest.mark.req("REQ-04.8")
 @pytest.mark.unit
 class TestSkillsFrontmatterToolsLastLine:
     """Cover the branch where tools: is NOT the last line in frontmatter."""

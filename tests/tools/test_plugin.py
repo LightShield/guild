@@ -373,7 +373,7 @@ class TestPluginLoaderEdgeCases:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-06.1")
+@pytest.mark.req("REQ-08.9")
 @pytest.mark.unit
 class TestToolsPluginEdges:
     """Cover tools/plugin.py uncovered branches."""

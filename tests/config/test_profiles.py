@@ -378,7 +378,7 @@ class TestConfigProfilesEdgeCases:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-05.3")
+@pytest.mark.req("REQ-14.1")
 @pytest.mark.unit
 class TestProfilesNonDictValues:
     """Cover branches where non-dict values in TOML are skipped."""
@@ -424,7 +424,7 @@ class TestProfilesNonDictValues:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-05.3")
+@pytest.mark.req("REQ-14.5")
 @pytest.mark.unit
 class TestProfilesValidateLoopBranch:
     """Cover the loop skip branch in validate_config (line 122->121)."""

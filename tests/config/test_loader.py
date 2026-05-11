@@ -398,7 +398,7 @@ class TestConfigLoaderInternals:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-05.3")
+@pytest.mark.req("REQ-14.5")
 @pytest.mark.unit
 class TestConfigLoaderGlobalFallback:
     """Cover the branch at line 65 where only global config exists."""
@@ -432,7 +432,7 @@ class TestConfigLoaderGlobalFallback:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-05.3")
+@pytest.mark.req("REQ-14.5")
 @pytest.mark.unit
 class TestConfigLoaderTempFileCleanup:
     """Cover the temp file cleanup branch at lines 155-158."""
@@ -466,7 +466,7 @@ class TestConfigLoaderTempFileCleanup:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-05.3")
+@pytest.mark.req("REQ-14.5")
 @pytest.mark.unit
 class TestConfigLoaderCorruptToml:
     """Cover the exception branch in _load_toml_file."""

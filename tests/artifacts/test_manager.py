@@ -54,7 +54,7 @@ def test_get_diff_between_versions(tmp_path: object) -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-18.3")
+@pytest.mark.req("REQ-18.1")
 def test_artifact_get_returns_content(tmp_path: object) -> None:
     """get() returns the content of the artifact."""
     mgr = ArtifactManager(tmp_path)  # type: ignore[arg-type]
@@ -107,7 +107,7 @@ def test_export_creates_directory(tmp_path: object) -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-22.1")
+@pytest.mark.req("REQ-18.4")
 class TestArtifactsEdgeCases:
     """Cover artifact manager edge cases."""
 

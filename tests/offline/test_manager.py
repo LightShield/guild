@@ -98,7 +98,7 @@ async def test_offline_help_returns_content() -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-24.3")
+@pytest.mark.req("REQ-21.2")
 class TestOfflineManagerEdgeCases:
     """Offline manager check_connectivity exception path."""
 
@@ -117,7 +117,7 @@ class TestOfflineManagerEdgeCases:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-14.1")
+@pytest.mark.req("REQ-21.1")
 @pytest.mark.unit
 class TestOfflineManagerHealthCheckSuccess:
     """Cover the branch where health check succeeds (line 45->exit)."""
