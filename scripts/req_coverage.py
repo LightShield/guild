@@ -157,14 +157,54 @@ def scan_test_file(path: Path) -> dict[str, list[str]]:
     return dict(coverage)
 
 
+def scan_e2e_tests(e2e_dir: Path) -> dict[str, list[str]]:
+    """Scan Playwright E2E test files for REQ-XX.X in test.describe strings."""
+    coverage: dict[str, list[str]] = defaultdict(list)
+    if not e2e_dir.is_dir():
+        return dict(coverage)
+
+    for spec_file in sorted(e2e_dir.glob("*.spec.ts")):
+        content = spec_file.read_text(encoding="utf-8")
+        rel_path = spec_file.relative_to(PROJECT_ROOT)
+
+        # Find test.describe('... (REQ-XX.X, REQ-YY.Y) ...')
+        describe_blocks = re.finditer(
+            r"test\.describe\(['\"]([^'\"]+)['\"]\s*,", content
+        )
+        current_req_ids: list[str] = []
+        for desc_match in describe_blocks:
+            desc_text = desc_match.group(1)
+            current_req_ids = [
+                f"REQ-{m.group(1)}" for m in REQ_ID_PATTERN.finditer(desc_text)
+            ]
+
+        # Count individual test(...) calls in the file
+        test_calls = re.findall(r"test\(['\"]([^'\"]+)['\"]", content)
+        for test_name in test_calls:
+            if test_name == "beforeEach":
+                continue
+            for req_id in current_req_ids:
+                node_id = f"{rel_path}::{test_name}"
+                coverage[req_id].append(node_id)
+
+    return dict(coverage)
+
+
 def scan_all_tests(tests_dir: Path) -> dict[str, list[str]]:
-    """Scan all test files and return {req_id: [test_node_ids]}."""
+    """Scan all test files (Python + Playwright E2E) and return {req_id: [test_node_ids]}."""
     all_coverage: dict[str, list[str]] = defaultdict(list)
 
+    # Python tests
     for test_file in sorted(tests_dir.rglob("test_*.py")):
         file_coverage = scan_test_file(test_file)
         for req_id, node_ids in file_coverage.items():
             all_coverage[req_id].extend(node_ids)
+
+    # Playwright E2E tests
+    e2e_dir = PROJECT_ROOT / "ui" / "e2e"
+    e2e_coverage = scan_e2e_tests(e2e_dir)
+    for req_id, node_ids in e2e_coverage.items():
+        all_coverage[req_id].extend(node_ids)
 
     return dict(all_coverage)
 
