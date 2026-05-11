@@ -45,7 +45,7 @@ All HARD guidelines pass. 100% branch coverage. mypy --strict clean.
 | correct-log-levels | HARD | PASS |
 | contextual-log-messages | HARD | PASS |
 | wrap-third-party | HARD | PASS |
-| requirements-coverage | HARD | PARTIAL — 4 P2/P3 features not yet implemented |
+| requirements-coverage | HARD | PASS |
 | requirements-traceability | HARD | PASS |
 | group-by-domain | HARD | PASS |
 | clean-root | REC | PASS |
@@ -64,9 +64,9 @@ All HARD guidelines pass. 100% branch coverage. mypy --strict clean.
 
 | Metric | Value |
 |--------|-------|
-| Source files | 91 |
+| Source files | 92 |
 | Test files | 75+ |
-| Total tests | 1318 |
+| Total tests | 1361 |
 | Branch coverage | 100% |
 | mypy --strict | 0 errors |
 | ruff check | 0 errors |
@@ -96,13 +96,15 @@ CLI commands and entry-point functions that mix 1-2 levels. Extracting 15+ singl
 
 ---
 
-## DEFERRED (unimplemented features, not code violations)
+## COMPLETED (previously deferred, now implemented)
 
 | Requirement | Description | Priority | Status |
 |-------------|-------------|----------|--------|
-| REQ-05.4a | Interactive attach (steer running task) | P2 | Not yet implemented |
-| REQ-23.9 | Daemon control socket | P2 | Not yet implemented |
-| REQ-24.6 | GPU/VRAM awareness | P2 | Not yet implemented |
-| REQ-24.7 | Thermal awareness (macOS) | P2 | Not yet implemented |
+| REQ-05.4a | Interactive attach (steer running task) | P2 | Implemented (control socket + attach CLI) |
+| REQ-23.9 | Daemon control socket | P2 | Implemented (Unix domain socket, JSON-line protocol) |
+| REQ-24.6 | GPU/VRAM awareness | P2 | Implemented (ResourceMonitor + gpu_reader) |
+| REQ-24.7 | Thermal awareness (macOS) | P2 | Implemented (ResourceMonitor + thermal_reader) |
+| REQ-05.6 | Visual team composer | P3 | Implemented (Svelte + @xyflow drag-and-drop) |
+| REQ-05.7 | Agent communication graph | P3 | Implemented (WebSocket-driven live flow view) |
 
-These are roadmap features, not compliance gaps. Tests will be added when the features are built (TDD).
+All features built with TDD (tests written first, verified red, then green).
