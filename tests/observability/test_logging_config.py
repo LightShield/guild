@@ -66,3 +66,37 @@ class TestStructuredFormatter:
         assert parsed["logger"] == "guild.test"
         assert parsed["message"] == "hello world"
         assert "timestamp" in parsed
+
+
+# ======================================================================
+# StructuredFormatter with exception (from coverage gaps)
+# ======================================================================
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-11.3")
+class TestStructuredFormatterException:
+    """StructuredFormatter formatting with exc_info."""
+
+    def test_format_with_exception(self) -> None:
+        """Log records with exc_info include an 'exception' key in output."""
+        formatter = StructuredFormatter()
+        try:
+            raise ValueError("test boom")
+        except ValueError:
+            import sys
+
+            record = logging.LogRecord(
+                name="guild.test",
+                level=logging.ERROR,
+                pathname="test.py",
+                lineno=1,
+                msg="Something failed",
+                args=(),
+                exc_info=sys.exc_info(),
+            )
+        output = formatter.format(record)
+        parsed = json.loads(output)
+        assert "exception" in parsed
+        assert "ValueError" in parsed["exception"]
+        assert "test boom" in parsed["exception"]

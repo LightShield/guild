@@ -209,3 +209,58 @@ class TestToolAuditLog:
         assert any("success" in d for d in details)
         assert any("denied" in d for d in details)
         await store.close()
+
+
+# ======================================================================
+# Shell tool edge cases (from coverage gaps)
+# ======================================================================
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-08.3")
+class TestShellEdgeCases:
+    """Cover shell tool edge-case branches."""
+
+    async def test_shell_empty_command_returns_error(self) -> None:
+        """Empty command string returns an error ToolResult."""
+        from guild.tools.shell import execute_shell
+
+        result = await execute_shell({"command": ""}, working_dir="/tmp")
+        assert result.success is False
+        assert "command" in (result.error or "").lower()
+
+    async def test_shell_non_int_timeout_uses_default(self) -> None:
+        """Non-numeric timeout falls back to default."""
+        from guild.tools.shell import execute_shell
+
+        result = await execute_shell(
+            {"command": "echo hi", "timeout": "not-a-number"},
+            working_dir="/tmp",
+        )
+        assert result.success is True
+        assert "hi" in result.output
+
+    async def test_shell_oserror_on_subprocess_creation(self) -> None:
+        """OSError during subprocess creation returns a descriptive error."""
+        from unittest.mock import patch
+
+        from guild.tools.shell import execute_shell
+
+        with patch(
+            "guild.tools.shell.asyncio.create_subprocess_shell",
+            side_effect=OSError("no such shell"),
+        ):
+            result = await execute_shell({"command": "echo test"}, working_dir="/tmp")
+        assert result.success is False
+        assert "Failed to start" in (result.error or "")
+
+    async def test_shell_stderr_included_in_output(self) -> None:
+        """Commands that write to stderr include it in output."""
+        from guild.tools.shell import execute_shell
+
+        result = await execute_shell(
+            {"command": "echo err >&2"},
+            working_dir="/tmp",
+        )
+        # stderr should be present in output
+        assert "[stderr]" in result.output

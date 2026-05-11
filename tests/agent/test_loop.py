@@ -1115,3 +1115,42 @@ class TestRealOllama:
                 for tc in msg.tool_calls:
                     assert tc not in tool_calls_seen, f"Duplicate tool call detected: {tc}"
                     tool_calls_seen.append(tc)
+
+
+# ======================================================================
+# Agent loop uncovered branches (from coverage gaps)
+# ======================================================================
+
+
+@pytest.mark.req("REQ-04.1")
+@pytest.mark.unit
+class TestAgentLoopUncoveredBranches:
+    """Cover agent loop branches where stuck_detector is None and tool schemas miss."""
+
+    def test_get_tool_schemas_skips_unknown_tools(self) -> None:
+        """_get_tool_schemas skips tools not in TOOL_SCHEMAS (305->304)."""
+        from unittest.mock import MagicMock, AsyncMock
+
+        loop = AgentLoop(
+            provider=MagicMock(),
+            tool_executors={"nonexistent_tool_xyz": AsyncMock()},
+        )
+        schemas = loop._get_tool_schemas()
+        # nonexistent_tool_xyz is not in TOOL_SCHEMAS, so it\'s skipped
+        assert schemas == []
+
+    async def test_attempt_recovery_without_stuck_detector(self) -> None:
+        """_attempt_recovery works when stuck_detector is None (221->223)."""
+        from unittest.mock import MagicMock
+
+        loop = AgentLoop(
+            provider=MagicMock(),
+            tool_executors={},
+            stuck_detector=None,
+        )
+        loop._recovery_attempted = False
+        result = loop._attempt_recovery()
+        assert result is None
+        assert loop._recovery_attempted is True
+        # Should have appended recovery prompt
+        assert any("stuck" in msg.content.lower() for msg in loop.messages)

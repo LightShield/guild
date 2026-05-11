@@ -491,3 +491,50 @@ class TestVerificationCommandEdgeCases:
         assert passed is False
         assert "FAIL" in results[0]
         assert "exited 1" in results[0]
+
+
+# ======================================================================
+# Task/spec edges (from coverage gaps)
+# ======================================================================
+
+
+@pytest.mark.req("REQ-04.3")
+@pytest.mark.unit
+class TestTaskSpecEdges:
+    """Cover task/spec.py uncovered branches."""
+
+    def test_mark_completed_unknown_task(self) -> None:
+        """mark_completed with unknown task_id does nothing (line 95->exit)."""
+        from guild.task.spec import TaskGraph
+
+        graph = TaskGraph()
+        # Should not raise
+        graph.mark_completed("nonexistent-task")
+
+    async def test_transition_task_not_found(self, tmp_path: Path) -> None:
+        """transition_task returns False when task doesn\'t exist (lines 280-281)."""
+        store = Storage(tmp_path / "test.db")
+        await store.connect()
+        result = await transition_task(store, "nonexistent", "running")
+        assert result is False
+        await store.close()
+
+    async def test_verify_command_oserror(self, tmp_path: Path) -> None:
+        """_verify_command handles OSError (lines 239-240)."""
+        from unittest.mock import patch as _patch
+
+        from guild.task.spec import VerificationStep, _verify_command
+
+        step = VerificationStep(
+            type="command",
+            target="echo test",
+            expected=None,
+        )
+        # Mock subprocess creation to raise OSError
+        with _patch(
+            "guild.task.spec.asyncio.create_subprocess_shell",
+            side_effect=OSError("No such file or directory"),
+        ):
+            passed, msg = await _verify_command(step, str(tmp_path))
+        assert passed is False
+        assert "error" in msg.lower()

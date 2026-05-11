@@ -256,3 +256,192 @@ class TestToolCache:
         assert cache.get("key2") is not None
         assert cache.get("key3") is not None
         assert cache.get("key4") is not None
+
+
+# ======================================================================
+# Plugin loader edge cases (from coverage gaps)
+# ======================================================================
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-08.9")
+class TestPluginLoaderEdgeCases:
+    """Cover plugin loader edge cases."""
+
+    def test_discover_skips_non_directory(self, tmp_path: Path) -> None:
+        """discover() skips paths that aren't directories."""
+        from guild.tools.plugin import PluginLoader
+
+        fake_path = tmp_path / "not-a-dir"
+        loader = PluginLoader(plugin_dirs=[fake_path])
+        plugins = loader.discover()
+        assert plugins == []
+
+    def test_load_from_file_invalid_toml(self, tmp_path: Path) -> None:
+        """load_from_file returns None for invalid TOML."""
+        from guild.tools.plugin import PluginLoader
+
+        bad_file = tmp_path / "bad.toml"
+        bad_file.write_text("this is not valid toml [[[")
+        loader = PluginLoader(plugin_dirs=[tmp_path])
+        result = loader.load_from_file(bad_file)
+        assert result is None
+
+    def test_load_from_file_no_tool_section(self, tmp_path: Path) -> None:
+        """load_from_file returns None when [tool] section missing."""
+        from guild.tools.plugin import PluginLoader
+
+        f = tmp_path / "no_tool.toml"
+        f.write_text('[other]\nkey = "value"\n')
+        loader = PluginLoader(plugin_dirs=[tmp_path])
+        result = loader.load_from_file(f)
+        assert result is None
+
+    def test_load_from_file_no_tool_name(self, tmp_path: Path) -> None:
+        """load_from_file returns None when tool.name is missing."""
+        from guild.tools.plugin import PluginLoader
+
+        f = tmp_path / "no_name.toml"
+        f.write_text('[tool]\ndescription = "no name"\n')
+        loader = PluginLoader(plugin_dirs=[tmp_path])
+        result = loader.load_from_file(f)
+        assert result is None
+
+    def test_load_from_dir_nonexistent(self, tmp_path: Path) -> None:
+        """load_from_dir returns empty for non-directory."""
+        from guild.tools.plugin import PluginLoader
+
+        loader = PluginLoader(plugin_dirs=[tmp_path / "nope"])
+        result = loader.load_from_dir(tmp_path / "nope")
+        assert result == []
+
+    def test_cache_update_existing_key(self) -> None:
+        """ToolCache.put updates an existing key and moves to end."""
+        from guild.tools.base import ToolResult
+        from guild.tools.plugin import ToolCache
+
+        cache = ToolCache(max_size=5)
+        r1 = ToolResult(success=True, output="first")
+        r2 = ToolResult(success=True, output="second")
+        cache.put("key1", r1)
+        cache.put("key1", r2)  # Update existing
+        result = cache.get("key1")
+        assert result is not None
+        assert result.output == "second"
+
+    def test_cache_evicts_oldest_when_full(self) -> None:
+        """ToolCache evicts oldest entries when at capacity."""
+        from guild.tools.base import ToolResult
+        from guild.tools.plugin import ToolCache
+
+        cache = ToolCache(max_size=2)
+        cache.put("k1", ToolResult(success=True, output="1"))
+        cache.put("k2", ToolResult(success=True, output="2"))
+        cache.put("k3", ToolResult(success=True, output="3"))
+        # k1 should be evicted
+        assert cache.get("k1") is None
+        assert cache.get("k2") is not None
+        assert cache.get("k3") is not None
+
+    def test_parse_parameters_with_required_dict(self, tmp_path: Path) -> None:
+        """Parser handles required as a dict with 'list' key."""
+        from guild.tools.plugin import PluginLoader
+
+        f = tmp_path / "tool.toml"
+        f.write_text(
+            "[tool]\n"
+            'name = "my-tool"\n'
+            'description = "Test tool"\n'
+            "\n"
+            "[tool.parameters]\n"
+            'type = "object"\n'
+            "\n"
+            "[tool.parameters.properties.arg1]\n"
+            'type = "string"\n'
+            "\n"
+            "[tool.parameters.required]\n"
+            'list = ["arg1"]\n'
+        )
+        loader = PluginLoader(plugin_dirs=[tmp_path])
+        plugin = loader.load_from_file(f)
+        assert plugin is not None
+        assert plugin.parameters.get("required") == ["arg1"]
+
+
+# ======================================================================
+# Tools/plugin additional edges (from coverage gaps)
+# ======================================================================
+
+
+@pytest.mark.req("REQ-06.1")
+@pytest.mark.unit
+class TestToolsPluginEdges:
+    """Cover tools/plugin.py uncovered branches."""
+
+    def test_plugin_load_from_file_missing_name(self, tmp_path: Path) -> None:
+        """Plugin without tool.name returns None (line 199 path)."""
+        from guild.tools.plugin import PluginLoader
+
+        plugin_dir = tmp_path / "plugins"
+        plugin_dir.mkdir()
+        plugin_file = plugin_dir / "no_name.toml"
+        # Valid TOML with [tool] section but no name field
+        plugin_file.write_text("[tool]\n" 'description = "A tool without a name"\n')
+
+        loader = PluginLoader(plugin_dirs=[plugin_dir])
+        result = loader.load_from_file(plugin_file)
+        assert result is None
+
+    def test_plugin_load_from_file_no_tool_section(self, tmp_path: Path) -> None:
+        """Plugin without [tool] section returns None."""
+        from guild.tools.plugin import PluginLoader
+
+        plugin_dir = tmp_path / "plugins"
+        plugin_dir.mkdir()
+        plugin_file = plugin_dir / "no_section.toml"
+        plugin_file.write_text('[metadata]\nauthor = "test"\n')
+
+        loader = PluginLoader(plugin_dirs=[plugin_dir])
+        result = loader.load_from_file(plugin_file)
+        assert result is None
+
+    def test_plugin_load_from_dir_skips_none(self, tmp_path: Path) -> None:
+        """load_from_dir skips files that return None (line 180->178)."""
+        from guild.tools.plugin import PluginLoader
+
+        plugin_dir = tmp_path / "plugins"
+        plugin_dir.mkdir()
+        # One bad plugin
+        (plugin_dir / "bad.toml").write_text("[metadata]\n")
+        # One good plugin
+        (plugin_dir / "good.toml").write_text(
+            "[tool]\n" 'name = "good_tool"\n' 'description = "A good tool"\n'
+        )
+
+        loader = PluginLoader(plugin_dirs=[plugin_dir])
+        plugins = loader.load_from_dir(plugin_dir)
+        # Only the good one should load
+        assert len(plugins) == 1
+        assert plugins[0].name == "good_tool"
+
+    def test_plugin_parameters_required_as_list(self, tmp_path: Path) -> None:
+        """Plugin with required as a list parses directly (line 199)."""
+        from guild.tools.plugin import PluginLoader
+
+        plugin_dir = tmp_path / "plugins"
+        plugin_dir.mkdir()
+        # TOML with required as a direct list
+        (plugin_dir / "with_required.toml").write_text(
+            "[tool]\n"
+            'name = "my_tool"\n'
+            'description = "test"\n'
+            "\n"
+            "[tool.parameters]\n"
+            'type = "object"\n'
+            'required = ["path", "content"]\n'
+        )
+
+        loader = PluginLoader(plugin_dirs=[plugin_dir])
+        plugin = loader.load_from_file(plugin_dir / "with_required.toml")
+        assert plugin is not None
+        assert plugin.parameters.get("required") == ["path", "content"]

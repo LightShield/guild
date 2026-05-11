@@ -200,3 +200,101 @@ class TestWakeBehaviorConfigurable:
 
         assert detector_resume.should_resume() is True
         assert detector_pause.should_resume() is False
+
+
+# ======================================================================
+# Sleep/wake edge cases (from coverage gaps)
+# ======================================================================
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-24.2")
+class TestSleepWakeEdgeCases:
+    """Cover sleep/wake detector edge cases."""
+
+    def test_detect_sleep_no_drift(self) -> None:
+        """No time drift means no sleep detected."""
+        detector = SleepWakeDetector(
+            config=SleepWakeConfig(sleep_threshold_seconds=5.0),
+        )
+        # Record current time, then check immediately -- no drift
+        detector.mark_turn_start()
+        slept = detector.check_for_sleep()
+        assert slept is False
+
+    def test_detect_sleep_with_drift(self) -> None:
+        """Time drift above threshold triggers sleep detection."""
+        import time
+
+        detector = SleepWakeDetector(
+            config=SleepWakeConfig(sleep_threshold_seconds=0.01),
+        )
+        # Simulate time drift by manually setting last turn time in the past
+        detector._last_turn_time = time.monotonic() - 10.0
+        slept = detector.check_for_sleep()
+        assert slept is True
+        assert detector.sleep_detected is True
+
+    def test_clear_sleep_flag(self) -> None:
+        """clear_sleep_flag resets the detected state."""
+        import time
+
+        detector = SleepWakeDetector(
+            config=SleepWakeConfig(sleep_threshold_seconds=0.01),
+        )
+        detector._last_turn_time = time.monotonic() - 10.0
+        detector.check_for_sleep()
+        assert detector.sleep_detected is True
+        detector.clear_sleep_flag()
+        assert detector.sleep_detected is False
+
+    async def test_wait_for_provider_recovery_fails(self) -> None:
+        """wait_for_provider_recovery returns False after max retries."""
+        from unittest.mock import AsyncMock
+
+        detector = SleepWakeDetector(
+            config=SleepWakeConfig(health_check_retry_delay=0.01),
+        )
+        provider = AsyncMock()
+        provider.health_check.return_value = False
+        result = await detector.wait_for_provider_recovery(provider, max_retries=2)
+        assert result is False
+
+    async def test_retry_after_sleep_connection_error(self) -> None:
+        """retry_after_sleep catches ConnectionError and retries after recovery."""
+        from unittest.mock import AsyncMock
+
+        detector = SleepWakeDetector(
+            config=SleepWakeConfig(health_check_retry_delay=0.01),
+        )
+        provider = AsyncMock()
+        provider.health_check.return_value = True
+
+        call_count = 0
+
+        async def operation():
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise ConnectionError("lost connection")
+            return "success"
+
+        result = await detector.retry_after_sleep(provider, operation)
+        assert result == "success"
+        assert call_count == 2
+
+    async def test_retry_after_sleep_recovery_fails_reraises(self) -> None:
+        """retry_after_sleep re-raises if recovery fails."""
+        from unittest.mock import AsyncMock
+
+        detector = SleepWakeDetector(
+            config=SleepWakeConfig(health_check_retry_delay=0.01, health_check_retries=1),
+        )
+        provider = AsyncMock()
+        provider.health_check.return_value = False
+
+        async def failing_op():
+            raise ConnectionError("permanent failure")
+
+        with pytest.raises(ConnectionError, match="permanent failure"):
+            await detector.retry_after_sleep(provider, failing_op)

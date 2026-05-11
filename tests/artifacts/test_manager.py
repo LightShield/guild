@@ -99,3 +99,60 @@ def test_export_creates_directory(tmp_path: object) -> None:
     assert export_dir.exists()
     exported_files = list(export_dir.iterdir())
     assert len(exported_files) == 2
+
+
+# ======================================================================
+# Artifacts manager edge cases (from coverage gaps)
+# ======================================================================
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-22.1")
+class TestArtifactsEdgeCases:
+    """Cover artifact manager edge cases."""
+
+    def test_latest_version_no_task_dir(self, tmp_path: Path) -> None:
+        """_latest_version returns 0 when task dir doesn\'t exist."""
+        mgr = ArtifactManager(tmp_path / "artifacts")
+        assert mgr._latest_version("nonexistent-task", "file") == 0
+
+    def test_list_for_task_no_dir(self, tmp_path: Path) -> None:
+        """list_for_task returns empty when task dir missing."""
+        mgr = ArtifactManager(tmp_path / "artifacts")
+        result = mgr.list_for_task("no-such-task")
+        assert result == []
+
+    def test_list_for_task_skips_non_versioned(self, tmp_path: Path) -> None:
+        """list_for_task skips files that don\'t match the versioning pattern."""
+        mgr = ArtifactManager(tmp_path / "artifacts")
+        task_dir = tmp_path / "artifacts" / "task-1"
+        task_dir.mkdir(parents=True)
+        (task_dir / "not_versioned.txt").write_text("hello")
+        (task_dir / "result.v1").write_text("v1 content")
+        result = mgr.list_for_task("task-1")
+        assert len(result) == 1
+        assert result[0].name == "result"
+
+    def test_get_nonexistent_version(self, tmp_path: Path) -> None:
+        """get() returns None for non-existent version."""
+        mgr = ArtifactManager(tmp_path / "artifacts")
+        result = mgr.get("task-x", "file", version=99)
+        assert result is None
+
+    def test_export_empty_task(self, tmp_path: Path) -> None:
+        """export() works even when task has no artifacts."""
+        mgr = ArtifactManager(tmp_path / "artifacts")
+        output_dir = tmp_path / "export"
+        result = mgr.export("empty-task", output_dir)
+        assert result == output_dir
+        assert output_dir.exists()
+
+    def test_export_copies_files(self, tmp_path: Path) -> None:
+        """export() copies all artifacts to output directory."""
+        mgr = ArtifactManager(tmp_path / "artifacts")
+        mgr.save("task-1", "code", "def main(): pass")
+        mgr.save_version("task-1", "code", "def main(): return 42")
+        output_dir = tmp_path / "export"
+        mgr.export("task-1", output_dir)
+        assert (output_dir / "code.v1").exists()
+        assert (output_dir / "code.v2").exists()

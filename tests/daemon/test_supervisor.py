@@ -201,3 +201,34 @@ class TestStatePersistence:
 
         await supervisor.run(trigger_shutdown())
         assert checkpoint_called is True
+
+
+# ======================================================================
+# Supervisor edge cases (from coverage gaps)
+# ======================================================================
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-23.8")
+class TestSupervisorEdgeCases:
+    """Cover supervisor edge cases."""
+
+    def test_request_shutdown_sets_flag(self, tmp_path: Path) -> None:
+        """request_shutdown() directly sets the shutdown flag."""
+        sup = DaemonSupervisor(run_dir=tmp_path, task_id="t1")
+        assert sup.shutdown_requested is False
+        sup.request_shutdown()
+        assert sup.shutdown_requested is True
+
+    def test_restore_signal_handlers_when_none(self, tmp_path: Path) -> None:
+        """restore_signal_handlers skips when originals are None."""
+        sup = DaemonSupervisor(run_dir=tmp_path, task_id="t2")
+        # Don't install first - _original_sigterm and _original_sigint are None
+        # Should not raise
+        sup.restore_signal_handlers()
+
+    async def test_remove_pid_file_when_not_exists(self, tmp_path: Path) -> None:
+        """remove_pid_file when no PID file does nothing."""
+        sup = DaemonSupervisor(run_dir=tmp_path, task_id="t3")
+        # PID file doesn't exist
+        sup.remove_pid_file()  # Should not raise

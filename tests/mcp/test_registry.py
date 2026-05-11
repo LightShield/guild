@@ -190,3 +190,39 @@ class TestMCPToolRegistryDisconnectOnFailure:
 
             mock_connect.assert_awaited_once()
             mock_disconnect.assert_awaited_once()
+
+
+# ======================================================================
+# MCP Registry edge cases (from coverage gaps)
+# ======================================================================
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-08.8")
+class TestMCPRegistryEdgeCases:
+    """Cover MCP tool registry edge cases."""
+
+    async def test_remove_server_unknown_name_noop(self) -> None:
+        """Removing a non-existent server does nothing (no error)."""
+        registry = MCPToolRegistry()
+        await registry.remove_server("nonexistent")
+        # Should not raise
+
+    async def test_call_tool_unknown_tool_raises(self) -> None:
+        """Calling an unregistered tool raises KeyError."""
+        registry = MCPToolRegistry()
+        with pytest.raises(KeyError, match="not found"):
+            await registry.call_tool("no-such-tool", {})
+
+    async def test_call_tool_server_disconnected_raises(self) -> None:
+        """Calling a tool whose server is gone raises KeyError."""
+        registry = MCPToolRegistry()
+        # Manually inject a tool without a matching client
+        registry._tools["orphan-tool"] = MCPTool(
+            name="orphan-tool",
+            description="test",
+            input_schema={},
+            server_name="gone-server",
+        )
+        with pytest.raises(KeyError, match="not connected"):
+            await registry.call_tool("orphan-tool", {})

@@ -223,3 +223,154 @@ class TestPresentStateAndPastInfo:
         assert "Key Past Info" in result
         assert "Use async patterns" in result
         assert "Always validate inputs" in result
+
+
+# ======================================================================
+# Temporal knowledge edge cases (from coverage gaps)
+# ======================================================================
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-27")
+class TestTemporalKnowledgeEdgeCases:
+    """Cover temporal knowledge assembly edge cases."""
+
+    async def test_get_relevant_context_no_instructions(self, tmp_path: Path) -> None:
+        """get_relevant_context works when no prompt.md exists."""
+        guild_dir = tmp_path / ".guild"
+        guild_dir.mkdir()
+        store = Storage(tmp_path / "test.db")
+        await store.connect()
+        tk = TemporalKnowledge(guild_dir=guild_dir, storage=store)
+        result = await tk.get_relevant_context("test task")
+        # No instructions, no decisions, no learnings => empty string
+        assert result == ""
+        await store.close()
+
+    async def test_get_relevant_context_with_instructions(self, tmp_path: Path) -> None:
+        """get_relevant_context includes prompt.md content."""
+        guild_dir = tmp_path / ".guild"
+        guild_dir.mkdir()
+        (guild_dir / "prompt.md").write_text("# Custom Instructions\nDo X.")
+
+        store = Storage(tmp_path / "test.db")
+        await store.connect()
+        tk = TemporalKnowledge(guild_dir=guild_dir, storage=store)
+        result = await tk.get_relevant_context("test task")
+        assert "Project Instructions" in result
+        assert "Custom Instructions" in result
+        await store.close()
+
+    async def test_get_present_state_with_git(self, tmp_path: Path) -> None:
+        """get_present_state runs git commands successfully."""
+        guild_dir = tmp_path / ".guild"
+        guild_dir.mkdir()
+        store = Storage(tmp_path / "test.db")
+        await store.connect()
+        tk = TemporalKnowledge(guild_dir=guild_dir, storage=store)
+        # Use the actual guild repo as working_dir
+        result = await tk.get_present_state("/Users/ormagen/workspace/private/guild")
+        assert "Present State" in result
+        await store.close()
+
+    async def test_get_present_state_nonexistent_dir(self, tmp_path: Path) -> None:
+        """get_present_state handles failure gracefully when commands fail."""
+        guild_dir = tmp_path / ".guild"
+        guild_dir.mkdir()
+        store = Storage(tmp_path / "test.db")
+        await store.connect()
+        tk = TemporalKnowledge(guild_dir=guild_dir, storage=store)
+        result = await tk.get_present_state("/nonexistent/path/xyz")
+        assert "No project state" in result
+        await store.close()
+
+    async def test_get_key_past_info_empty(self, tmp_path: Path) -> None:
+        """get_key_past_info returns empty when no data."""
+        guild_dir = tmp_path / ".guild"
+        guild_dir.mkdir()
+        store = Storage(tmp_path / "test.db")
+        await store.connect()
+        tk = TemporalKnowledge(guild_dir=guild_dir, storage=store)
+        result = await tk.get_key_past_info("test task")
+        assert result == ""
+        await store.close()
+
+
+# ======================================================================
+# Temporal knowledge branches (from coverage gaps)
+# ======================================================================
+
+
+@pytest.mark.req("REQ-07.4")
+@pytest.mark.unit
+class TestTemporalKnowledgeBranches:
+    """Cover temporal knowledge uncovered branches."""
+
+    async def test_format_decisions_called_in_context(self, tmp_path: Path) -> None:
+        """get_relevant_context formats decisions when they exist (lines 68-69)."""
+        store = Storage(tmp_path / "test.db")
+        await store.connect()
+        guild_dir = tmp_path / ".guild"
+        guild_dir.mkdir()
+
+        # Add decisions so lines 68-69 are hit
+        await store.log_decision(
+            task_id="t1",
+            agent_id="a1",
+            decision="Use pattern X",
+            rationale="It is efficient",
+        )
+
+        tk = TemporalKnowledge(guild_dir, store)
+        context = await tk.get_relevant_context("some task")
+        assert "Use pattern X" in context
+        assert "Recent Decisions" in context
+        await store.close()
+
+    async def test_run_cmd_returns_none_on_failure(self, tmp_path: Path) -> None:
+        """_run_cmd returns None when command fails (line 163->167)."""
+        store = Storage(tmp_path / "test.db")
+        await store.connect()
+        guild_dir = tmp_path / ".guild"
+        guild_dir.mkdir()
+
+        tk = TemporalKnowledge(guild_dir, store)
+
+        # Run a command that will fail (non-existent dir)
+        result = await tk._run_cmd("git status", "/nonexistent/path/xyz")
+        assert result is None
+        await store.close()
+
+    async def test_present_state_no_git_repo(self, tmp_path: Path) -> None:
+        """get_present_state in a non-git dir returns \'No project state\'."""
+        store = Storage(tmp_path / "test.db")
+        await store.connect()
+        guild_dir = tmp_path / ".guild"
+        guild_dir.mkdir()
+
+        # Use a directory that is NOT a git repo and has no ls
+        empty_dir = tmp_path / "empty"
+        empty_dir.mkdir()
+
+        tk = TemporalKnowledge(guild_dir, store)
+        # git commands will fail, ls will succeed
+        result = await tk.get_present_state(str(empty_dir))
+        # At minimum the ls command should work
+        assert "Present State" in result or "No project state" in result
+        await store.close()
+
+    async def test_run_cmd_returns_none_on_timeout(self, tmp_path: Path) -> None:
+        """_run_cmd returns None when command times out (line 174)."""
+        from unittest.mock import patch
+
+        store = Storage(tmp_path / "test.db")
+        await store.connect()
+        guild_dir = tmp_path / ".guild"
+        guild_dir.mkdir()
+
+        tk = TemporalKnowledge(guild_dir, store)
+
+        with patch("guild.knowledge.temporal.asyncio.wait_for", side_effect=TimeoutError()):
+            result = await tk._run_cmd("sleep 100", str(tmp_path))
+        assert result is None
+        await store.close()

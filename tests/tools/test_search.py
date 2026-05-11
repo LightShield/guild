@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from guild.tools.search import (
@@ -161,3 +163,78 @@ class TestGlob:
 
         assert result.success is True
         assert "truncated" in result.output.lower() or "limit" in result.output.lower()
+
+
+# ======================================================================
+# Search tool edge cases (from coverage gaps)
+# ======================================================================
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-08.3")
+class TestSearchToolEdgeCases:
+    """Cover search/glob tool edge cases."""
+
+    async def test_search_empty_pattern_returns_error(self) -> None:
+        """Missing pattern returns error."""
+        result = await execute_search({"pattern": ""}, working_dir="/tmp")
+        assert result.success is False
+        assert "pattern" in (result.error or "").lower()
+
+    async def test_search_path_not_found(self, tmp_path: Path) -> None:
+        """Non-existent path returns error."""
+        result = await execute_search(
+            {"pattern": "hello", "path": str(tmp_path / "nope")},
+            working_dir=str(tmp_path),
+        )
+        assert result.success is False
+        assert "not found" in (result.error or "").lower()
+
+    async def test_search_single_file(self, tmp_path: Path) -> None:
+        """Search on a single file works."""
+        f = tmp_path / "test.txt"
+        f.write_text("hello world\ngoodbye world\n")
+        result = await execute_search(
+            {"pattern": "hello", "path": str(f)},
+            working_dir=str(tmp_path),
+        )
+        assert result.success is True
+        assert "hello" in result.output
+
+    async def test_search_file_oserror_skipped(self, tmp_path: Path) -> None:
+        """Files that raise OSError on read are silently skipped."""
+        f = tmp_path / "test.txt"
+        f.write_text("content")
+        # Make file unreadable
+        f.chmod(0o000)
+        try:
+            result = await execute_search(
+                {"pattern": "content", "path": str(tmp_path)},
+                working_dir=str(tmp_path),
+            )
+            # Should not error out, just find no matches
+            assert result.success is True
+        finally:
+            f.chmod(0o644)
+
+    async def test_search_is_relative_to_false(self, tmp_path: Path) -> None:
+        """File not relative to base uses absolute path in results."""
+        from guild.tools.search import _is_relative_to
+
+        assert _is_relative_to(Path("/a/b/c"), Path("/a/b")) is True
+        assert _is_relative_to(Path("/x/y"), Path("/a/b")) is False
+
+    async def test_glob_empty_pattern_returns_error(self) -> None:
+        """Missing glob pattern returns error."""
+        result = await execute_glob({"pattern": ""}, working_dir="/tmp")
+        assert result.success is False
+        assert "pattern" in (result.error or "").lower()
+
+    async def test_glob_path_not_found(self, tmp_path: Path) -> None:
+        """Non-existent path returns error."""
+        result = await execute_glob(
+            {"pattern": "*.txt", "path": str(tmp_path / "nope")},
+            working_dir=str(tmp_path),
+        )
+        assert result.success is False
+        assert "not found" in (result.error or "").lower()

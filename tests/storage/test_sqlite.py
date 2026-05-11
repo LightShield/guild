@@ -628,3 +628,76 @@ class TestStorageNotConnected:
         store = Storage(":memory:")
         with pytest.raises(RuntimeError, match="Storage not connected"):
             await getattr(store, method)(*args)
+
+
+# ======================================================================
+# Storage edge cases (from coverage gaps)
+# ======================================================================
+
+
+@pytest.mark.req("REQ-07.1")
+@pytest.mark.unit
+class TestStorageEdgeCases:
+    """Cover storage update edge cases."""
+
+    async def test_update_task_no_fields(self, tmp_path: Path) -> None:
+        """update_task with no fields returns early (line 212)."""
+        store = Storage(tmp_path / "test.db")
+        await store.connect()
+        await store.create_task("t1", "test")
+        # Call with no fields -- should return immediately
+        await store.update_task("t1")
+        # Task should be unchanged
+        task = await store.get_task("t1")
+        assert task is not None
+        assert task["status"] == "pending"
+        await store.close()
+
+    async def test_update_task_invalid_fields(self, tmp_path: Path) -> None:
+        """update_task with unrecognized fields returns early (line 216)."""
+        store = Storage(tmp_path / "test.db")
+        await store.connect()
+        await store.create_task("t1", "test")
+        # Call with invalid field names -- filtered set is empty
+        await store.update_task("t1", invalid_field="value", another="nope")
+        task = await store.get_task("t1")
+        assert task is not None
+        assert task["status"] == "pending"
+        await store.close()
+
+    async def test_update_agent_no_fields(self, tmp_path: Path) -> None:
+        """update_agent with no fields returns early (line 248)."""
+        store = Storage(tmp_path / "test.db")
+        await store.connect()
+        await store.register_agent("a1", "coder")
+        await store.update_agent("a1")
+        await store.close()
+
+    async def test_update_agent_invalid_fields(self, tmp_path: Path) -> None:
+        """update_agent with unrecognized fields returns early (line 252)."""
+        store = Storage(tmp_path / "test.db")
+        await store.connect()
+        await store.register_agent("a1", "coder")
+        await store.update_agent("a1", bad_field="nope")
+        await store.close()
+
+    async def test_list_questions_all(self, tmp_path: Path) -> None:
+        """list_questions with answered=None returns all (line 526)."""
+        store = Storage(tmp_path / "test.db")
+        await store.connect()
+        await store.insert_question(
+            question_id="q1",
+            question="What?",
+            context="ctx",
+            created_at="2024-01-01T00:00:00",
+            agent_id="a1",
+        )
+        questions = await store.list_questions(answered=None)
+        assert len(questions) >= 1
+        await store.close()
+
+    async def test_close_when_not_connected(self, tmp_path: Path) -> None:
+        """close() when db is None is a no-op (line 172->exit)."""
+        store = Storage(tmp_path / "test.db")
+        # Don\'t connect -- _db is None
+        await store.close()  # Should not raise

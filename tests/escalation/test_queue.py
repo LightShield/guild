@@ -163,3 +163,23 @@ class TestPriorityOrdering:
         assert pending[0].question == "Blocking"
         assert pending[1].question == "Normal"
         assert pending[2].question == "Low"
+
+
+# ======================================================================
+# QuestionQueue edge cases (from coverage gaps)
+# ======================================================================
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-15.1")
+class TestQuestionQueueEdgeCases:
+    """Edge cases for QuestionQueue."""
+
+    async def test_get_answer_nonexistent_returns_none(self, tmp_path: Path) -> None:
+        """get_answer for a nonexistent question returns None."""
+        store = Storage(tmp_path / "test.db")
+        await store.connect()
+        queue = QuestionQueue(store)
+        result = await queue.get_answer("totally-fake-id")
+        assert result is None
+        await store.close()

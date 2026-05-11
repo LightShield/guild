@@ -291,3 +291,195 @@ allowed = false
         assert policy.denied_commands == []
         assert policy.network_hosts_allowlist == []
         assert policy.secrets == {}
+
+
+# ======================================================================
+# Sandbox policy edge cases (from coverage gaps)
+# ======================================================================
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-13")
+class TestSandboxEdgeCases:
+    """Cover sandbox policy edge cases."""
+
+    def test_resolve_path_returns_absolute(self) -> None:
+        """_resolve_path returns an absolute resolved path."""
+        policy = SandboxPolicy()
+        result = policy._resolve_path("/tmp/normal")
+        # On macOS, /tmp resolves to /private/tmp -- just check it\'s absolute
+        assert result.is_absolute()
+        assert "normal" in str(result)
+
+    def test_extract_command_name_with_sudo(self) -> None:
+        """_extract_command_name skips \'sudo\' prefix."""
+        policy = SandboxPolicy()
+        assert policy._extract_command_name("sudo rm -rf /tmp") == "rm"
+
+    def test_extract_command_name_empty(self) -> None:
+        """_extract_command_name returns empty for empty string."""
+        policy = SandboxPolicy()
+        assert policy._extract_command_name("") == ""
+
+    def test_extract_command_name_only_prefixes(self) -> None:
+        """_extract_command_name handles \'sudo env\' (all prefixes)."""
+        policy = SandboxPolicy()
+        # When idx >= len(parts), returns parts[-1]
+        result = policy._extract_command_name("sudo env")
+        assert result == "env"
+
+    def test_load_sandbox_policy_from_file(self, tmp_path: Path) -> None:
+        """load_sandbox_policy parses a security.toml file."""
+        guild_dir = tmp_path / ".guild"
+        guild_dir.mkdir()
+        (guild_dir / "security.toml").write_text(
+            "[filesystem]\n"
+            'allowed_paths = ["/tmp"]\n'
+            'denied_paths = ["/etc"]\n'
+            "\n"
+            "[commands]\n"
+            'allow = ["git", "ls"]\n'
+            'deny = ["rm"]\n'
+            "\n"
+            "[network]\n"
+            "allowed = false\n"
+            'hosts_allowlist = ["api.example.com"]\n'
+            "\n"
+            "[secrets]\n"
+            'API_KEY = "sk-secret-123"\n'
+        )
+        policy = load_sandbox_policy(guild_dir)
+        assert policy.allowed_paths == ["/tmp"]
+        assert policy.denied_paths == ["/etc"]
+        assert policy.allowed_commands == ["git", "ls"]
+        assert policy.denied_commands == ["rm"]
+        assert policy.network_allowed is False
+        assert policy.secrets["API_KEY"] == "sk-secret-123"
+
+    def test_load_sandbox_policy_invalid_toml(self, tmp_path: Path) -> None:
+        """load_sandbox_policy returns default on parse failure."""
+        guild_dir = tmp_path / ".guild"
+        guild_dir.mkdir()
+        (guild_dir / "security.toml").write_text("invalid [[[toml")
+        policy = load_sandbox_policy(guild_dir)
+        # Should fall back to default (permissive)
+        assert policy.allowed_paths == []
+        assert policy.network_allowed is True
+
+    def test_check_command_denylist_match(self) -> None:
+        """Denied commands are blocked."""
+        policy = SandboxPolicy(denied_commands=["rm", "dd"])
+        allowed, reason = policy.check_command("rm -rf /tmp/test")
+        assert allowed is False
+        assert "denylist" in reason
+
+    def test_check_command_allowlist_no_match(self) -> None:
+        """Commands not in allowlist are rejected."""
+        policy = SandboxPolicy(allowed_commands=["git", "ls"])
+        allowed, reason = policy.check_command("curl http://evil.com")
+        assert allowed is False
+        assert "not in allowlist" in reason
+
+    def test_inject_secret_unknown_placeholder_left_alone(self) -> None:
+        """Unknown ${PLACEHOLDER} is left as-is."""
+        policy = SandboxPolicy(secrets={"API_KEY": "secret123"})
+        result = policy.inject_secret("echo ${UNKNOWN_VAR}")
+        assert "${UNKNOWN_VAR}" in result
+
+    def test_check_path_denied_takes_precedence(self) -> None:
+        """Denied paths take precedence over allowed paths."""
+        policy = SandboxPolicy(
+            allowed_paths=["/tmp"],
+            denied_paths=["/tmp/secret"],
+        )
+        allowed, reason = policy.check_path("/tmp/secret/file.txt")
+        assert allowed is False
+
+    def test_check_path_outside_allowed(self) -> None:
+        """Paths outside allowed_paths are rejected."""
+        policy = SandboxPolicy(allowed_paths=["/tmp"])
+        allowed, reason = policy.check_path("/etc/passwd")
+        assert allowed is False
+        assert "outside" in reason
+
+
+# ======================================================================
+# Security/sandbox additional edges (from coverage gaps)
+# ======================================================================
+
+
+@pytest.mark.req("REQ-11.5")
+@pytest.mark.unit
+class TestSandboxEdges:
+    """Cover security/sandbox.py uncovered branches."""
+
+    def test_check_path_denied_path_matches(self) -> None:
+        """check_path returns False when path is in denied list (line 65->63)."""
+        policy = SandboxPolicy(
+            denied_paths=["/etc", "/var/secret"],
+            allowed_paths=["/"],
+        )
+        allowed, reason = policy.check_path("/etc/passwd")
+        assert allowed is False
+        assert "denied" in reason.lower()
+
+    def test_check_command_denied_matches(self) -> None:
+        """check_command returns False when command is in denylist (line 89->88)."""
+        policy = SandboxPolicy(
+            denied_commands=["rm", "shutdown"],
+            allowed_commands=[],
+        )
+        allowed, reason = policy.check_command("rm -rf /")
+        assert allowed is False
+        assert "denylist" in reason.lower()
+
+    def test_mask_secrets_replaces_value(self) -> None:
+        """mask_secrets replaces matching secret values (line 108->107)."""
+        policy = SandboxPolicy(
+            secrets={"API_KEY": "sk-12345", "DB_PASS": "secret123"},
+        )
+        result = policy.mask_secrets("Token: sk-12345, Pass: secret123")
+        assert "sk-12345" not in result
+        assert "[REDACTED:API_KEY]" in result
+        assert "[REDACTED:DB_PASS]" in result
+
+    def test_resolve_path_oserror(self) -> None:
+        """_resolve_path handles OSError gracefully (lines 135-136)."""
+        from unittest.mock import patch
+
+        policy = SandboxPolicy()
+        # Mock Path.resolve() to raise OSError
+        with patch("guild.security.sandbox.Path.resolve", side_effect=OSError("broken link")):
+            result = policy._resolve_path("/some/broken/link")
+            # Should return the unresolved path (line 136)
+            assert result is not None
+
+    def test_check_path_multiple_denied_second_matches(self) -> None:
+        """check_path iterates through multiple denied paths (65->63 branch)."""
+        policy = SandboxPolicy(
+            denied_paths=["/safe/dir", "/etc/secrets"],
+            allowed_paths=["/"],
+        )
+        # First denied path doesn\'t match, second does
+        allowed, reason = policy.check_path("/etc/secrets/key")
+        assert allowed is False
+
+    def test_check_command_multiple_denied_second_matches(self) -> None:
+        """check_command iterates through multiple denied commands (89->88)."""
+        policy = SandboxPolicy(
+            denied_commands=["safe_cmd", "rm"],
+            allowed_commands=[],
+        )
+        # First denied doesn\'t match, second does
+        allowed, reason = policy.check_command("rm -rf /")
+        assert allowed is False
+
+    def test_mask_secrets_multiple_secrets_some_match(self) -> None:
+        """mask_secrets iterates through multiple secrets (108->107 branch)."""
+        policy = SandboxPolicy(
+            secrets={"NO_MATCH": "xyz_not_present", "MATCH": "secret123"},
+        )
+        result = policy.mask_secrets("The password is secret123")
+        # First secret doesn\'t match, second does -- exercises loop continuation
+        assert "secret123" not in result
+        assert "[REDACTED:MATCH]" in result

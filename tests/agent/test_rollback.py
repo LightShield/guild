@@ -195,3 +195,97 @@ class TestTryWithRollback:
         assert f1.read_text() == "1"
         assert f2.read_text() == "2"
         assert not f3.exists()
+
+
+# ======================================================================
+# Rollback deletes created file (from coverage gaps)
+# ======================================================================
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-06.11")
+class TestRollbackDeletesCreatedFile:
+    """Rollback deletes files that were created after capture."""
+
+    def test_rollback_deletes_file_created_after_capture(self, tmp_path: Path) -> None:
+        """If a file didn't exist at capture time but exists now, rollback deletes it."""
+        from guild.agent.rollback import RollbackContext
+
+        new_file = tmp_path / "new.txt"
+        ctx = RollbackContext()
+        ctx.capture(str(new_file))
+
+        # Create the file after capture
+        new_file.write_text("created content")
+        assert new_file.exists()
+
+        # Rollback should delete it
+        rolled = ctx.rollback()
+        assert str(new_file) in rolled
+        assert not new_file.exists()
+
+
+# ======================================================================
+# Rollback restore existing file branch (from coverage gaps)
+# ======================================================================
+
+
+@pytest.mark.req("REQ-06.8")
+@pytest.mark.unit
+class TestRollbackRestoreExistingFileBranch:
+    """Explicitly cover the else branch at line 53->61 in rollback."""
+
+    def test_rollback_existing_file_restores_content(self, tmp_path: Path) -> None:
+        """Rollback of a file that existed restores its original content."""
+        from guild.agent.rollback import RollbackContext
+
+        f = tmp_path / "existing.txt"
+        f.write_text("original data")
+
+        ctx = RollbackContext()
+        ctx.capture(str(f))
+
+        # Modify the file
+        f.write_text("modified data")
+        assert f.read_text() == "modified data"
+
+        # Rollback should restore
+        rolled_back = ctx.rollback()
+        assert str(f) in rolled_back
+        assert f.read_text() == "original data"
+
+    def test_rollback_mixed_existing_and_new_files(self, tmp_path: Path) -> None:
+        """Rollback handles mix of existing files and new files correctly."""
+        from guild.agent.rollback import RollbackContext
+
+        existing = tmp_path / "exists.txt"
+        existing.write_text("keep me")
+        new_file = tmp_path / "new.txt"
+
+        ctx = RollbackContext()
+        ctx.capture(str(existing))  # content != None -> else branch
+        ctx.capture(str(new_file))  # content == None -> if branch
+
+        # Modify/create
+        existing.write_text("changed")
+        new_file.write_text("created")
+
+        rolled_back = ctx.rollback()
+        assert len(rolled_back) == 2
+        assert existing.read_text() == "keep me"  # Restored (else branch)
+        assert not new_file.exists()  # Deleted (if branch)
+
+    def test_rollback_nonexistent_file_never_created(self, tmp_path: Path) -> None:
+        """Rollback of a file that never existed and was never created."""
+        from guild.agent.rollback import RollbackContext
+
+        f = tmp_path / "never_created.txt"
+        assert not f.exists()
+
+        ctx = RollbackContext()
+        ctx.capture(str(f))  # content = None (file doesn\'t exist)
+
+        # Do NOT create the file -- leave it nonexistent
+        rolled_back = ctx.rollback()
+        assert str(f) in rolled_back
+        assert not f.exists()

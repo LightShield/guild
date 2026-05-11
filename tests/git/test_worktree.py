@@ -262,3 +262,124 @@ class TestCreateWorktreeFailure:
             await manager._create_worktree(
                 worktree_path, "nonexistent-branch", branch_exists=True
             )
+
+
+# ======================================================================
+# Worktree _parse_worktree_list (from coverage gaps)
+# ======================================================================
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-09.1")
+class TestWorktreeParseList:
+    """Cover worktree list parsing edge cases."""
+
+    def test_parse_empty_output(self) -> None:
+        """Empty output produces empty list."""
+        mgr = WorktreeManager(repo_root=Path("/tmp"))
+        result = mgr._parse_worktree_list("")
+        assert result == []
+
+    def test_parse_guild_worktrees(self) -> None:
+        """Parses guild-managed worktrees from porcelain output."""
+        mgr = WorktreeManager(repo_root=Path("/tmp"))
+        output = (
+            "worktree /repo\n"
+            "branch refs/heads/main\n"
+            "\n"
+            "worktree /repo/.guild/worktrees/task-1\n"
+            "branch refs/heads/guild/task-1\n"
+            "\n"
+        )
+        result = mgr._parse_worktree_list(output)
+        assert len(result) == 1
+        assert result[0].task_id == "task-1"
+        assert result[0].branch == "guild/task-1"
+
+    def test_parse_skips_staging(self) -> None:
+        """Staging worktree is not included in results."""
+        mgr = WorktreeManager(repo_root=Path("/tmp"))
+        output = (
+            "worktree /repo/.guild/worktrees/_staging\n" "branch refs/heads/guild/staging\n" "\n"
+        )
+        result = mgr._parse_worktree_list(output)
+        assert result == []
+
+    def test_parse_no_trailing_newline(self) -> None:
+        """Handles last entry without trailing blank line."""
+        mgr = WorktreeManager(repo_root=Path("/tmp"))
+        # No blank line after last entry
+        output = "worktree /repo/.guild/worktrees/task-2\n" "branch refs/heads/guild/task-2\n"
+        result = mgr._parse_worktree_list(output)
+        assert len(result) == 1
+        assert result[0].task_id == "task-2"
+
+    def test_parse_non_guild_branches_excluded(self) -> None:
+        """Non-guild branches are excluded from results."""
+        mgr = WorktreeManager(repo_root=Path("/tmp"))
+        output = "worktree /repo\n" "branch refs/heads/feature/my-feature\n" "\n"
+        result = mgr._parse_worktree_list(output)
+        assert result == []
+
+
+# ======================================================================
+# Worktree operations with mocked git (from coverage gaps)
+# ======================================================================
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-09.1")
+class TestWorktreeOperations:
+    """Test worktree operations with mocked git."""
+
+    async def test_create_fails_raises(self, tmp_path: Path) -> None:
+        """create() raises RuntimeError when git fails."""
+        from unittest.mock import patch
+
+        mgr = WorktreeManager(repo_root=tmp_path)
+        with (
+            patch.object(mgr, "_run_git", return_value=(1, "fatal: error")),
+            pytest.raises(RuntimeError, match="Failed to create"),
+        ):
+            await mgr.create("task-1")
+
+    async def test_remove_fails_raises(self, tmp_path: Path) -> None:
+        """remove() raises RuntimeError when git fails."""
+        from unittest.mock import patch
+
+        mgr = WorktreeManager(repo_root=tmp_path)
+        with (
+            patch.object(mgr, "_run_git", return_value=(1, "fatal: error")),
+            pytest.raises(RuntimeError, match="Failed to remove"),
+        ):
+            await mgr.remove("task-1")
+
+    async def test_list_active_on_git_failure(self, tmp_path: Path) -> None:
+        """list_active() returns empty list when git fails."""
+        from unittest.mock import patch
+
+        mgr = WorktreeManager(repo_root=tmp_path)
+        with patch.object(mgr, "_run_git", return_value=(1, "error")):
+            result = await mgr.list_active()
+            assert result == []
+
+    async def test_ensure_staging_existing_path(self, tmp_path: Path) -> None:
+        """_ensure_staging_branch returns early if staging path exists."""
+        from unittest.mock import patch
+
+        mgr = WorktreeManager(repo_root=tmp_path)
+        staging_path = mgr.worktrees_dir / "_staging"
+        staging_path.mkdir(parents=True)
+        # Should return without calling git
+        with patch.object(mgr, "_run_git") as mock_git:
+            await mgr._ensure_staging_branch("guild/staging")
+            mock_git.assert_not_called()
+
+    async def test_staging_worktree_path_creates_if_missing(self, tmp_path: Path) -> None:
+        """_staging_worktree_path calls _ensure_staging_branch when missing."""
+        from unittest.mock import AsyncMock, patch
+
+        mgr = WorktreeManager(repo_root=tmp_path)
+        with patch.object(mgr, "_ensure_staging_branch", new_callable=AsyncMock) as mock_ensure:
+            await mgr._staging_worktree_path("guild/staging")
+            mock_ensure.assert_called_once()

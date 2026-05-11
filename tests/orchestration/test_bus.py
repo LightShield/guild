@@ -195,3 +195,40 @@ class TestDynamicWorkerSpawning:
         result3 = await spawner.spawn(task="Subtask C", agent_id="dynamic-3")
         assert result3 == "Worker result"
         assert len(spawner.active_agents) == 3
+
+
+# ======================================================================
+# MessageBus receive timeout (from coverage gaps)
+# ======================================================================
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-04.7")
+class TestMessageBusTimeout:
+    """MessageBus.receive with timeout returns None."""
+
+    async def test_receive_timeout_returns_none(self) -> None:
+        """receive() returns None when timeout expires."""
+        bus = MessageBus()
+        result = await bus.receive("agent-x", timeout=0.05)
+        assert result is None
+
+
+# ======================================================================
+# MessageBus receive without timeout (from coverage gaps)
+# ======================================================================
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-07.1")
+class TestBusReceiveNoTimeout:
+    """Test bus receive without timeout (blocking)."""
+
+    async def test_receive_without_timeout_gets_message(self) -> None:
+        """receive() without timeout returns message immediately if available."""
+        bus = MessageBus()
+        # Send first, then receive without timeout
+        await bus.send("sender", "receiver", "data", {"hello": "world"})
+        msg = await bus.receive("receiver", timeout=None)
+        assert msg is not None
+        assert msg.data == {"hello": "world"}

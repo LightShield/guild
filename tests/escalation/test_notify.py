@@ -171,3 +171,100 @@ class TestDesktopNotification:
             # Should not raise
             await notifier.notify("failing notification")
             mock_adapter.send_desktop_notification.assert_called_once()
+
+
+# ======================================================================
+# Notifier unsupported platform (from coverage gaps)
+# ======================================================================
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-15.5")
+class TestNotifierUnsupportedPlatform:
+    """Desktop notification on unsupported platform."""
+
+    async def test_desktop_notification_unsupported_platform(self) -> None:
+        """Desktop notification returns False on unsupported platforms."""
+        from guild.daemon.platform import FallbackAdapter
+
+        notifier = Notifier(channels=[NotificationChannel.DESKTOP])
+        with patch(
+            "guild.escalation.notify.get_platform_adapter",
+            return_value=FallbackAdapter(),
+        ):
+            await notifier.notify("Windows test")
+            # FallbackAdapter.send_desktop_notification returns False (no-op)
+
+
+# ======================================================================
+# Notify loop-continue branch (from coverage gaps)
+# ======================================================================
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-15.5")
+class TestNotifierLoopContinue:
+    """NONE channel causes a continue without action."""
+
+    async def test_none_channel_mixed_with_bell(self) -> None:
+        """NONE channel is skipped, bell channel still fires."""
+        notifier = Notifier(channels=[NotificationChannel.NONE, NotificationChannel.TERMINAL_BELL])
+        with patch("sys.stdout") as mock_stdout:
+            mock_stdout.write = MagicMock()
+            mock_stdout.flush = MagicMock()
+            await notifier.notify("Test")
+            mock_stdout.write.assert_called_once_with("\a")
+
+
+# ======================================================================
+# Notify loop continuation (from coverage gaps)
+# ======================================================================
+
+
+@pytest.mark.req("REQ-15.1")
+@pytest.mark.unit
+class TestNotifyLoopContinuation:
+    """Cover the loop continuation branch when NONE is followed by real channels."""
+
+    async def test_none_channel_skips_but_others_fire(self) -> None:
+        """NONE channel is skipped (continue), then BELL channel fires."""
+        notifier = Notifier(
+            channels=[
+                NotificationChannel.NONE,
+                NotificationChannel.TERMINAL_BELL,
+            ]
+        )
+
+        with patch("sys.stdout") as mock_stdout:
+            mock_stdout.write = MagicMock()
+            mock_stdout.flush = MagicMock()
+            await notifier.notify("test message")
+            # NONE was skipped (continue at line 54), BELL fired
+            mock_stdout.write.assert_called_once_with("\a")
+
+    async def test_webhook_followed_by_bell_covers_loop_continuation(self) -> None:
+        """WEBHOOK followed by BELL ensures loop continues past webhook (59->52)."""
+        from unittest.mock import AsyncMock
+
+        notifier = Notifier(
+            channels=[
+                NotificationChannel.WEBHOOK,
+                NotificationChannel.TERMINAL_BELL,
+            ],
+            webhook_url="https://example.com/hook",
+        )
+
+        with (
+            patch("guild.escalation.notify.asyncio.get_event_loop") as mock_loop,
+            patch("sys.stdout") as mock_stdout,
+        ):
+            mock_executor = AsyncMock()
+            mock_loop.return_value.run_in_executor = mock_executor
+            mock_stdout.write = MagicMock()
+            mock_stdout.flush = MagicMock()
+
+            await notifier.notify("multi-channel")
+
+            # Both channels should have fired
+            mock_executor.assert_called_once()
+            mock_stdout.write.assert_called_once_with("\a")

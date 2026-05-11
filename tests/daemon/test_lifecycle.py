@@ -464,3 +464,130 @@ class TestTaskQueue:
         assert state[2]["task_id"] == "t3"
 
         await storage.close()
+
+
+# ======================================================================
+# Lifecycle edge cases (from coverage gaps)
+# ======================================================================
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-25")
+class TestLifecycleEdgeCases:
+    """Cover lifecycle manager edge cases."""
+
+    async def test_pause_task_not_found(self, tmp_path: Path) -> None:
+        """pause_task returns False when task doesn\'t exist."""
+        store = Storage(tmp_path / "test.db")
+        await store.connect()
+        run_dir = tmp_path / "run"
+        run_dir.mkdir()
+        mgr = LifecycleManager(run_dir=run_dir, storage=store)
+        result = await mgr.pause_task("nonexistent")
+        assert result is False
+        await store.close()
+
+    async def test_resume_task_not_found(self, tmp_path: Path) -> None:
+        """resume_task returns False when task doesn\'t exist."""
+        store = Storage(tmp_path / "test.db")
+        await store.connect()
+        run_dir = tmp_path / "run"
+        run_dir.mkdir()
+        mgr = LifecycleManager(run_dir=run_dir, storage=store)
+        result = await mgr.resume_task("nonexistent")
+        assert result is False
+        await store.close()
+
+    async def test_pause_task_wrong_status(self, tmp_path: Path) -> None:
+        """pause_task returns False when task is not \'running\'."""
+        store = Storage(tmp_path / "test.db")
+        await store.connect()
+        # Create a task then set it to \'completed\'
+        await store.create_task(task_id="t1", description="test")
+        await store.update_task("t1", status="completed")
+        run_dir = tmp_path / "run"
+        run_dir.mkdir()
+        mgr = LifecycleManager(run_dir=run_dir, storage=store)
+        result = await mgr.pause_task("t1")
+        assert result is False
+        await store.close()
+
+    async def test_resume_task_wrong_status(self, tmp_path: Path) -> None:
+        """resume_task returns False when task is not \'paused\'."""
+        store = Storage(tmp_path / "test.db")
+        await store.connect()
+        await store.create_task(task_id="t1", description="test")
+        await store.update_task("t1", status="running")
+        run_dir = tmp_path / "run"
+        run_dir.mkdir()
+        mgr = LifecycleManager(run_dir=run_dir, storage=store)
+        result = await mgr.resume_task("t1")
+        assert result is False
+        await store.close()
+
+    async def test_task_queue_complete(self, tmp_path: Path) -> None:
+        """complete() removes task from active list."""
+        from guild.daemon.lifecycle import TaskQueue
+
+        queue = TaskQueue(max_concurrent=2)
+        await queue.enqueue("t1")
+        task_id = await queue.dequeue()
+        assert task_id == "t1"
+        assert queue.active_count == 1
+        queue.complete("t1")
+        assert queue.active_count == 0
+
+    async def test_task_queue_complete_unknown_task(self, tmp_path: Path) -> None:
+        """complete() with unknown task_id does nothing."""
+        from guild.daemon.lifecycle import TaskQueue
+
+        queue = TaskQueue(max_concurrent=2)
+        queue.complete("unknown")
+        assert queue.active_count == 0
+
+
+# ======================================================================
+# Lifecycle kill_all fail branch (from coverage gaps)
+# ======================================================================
+
+
+@pytest.mark.req("REQ-08.1")
+@pytest.mark.unit
+class TestLifecycleKillAllFailBranch:
+    """Cover the branch where kill_task returns False in kill_all loop."""
+
+    async def test_kill_all_counts_only_successful_kills(self, tmp_path: Path) -> None:
+        """kill_all only counts tasks where kill_task returned True."""
+        from unittest.mock import patch
+
+        store = Storage(tmp_path / "test.db")
+        await store.connect()
+        run_dir = tmp_path / "run"
+        run_dir.mkdir()
+
+        # Create two PID files
+        (run_dir / "task-a.pid").write_text("111")
+        (run_dir / "task-b.pid").write_text("222")
+
+        mgr = LifecycleManager(run_dir=run_dir, storage=store)
+
+        # Make kill_task return True for first, False for second
+        call_count = 0
+
+        async def selective_kill(task_id: str, timeout: float = 10.0) -> bool:
+            nonlocal call_count
+            call_count += 1
+            if task_id == "task-a":
+                # Simulate successful kill
+                (run_dir / f"{task_id}.pid").unlink(missing_ok=True)
+                return True
+            else:
+                # Simulate failed kill (PID file doesn\'t exist scenario)
+                return False
+
+        with patch.object(mgr, "kill_task", side_effect=selective_kill):
+            count = await mgr.kill_all()
+
+        # Only one kill was successful -- branch 99->96 exercised
+        assert count == 1
+        await store.close()

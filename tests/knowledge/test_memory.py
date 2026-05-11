@@ -194,3 +194,28 @@ class TestMemoryConsolidation:
         index_after = await memory_index.get_index()
         dup_count_after = sum(1 for e in index_after if "Duplicate summary" in e)
         assert dup_count_after == 1
+
+
+# ======================================================================
+# Memory format_index_for_prompt (from coverage gaps)
+# ======================================================================
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-07.6")
+class TestMemoryFormatIndex:
+    """Tests for MemoryIndex.format_index_for_prompt."""
+
+    def test_format_empty_index_returns_empty(self) -> None:
+        """Empty index produces an empty string."""
+        index = MemoryIndex.__new__(MemoryIndex)
+        result = index.format_index_for_prompt([])
+        assert result == ""
+
+    def test_format_index_with_entries(self) -> None:
+        """Non-empty index produces header and bullet list."""
+        index = MemoryIndex.__new__(MemoryIndex)
+        result = index.format_index_for_prompt(["Entry one", "Entry two"])
+        assert "## Agent Memory Index" in result
+        assert "- Entry one" in result
+        assert "- Entry two" in result

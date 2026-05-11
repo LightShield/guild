@@ -220,3 +220,92 @@ class TestSeparateStaticDynamic:
             task="",
         )
         assert dynamic == ""
+
+
+# ======================================================================
+# Context manager empty content branch (from coverage gaps)
+# ======================================================================
+
+
+@pytest.mark.req("REQ-07.4")
+@pytest.mark.unit
+class TestContextManagerEmptyContentBranch:
+    """Cover context manager branches with empty content."""
+
+    def test_estimate_tokens_with_empty_content(self) -> None:
+        """Messages with empty/None content don\'t add to token count."""
+        cm = ContextManager()
+        messages = [
+            Message(role="system", content=""),
+            Message(role="user", content=""),
+            Message(role="tool", content=""),
+        ]
+        # All empty content -- should be 0 tokens
+        assert cm.estimate_tokens(messages) == 0
+
+    def test_compact_empty_messages_returns_empty(self) -> None:
+        """compact() returns [] for empty messages list (line 60)."""
+        cm = ContextManager()
+        result = cm.compact([])
+        assert result == []
+
+    def test_compact_already_within_threshold(self) -> None:
+        """compact() exits early when tokens are already within threshold (75 branch)."""
+        cm = ContextManager(max_tokens=10000, preserve_recent=2)
+        messages = [
+            Message(role="system", content="Hello"),
+            Message(role="tool", content="short"),
+            Message(role="user", content="hi"),
+            Message(role="assistant", content="bye"),
+        ]
+        # These are very short -- within threshold, so no truncation needed
+        result = cm.compact(messages)
+        # Content should be unchanged
+        assert result[1].content == "short"
+
+    def test_protected_indices_no_system_prompt(self) -> None:
+        """When first message is not system, index 0 is not protected (151->154)."""
+        cm = ContextManager(preserve_recent=2)
+        messages = [
+            Message(role="user", content="first"),
+            Message(role="assistant", content="second"),
+            Message(role="tool", content="third"),
+            Message(role="user", content="fourth"),
+        ]
+        protected = cm._protected_indices(messages)
+        # Index 0 is NOT protected since role != "system"
+        assert 0 not in protected
+        # Recent 2 are protected
+        assert 2 in protected
+        assert 3 in protected
+
+    def test_truncate_message_short_content_unchanged(self) -> None:
+        """_truncate_message doesn\'t truncate short content (line 164)."""
+        cm = ContextManager()
+        msg = Message(role="tool", content="short")
+        assert len("short") <= MIN_CONTENT_LEN
+        cm._truncate_message(msg)
+        assert msg.content == "short"
+
+    def test_extract_decisions_finds_decision_prefix(self) -> None:
+        """_extract_decisions finds lines starting with \'Decision:\' (line 177->175)."""
+        cm = ContextManager()
+        messages = [
+            Message(role="assistant", content="Decision: use SQLite\nOther line"),
+            Message(role="user", content="ok"),
+        ]
+        decisions = cm._extract_decisions(messages)
+        assert len(decisions) == 1
+        assert "Decision: use SQLite" in decisions[0]
+
+    def test_extract_completed_actions_empty_first_line(self) -> None:
+        """_extract_completed_actions skips empty first lines (190->184)."""
+        cm = ContextManager()
+        messages = [
+            Message(role="tool", content="\nsecond line here"),
+            Message(role="tool", content=""),
+        ]
+        actions = cm._extract_completed_actions(messages)
+        # First message: first_line is "" (empty after split/strip) -- skipped
+        # Second message: content is "" -- first_line is "" -- skipped
+        assert actions == []

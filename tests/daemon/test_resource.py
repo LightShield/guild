@@ -568,3 +568,83 @@ class TestGpuVramEdgeCases:
         status = monitor.get_status()
         assert status.is_throttled
         assert "paused until idle" in status.reason.lower()
+
+
+# ======================================================================
+# Resource monitor stealth mode (from coverage gaps)
+# ======================================================================
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-24.1")
+class TestResourceMonitorStealthExit:
+    """ResourceMonitor stealth mode exits when user becomes idle."""
+
+    async def test_stealth_mode_exits_on_idle(self) -> None:
+        """Stealth mode blocks while active and unblocks when idle."""
+        call_count = 0
+
+        def detector() -> ActivityState:
+            nonlocal call_count
+            call_count += 1
+            if call_count <= 1:
+                return ActivityState.ACTIVE
+            return ActivityState.IDLE
+
+        monitor = ResourceMonitor(
+            mode=SchedulingMode.STEALTH,
+            activity_detector=detector,
+            cpu_reader=lambda: 20.0,
+        )
+        monitor.thresholds.poll_interval_seconds = 0.01
+        await monitor.wait_if_throttled()
+        # Should have polled at least twice (once ACTIVE, once IDLE)
+        assert call_count >= 2
+
+
+# ======================================================================
+# Resource throttle STEALTH exit branch (from coverage gaps)
+# ======================================================================
+
+
+@pytest.mark.req("REQ-08.5")
+@pytest.mark.unit
+class TestResourceThrottleStealthExit:
+    """Cover the STEALTH mode exit branch in wait_if_throttled."""
+
+    async def test_stealth_mode_returns_when_idle(self) -> None:
+        """In STEALTH mode, if user is idle, returns immediately (exit branch)."""
+        import time
+
+        monitor = ResourceMonitor(
+            mode=SchedulingMode.STEALTH,
+            activity_detector=lambda: ActivityState.IDLE,
+            cpu_reader=lambda: 10.0,
+        )
+
+        # Should return immediately since user is IDLE
+        start = time.monotonic()
+        await monitor.wait_if_throttled()
+        elapsed = time.monotonic() - start
+        assert elapsed < 0.05
+
+    async def test_stealth_mode_blocks_then_releases(self) -> None:
+        """In STEALTH mode, blocks while active then proceeds when idle."""
+        call_count = 0
+
+        def activity_changes() -> ActivityState:
+            nonlocal call_count
+            call_count += 1
+            # First call: ACTIVE, second call: IDLE (unblocks)
+            return ActivityState.ACTIVE if call_count <= 1 else ActivityState.IDLE
+
+        monitor = ResourceMonitor(
+            mode=SchedulingMode.STEALTH,
+            thresholds=ResourceThresholds(poll_interval_seconds=0.01),
+            activity_detector=activity_changes,
+            cpu_reader=lambda: 10.0,
+        )
+
+        await monitor.wait_if_throttled()
+        # Should have polled at least twice
+        assert call_count >= 2

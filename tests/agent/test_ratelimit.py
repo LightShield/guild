@@ -278,3 +278,59 @@ class TestBackpressure:
         assert elapsed < 0.05
         mgr.release()
         mgr.release()
+
+
+# ======================================================================
+# BackpressureManager release edge case (from coverage gaps)
+# ======================================================================
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-20.3")
+class TestBackpressureReleaseBranch:
+    """BackpressureManager release edge case."""
+
+    async def test_release_when_active_is_zero(self) -> None:
+        """Releasing when active==0 still releases semaphore without decrement."""
+        from guild.agent.ratelimit import BackpressureManager
+
+        mgr = BackpressureManager(max_concurrent=2)
+        # Don't acquire first, just release — _active stays at 0
+        mgr.release()
+        # active should still be 0
+        assert mgr._active == 0
+
+
+# ======================================================================
+# RateLimiter window expired branch (from coverage gaps)
+# ======================================================================
+
+
+@pytest.mark.req("REQ-10.5")
+@pytest.mark.unit
+class TestRateLimiterWindowExpiredBranch:
+    """Cover the branch where wait computes to <= 0 in RateLimiter."""
+
+    async def test_wait_computes_to_zero_or_negative(self) -> None:
+        """When calls are exactly at window boundary, wait <= 0 skips sleep."""
+        # Use a very short window so calls quickly expire
+        limiter = RateLimiter(max_calls=1, window_seconds=0.01)
+
+        # Fill the window
+        await limiter.acquire()
+
+        # Wait just past the window so oldest call is beyond boundary
+        await asyncio.sleep(0.02)
+
+        # Inject a call that\'s exactly at the window edge.
+        limiter._calls = [time.monotonic() - limiter._window]
+
+        # Now: len(calls) == 1 == max, so it enters the wait calc.
+        # wait = window - (now - oldest) = window - window = ~0 or negative.
+        # This should hit the `wait <= 0` branch (line 81->83) and NOT sleep.
+        start = time.monotonic()
+        await limiter.acquire()
+        elapsed = time.monotonic() - start
+
+        # Should be near-instant since wait <= 0 means no sleep
+        assert elapsed < 0.05

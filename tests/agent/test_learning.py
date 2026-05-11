@@ -326,3 +326,111 @@ class TestCrossTaskLearning:
         # Format for injection
         injection = format_learnings_for_injection(high_conf)
         assert "Always check return values" in injection
+
+
+# ======================================================================
+# Learning module edge branches (from coverage gaps)
+# ======================================================================
+
+
+@pytest.mark.req("REQ-09.1")
+@pytest.mark.unit
+class TestLearningEdgeBranches:
+    """Cover learning module uncovered branches."""
+
+    async def test_extract_learnings_no_assigned_agent(self, tmp_path: Path) -> None:
+        """extract_learnings returns [] when task has no assigned_agent (lines 57-58)."""
+        from guild.storage.sqlite import Storage
+
+        store = Storage(tmp_path / "test.db")
+        await store.connect()
+        await store.create_task("t1", "test task")
+        # Task exists but has no assigned_agent
+
+        provider = AsyncMock()
+        result = await extract_learnings("t1", store, provider)
+        assert result == []
+        await store.close()
+
+    async def test_extract_learnings_no_messages(self, tmp_path: Path) -> None:
+        """extract_learnings returns [] when agent has no messages (lines 63-64)."""
+        from guild.storage.sqlite import Storage
+
+        store = Storage(tmp_path / "test.db")
+        await store.connect()
+        await store.create_task("t1", "test task")
+        # Assign an agent but don\'t add any messages
+        await store.update_task("t1", assigned_agent="agent-1")
+
+        provider = AsyncMock()
+        result = await extract_learnings("t1", store, provider)
+        assert result == []
+        await store.close()
+
+    def test_parse_learning_line_empty_line(self) -> None:
+        """_parse_learning_line returns None for empty line (line 190)."""
+        from guild.agent.learning import _parse_learning_line
+
+        result = _parse_learning_line("")
+        assert result is None
+        result = _parse_learning_line("   ")
+        assert result is None
+
+    def test_parse_learning_line_non_dict_json(self) -> None:
+        """_parse_learning_line returns None for non-dict JSON (line 199)."""
+        from guild.agent.learning import _parse_learning_line
+
+        # Valid JSON but array, not dict
+        result = _parse_learning_line("[1, 2, 3]")
+        assert result is None
+
+    def test_parse_learning_line_empty_content(self) -> None:
+        """_parse_learning_line returns None for empty content (line 190)."""
+        from guild.agent.learning import _parse_learning_line
+
+        # Valid category but empty content
+        result = _parse_learning_line('{"category": "pattern", "content": ""}')
+        assert result is None
+
+    def test_parse_learning_line_non_string_content(self) -> None:
+        """_parse_learning_line returns None for non-string content."""
+        from guild.agent.learning import _parse_learning_line
+
+        result = _parse_learning_line('{"category": "pattern", "content": 123}')
+        assert result is None
+
+    def test_format_session_log_truncates_long_content(self) -> None:
+        """_format_session_log truncates messages > 500 chars (line 181)."""
+        from guild.agent.learning import _format_session_log
+
+        long_content = "x" * 600
+        messages = [{"role": "user", "content": long_content}]
+        result = _format_session_log(messages)
+        # Should be truncated to 500 chars + "..."
+        assert len(result.split("] ")[1]) == 503  # 500 + "..."
+        assert result.endswith("...")
+
+    async def test_suggest_prompt_refinements_skips_non_matching(self, tmp_path: Path) -> None:
+        """suggest_prompt_refinements skips categories other than anti_pattern/tool_tip."""
+        from guild.agent.learning import suggest_prompt_refinements
+        from guild.storage.sqlite import Storage
+
+        store = Storage(tmp_path / "test.db")
+        await store.connect()
+
+        # Add learnings of various categories
+        await store.add_learning(category="pattern", content="Use async", confidence=0.9)
+        await store.add_learning(category="domain_knowledge", content="API is REST", confidence=0.8)
+        await store.add_learning(
+            category="anti_pattern", content="Avoid busy waits", confidence=0.7
+        )
+        await store.add_learning(category="tool_tip", content="Use --verbose flag", confidence=0.6)
+
+        suggestions = await suggest_prompt_refinements(store)
+
+        # Only anti_pattern and tool_tip should generate suggestions
+        assert any("Avoid busy waits" in s for s in suggestions)
+        assert any("--verbose flag" in s for s in suggestions)
+        # pattern and domain_knowledge are in the loop but don\'t match
+        assert len(suggestions) == 2
+        await store.close()

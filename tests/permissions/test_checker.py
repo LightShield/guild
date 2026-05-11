@@ -445,3 +445,42 @@ class TestReversibilitySafeOperations:
 
         result = checker.check("shell", "agent-1", {"command": command})
         assert result is True, f"Safe command '{command}' was blocked in tier {tier.value}"
+
+
+# ======================================================================
+# Permissions checker edges (from coverage gaps)
+# ======================================================================
+
+
+@pytest.mark.req("REQ-11.1")
+@pytest.mark.unit
+class TestPermissionsCheckerEdges:
+    """Cover permissions checker uncovered branches."""
+
+    def test_set_tier_updates_allowed_paths(self) -> None:
+        """set_tier with allowed_paths updates the paths (line 175)."""
+        checker = PermissionChecker(tier=PermissionTier.ASK)
+        checker.set_tier(
+            PermissionTier.SCOPED,
+            allowed_paths=["/home/user"],
+            allowed_tools=["file_read"],
+        )
+        # Verify paths were set
+        assert checker._allowed_paths == ["/home/user"]
+        assert checker._allowed_tools == ["file_read"]
+
+    def test_ask_tier_no_prompt_fn_returns_false(self) -> None:
+        """ASK tier with no prompt_fn returns False (line 187)."""
+        checker = PermissionChecker(tier=PermissionTier.ASK, prompt_fn=None)
+        result = checker.check("file_read", "agent-1", {"path": "/tmp/x"})
+        assert result is False
+
+    def test_scoped_path_exact_match(self) -> None:
+        """Scoped tier allows path that exactly matches allowed path (line 224)."""
+        checker = PermissionChecker(
+            tier=PermissionTier.SCOPED,
+            allowed_tools=["file_read"],
+            allowed_paths=["/exact/path"],
+        )
+        result = checker.check("file_read", "agent-1", {"path": "/exact/path"})
+        assert result is True

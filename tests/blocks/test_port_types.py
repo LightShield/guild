@@ -229,3 +229,28 @@ class TestBasicSchemaCheck:
         valid, error = validate_port_data({"data": 123}, "no-schema-type")
         assert valid is True
         assert error == ""
+
+
+# ======================================================================
+# Port types: get_composite_ports when block is None (from coverage gaps)
+# ======================================================================
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-04.33")
+class TestCompositePortsUnknownBlock:
+    """get_composite_ports skips blocks unknown to registry."""
+
+    def test_composite_ports_with_unknown_block_type(self) -> None:
+        """Unknown block types are skipped gracefully."""
+        registry = BlockRegistry()
+        team = TeamDef(
+            name="partial-team",
+            blocks={"known": "coder", "unknown": "not_registered_type"},
+            connections=[],
+            entry_block="known",
+        )
+        inputs, outputs = get_composite_ports(team, registry)
+        # Should still get ports from the known block (coder)
+        input_names = [p.name for p in inputs]
+        assert "spec" in input_names or "context" in input_names

@@ -404,3 +404,61 @@ class TestModelCapabilityTagging:
             assert len(cap.tags) > 0
             assert cap.cost_tier in ("free", "cheap", "expensive")
             assert cap.name != ""
+
+
+# ======================================================================
+# Provider escalation edges (from coverage gaps)
+# ======================================================================
+
+
+@pytest.mark.req("REQ-12.1")
+@pytest.mark.unit
+class TestProviderEscalationEdges:
+    """Cover provider/escalation.py uncovered branches."""
+
+    def test_select_model_unknown_model_skipped(self) -> None:
+        """select_model_for_task skips models not in MODEL_CAPABILITIES (line 81)."""
+        from guild.provider.escalation import select_model_for_task
+
+        # Include a model name that\'s not in MODEL_CAPABILITIES + one that is
+        result = select_model_for_task(
+            task_type="simple_qa",
+            available_models=["unknown_model_xyz", "gemma4-2b-edge-fast"],
+        )
+        # Should pick the known model (unknown is skipped)
+        assert result == "gemma4-2b-edge-fast"
+
+    def test_select_model_no_match_raises(self) -> None:
+        """select_model_for_task raises when no model supports task type (line 87)."""
+        from guild.provider.escalation import select_model_for_task
+
+        with pytest.raises(ValueError, match="No available model"):
+            select_model_for_task(
+                task_type="nonexistent_task_type",
+                available_models=["unknown_model_xyz"],
+            )
+
+    async def test_escalation_provider_chain_exhausted_raises(self) -> None:
+        """EscalatingProvider raises when chain is exhausted (line 214)."""
+        from unittest.mock import AsyncMock
+
+        # Create a chain with a single provider that fails
+        provider = AsyncMock()
+        provider.generate.side_effect = RuntimeError("provider fail")
+
+        chain = EscalationChain(
+            providers=[provider],
+        )
+        ep = EscalatingProvider(chain)
+
+        with pytest.raises(RuntimeError, match="provider fail"):
+            await ep.generate([{"role": "user", "content": "test"}])
+
+    def test_escalation_provider_chain_property(self) -> None:
+        """EscalatingProvider.chain property returns the chain (line 186)."""
+        from unittest.mock import AsyncMock
+
+        provider = AsyncMock()
+        chain = EscalationChain(providers=[provider])
+        ep = EscalatingProvider(chain)
+        assert ep.chain is chain

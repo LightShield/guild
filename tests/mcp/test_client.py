@@ -250,3 +250,75 @@ class TestMCPClientAsyncContextManager:
                 mock_disconnect.assert_not_awaited()
 
             mock_disconnect.assert_awaited_once()
+
+
+# ======================================================================
+# MCP Client edge cases (from coverage gaps)
+# ======================================================================
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-04.3")
+class TestMCPClientEdgeCases:
+    """Cover MCP client edge cases."""
+
+    async def test_disconnect_when_not_connected(self) -> None:
+        """disconnect() is a no-op when not connected."""
+        config = MCPServerConfig(name="test", command="echo")
+        client = MCPClient(config)
+        # Should not raise
+        await client.disconnect()
+
+    async def test_send_request_not_connected_raises(self) -> None:
+        """_send_request raises MCPError when not connected."""
+        config = MCPServerConfig(name="test", command="echo")
+        client = MCPClient(config)
+        with pytest.raises(MCPError, match="Not connected"):
+            await client._send_request("test/method", {})
+
+    def test_config_property(self) -> None:
+        """config property returns the server config."""
+        config = MCPServerConfig(name="my-server", command="node", args=["mcp.js"])
+        client = MCPClient(config)
+        assert client.config.name == "my-server"
+
+
+# ======================================================================
+# MCP Client protocol edge cases (from coverage gaps)
+# ======================================================================
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-04.3")
+class TestMCPClientProtocol:
+    """Test MCP client protocol edge cases."""
+
+    async def test_send_request_stdout_none_raises(self) -> None:
+        """_send_request raises MCPError if stdout is None."""
+        config = MCPServerConfig(name="test", command="echo")
+        client = MCPClient(config)
+        # Simulate connected but with stdout=None
+        mock_proc = MagicMock()
+        mock_proc.stdin = MagicMock()
+        mock_proc.stdin.write = MagicMock()
+        mock_proc.stdin.drain = AsyncMock()
+        mock_proc.stdout = None
+        client._process = mock_proc
+
+        with pytest.raises(MCPError, match="stdout"):
+            await client._send_request("test", {})
+
+    async def test_send_request_empty_response_raises(self) -> None:
+        """_send_request raises MCPError when server closes connection."""
+        config = MCPServerConfig(name="test", command="echo")
+        client = MCPClient(config)
+        mock_proc = MagicMock()
+        mock_proc.stdin = MagicMock()
+        mock_proc.stdin.write = MagicMock()
+        mock_proc.stdin.drain = AsyncMock()
+        mock_proc.stdout = MagicMock()
+        mock_proc.stdout.readline = AsyncMock(return_value=b"")
+        client._process = mock_proc
+
+        with pytest.raises(MCPError, match="closed connection"):
+            await client._send_request("test", {})

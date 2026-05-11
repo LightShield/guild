@@ -124,3 +124,126 @@ class TestSessionReplay:
         output = replay.format_for_display([])
 
         assert output == "(empty session)"
+
+
+# ======================================================================
+# Session replay edge cases (from coverage gaps)
+# ======================================================================
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-21.1")
+class TestReplayEdgeCases:
+    """Cover session replay edge cases."""
+
+    async def test_replay_empty_session(self, tmp_path: Path) -> None:
+        """Replaying a session with no messages returns empty."""
+        store = Storage(tmp_path / "test.db")
+        await store.connect()
+        replay = SessionReplay(store)
+        messages = await replay.get_session("nonexistent-agent")
+        assert messages == []
+        await store.close()
+
+    async def test_get_session_summary_empty(self, tmp_path: Path) -> None:
+        """Summarizing a session with no messages returns zero counts."""
+        store = Storage(tmp_path / "test.db")
+        await store.connect()
+        replay = SessionReplay(store)
+        summary = await replay.get_session_summary("nonexistent-agent")
+        assert summary["turn_count"] == 0
+        assert summary["message_count"] == 0
+        await store.close()
+
+    def test_format_for_display_empty(self) -> None:
+        """format_for_display returns placeholder for empty session."""
+        from unittest.mock import MagicMock
+
+        replay = SessionReplay(MagicMock())
+        result = replay.format_for_display([])
+        assert "empty" in result.lower()
+
+    def test_extract_tool_names_invalid_json(self) -> None:
+        """_extract_tool_names handles invalid JSON gracefully."""
+        tools: list[str] = []
+        SessionReplay._extract_tool_names("not-json", tools)
+        assert tools == []
+
+    def test_extract_tool_names_valid(self) -> None:
+        """_extract_tool_names extracts tool names from valid JSON."""
+        import json
+
+        tools: list[str] = []
+        calls = json.dumps(
+            [
+                {"function": {"name": "shell"}},
+                {"function": {"name": "file_read"}},
+            ]
+        )
+        SessionReplay._extract_tool_names(calls, tools)
+        assert "shell" in tools
+        assert "file_read" in tools
+
+
+# ======================================================================
+# Replay extract tool names branches (from coverage gaps)
+# ======================================================================
+
+
+@pytest.mark.req("REQ-10.1")
+@pytest.mark.unit
+class TestReplayExtractToolNamesBranches:
+    """Cover the branch exits in _extract_tool_names."""
+
+    def test_extract_tool_names_non_list_json(self) -> None:
+        """When JSON parses to a non-list, branch exits early (line 98->exit)."""
+        tools: list[str] = []
+        # Valid JSON but not a list -- should hit `if isinstance(calls, list)` False branch
+        SessionReplay._extract_tool_names('{"not": "a list"}', tools)
+        assert tools == []
+
+    def test_extract_tool_names_call_without_name(self) -> None:
+        """When a call has no function name, it\'s skipped (line 102->99)."""
+        import json
+
+        tools: list[str] = []
+        # A call with empty name -- `if name` is False, branch 102->99
+        calls = json.dumps(
+            [
+                {"function": {"name": ""}},
+                {"function": {"name": "valid_tool"}},
+            ]
+        )
+        SessionReplay._extract_tool_names(calls, tools)
+        # Only valid_tool should be extracted
+        assert tools == ["valid_tool"]
+
+    def test_extract_tool_names_call_missing_function_key(self) -> None:
+        """When a call has no \'function\' key, it\'s handled."""
+        import json
+
+        tools: list[str] = []
+        calls = json.dumps(
+            [
+                {"other_key": "value"},
+                {"function": {"name": "good_tool"}},
+            ]
+        )
+        SessionReplay._extract_tool_names(calls, tools)
+        assert tools == ["good_tool"]
+
+    def test_extract_tool_names_deduplication(self) -> None:
+        """Duplicate tool names are not added twice (name not in tools_used branch)."""
+        import json
+
+        tools: list[str] = ["existing_tool"]
+        calls = json.dumps(
+            [
+                {"function": {"name": "existing_tool"}},
+                {"function": {"name": "new_tool"}},
+            ]
+        )
+        SessionReplay._extract_tool_names(calls, tools)
+        # existing_tool should NOT be duplicated
+        assert tools.count("existing_tool") == 1
+        assert "new_tool" in tools

@@ -90,3 +90,61 @@ async def test_offline_help_returns_content() -> None:
     assert mgr.get_help("commands") is not None
     assert mgr.get_help("troubleshooting") is not None
     assert mgr.get_help("nonexistent-topic") is None
+
+
+# ======================================================================
+# Offline manager edge cases (from coverage gaps)
+# ======================================================================
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-24.3")
+class TestOfflineManagerEdgeCases:
+    """Offline manager check_connectivity exception path."""
+
+    async def test_connectivity_exception_sets_offline(self) -> None:
+        """If health_check raises, is_online is set to False."""
+        provider = AsyncMock()
+        provider.health_check.side_effect = ConnectionError("connection refused")
+        mgr = OfflineManager(provider=provider)
+        result = await mgr.check_connectivity()
+        assert result is False
+        assert mgr.is_online is False
+
+
+# ======================================================================
+# Offline manager health check success (from coverage gaps)
+# ======================================================================
+
+
+@pytest.mark.req("REQ-14.1")
+@pytest.mark.unit
+class TestOfflineManagerHealthCheckSuccess:
+    """Cover the branch where health check succeeds (line 45->exit)."""
+
+    async def test_check_connectivity_success(self) -> None:
+        """When health_check returns True, connectivity is True."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        provider = MagicMock()
+        provider.health_check = AsyncMock(return_value=True)
+
+        mgr = OfflineManager(provider)
+        result = await mgr.check_connectivity()
+
+        assert result is True
+        assert mgr.is_online is True
+
+    async def test_check_connectivity_false(self) -> None:
+        """When health_check returns False, connectivity is False (exit branch)."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        provider = MagicMock()
+        provider.health_check = AsyncMock(return_value=False)
+
+        mgr = OfflineManager(provider)
+        result = await mgr.check_connectivity()
+
+        # This exercises the path where result = False (line 45 -> exit)
+        assert result is False
+        assert mgr.is_online is False

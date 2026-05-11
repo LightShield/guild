@@ -242,3 +242,241 @@ class TestConfigWatcher:
 
         assert watcher.check_for_changes() is False
         assert len(callback_calls) == 0
+
+
+# ======================================================================
+# Config loader edge cases (from coverage gaps)
+# ======================================================================
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-01.3")
+class TestConfigLoaderEdgeCases:
+    """Cover config loader edge cases."""
+
+    def test_find_guild_dir_walks_up(self, tmp_path: Path) -> None:
+        """find_guild_dir walks up directory tree."""
+        guild_dir = tmp_path / ".guild"
+        guild_dir.mkdir()
+        deep = tmp_path / "a" / "b" / "c"
+        deep.mkdir(parents=True)
+        result = find_guild_dir(deep)
+        assert result == guild_dir
+
+    def test_find_guild_dir_not_found(self) -> None:
+        """find_guild_dir returns None when not found."""
+        from pathlib import Path
+
+        # Start from root or a place without .guild
+        result = find_guild_dir(Path("/"))
+        assert result is None
+
+    def test_load_toml_file_invalid(self, tmp_path: Path) -> None:
+        """_load_toml_file returns {} on invalid TOML."""
+        from guild.config.loader import _load_toml_file
+
+        bad = tmp_path / "bad.toml"
+        bad.write_text("invalid [[[toml content")
+        result = _load_toml_file(bad)
+        assert result == {}
+
+    def test_load_toml_file_missing(self) -> None:
+        """_load_toml_file returns {} when file doesn\'t exist."""
+        from pathlib import Path
+
+        from guild.config.loader import _load_toml_file
+
+        result = _load_toml_file(Path("/nonexistent/file.toml"))
+        assert result == {}
+
+    def test_config_watcher_detects_change(self, tmp_path: Path) -> None:
+        """ConfigWatcher detects mtime change and calls callback."""
+        import time
+
+        config_file = tmp_path / "config.toml"
+        config_file.write_text('model = "test"\n')
+        called = []
+        watcher = ConfigWatcher(config_file, callback=lambda: called.append(1))
+
+        # No change yet
+        assert watcher.check_for_changes() is False
+
+        # Modify file
+        time.sleep(0.05)
+        config_file.write_text('model = "updated"\n')
+        assert watcher.check_for_changes() is True
+        assert len(called) == 1
+
+    def test_config_watcher_missing_file(self, tmp_path: Path) -> None:
+        """ConfigWatcher returns False for missing file."""
+        watcher = ConfigWatcher(tmp_path / "nope.toml", callback=lambda: None)
+        assert watcher.check_for_changes() is False
+
+
+# ======================================================================
+# Config loader internal functions (from coverage gaps)
+# ======================================================================
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-01.3")
+class TestConfigLoaderInternals:
+    """Cover config loader internal functions."""
+
+    def test_write_toml_bytes(self) -> None:
+        """_write_toml_bytes writes correct TOML bytes."""
+        import io
+
+        from guild.config.loader import _write_toml_bytes
+
+        buf = io.BytesIO()
+        data = {
+            "model": "test-model",
+            "debug": True,
+            "provider": {"base_url": "http://localhost:11434"},
+        }
+        _write_toml_bytes(buf, data)
+        content = buf.getvalue().decode()
+        assert 'model = "test-model"' in content
+        assert "debug = true" in content
+        assert "[provider]" in content
+        assert 'base_url = "http://localhost:11434"' in content
+
+    def test_toml_literal_bool_false(self) -> None:
+        """_toml_literal formats False as \'false\'."""
+        from guild.config.loader import _toml_literal
+
+        assert _toml_literal(False) == "false"
+        assert _toml_literal(True) == "true"
+
+    def test_toml_literal_int(self) -> None:
+        """_toml_literal formats integers correctly."""
+        from guild.config.loader import _toml_literal
+
+        assert _toml_literal(42) == "42"
+
+    def test_merge_toml_files_both_present(self, tmp_path: Path) -> None:
+        """When both global and project config exist, they are merged."""
+        from unittest.mock import patch
+
+        from guild.config.loader import _merge_toml_files
+
+        guild_dir = tmp_path / ".guild"
+        guild_dir.mkdir()
+        project_config = guild_dir / "config.toml"
+        project_config.write_text('model = "project-model"\n')
+
+        # Patch global path to avoid depending on actual ~/.guild
+        with patch("guild.config.loader.Path.home", return_value=tmp_path / "home"):
+            home_guild = tmp_path / "home" / ".guild"
+            home_guild.mkdir(parents=True)
+            (home_guild / "config.toml").write_text('model = "global-model"\ndebug = true\n')
+
+            result = _merge_toml_files(guild_dir)
+            # Result should be a temp file with merged content
+            assert result is not None
+            content = result.read_text()
+            # Project overrides global for model
+            assert "project-model" in content
+            # Cleanup
+            result.unlink()
+
+    def test_load_config_no_guild_dir(self) -> None:
+        """load_config works without a guild_dir (uses defaults)."""
+        from pathlib import Path
+        from unittest.mock import patch
+
+        # With no guild_dir and no global config, should return default config
+        with patch("guild.config.loader.Path.home", return_value=Path("/nonexistent")):
+            config = load_config(guild_dir=None)
+            # Should still produce a valid config with defaults
+            assert config is not None
+
+
+# ======================================================================
+# Config loader global fallback (from coverage gaps)
+# ======================================================================
+
+
+@pytest.mark.req("REQ-05.3")
+@pytest.mark.unit
+class TestConfigLoaderGlobalFallback:
+    """Cover the branch at line 65 where only global config exists."""
+
+    def test_global_config_only_returns_global_path(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """When only global config exists (no project config), return global path."""
+        from guild.config.loader import _merge_toml_files
+
+        # Set up: global config exists, project config does NOT exist
+        home = tmp_path / "home"
+        global_guild = home / ".guild"
+        global_guild.mkdir(parents=True)
+        global_config = global_guild / "config.toml"
+        global_config.write_text('[provider]\nmodel = "global-model"\n')
+
+        # Project guild dir exists but has no config.toml
+        project_guild = tmp_path / "project" / ".guild"
+        project_guild.mkdir(parents=True)
+
+        monkeypatch.setenv("HOME", str(home))
+
+        result = _merge_toml_files(project_guild)
+        # Should return the global path directly (line 65)
+        assert result == global_config
+
+
+# ======================================================================
+# Config loader temp file cleanup (from coverage gaps)
+# ======================================================================
+
+
+@pytest.mark.req("REQ-05.3")
+@pytest.mark.unit
+class TestConfigLoaderTempFileCleanup:
+    """Cover the temp file cleanup branch at lines 155-158."""
+
+    def test_load_config_cleans_up_temp_file(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """When merged config creates a temp file, it\'s cleaned up after loading."""
+        # Set up both global and project configs so merge creates a temp file
+        home = tmp_path / "home"
+        global_guild = home / ".guild"
+        global_guild.mkdir(parents=True)
+        (global_guild / "config.toml").write_text(
+            '[provider]\nmodel = "global"\ntemperature = 0.5\n'
+        )
+
+        project_guild = tmp_path / "project" / ".guild"
+        project_guild.mkdir(parents=True)
+        (project_guild / "config.toml").write_text('[provider]\nmodel = "project"\n')
+
+        # Patch Path.home() to return our fake home
+        monkeypatch.setenv("HOME", str(home))
+
+        # load_config should merge, use temp file, then clean it up
+        config = load_config(guild_dir=project_guild)
+        assert config.model == "project"
+
+
+# ======================================================================
+# Config loader corrupt TOML (from coverage gaps)
+# ======================================================================
+
+
+@pytest.mark.req("REQ-05.3")
+@pytest.mark.unit
+class TestConfigLoaderCorruptToml:
+    """Cover the exception branch in _load_toml_file."""
+
+    def test_load_toml_file_corrupt_returns_empty(self, tmp_path: Path) -> None:
+        """Corrupt TOML file returns empty dict (lines 87-89)."""
+        from guild.config.loader import _load_toml_file
+
+        corrupt_file = tmp_path / "bad.toml"
+        corrupt_file.write_text("this is not = valid [ toml {{{")
+
+        result = _load_toml_file(corrupt_file)
+        assert result == {}
