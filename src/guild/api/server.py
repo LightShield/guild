@@ -306,6 +306,97 @@ def _register_static_files(app: Any) -> None:
             return FileResponse(str(_UI_DIST / "index.html"))
 
 
+def _jsonrpc_error(req_id: Any, code: int, message: str) -> dict[str, Any]:
+    """Build a JSON-RPC 2.0 error response."""
+    return {
+        "jsonrpc": "2.0",
+        "id": req_id,
+        "error": {"code": code, "message": message},
+    }
+
+
+def _jsonrpc_result(req_id: Any, result: Any) -> dict[str, Any]:
+    """Build a JSON-RPC 2.0 success response."""
+    return {
+        "jsonrpc": "2.0",
+        "id": req_id,
+        "result": result,
+    }
+
+
+def _register_a2a_routes(app: Any) -> None:
+    """Register A2A protocol routes (REQ-04.7a)."""
+    import uuid
+
+    from fastapi import Request
+
+    # In-memory A2A task store (keyed by task ID)
+    a2a_tasks: dict[str, dict[str, Any]] = {}
+
+    @app.get("/.well-known/agent.json")  # type: ignore[untyped-decorator]
+    async def agent_card() -> dict[str, Any]:
+        """Return the A2A agent card for discovery."""
+        return {
+            "name": "Guild",
+            "description": "Autonomous coding agent harness",
+            "url": "/a2a",
+            "version": __version__,
+            "capabilities": {
+                "methods": ["tasks/send", "tasks/get", "tasks/cancel"],
+            },
+        }
+
+    @app.post("/a2a")  # type: ignore[untyped-decorator]
+    async def a2a_endpoint(request: Request) -> dict[str, Any]:
+        """JSON-RPC 2.0 dispatcher for A2A protocol."""
+        try:
+            body = await request.json()
+        except Exception:
+            return _jsonrpc_error(None, -32700, "Parse error")
+
+        method = body.get("method")
+        if not method:
+            return _jsonrpc_error(
+                body.get("id"), -32600, "Invalid request: missing method"
+            )
+
+        req_id = body.get("id")
+        params: dict[str, Any] = body.get("params", {})
+
+        if method == "tasks/send":
+            message = params.get("message")
+            if not message:
+                return _jsonrpc_error(req_id, -32602, "Invalid params: missing message")
+            task_id = str(uuid.uuid4())
+            a2a_tasks[task_id] = {
+                "id": task_id,
+                "status": {"state": "submitted"},
+                "message": message,
+            }
+            return _jsonrpc_result(
+                req_id, {"id": task_id, "status": {"state": "submitted"}}
+            )
+        elif method == "tasks/get":
+            task_id = params.get("id", "")
+            task = a2a_tasks.get(task_id)
+            if task is None:
+                return _jsonrpc_error(req_id, -32001, "Task not found")
+            return _jsonrpc_result(
+                req_id, {"id": task["id"], "status": task["status"]}
+            )
+        elif method == "tasks/cancel":
+            task_id = params.get("id", "")
+            task = a2a_tasks.get(task_id)
+            if task is None:
+                return _jsonrpc_error(req_id, -32001, "Task not found")
+            task["status"] = {"state": "canceled"}
+            return _jsonrpc_result(
+                req_id, {"id": task["id"], "status": task["status"]}
+            )
+        else:
+            return _jsonrpc_error(req_id, -32601, f"Method not found: {method}")
+
+
 def create_app(
     guild_dir: Path | None = None,
     storage: "Storage | None" = None,
@@ -359,6 +450,7 @@ def create_app(
         return app.state.storage  # type: ignore[no-any-return]
 
     # Register route groups
+    _register_a2a_routes(app)
     _register_task_routes(app, _get_storage)
     _register_agent_routes(app, _get_storage)
     _register_config_routes(app, _get_storage, _guild_dir)
