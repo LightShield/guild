@@ -158,9 +158,8 @@ def test_frontend_serves_html(tmp_path: Path) -> None:
 
 @pytest.mark.unit
 @pytest.mark.req("REQ-05.5")
-@pytest.mark.req("REQ-05.7")
 def test_websocket_sends_status_updates(guild_api_dir: Path) -> None:
-    """WebSocket /ws sends JSON status updates (backend for REQ-05.7 comm graph)."""
+    """WebSocket /ws sends JSON status updates."""
     from starlette.testclient import TestClient
 
     app = create_app(guild_dir=guild_api_dir)
@@ -189,13 +188,13 @@ def test_guild_serve_command_exists() -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-05.6")
+@pytest.mark.req("REQ-05.4")
 def test_visual_composer_api_routes_exist() -> None:
-    """The API provides blocks/teams data for the composer (backend side only)."""
+    """The API provides blocks/teams data routes (backend side only)."""
     # NOTE: REQ-05.6 (visual composer) and REQ-05.7 (communication graph) are
     # frontend features that cannot be meaningfully unit-tested without a browser.
-    # These tests only verify the backend API supports the composer's data needs.
-    # The requirements remain UNCOVERED until E2E browser tests exist.
+    # These tests only verify the backend API exposes the required data routes.
+    # The frontend requirements remain UNCOVERED until E2E browser tests exist.
     assert "GET /api/blocks" in API_ROUTES
     assert "GET /api/teams" in API_ROUTES
 
@@ -591,8 +590,8 @@ def test_websocket_disconnect_path(guild_api_dir: Path) -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-05.6")
-@pytest.mark.req("REQ-04.24a")
+@pytest.mark.req("REQ-05.5")
+@pytest.mark.req("REQ-14.2")
 def test_api_save_team(guild_api_dir: Path) -> None:
     """POST /api/teams saves a team composition to disk."""
     from starlette.testclient import TestClient
@@ -620,7 +619,7 @@ def test_api_save_team(guild_api_dir: Path) -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-05.6")
+@pytest.mark.req("REQ-05.5")
 def test_api_save_team_missing_name(guild_api_dir: Path) -> None:
     """POST /api/teams with empty name returns 400."""
     from starlette.testclient import TestClient

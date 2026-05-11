@@ -607,7 +607,7 @@ class TestResourceMonitorStealthExit:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-08.5")
+@pytest.mark.req("REQ-24.5")
 @pytest.mark.unit
 class TestResourceThrottleStealthExit:
     """Cover the STEALTH mode exit branch in wait_if_throttled."""
