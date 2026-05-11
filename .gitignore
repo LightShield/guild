@@ -43,3 +43,8 @@ logs/
 ui/node_modules/
 ui/.svelte-kit/
 ui/dist/
+
+# Playwright
+ui/test-results/
+ui/playwright-report/
+ui/e2e/.auth/
