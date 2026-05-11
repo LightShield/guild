@@ -587,3 +587,44 @@ def test_websocket_disconnect_path(guild_api_dir: Path) -> None:
             # Server sends one status update then "disconnects"
             data = ws.receive_json()
             assert "status" in data
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-05.6")
+def test_api_save_team(guild_api_dir: Path) -> None:
+    """POST /api/teams saves a team composition to disk."""
+    from starlette.testclient import TestClient
+
+    app = create_app(guild_dir=guild_api_dir)
+    with TestClient(app) as client:
+        resp = client.post(
+            "/api/teams",
+            json={
+                "name": "my-team",
+                "blocks": {"planner": "planner-block", "coder": "coder-block"},
+                "connections": [
+                    {"source_block": "planner", "target_block": "coder",
+                     "source_port": "plan", "target_port": "instructions"}
+                ],
+            },
+        )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "ok"
+    assert data["name"] == "my-team"
+    # Verify file was created
+    team_file = guild_api_dir / "teams" / "my-team.toml"
+    assert team_file.exists()
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-05.6")
+def test_api_save_team_missing_name(guild_api_dir: Path) -> None:
+    """POST /api/teams with empty name returns 400."""
+    from starlette.testclient import TestClient
+
+    app = create_app(guild_dir=guild_api_dir)
+    with TestClient(app) as client:
+        resp = client.post("/api/teams", json={"name": "", "blocks": {}})
+    assert resp.status_code == 400
+    assert "required" in resp.json()["detail"].lower()

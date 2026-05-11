@@ -94,7 +94,9 @@ class AgentSpawner:
         """List IDs of all tracked agents."""
         return list(self._agents.keys())
 
-    async def execute_spawn(self, args: dict[str, Any], working_dir: str | None = None) -> ToolResult:
+    async def execute_spawn(
+        self, args: dict[str, Any], working_dir: str | None = None
+    ) -> ToolResult:
         """Execute a spawn request from the spawn_agent tool.
 
         Called by AgentLoop when the model invokes the spawn_agent tool.

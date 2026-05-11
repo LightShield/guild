@@ -775,7 +775,9 @@ class Storage:
         )
         await self._db.commit()
 
-    async def list_eval_results(self, task_name: str | None = None, limit: int = 50) -> list[dict[str, Any]]:
+    async def list_eval_results(
+        self, task_name: str | None = None, limit: int = 50
+    ) -> list[dict[str, Any]]:
         """List eval results, most recent first, optionally by task_name."""
         if self._db is None:
             raise RuntimeError("Storage not connected. Call connect() first.")

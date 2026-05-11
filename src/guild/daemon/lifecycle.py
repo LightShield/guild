@@ -174,7 +174,7 @@ class LifecycleManager:
             logger.warning("Cleaned stale lock for task %s", task_id)
         return count
 
-    def get_running_tasks(self) -> list[dict[str, Any]]:  # pragma: no cover — requires running subprocess
+    def get_running_tasks(self) -> list[dict[str, Any]]:  # pragma: no cover
         """List all tasks with live PID files."""
         running: list[dict[str, Any]] = []
         for pid_file in self.run_dir.glob("*.pid"):

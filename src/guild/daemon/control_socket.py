@@ -10,7 +10,7 @@ import json
 import logging
 import os
 import socket
-from pathlib import Path
+from pathlib import Path  # noqa: TC003 — used at runtime
 from typing import Any
 
 __all__ = ["ControlSocket"]

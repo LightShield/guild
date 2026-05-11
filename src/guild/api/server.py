@@ -31,6 +31,7 @@ API_ROUTES: dict[str, str] = {
     "GET /api/agents": "List all agents",
     "GET /api/blocks": "List available blocks",
     "GET /api/teams": "List available teams",
+    "POST /api/teams": "Save team composition",
     "GET /api/learnings": "List learnings",
     "GET /api/audit": "Audit log",
     "GET /api/config": "Current config",
@@ -164,6 +165,7 @@ def _register_status_routes(
     app: Any, get_storage: Callable[[], "Storage"], guild_dir: Path
 ) -> None:
     """Register status, learnings, and audit routes."""
+    from fastapi import Request
 
     @app.get("/api/status")  # type: ignore[untyped-decorator]
     async def get_status() -> dict[str, Any]:
@@ -200,6 +202,31 @@ def _register_status_routes(
             return [{"name": t.name} for t in (config.teams or [])]
         except (ImportError, OSError, AttributeError):
             return []
+
+    @app.post("/api/teams")  # type: ignore[untyped-decorator]
+    async def save_team(request: Request) -> dict[str, str]:
+        """Save a team composition from the visual composer (REQ-05.6)."""
+        from fastapi import HTTPException
+
+        from guild.config.loader import write_toml_bytes
+
+        body = await request.json()
+        name: str = body.get("name", "")
+        if not name:
+            raise HTTPException(status_code=400, detail="Team name is required")
+        teams_dir = guild_dir / "teams"
+        teams_dir.mkdir(exist_ok=True)
+        team_path = teams_dir / f"{name}.toml"
+        blocks: dict[str, str] = body.get("blocks", {})
+        connections: list[dict[str, str]] = body.get("connections", [])
+        team_data: dict[str, Any] = {
+            "team": {"name": name, "entry_block": next(iter(blocks), "")},
+            "blocks": blocks,
+            "connections": connections,
+        }
+        with open(team_path, "wb") as f:
+            write_toml_bytes(f, team_data)
+        return {"status": "ok", "name": name}
 
     @app.get("/api/learnings")  # type: ignore[untyped-decorator]
     async def list_learnings() -> list[dict[str, Any]]:
