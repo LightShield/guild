@@ -175,12 +175,23 @@ def scan_all_tests(tests_dir: Path) -> dict[str, list[str]]:
 
 
 def _sort_req_id(req_id: str) -> tuple[int, int]:
-    """Sort key for requirement IDs: REQ-01.2 -> (1, 2)."""
+    """Sort key for requirement IDs: REQ-01.2 -> (1, 2, ''), REQ-05.4a -> (5, 4, 'a')."""
     match = REQ_ID_PATTERN.search(req_id)
     if match:
-        parts = match.group(1).split(".")
-        return (int(parts[0]), int(parts[1]))
-    return (999, 999)
+        raw = match.group(1)
+        parts = raw.split(".")
+        major = int(parts[0])
+        minor_str = parts[1] if len(parts) > 1 else "0"
+        suffix = ""
+        minor_digits = ""
+        for ch in minor_str:
+            if ch.isdigit():
+                minor_digits += ch
+            else:
+                suffix = ch
+                break
+        return (major, int(minor_digits) if minor_digits else 0, suffix)
+    return (999, 999, "")
 
 
 def generate_report(

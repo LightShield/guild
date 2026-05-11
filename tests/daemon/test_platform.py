@@ -155,6 +155,7 @@ class TestFallbackAdapter:
 
 
 @pytest.mark.req("REQ-02.1")
+@pytest.mark.req("REQ-02.3")
 class TestCrossPlatformGuarantees:
     """Verify cross-platform coding practices (REQ-02.1, REQ-02.3)."""
 

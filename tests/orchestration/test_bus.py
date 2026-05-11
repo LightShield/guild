@@ -123,6 +123,7 @@ class TestMessageBus:
 
 @pytest.mark.unit
 @pytest.mark.req("REQ-04.10")
+@pytest.mark.req("REQ-07.3")
 class TestSharedContext:
     """SharedContext provides a shared workspace for team members."""
 

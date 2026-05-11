@@ -158,8 +158,9 @@ def test_frontend_serves_html(tmp_path: Path) -> None:
 
 @pytest.mark.unit
 @pytest.mark.req("REQ-05.5")
+@pytest.mark.req("REQ-05.7")
 def test_websocket_sends_status_updates(guild_api_dir: Path) -> None:
-    """WebSocket /ws sends JSON status updates."""
+    """WebSocket /ws sends JSON status updates (backend for REQ-05.7 comm graph)."""
     from starlette.testclient import TestClient
 
     app = create_app(guild_dir=guild_api_dir)
@@ -591,6 +592,7 @@ def test_websocket_disconnect_path(guild_api_dir: Path) -> None:
 
 @pytest.mark.unit
 @pytest.mark.req("REQ-05.6")
+@pytest.mark.req("REQ-04.24a")
 def test_api_save_team(guild_api_dir: Path) -> None:
     """POST /api/teams saves a team composition to disk."""
     from starlette.testclient import TestClient
