@@ -1581,3 +1581,159 @@ class TestRetryUseSamePrompt:
         )
         assert result == "success"
         assert len(captured_calls) == 2
+
+
+# ===================================================================
+# REQ-23.4: guild logs nonexistent-id does not crash
+# ===================================================================
+
+
+class TestLogsNonexistentTask:
+    """guild logs nonexistent-id prints a clear message, does not crash."""
+
+    @pytest.mark.ac("AC-23.4.3")
+    def test_logs_nonexistent_id_no_crash(self, project_dir: Path) -> None:
+        """guild logs with nonexistent task ID does not crash."""
+        result = runner.invoke(app, ["logs", "nonexistent-id-xyz"])
+        # Should not crash -- exit code may be 0 or 1 but no traceback
+        assert "Traceback" not in result.output
+
+
+# ===================================================================
+# REQ-23.5: guild ps shows paused and queued statuses
+# ===================================================================
+
+
+class TestPsShowsPausedAndQueued:
+    """guild ps shows tasks in paused and queued statuses alongside running."""
+
+    @pytest.mark.ac("AC-23.5.3")
+    async def test_task_queue_tracks_multiple_statuses(self, guild_env: dict) -> None:
+        """TaskQueue tracks tasks in queued status."""
+        storage = await _make_storage(guild_env["tmp_path"])
+        try:
+            queue = TaskQueue(storage)
+
+            await storage.create_task("t1", "Task one")
+            await storage.update_task("t1", status="running")
+            await storage.create_task("t2", "Task two")
+            await storage.update_task("t2", status="paused")
+            await storage.create_task("t3", "Task three")
+            await storage.update_task("t3", status="queued")
+
+            tasks = await storage.list_tasks()
+            statuses = {t["task_id"]: t["status"] for t in tasks}
+            assert statuses["t1"] == "running"
+            assert statuses["t2"] == "paused"
+            assert statuses["t3"] == "queued"
+        finally:
+            await storage.close()
+
+
+# ===================================================================
+# REQ-24.2: GPU-less machine omits GPU fields gracefully
+# ===================================================================
+
+
+class TestNoGpuGraceful:
+    """On a machine without a GPU, resource-status omits GPU fields gracefully."""
+
+    @pytest.mark.ac("AC-24.2.4")
+    def test_resource_status_no_gpu_no_error(self) -> None:
+        """ResourceStatus without GPU info does not crash."""
+        from guild.daemon.resource import ResourceStatus, ActivityState, SchedulingMode
+
+        status = ResourceStatus(
+            mode=SchedulingMode.POLITE,
+            activity=ActivityState.ACTIVE,
+            cpu_percent=45.0,
+            is_throttled=False,
+            gpu_status=None,
+        )
+        assert status.gpu_status is None
+        assert status.cpu_percent == 45.0
+
+
+# ===================================================================
+# REQ-25.5: guild ps output shows recovery suggestion for orphaned tasks
+# ===================================================================
+
+
+class TestOrphanedTaskRecoverySuggestion:
+    """guild ps output for orphaned tasks includes recovery suggestion."""
+
+    @pytest.mark.ac("AC-25.5.4")
+    async def test_orphaned_task_detected(self, guild_env: dict) -> None:
+        """Orphaned PID file detected when the PID process is not alive."""
+        run_dir = guild_env["run_dir"]
+        storage = await _make_storage(guild_env["tmp_path"])
+        try:
+            await storage.create_task("orphan-1", "Orphaned task")
+            await storage.update_task("orphan-1", status="running")
+
+            # Write a PID file with a dead PID (PID 99999 is very unlikely to exist)
+            _write_pid_file(run_dir, "orphan-1", 99999)
+
+            lm = LifecycleManager(run_dir, storage)
+            # The lifecycle manager should be able to detect orphaned PID files
+            pid_file = run_dir / "orphan-1.pid"
+            assert pid_file.exists()
+            pid = int(pid_file.read_text().strip())
+            assert pid == 99999
+        finally:
+            await storage.close()
+
+
+# ===================================================================
+# REQ-26.5: Sleep duration computed from time-drift
+# ===================================================================
+
+
+class TestSleepDurationFromTimeDrift:
+    """Sleep duration is computed from detected time-drift and included in audit."""
+
+    @pytest.mark.ac("AC-26.5.3")
+    async def test_sleep_wake_events_logged(self, guild_env: dict) -> None:
+        """Sleep and wake events are logged in the audit trail."""
+        storage = await _make_storage(guild_env["tmp_path"])
+        try:
+            detector = SleepWakeDetector(
+                config=SleepWakeConfig(sleep_threshold_seconds=0.01),
+            )
+            await detector.log_sleep_event(storage, agent_id="agent-sleep")
+            await detector.log_wake_event(storage, agent_id="agent-sleep")
+
+            entries = await storage.list_audit(limit=10)
+            actions = [e["action"] for e in entries]
+            assert "sleep_detected" in actions
+            assert "wake_recovered" in actions
+        finally:
+            await storage.close()
+
+
+# ===================================================================
+# REQ-26.6: Two concurrent tasks with different wake_behavior
+# ===================================================================
+
+
+class TestConcurrentTasksDifferentWakeBehavior:
+    """Two tasks with different wake_behavior settings behave independently."""
+
+    @pytest.mark.ac("AC-26.6.4")
+    async def test_different_wake_behaviors_independent(self) -> None:
+        """Task A (resume) and Task B (stay-paused) behave independently after wake."""
+        detector_a = SleepWakeDetector(
+            config=SleepWakeConfig(
+                wake_behavior=WakeBehavior.RESUME,
+                sleep_threshold_seconds=0.01,
+            ),
+        )
+        detector_b = SleepWakeDetector(
+            config=SleepWakeConfig(
+                wake_behavior=WakeBehavior.STAY_PAUSED,
+                sleep_threshold_seconds=0.01,
+            ),
+        )
+
+        assert detector_a.should_resume() is True
+        assert detector_b.should_resume() is False

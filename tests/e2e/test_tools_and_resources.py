@@ -1167,3 +1167,84 @@ class TestActivityDetectionPlatform:
         adapter = get_platform_adapter()
         # The adapter should have is_user_idle method
         assert hasattr(adapter, "is_user_idle")
+
+
+# ======================================================================
+# REQ-08.8: MCP tool calls forwarded to server
+# ======================================================================
+
+
+class TestMCPToolCallForwarding:
+    """MCP tool calls are forwarded to the server and results returned."""
+
+    @pytest.mark.ac("AC-08.8.3")
+    async def test_mcp_call_tool_requires_connection(self) -> None:
+        """call_tool on unconnected MCPClient raises MCPError."""
+        from guild.mcp.client import MCPClient, MCPError, MCPServerConfig
+
+        config = MCPServerConfig(name="test-server", command="echo")
+        client = MCPClient(config)
+        with pytest.raises(MCPError, match="Not connected"):
+            await client.call_tool("tool_name", {"arg": "val"})
+
+
+# ======================================================================
+# REQ-08.9: Malformed plugin files skipped with warning
+# ======================================================================
+
+
+class TestMalformedPluginSkipped:
+    """Malformed or missing plugin files are skipped with a warning."""
+
+    @pytest.mark.ac("AC-08.9.3")
+    def test_invalid_toml_plugin_skipped(self, tmp_path: Path) -> None:
+        """Invalid TOML files are skipped; valid ones are loaded."""
+        from guild.tools.plugin import PluginLoader
+
+        plugin_dir = tmp_path / "plugins"
+        plugin_dir.mkdir()
+
+        # Valid plugin
+        valid = plugin_dir / "good.toml"
+        valid.write_text(
+            '[tool]\nname = "good_tool"\ndescription = "A good tool"\n'
+            "[tool.parameters]\ntype = \"object\"\n"
+        )
+
+        # Invalid TOML
+        bad = plugin_dir / "bad.toml"
+        bad.write_text("this is not valid toml {{{{")
+
+        loader = PluginLoader([plugin_dir])
+        plugins = loader.discover()
+
+        names = [p.name for p in plugins]
+        assert "good_tool" in names
+        assert len(plugins) == 1  # bad one was skipped
+
+
+# ======================================================================
+# REQ-08.11: Cache respects max size and evicts oldest
+# ======================================================================
+
+
+class TestToolCacheMaxSize:
+    """Cache respects max size and evicts the oldest entries."""
+
+    @pytest.mark.ac("AC-08.11.3")
+    def test_cache_evicts_oldest_entries(self) -> None:
+        """Set max_size=3, cache 5 results -> only 3 most recent remain."""
+        from guild.tools.base import ToolResult
+        from guild.tools.plugin import ToolCache
+
+        cache = ToolCache(max_size=3)
+        for i in range(5):
+            cache.put(f"key-{i}", ToolResult(success=True, output=f"result-{i}"), ttl=300)
+
+        # Oldest two (key-0, key-1) should be evicted
+        assert cache.get("key-0") is None
+        assert cache.get("key-1") is None
+        # Newest three should still be there
+        assert cache.get("key-2") is not None
+        assert cache.get("key-3") is not None
+        assert cache.get("key-4") is not None

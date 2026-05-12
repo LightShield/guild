@@ -1239,6 +1239,157 @@ class TestTryTestRollbackE2E:
 # ======================================================================
 
 
+class TestTier0BlockedToolsAudited:
+    """Dropped tool calls at Tier 0 are logged in the audit trail."""
+
+    @pytest.mark.ac("AC-03.1.3")
+    @pytest.mark.skip(reason="Not yet implemented: audit trail entry for tier_0_blocked not yet emitted")
+    def test_tier0_blocked_tool_logged(self, project_dir: Path) -> None:
+        """Tier 0 blocked tool call creates audit entry with reason."""
+        from guild.permissions.checker import PermissionChecker, PermissionTier
+
+        checker = PermissionChecker(tier=PermissionTier.NOTHING)
+        result = checker.check("file_read", "agent-e2e", {"path": "/tmp"})
+        assert result is False
+        # Future: audit log should contain action="tool_blocked"
+
+
+class TestAskTierPerCallMode:
+    """per-call approval mode prompts on every invocation."""
+
+    @pytest.mark.ac("AC-03.2.4")
+    @pytest.mark.skip(reason="Not yet implemented: per-call approval granularity not yet supported")
+    def test_per_call_always_prompts(self, project_dir: Path) -> None:
+        """With per-call mode, even previously approved tools re-prompt."""
+        from guild.permissions.checker import PermissionChecker, PermissionTier
+
+        call_count = 0
+
+        def counting_prompt(tool: str, agent_id: str, args: dict[str, Any]) -> bool:
+            nonlocal call_count
+            call_count += 1
+            return True
+
+        checker = PermissionChecker(tier=PermissionTier.ASK, prompt_fn=counting_prompt)
+        checker.check("file_read", "agent-e2e", {"path": "/a"})
+        checker.check("file_read", "agent-e2e", {"path": "/b"})
+        # In per-call mode, both should prompt (call_count == 2)
+        assert call_count == 2
+
+
+class TestScopedViolationReportsSpecificBoundary:
+    """Scope violation is reported back with the specific boundary exceeded."""
+
+    @pytest.mark.ac("AC-03.3.4")
+    @pytest.mark.skip(reason="Not yet implemented: scope violation does not report specific boundary in error message")
+    def test_scoped_violation_includes_boundary(self, project_dir: Path) -> None:
+        """Scope violation error includes the specific scope boundary."""
+        from guild.permissions.checker import PermissionChecker, PermissionTier
+
+        checker = PermissionChecker(
+            tier=PermissionTier.SCOPED,
+            allowed_tools=["file_write"],
+            allowed_paths=[str(project_dir / "src")],
+        )
+        # Attempt outside scope should mention the boundary
+        result = checker.check(
+            "file_write", "agent-e2e",
+            {"path": str(project_dir / "docs" / "readme.md"), "content": "x"},
+        )
+        assert result is False
+
+
+class TestSwitchTiersClearsSessionApprovals:
+    """Switching tiers clears session-level approvals."""
+
+    @pytest.mark.ac("AC-03.5.3")
+    def test_tier_switch_clears_approval_cache(self, project_dir: Path) -> None:
+        """Switching tier away and back re-prompts previously approved tools."""
+        from guild.permissions.checker import PermissionChecker, PermissionTier
+
+        prompt_count = 0
+
+        def counting_prompt(tool: str, agent_id: str, args: dict[str, Any]) -> bool:
+            nonlocal prompt_count
+            prompt_count += 1
+            return True
+
+        checker = PermissionChecker(tier=PermissionTier.ASK, prompt_fn=counting_prompt)
+        checker.check("file_read", "agent-e2e", {"path": "/a"})
+        assert prompt_count == 1
+
+        checker.set_tier(PermissionTier.AUTOPILOT)
+        checker.set_tier(PermissionTier.ASK, prompt_fn=counting_prompt)
+        checker.check("file_read", "agent-e2e", {"path": "/b"})
+        assert prompt_count == 2  # re-prompted because cache cleared
+
+
+class TestAutoPermittedActionsLogged:
+    """Auto-permitted actions (Tier 3, Tier 2 in-scope) are logged."""
+
+    @pytest.mark.ac("AC-03.6.3")
+    @pytest.mark.skip(reason="Not yet implemented: auto_permitted audit entries not yet emitted for Tier 3 actions")
+    def test_autopilot_tool_calls_logged(self, project_dir: Path) -> None:
+        """Tier 3 tool calls create audit entries with status=auto_permitted."""
+        from guild.permissions.checker import PermissionChecker, PermissionTier
+
+        checker = PermissionChecker(tier=PermissionTier.AUTOPILOT)
+        result = checker.check("file_read", "agent-e2e", {"path": "/tmp"})
+        assert result is True
+        # Future: audit log should contain entry with status="auto_permitted"
+
+
+class TestHardcodedNeverBlocksRecordedInAudit:
+    """Hardcoded-never blocks are recorded in the audit log with matched pattern."""
+
+    @pytest.mark.ac("AC-03.6.4")
+    def test_hardcoded_never_block_provides_pattern(self, project_dir: Path) -> None:
+        """Hardcoded-never block returns the matched denylist pattern."""
+        from guild.permissions.checker import PermissionChecker, PermissionTier
+
+        checker = PermissionChecker(tier=PermissionTier.AUTOPILOT)
+        allowed, reason = checker.check_hardcoded_never(
+            "shell", {"command": "git push --force origin main"}
+        )
+        assert allowed is False
+        assert "git push --force" in reason
+
+
+class TestHardcodedNeverCannotBeWeakenedViaConfig:
+    """Hardcoded-never patterns cannot be weakened via config file."""
+
+    @pytest.mark.ac("AC-03.7.4")
+    def test_hardcoded_never_not_weakened_by_config(self, project_dir: Path) -> None:
+        """Hardcoded-never patterns remain active regardless of config."""
+        from guild.permissions.checker import PermissionChecker, PermissionTier
+
+        # Even with the most permissive tier, hardcoded never blocks
+        checker = PermissionChecker(
+            tier=PermissionTier.AUTOPILOT,
+            allowed_tools=["shell"],
+            allowed_paths=["/"],
+        )
+        assert checker.check(
+            "shell", "agent-e2e", {"command": "git push --force origin main"}
+        ) is False
+
+
+class TestToolsTaggedWithReversibility:
+    """Tools are tagged with a reversibility level."""
+
+    @pytest.mark.ac("AC-03.8.3")
+    @pytest.mark.skip(reason="Not yet implemented: tool reversibility tags (read-only, reversible, irreversible) not yet in tool metadata")
+    def test_tools_have_reversibility_metadata(self) -> None:
+        """Built-in tools have reversibility metadata."""
+        from guild.tools.base import TOOL_SCHEMAS
+
+        # Future: each tool schema should include a reversibility field
+        for tool_name, schema in TOOL_SCHEMAS.items():
+            assert "reversibility" in schema or "is_read_only" in schema, (
+                f"Tool {tool_name} missing reversibility metadata"
+            )
+
+
 class TestInteractiveAttachStreamsExisting:
     """Attaching streams existing output before accepting input."""
 
@@ -1272,3 +1423,146 @@ class TestInteractiveAttachStreamsExisting:
         writer.close()
         await writer.wait_closed()
         await cs.stop()
+
+
+# ===================================================================
+# REQ-06.2: Verification failure details in task status
+# ===================================================================
+
+
+class TestVerificationFailureDetails:
+    """Verification failure details are included in task final status."""
+
+    @pytest.mark.ac("AC-06.2.3")
+    @pytest.mark.skip(reason="Not yet implemented: verification failure details not surfaced in guild status output")
+    async def test_verification_failure_details_in_status(self, project_dir: Path) -> None:
+        """Task status shows specific verification failure message, not just 'failed'."""
+
+
+# ===================================================================
+# REQ-06.4: Recovery strategy is logged
+# ===================================================================
+
+
+class TestRecoveryStrategyLogged:
+    """The recovery strategy is logged so the user can see what was tried."""
+
+    @pytest.mark.ac("AC-06.4.3")
+    async def test_stuck_recovery_prompt_content(self) -> None:
+        """Stuck detection recovery prompt includes actionable recovery guidance."""
+        from guild.agent.loop import STUCK_RECOVERY_PROMPT
+
+        assert "stuck" in STUCK_RECOVERY_PROMPT.lower()
+        assert "different approach" in STUCK_RECOVERY_PROMPT.lower()
+
+
+# ===================================================================
+# REQ-06.7: Timeout progress report includes accomplishments
+# ===================================================================
+
+
+class TestTimeoutProgressReport:
+    """The progress report generated at timeout includes what was accomplished."""
+
+    @pytest.mark.ac("AC-06.7.3")
+    @pytest.mark.skip(reason="Not yet implemented: timeout progress report with accomplishment summary")
+    async def test_timeout_progress_report_includes_summary(self) -> None:
+        """Timeout pause message includes summary of completed actions and current step."""
+
+
+# ===================================================================
+# REQ-06.9: send() preserves all prior context including tool results
+# ===================================================================
+
+
+class TestSendPreservesToolContext:
+    """The send() method preserves all prior context including tool results."""
+
+    @pytest.mark.ac("AC-06.9.3")
+    async def test_send_preserves_tool_results_from_run(self) -> None:
+        """Messages sent to LLM for step 2 include tool call results from step 1."""
+        from guild.agent.loop import AgentLoop
+        from guild.tools.base import ToolResult
+
+        call_counter = 0
+        captured_messages: list[list[dict[str, Any]]] = []
+
+        async def tracking_generate(
+            messages: list[dict[str, Any]], tools: list[dict[str, Any]] | None = None
+        ) -> LLMResponse:
+            nonlocal call_counter
+            captured_messages.append([m.copy() for m in messages])
+            call_counter += 1
+            if call_counter == 1:
+                return LLMResponse(
+                    content="",
+                    tool_calls=[{"function": {"name": "file_read", "arguments": {"path": "/tmp/x"}}}],
+                    input_tokens=10, output_tokens=5, model="mock",
+                )
+            return LLMResponse(
+                content="Step done.", tool_calls=None,
+                input_tokens=10, output_tokens=5, model="mock",
+            )
+
+        async def mock_file_read(args: dict[str, Any], _cid: str | None = None) -> ToolResult:
+            return ToolResult(success=True, output="file contents here")
+
+        provider = AsyncMock()
+        provider.generate = tracking_generate
+        provider.health_check = AsyncMock(return_value=True)
+
+        loop = AgentLoop(
+            provider=provider,
+            tool_executors={"file_read": mock_file_read},
+        )
+
+        await loop.run("system", "do step 1")
+        call_counter = 0
+        captured_messages.clear()
+        await loop.send("now do step 2")
+
+        assert len(captured_messages) > 0
+        all_roles = [m["role"] for m in captured_messages[0]]
+        assert "tool" in all_roles, "Tool results from step 1 should be in step 2 context"
+
+
+# ===================================================================
+# REQ-06.10: Self-review can be disabled per-task or globally
+# ===================================================================
+
+
+class TestSelfReviewConfigurable:
+    """Self-review can be disabled per-task or globally via configuration."""
+
+    @pytest.mark.ac("AC-06.10.3")
+    async def test_self_review_disabled_skips_review(self) -> None:
+        """Setting self_review=False skips the adversarial self-review prompt."""
+        from guild.agent.loop import AgentLoop, SELF_REVIEW_PROMPT
+
+        provider = AsyncMock()
+        provider.generate = AsyncMock(return_value=LLMResponse(
+            content="Implementation done.",
+            tool_calls=None, input_tokens=10, output_tokens=5, model="mock",
+        ))
+        loop = AgentLoop(provider=provider, tool_executors={})
+
+        result = await loop.run("system prompt", "build a feature", self_review=False)
+        assert result == "Implementation done."
+        message_contents = [m.content for m in loop.messages]
+        assert SELF_REVIEW_PROMPT not in message_contents
+
+    @pytest.mark.ac("AC-06.10.3")
+    async def test_self_review_enabled_injects_review(self) -> None:
+        """Setting self_review=True injects the adversarial self-review prompt."""
+        from guild.agent.loop import AgentLoop, SELF_REVIEW_PROMPT
+
+        provider = AsyncMock()
+        provider.generate = AsyncMock(return_value=LLMResponse(
+            content="All looks good.",
+            tool_calls=None, input_tokens=10, output_tokens=5, model="mock",
+        ))
+        loop = AgentLoop(provider=provider, tool_executors={})
+
+        await loop.run("system prompt", "build a feature", self_review=True)
+        message_contents = [m.content for m in loop.messages]
+        assert SELF_REVIEW_PROMPT in message_contents

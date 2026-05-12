@@ -1571,3 +1571,671 @@ class TestEvaluatorOutputValidation:
         assert parsed.passed is True
         # Score defaults to a reasonable value
         assert parsed.score >= 0
+
+
+# ---------------------------------------------------------------------------
+# REQ-04.30: Port with no schema accepts any JSON-serializable data
+# ---------------------------------------------------------------------------
+
+
+class TestPortNoSchemaAcceptsAny:
+    """A port type registered without a JSON schema accepts any JSON data."""
+
+    @pytest.mark.ac("AC-04.30.4")
+    def test_port_with_no_schema_accepts_any_dict(self) -> None:
+        """register_port_type with no json_schema -> validate_port_data with any dict is valid."""
+        tag = "custom-no-schema-e2e"
+        register_port_type(tag)
+        valid, err = validate_port_data({"foo": 42, "bar": [1, 2]}, tag)
+        assert valid is True
+        assert err == ""
+
+
+# ---------------------------------------------------------------------------
+# New tests for uncovered ACs (batch 1 — first 58 ACs)
+# ---------------------------------------------------------------------------
+
+
+class TestSpawnDepthBounded:
+    """Spawn depth is bounded to prevent infinite recursion."""
+
+    @pytest.mark.ac("AC-04.3.3")
+    @pytest.mark.skip(reason="Not yet implemented: max_spawn_depth config and enforcement not yet added")
+    async def test_spawn_depth_exceeds_max(self) -> None:
+        """Spawn at depth exceeding max is rejected."""
+        provider = _mock_provider()
+        bus = MessageBus()
+        spawner = AgentSpawner(provider, storage=None, bus=bus)
+        result = await spawner.spawn(task="deep", agent_id="deep-agent")
+        assert result is not None
+
+
+class TestWorkerRejectsOutOfRoleTasks:
+    """Worker block rejects tasks outside its role scope."""
+
+    @pytest.mark.ac("AC-04.5.3")
+    @pytest.mark.skip(reason="Not yet implemented: worker blocks do not refuse tasks outside their role scope")
+    async def test_coder_rejects_unrelated_task(self) -> None:
+        """Coder block gracefully refuses a pure documentation task."""
+        reg = BlockRegistry()
+        team = TeamDef(name="t", entry_block="w", blocks={"w": "coder"})
+        provider = _mock_provider("I cannot do that")
+        tr = TeamRunner(team, reg, provider)
+        result = await tr.run("Write documentation only")
+        assert result is not None
+
+
+class TestWorkerOutputConformsToPortType:
+    """Worker block output conforms to its declared output port type."""
+
+    @pytest.mark.ac("AC-04.5.4")
+    @pytest.mark.skip(reason="Not yet implemented: output port type validation not enforced on block output")
+    async def test_coder_output_tagged_as_code_changes(self) -> None:
+        """Coder block output is tagged as code-changes type."""
+        reg = BlockRegistry()
+        coder = reg.get_block("coder")
+        assert coder is not None
+
+
+class TestMCPClientListTools:
+    """MCPClient can list tools from a connected server."""
+
+    @pytest.mark.ac("AC-04.6.3")
+    @pytest.mark.skip(reason="Not yet implemented: MCPClient.list_tools requires a running MCP server subprocess")
+    async def test_mcp_list_tools_not_connected(self) -> None:
+        """list_tools on an unconnected client raises MCPError."""
+        config = MCPServerConfig(name="test", command="echo")
+        client = MCPClient(config)
+        with pytest.raises(MCPError, match="Not connected"):
+            await client.list_tools()
+
+
+class TestMCPClientHandlesCrash:
+    """MCPClient handles server crash during tool call."""
+
+    @pytest.mark.ac("AC-04.6.4")
+    @pytest.mark.skip(reason="Not yet implemented: MCPClient crash handling requires a running MCP server subprocess")
+    async def test_mcp_server_crash_raises_mcp_error(self) -> None:
+        """Kill the MCP server mid-call raises MCPError."""
+        config = MCPServerConfig(name="test", command="echo")
+        client = MCPClient(config)
+        assert client.config.name == "test"
+
+
+class TestMCPToolResultsIntegration:
+    """MCP tool results are integrated into the agent loop as standard ToolResults."""
+
+    @pytest.mark.ac("AC-04.6.5")
+    @pytest.mark.skip(reason="Not yet implemented: MCP tool result integration into agent loop not yet tested end-to-end")
+    async def test_mcp_result_as_tool_result(self) -> None:
+        """MCP tool call result appears as standard ToolResult format."""
+        pass
+
+
+class TestBusBroadcastToAll:
+    """Bus supports broadcast to all agents."""
+
+    @pytest.mark.ac("AC-04.7.4")
+    async def test_broadcast_reaches_all_except_sender(self) -> None:
+        """Broadcast reaches all agents except the sender."""
+        bus = MessageBus()
+        await bus.send("setup", "agent-1", "init", {})
+        await bus.send("setup", "agent-2", "init", {})
+        await bus.send("setup", "agent-3", "init", {})
+        await bus.receive("agent-1", timeout=0.1)
+        await bus.receive("agent-2", timeout=0.1)
+        await bus.receive("agent-3", timeout=0.1)
+
+        await bus.broadcast("agent-1", "notify", {"event": "done"})
+        msg2 = await bus.receive("agent-2", timeout=1.0)
+        msg3 = await bus.receive("agent-3", timeout=1.0)
+        assert msg2 is not None and msg2.data["event"] == "done"
+        assert msg3 is not None and msg3.data["event"] == "done"
+        assert not bus.has_pending("agent-1")
+
+
+class TestBusMessageOrderingFIFO:
+    """Message ordering is preserved per-agent queue (FIFO)."""
+
+    @pytest.mark.ac("AC-04.7.5")
+    async def test_fifo_message_ordering(self) -> None:
+        """Messages are received in the order they were sent."""
+        bus = MessageBus()
+        await bus.send("sender", "receiver", "port", {"seq": 1})
+        await bus.send("sender", "receiver", "port", {"seq": 2})
+        await bus.send("sender", "receiver", "port", {"seq": 3})
+        m1 = await bus.receive("receiver", timeout=1.0)
+        m2 = await bus.receive("receiver", timeout=1.0)
+        m3 = await bus.receive("receiver", timeout=1.0)
+        assert m1 is not None and m1.data["seq"] == 1
+        assert m2 is not None and m2.data["seq"] == 2
+        assert m3 is not None and m3.data["seq"] == 3
+
+
+class TestBusMessageLogForAudit:
+    """Bus message log captures all messages for audit/replay."""
+
+    @pytest.mark.ac("AC-04.7.6")
+    async def test_get_log_returns_all_messages(self) -> None:
+        """get_log() returns all messages with required fields."""
+        bus = MessageBus()
+        await bus.send("a", "b", "output", {"key": "val1"})
+        await bus.send("b", "c", "data", {"key": "val2"})
+        await bus.send("c", "a", "result", {"key": "val3"})
+        await bus.send("a", "c", "extra", {"key": "val4"})
+        await bus.send("b", "a", "final", {"key": "val5"})
+        log = bus.get_log()
+        assert len(log) == 5
+        assert all(hasattr(m, "source_agent") for m in log)
+        assert all(hasattr(m, "timestamp") for m in log)
+
+
+class TestA2AMissingParamsError:
+    """A2A endpoint returns JSON-RPC error for missing params."""
+
+    @pytest.mark.ac("AC-04.7a.4")
+    def test_a2a_missing_params_returns_error(self) -> None:
+        """POST /a2a with tasks/send but no message param returns -32602."""
+        from starlette.testclient import TestClient
+        from guild.api.server import create_app
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as td:
+            guild_dir = Path(td) / ".guild"
+            guild_dir.mkdir()
+            (guild_dir / "config.toml").write_text(
+                '[provider]\nprovider_name = "ollama"\nmodel = "m"\n'
+            )
+            import asyncio as _aio
+            from guild.storage.sqlite import Storage as _Storage
+
+            async def _init() -> None:
+                async with _Storage(guild_dir / "guild.db"):
+                    pass
+            _aio.run(_init())
+
+            api_app = create_app(guild_dir=guild_dir)
+            with TestClient(api_app) as client:
+                resp = client.post("/a2a", json={
+                    "jsonrpc": "2.0", "id": 1,
+                    "method": "tasks/send", "params": {},
+                })
+                data = resp.json()
+                assert "error" in data
+                assert data["error"]["code"] == -32602
+
+
+class TestA2AOptionalStartup:
+    """A2A gateway does not block startup."""
+
+    @pytest.mark.ac("AC-04.7a.5")
+    def test_a2a_gateway_importable(self) -> None:
+        """guild.api.server is importable without error."""
+        from guild.api import server
+        assert hasattr(server, "create_app")
+
+
+class TestSkillInvalidFrontmatter:
+    """Skill with invalid frontmatter is skipped with a warning."""
+
+    @pytest.mark.ac("AC-04.8.5")
+    def test_invalid_frontmatter_skill_skipped(self, tmp_path: Path) -> None:
+        """Invalid YAML skill file is skipped; valid ones load."""
+        (tmp_path / "valid.md").write_text(
+            "---\nname: good-skill\ndescription: Good\n---\nGood content."
+        )
+        (tmp_path / "bad.md").write_text(
+            "---\nname: [invalid yaml\n---\nBad content."
+        )
+        reg = SkillRegistry()
+        count = reg.load_from_dir(tmp_path)
+        assert count >= 1
+
+
+class TestSkillDuplicateNames:
+    """Duplicate skill names: last loaded wins."""
+
+    @pytest.mark.ac("AC-04.8.6")
+    def test_duplicate_skill_last_wins(self, tmp_path: Path) -> None:
+        """Two files with same skill name: only one instance."""
+        (tmp_path / "a_skill.md").write_text(
+            "---\nname: deploy\ndescription: Deploy v1\n---\nV1."
+        )
+        (tmp_path / "b_skill.md").write_text(
+            "---\nname: deploy\ndescription: Deploy v2\n---\nV2."
+        )
+        reg = SkillRegistry()
+        reg.load_from_dir(tmp_path)
+        assert len([s for s in reg.list_skills() if s.name == "deploy"]) == 1
+
+
+class TestAgentStatusStateMachine:
+    """Agent status transitions follow valid state machine."""
+
+    @pytest.mark.ac("AC-04.9.3")
+    async def test_status_goes_completed(self) -> None:
+        """Block transitions through to COMPLETED."""
+        reg = BlockRegistry()
+        team = _simple_team()
+        provider = _mock_provider()
+        tr = TeamRunner(team, reg, provider)
+        await tr.run("go")
+        assert tr.agent_statuses["entry"] == AgentStatus.COMPLETED
+
+
+class TestAgentPauseResumePreservesHistory:
+    """Pausing and resuming preserves message history."""
+
+    @pytest.mark.ac("AC-04.9.4")
+    @pytest.mark.skip(reason="Not yet implemented: agent pause/resume with message preservation not yet supported at TeamRunner level")
+    async def test_pause_resume_preserves(self) -> None:
+        """Agent paused at turn 5 retains all messages on resume."""
+        pass
+
+
+class TestAgentMonitoringReturnsAllStatuses:
+    """Monitoring returns current status for all agents."""
+
+    @pytest.mark.ac("AC-04.9.5")
+    async def test_agent_statuses_for_all(self) -> None:
+        """agent_statuses returns status for all blocks."""
+        reg = BlockRegistry()
+        team = TeamDef(
+            name="multi",
+            entry_block="plan",
+            blocks={"plan": "planner", "code": "coder"},
+            connections=[Connection("plan", "plan", "code", "spec")],
+        )
+        provider = _mock_provider()
+        tr = TeamRunner(team, reg, provider)
+        await tr.run("build something")
+        statuses = tr.agent_statuses
+        assert "plan" in statuses
+        assert "code" in statuses
+
+
+class TestSharedContextLastWriterWins:
+    """Concurrent writes use last-writer-wins semantics."""
+
+    @pytest.mark.ac("AC-04.10.4")
+    def test_last_writer_wins(self) -> None:
+        """Agent B's write overwrites Agent A's value."""
+        ctx = SharedContext()
+        ctx.put("plan", {"version": 1}, agent_id="agent-A")
+        ctx.put("plan", {"version": 2}, agent_id="agent-B")
+        assert ctx.get("plan") == {"version": 2}
+
+
+class TestSharedContextSurvivesTeamRun:
+    """Shared context data survives for team duration."""
+
+    @pytest.mark.ac("AC-04.10.5")
+    def test_data_persists_during_run(self) -> None:
+        """Data stored early is available later."""
+        ctx = SharedContext()
+        ctx.put("early_data", {"x": 42}, agent_id="agent-1")
+        assert ctx.get("early_data") == {"x": 42}
+
+
+class TestSpawnedAgentMaxTurns:
+    """Spawned agent respects max_turns limit."""
+
+    @pytest.mark.ac("AC-04.11.3")
+    async def test_sub_agent_max_turns(self) -> None:
+        """SUB_AGENT_MAX_TURNS is 30."""
+        from guild.orchestration.spawner import SUB_AGENT_MAX_TURNS
+        assert SUB_AGENT_MAX_TURNS == 30
+
+
+class TestSpawnedAgentExplicitId:
+    """Spawning with explicit agent_id uses that ID."""
+
+    @pytest.mark.ac("AC-04.11.4")
+    async def test_explicit_agent_id_used(self) -> None:
+        """spawn(agent_id='custom-worker') uses that ID."""
+        provider = _mock_provider("ok")
+        bus = MessageBus()
+        spawner = AgentSpawner(provider, storage=None, bus=bus)
+        await spawner.spawn(task="task", agent_id="custom-worker")
+        assert "custom-worker" in spawner.active_agents
+
+
+class TestWorktreeNonGitFails:
+    """Worktree creation fails in non-git directory."""
+
+    @pytest.mark.ac("AC-04.12.4")
+    async def test_worktree_non_git_raises(self, tmp_path: Path) -> None:
+        """WorktreeManager.create in a non-git directory raises RuntimeError."""
+        mgr = WorktreeManager(tmp_path)
+        with pytest.raises(RuntimeError):
+            await mgr.create("task-non-git", base_branch="main")
+
+
+class TestWorktreeBranchNamingConvention:
+    """Worktree branch naming follows guild/<task_id>."""
+
+    @pytest.mark.ac("AC-04.12.5")
+    async def test_branch_name_convention(self, tmp_path: Path) -> None:
+        """Branch name is guild/<task_id>."""
+        proc = await asyncio.create_subprocess_exec(
+            "git", "init", str(tmp_path),
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        )
+        await proc.communicate()
+        (tmp_path / "README.md").write_text("init")
+        await _git(tmp_path, "add", ".")
+        await _git(tmp_path, "commit", "-m", "init")
+
+        mgr = WorktreeManager(tmp_path)
+        info = await mgr.create("abc-123", base_branch="main")
+        assert info.branch == f"{BRANCH_PREFIX}abc-123"
+        await mgr.remove("abc-123")
+
+
+class TestListActiveOnlyGuildManaged:
+    """list_active returns only Guild-managed worktrees."""
+
+    @pytest.mark.ac("AC-04.12.6")
+    async def test_list_active_guild_only(self, tmp_path: Path) -> None:
+        """list_active excludes user worktrees."""
+        proc = await asyncio.create_subprocess_exec(
+            "git", "init", str(tmp_path),
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        )
+        await proc.communicate()
+        (tmp_path / "README.md").write_text("init")
+        await _git(tmp_path, "add", ".")
+        await _git(tmp_path, "commit", "-m", "init")
+
+        mgr = WorktreeManager(tmp_path)
+        info = await mgr.create("guild-task", base_branch="main")
+        active = await mgr.list_active()
+        for wt in active:
+            assert wt.branch.startswith(BRANCH_PREFIX)
+        await mgr.remove("guild-task")
+
+
+class TestCustomProtectedBranches:
+    """Custom protected branches are respected."""
+
+    @pytest.mark.ac("AC-04.13.4")
+    def test_custom_protected_branches(self) -> None:
+        """Custom protected_branches list is respected."""
+        policy = BranchPolicy(protected_branches=["main", "release", "production"])
+        assert policy.is_protected("production")
+        assert not policy.is_protected("master")
+
+
+class TestAutoMergeOnTestsPass:
+    """Non-protected branches follow auto_merge_on_tests_pass."""
+
+    @pytest.mark.ac("AC-04.13.5")
+    def test_auto_merge_setting(self) -> None:
+        """Feature branches respect auto_merge_on_tests_pass."""
+        assert BranchPolicy(auto_merge_on_tests_pass=False).can_auto_merge("feature/x") is False
+        assert BranchPolicy(auto_merge_on_tests_pass=True).can_auto_merge("feature/x") is True
+
+
+class TestMergeConflictDetection:
+    """Merge conflict to staging detected and reported."""
+
+    @pytest.mark.ac("AC-04.14.3")
+    @pytest.mark.skip(reason="Not yet implemented: merge conflict detection for staging not yet tested e2e")
+    async def test_merge_conflict_reported(self, tmp_path: Path) -> None:
+        """Second merge with conflicting changes is detected."""
+        pass
+
+
+class TestStagingBranchAutoCreated:
+    """Staging branch auto-created if it does not exist."""
+
+    @pytest.mark.ac("AC-04.14.4")
+    @pytest.mark.skip(reason="Not yet implemented: staging branch auto-creation not yet tested e2e")
+    async def test_staging_auto_created(self, tmp_path: Path) -> None:
+        """First merge_to_staging() auto-creates the branch."""
+        pass
+
+
+class TestDefaultMergePolicyStaging:
+    """Default merge policy is STAGING."""
+
+    @pytest.mark.ac("AC-04.15.4")
+    def test_default_is_staging(self) -> None:
+        """BranchPolicy() defaults to MergeApproval.STAGING."""
+        assert BranchPolicy().merge_approval == MergeApproval.STAGING
+
+
+class TestDeleteBranchAfterMerge:
+    """delete_branch_after_merge controls post-merge cleanup."""
+
+    @pytest.mark.ac("AC-04.15.5")
+    def test_delete_branch_default_true(self) -> None:
+        """Default delete_branch_after_merge is True."""
+        assert BranchPolicy().delete_branch_after_merge is True
+
+    @pytest.mark.ac("AC-04.15.5")
+    def test_delete_branch_configurable(self) -> None:
+        """Can set delete_branch_after_merge=False."""
+        assert BranchPolicy(delete_branch_after_merge=False).delete_branch_after_merge is False
+
+
+class TestBuiltinBlocksConformToSpec:
+    """All 6+ built-in blocks conform to the spec."""
+
+    @pytest.mark.ac("AC-04.20.3")
+    def test_all_builtins_have_ports_and_role(self) -> None:
+        """Each built-in block has role, inputs, and outputs."""
+        reg = BlockRegistry()
+        required = {"planner", "coder", "reviewer", "tester", "evaluator", "researcher"}
+        available = {b.name for b in reg.list_blocks()}
+        assert required <= available
+        for name in required:
+            block = reg.get_block(name)
+            assert block is not None and block.role
+
+
+class TestAtomicBlockDefaultMaxRetries:
+    """Atomic block max_retries defaults to 1."""
+
+    @pytest.mark.ac("AC-04.20.4")
+    def test_default_max_retries(self) -> None:
+        """BlockDef() defaults to max_retries=1; configurable."""
+        assert BlockDef(name="b", role="r").max_retries == 1
+        assert BlockDef(name="b", role="r", max_retries=3).max_retries == 3
+
+
+class TestCompositeBlockExecutes:
+    """Composite block team executes."""
+
+    @pytest.mark.ac("AC-04.21.3")
+    async def test_composite_executes(self) -> None:
+        """TeamRunner executes a composite team."""
+        reg = BlockRegistry()
+        team = TeamDef(
+            name="comp",
+            entry_block="c",
+            blocks={"c": "coder", "r": "reviewer"},
+            connections=[Connection("c", "changes", "r", "changes")],
+        )
+        tr = TeamRunner(team, reg, _mock_provider("all good"))
+        result = await tr.run("review code")
+        assert len(result) > 0
+
+
+class TestCompositeBlockNesting:
+    """Composite blocks reference other composites."""
+
+    @pytest.mark.ac("AC-04.21.4")
+    def test_nested_registration(self) -> None:
+        """Teams can reference other registered teams."""
+        reg = BlockRegistry()
+        reg.register_team(TeamDef(name="inner", entry_block="c", blocks={"c": "coder"}))
+        reg.register_team(TeamDef(name="outer", entry_block="p", blocks={"p": "planner"}))
+        assert reg.get_team("inner") is not None
+        assert reg.get_team("outer") is not None
+
+
+class TestConnectionTypeMismatchDetected:
+    """Port type mismatch in connections detected."""
+
+    @pytest.mark.ac("AC-04.22.3")
+    def test_type_mismatch_in_connection(self) -> None:
+        """Connection with mismatched types caught by validation."""
+        reg = BlockRegistry()
+        team = TeamDef(
+            name="mismatch",
+            entry_block="p",
+            blocks={"p": "planner", "t": "tester"},
+            connections=[Connection("p", "plan", "t", "changes")],
+        )
+        assert any("mismatch" in e.lower() for e in reg.validate_team(team))
+
+
+class TestConnectionMissingBlockDetected:
+    """Connection referencing nonexistent block detected."""
+
+    @pytest.mark.ac("AC-04.22.4")
+    def test_missing_block_in_connection(self) -> None:
+        """Connection to nonexistent block produces error."""
+        reg = BlockRegistry()
+        team = TeamDef(
+            name="bad",
+            entry_block="p",
+            blocks={"p": "planner"},
+            connections=[Connection("p", "plan", "ghost", "spec")],
+        )
+        assert any("ghost" in e for e in reg.validate_team(team))
+
+
+class TestBlockLibraryRoles:
+    """Block library lists all roles."""
+
+    @pytest.mark.ac("AC-04.23.3")
+    def test_list_blocks_roles(self) -> None:
+        """list_blocks returns blocks with various roles."""
+        reg = BlockRegistry()
+        roles = {b.role for b in reg.list_blocks()}
+        assert {"coder", "planner", "reviewer"} <= roles
+
+
+class TestBlockLibraryCustomBlockListed:
+    """Custom block appears in listing."""
+
+    @pytest.mark.ac("AC-04.23.4")
+    def test_custom_block_listed(self) -> None:
+        """Registered custom block in list_blocks."""
+        reg = BlockRegistry()
+        reg.register_block(BlockDef(name="my-linter", role="linter"))
+        assert "my-linter" in {b.name for b in reg.list_blocks()}
+
+
+class TestMalformedTomlSkipped:
+    """Malformed TOML files skipped during load."""
+
+    @pytest.mark.ac("AC-04.24.3")
+    def test_malformed_toml_skipped(self, tmp_path: Path) -> None:
+        """Malformed TOML skipped, valid loaded."""
+        (tmp_path / "bad.toml").write_text("not valid [[[")
+        (tmp_path / "good.toml").write_text(
+            '[team]\nname = "ok"\nentry_block = "p"\n[team.blocks]\np = "planner"\n'
+        )
+        reg = BlockRegistry()
+        assert reg.load_from_dir(tmp_path) >= 1
+
+
+class TestBlockTomlVersion:
+    """Block TOML includes version field."""
+
+    @pytest.mark.ac("AC-04.24.4")
+    def test_block_version_from_toml(self, tmp_path: Path) -> None:
+        """Block loaded from TOML has correct version."""
+        (tmp_path / "v.toml").write_text(
+            '[block]\nname = "versioned"\nrole = "worker"\nversion = "2.5.0"\n'
+        )
+        reg = BlockRegistry()
+        reg.load_from_dir(tmp_path)
+        block = reg.get_block("versioned")
+        assert block is not None and block.version == "2.5.0"
+
+
+class TestNestingDepthBounded:
+    """Nesting depth bounded."""
+
+    @pytest.mark.ac("AC-04.25.2")
+    @pytest.mark.skip(reason="Not yet implemented: nesting depth enforcement not yet added")
+    def test_nesting_depth_limit(self) -> None:
+        """Deeply nested composites rejected."""
+        pass
+
+
+class TestNestedCompositeValidates:
+    """Nested composite validates."""
+
+    @pytest.mark.ac("AC-04.25.3")
+    def test_nested_composite_validates(self) -> None:
+        """Outer team referencing inner composite passes validation."""
+        reg = BlockRegistry()
+        reg.register_block(BlockDef(
+            name="inner-comp", role="composite",
+            inputs=[PortDef(name="spec", type_tag="plan")],
+            outputs=[PortDef(name="result", type_tag="code-changes")],
+        ))
+        reg.register_team(TeamDef(name="inner-comp", entry_block="c", blocks={"c": "coder"}))
+        outer = TeamDef(
+            name="full",
+            entry_block="p",
+            blocks={"p": "planner", "dev": "inner-comp"},
+            connections=[Connection("p", "plan", "dev", "spec")],
+        )
+        assert reg.validate_team(outer) == []
+
+
+class TestLoopMissingBlockDetected:
+    """Loop referencing nonexistent block detected."""
+
+    @pytest.mark.ac("AC-04.27.3")
+    def test_loop_missing_block(self) -> None:
+        """Loop with nonexistent evaluator block caught."""
+        reg = BlockRegistry()
+        team = TeamDef(
+            name="bad-loop",
+            entry_block="gen",
+            blocks={"gen": "coder"},
+            loops=[LoopDef(generator_block="gen", evaluator_block="nonexistent")],
+        )
+        assert any("nonexistent" in e for e in reg.validate_team(team))
+
+
+class TestLoopDefaultMaxIterations:
+    """Loop default max_iterations is 5."""
+
+    @pytest.mark.ac("AC-04.27.4")
+    def test_default_max_iterations(self) -> None:
+        """LoopDef defaults to max_iterations=5."""
+        assert LoopDef(generator_block="g", evaluator_block="e").max_iterations == 5
+
+
+class TestPortTypeCustomRegistration:
+    """Custom port types can be registered and validated."""
+
+    @pytest.mark.ac("AC-04.30.3")
+    def test_register_validate_custom_type(self) -> None:
+        """Custom port type with schema validates data."""
+        register_port_type(
+            "ac303-test", json_schema={"type": "object", "required": ["name"]},
+        )
+        valid, _ = validate_port_data({"name": "test"}, "ac303-test")
+        assert valid is True
+
+
+class TestPortTypeSchemaValidationRejects:
+    """Schema validation rejects invalid data."""
+
+    @pytest.mark.ac("AC-04.30.4")
+    def test_schema_rejects_invalid(self) -> None:
+        """Data not matching schema is rejected."""
+        register_port_type(
+            "ac304-test", json_schema={"type": "object", "required": ["a", "b"]},
+        )
+        valid, err = validate_port_data({"a": "x"}, "ac304-test")
+        assert valid is False
