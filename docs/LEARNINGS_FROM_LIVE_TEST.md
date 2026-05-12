@@ -15,15 +15,24 @@
 
 ## What Struggles
 
-1. **Multi-file generation + test verification** — creating a module AND its tests AND running them often exceeds timeout or gets stuck in a repair loop
-2. **26B model quality** — generated code with typos (e.g., `self.next_node_after_head()` vs `self._next_node_after_head()`) that it can't self-correct
-3. **4B model complexity ceiling** — handles 1-3 tool calls well, struggles with 5+ sequential steps
-4. **Timeout vs quality tradeoff** — 60s timeout sufficient for simple tasks, insufficient for complex ones
+1. **Stuck detection too aggressive** — when tests fail with 1 error, agent retries the same shell command 3 times and stuck detector fires. It should recognize "failing test" as a fixable issue and attempt a code fix rather than declaring stuck.
+2. **4B model complexity ceiling** — handles 1-3 tool calls well, struggles with 5+ sequential steps
+3. **Timeout vs quality tradeoff** — 60s timeout sufficient for simple tasks, needs 120-180s for complex ones
+
+## Corrected Assessment of 26B Model
+
+Initial impression was negative (saw "stuck detected") but upon deeper investigation:
+- 26B generated **correct linked_list.py** (all 7 methods work perfectly)
+- Generated **17 comprehensive tests** with fixtures, edge cases, empty/single/multiple scenarios
+- Only **1 test had a bug** (traversal assertion `current.next.data` should be `current.data`)
+- Quality is MUCH higher than 4B — better structure, better test coverage, docstrings, fixtures
+
+The "stuck" behavior was the agent hitting the 1 failing test repeatedly and not being able to fix its own test. This is a **stuck recovery issue**, not a model quality issue.
 
 ## Recommendations
 
 - Default timeout should be higher (120-180s) for multi-step tasks
-- Stuck recovery prompt should suggest "check for typos in method/attribute names" when seeing AttributeError
-- For complex tasks, decompose into subtasks (create file → run tests → fix issues) rather than one big prompt
-- The 4B model is the best default: fast enough for interactive use, capable enough for focused tasks
-- 26B model should be used for planning/decomposition, not direct code generation (too slow + quality issues with agentic tasks)
+- Stuck recovery should differentiate "test fails" from "command crashes" — for test failures, suggest fixing the test code
+- The 26B model produces better code quality — prefer for tasks requiring correctness
+- The 4B model is faster for simple tasks (file creation, bug fixes)
+- Stuck detection should count unique errors, not repeated identical commands with the same error
