@@ -28,11 +28,10 @@ def project_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return tmp_path
 
 
-# REQ-03.1: Permission system
-@pytest.mark.req("REQ-03.1")
 class TestPermissions:
     """Permission tiers are enforced through the CLI."""
 
+    @pytest.mark.ac("AC-03.1.1")
     def test_task_runs_in_autopilot_by_default(self, project_dir: Path) -> None:
         """Default permission is autopilot — no prompts."""
         mock_provider = AsyncMock()
@@ -47,6 +46,7 @@ class TestPermissions:
         assert result.exit_code == 0
         assert "Done" in result.output
 
+    @pytest.mark.ac("AC-03.1.2")
     def test_permission_flag_accepted(self, project_dir: Path) -> None:
         """--permission flag is recognized for all tiers."""
         for tier in ["nothing", "ask", "scoped", "autopilot"]:
@@ -54,11 +54,10 @@ class TestPermissions:
             # Just verifying the flag is accepted (--help exits before running)
 
 
-# REQ-23.9: Control socket
-@pytest.mark.req("REQ-23.9")
 class TestControlSocket:
     """Control socket accepts connections, processes commands, and cleans up."""
 
+    @pytest.mark.ac("AC-23.9.2")
     async def test_control_socket_full_lifecycle(self, tmp_path: Path) -> None:
         """Start socket, send commands, verify responses, stop."""
         from guild.daemon.control_socket import ControlSocket
@@ -96,11 +95,10 @@ class TestControlSocket:
         await cs.stop()
 
 
-# REQ-18.1: Artifact management
-@pytest.mark.req("REQ-18.1")
 class TestArtifacts:
     """Artifact save, retrieve, and review lifecycle."""
 
+    @pytest.mark.ac("AC-18.1.1")
     def test_artifact_save_and_retrieve(self, project_dir: Path) -> None:
         """Save artifact, retrieve it, verify content."""
         from guild.artifacts.manager import ArtifactManager
@@ -111,6 +109,7 @@ class TestArtifacts:
         content = mgr.get("task-1", "result.py")
         assert content == "print('hello')"
 
+    @pytest.mark.ac("AC-18.1.2")
     def test_artifact_review_gate(self, project_dir: Path) -> None:
         """Artifact starts pending, can be accepted or rejected."""
         from guild.artifacts.manager import ArtifactManager
@@ -128,11 +127,10 @@ class TestArtifacts:
         assert len(mgr.list_accepted("task-2")) == 1
 
 
-# REQ-18.3: Accept/reject/edit
-@pytest.mark.req("REQ-18.3")
 class TestArtifactReview:
     """Artifact accept, reject, and edit operations."""
 
+    @pytest.mark.ac("AC-18.3.2")
     def test_reject_removes_artifact(self, project_dir: Path) -> None:
         """Rejecting removes the artifact completely."""
         from guild.artifacts.manager import ArtifactManager
@@ -142,6 +140,7 @@ class TestArtifactReview:
         mgr.reject("task-3", "bad.py")
         assert mgr.get("task-3", "bad.py") is None
 
+    @pytest.mark.ac("AC-18.3.1")
     def test_edit_updates_and_accepts(self, project_dir: Path) -> None:
         """Editing saves new content and auto-accepts."""
         from guild.artifacts.manager import ArtifactManager
@@ -154,11 +153,10 @@ class TestArtifactReview:
         assert len(mgr.list_accepted("task-4")) == 1
 
 
-# REQ-24.6: GPU/VRAM awareness
-@pytest.mark.req("REQ-24.6")
 class TestResourceAwareness:
     """Resource monitor detects GPU/VRAM pressure and throttles accordingly."""
 
+    @pytest.mark.ac("AC-24.6.1")
     def test_vram_pressure_triggers_throttle(self) -> None:
         """High VRAM usage causes the resource monitor to throttle."""
         from guild.daemon.resource import ResourceMonitor, ResourceThresholds, SchedulingMode
@@ -172,6 +170,7 @@ class TestResourceAwareness:
         assert status.is_throttled
         assert "vram" in status.reason.lower()
 
+    @pytest.mark.ac("AC-24.6.2")
     def test_no_pressure_no_throttle(self) -> None:
         """Low VRAM usage does not throttle."""
         from guild.daemon.resource import ResourceMonitor, ResourceThresholds, SchedulingMode
@@ -225,14 +224,13 @@ def _make_mock_provider(*responses: LLMResponse) -> AsyncMock:
 
 
 # ======================================================================
-# REQ-03.2  Ask tier prompts for approval (mock prompt_fn)
 # ======================================================================
 
 
-@pytest.mark.req("REQ-03.2")
 class TestAskTierPromptsE2E:
     """Ask tier delegates each new tool name to prompt_fn for approval."""
 
+    @pytest.mark.ac("AC-03.2.1")
     def test_ask_tier_approved_allows_tool(self, project_dir: Path) -> None:
         """Happy: prompt_fn returns True, tool call proceeds."""
         from guild.permissions.checker import PermissionChecker, PermissionTier
@@ -247,6 +245,7 @@ class TestAskTierPromptsE2E:
         assert checker.check("file_read", "agent-e2e", {"path": "/tmp/a"}) is True
         assert "file_read" in approvals
 
+    @pytest.mark.ac("AC-03.2.3")
     def test_ask_tier_denied_blocks_tool(self, project_dir: Path) -> None:
         """Sad: prompt_fn returns False, tool call is blocked."""
         from guild.permissions.checker import PermissionChecker, PermissionTier
@@ -257,6 +256,7 @@ class TestAskTierPromptsE2E:
         checker = PermissionChecker(tier=PermissionTier.ASK, prompt_fn=deny_all)
         assert checker.check("shell", "agent-e2e", {"command": "ls"}) is False
 
+    @pytest.mark.ac("AC-03.2.2")
     def test_ask_tier_caches_per_tool_name(self, project_dir: Path) -> None:
         """Edge: second call to same tool name reuses cached approval."""
         from guild.permissions.checker import PermissionChecker, PermissionTier
@@ -276,6 +276,7 @@ class TestAskTierPromptsE2E:
         # file_read prompted once (cached), file_write prompted once = 2 total
         assert call_count == 2
 
+    @pytest.mark.ac("AC-03.2.1")
     def test_ask_tier_no_prompt_fn_blocks(self, project_dir: Path) -> None:
         """Edge: ASK tier with no prompt_fn installed always denies."""
         from guild.permissions.checker import PermissionChecker, PermissionTier
@@ -285,14 +286,13 @@ class TestAskTierPromptsE2E:
 
 
 # ======================================================================
-# REQ-03.3  Scoped tier allows tools within scope
 # ======================================================================
 
 
-@pytest.mark.req("REQ-03.3")
 class TestScopedTierE2E:
     """Scoped tier permits tools + paths inside the allowlist, denies outside."""
 
+    @pytest.mark.ac("AC-03.3.1")
     def test_scoped_allows_tool_in_scope(self, project_dir: Path) -> None:
         """Happy: tool in allowlist and path in bounds is allowed."""
         from guild.permissions.checker import PermissionChecker, PermissionTier
@@ -305,6 +305,7 @@ class TestScopedTierE2E:
         args = {"path": str(project_dir / "src" / "main.py")}
         assert checker.check("file_read", "agent-e2e", args) is True
 
+    @pytest.mark.ac("AC-03.3.3")
     def test_scoped_blocks_tool_outside_scope(self, project_dir: Path) -> None:
         """Sad: tool not in allowlist is denied regardless of path."""
         from guild.permissions.checker import PermissionChecker, PermissionTier
@@ -316,6 +317,7 @@ class TestScopedTierE2E:
         )
         assert checker.check("shell", "agent-e2e", {"command": "ls"}) is False
 
+    @pytest.mark.ac("AC-03.3.2")
     def test_scoped_blocks_path_outside_boundary(self, project_dir: Path) -> None:
         """Sad: tool in allowlist but path outside boundary is denied."""
         from guild.permissions.checker import PermissionChecker, PermissionTier
@@ -329,6 +331,7 @@ class TestScopedTierE2E:
             "file_write", "agent-e2e", {"path": "/etc/shadow", "content": "x"}
         ) is False
 
+    @pytest.mark.ac("AC-03.3.3")
     def test_scoped_tool_with_no_path_arg_allowed(self, project_dir: Path) -> None:
         """Edge: tool in allowlist with no path in args is allowed."""
         from guild.permissions.checker import PermissionChecker, PermissionTier
@@ -342,14 +345,13 @@ class TestScopedTierE2E:
 
 
 # ======================================================================
-# REQ-03.4  Autopilot allows all tools
 # ======================================================================
 
 
-@pytest.mark.req("REQ-03.4")
 class TestAutopilotTierE2E:
     """Autopilot tier allows every tool call without any gating."""
 
+    @pytest.mark.ac("AC-03.4.1")
     def test_autopilot_task_succeeds_via_cli(self, project_dir: Path) -> None:
         """Happy: task with --permission autopilot completes when tool called."""
         provider = _make_mock_provider(
@@ -363,6 +365,7 @@ class TestAutopilotTierE2E:
         assert result.exit_code == 0
         assert "Done" in result.output
 
+    @pytest.mark.ac("AC-03.4.1")
     def test_autopilot_allows_any_tool(self, project_dir: Path) -> None:
         """Happy: autopilot permits shell, file_write, etc."""
         from guild.permissions.checker import PermissionChecker, PermissionTier
@@ -372,6 +375,7 @@ class TestAutopilotTierE2E:
         assert checker.check("file_write", "agent-e2e", {"path": "/x"}) is True
         assert checker.check("search", "agent-e2e", {"query": "foo"}) is True
 
+    @pytest.mark.ac("AC-03.4.2")
     def test_autopilot_still_blocked_by_hardcoded_never(self, project_dir: Path) -> None:
         """Edge: autopilot cannot override the hardcoded-never layer."""
         from guild.permissions.checker import PermissionChecker, PermissionTier
@@ -383,14 +387,13 @@ class TestAutopilotTierE2E:
 
 
 # ======================================================================
-# REQ-03.5  Permission switchable at runtime
 # ======================================================================
 
 
-@pytest.mark.req("REQ-03.5")
 class TestPermissionSwitchingE2E:
     """Permission tier can be changed at runtime; cached state is cleared."""
 
+    @pytest.mark.ac("AC-03.5.1")
     def test_switch_nothing_to_autopilot(self, project_dir: Path) -> None:
         """Happy: switching from nothing to autopilot unlocks tool calls."""
         from guild.permissions.checker import PermissionChecker, PermissionTier
@@ -401,6 +404,7 @@ class TestPermissionSwitchingE2E:
         checker.set_tier(PermissionTier.AUTOPILOT)
         assert checker.check("file_read", "agent-e2e", {}) is True
 
+    @pytest.mark.ac("AC-03.5.1")
     def test_switch_autopilot_to_nothing(self, project_dir: Path) -> None:
         """Sad: switching from autopilot to nothing locks everything."""
         from guild.permissions.checker import PermissionChecker, PermissionTier
@@ -411,6 +415,7 @@ class TestPermissionSwitchingE2E:
         checker.set_tier(PermissionTier.NOTHING)
         assert checker.check("file_read", "agent-e2e", {}) is False
 
+    @pytest.mark.ac("AC-03.5.1")
     def test_switch_clears_ask_cache(self, project_dir: Path) -> None:
         """Edge: switching tier resets the session approval cache."""
         from guild.permissions.checker import PermissionChecker, PermissionTier
@@ -432,6 +437,7 @@ class TestPermissionSwitchingE2E:
         checker.check("file_read", "agent-e2e", {"path": "/b"})
         assert prompt_count == 2  # re-prompted because cache was cleared
 
+    @pytest.mark.ac("AC-03.5.2")
     def test_cli_accepts_all_permission_tiers(self, project_dir: Path) -> None:
         """Edge: every tier value is accepted by the --permission flag."""
         for tier in ["nothing", "ask", "scoped", "autopilot"]:
@@ -443,14 +449,13 @@ class TestPermissionSwitchingE2E:
 
 
 # ======================================================================
-# REQ-03.6  Audit log of permission decisions
 # ======================================================================
 
 
-@pytest.mark.req("REQ-03.6")
 class TestPermissionAuditE2E:
     """Permission decisions produce data suitable for audit logging."""
 
+    @pytest.mark.ac("AC-03.6.1")
     def test_task_creates_audit_entry(self, project_dir: Path) -> None:
         """Happy: running a task creates an audit_log entry visible via CLI."""
         provider = _make_mock_provider(_simple_response("All done."))
@@ -461,6 +466,7 @@ class TestPermissionAuditE2E:
         assert audit.exit_code == 0
         assert "task_completed" in audit.output
 
+    @pytest.mark.ac("AC-03.6.2")
     def test_permission_check_returns_auditable_info(self, project_dir: Path) -> None:
         """Happy: checker returns bool; tier and tool name are available for logging."""
         from guild.permissions.checker import PermissionChecker, PermissionTier
@@ -472,6 +478,7 @@ class TestPermissionAuditE2E:
         assert result is False
         assert checker._tier == PermissionTier.NOTHING
 
+    @pytest.mark.ac("AC-03.6.1")
     def test_hardcoded_never_provides_reason(self, project_dir: Path) -> None:
         """Sad: denied calls include a descriptive reason for the audit log."""
         from guild.permissions.checker import PermissionChecker, PermissionTier
@@ -486,14 +493,13 @@ class TestPermissionAuditE2E:
 
 
 # ======================================================================
-# REQ-03.7  Hardcoded-never blocks dangerous actions
 # ======================================================================
 
 
-@pytest.mark.req("REQ-03.7")
 class TestHardcodedNeverE2E:
     """Hardcoded-never layer blocks destructive/irreversible actions at every tier."""
 
+    @pytest.mark.ac("AC-03.7.3")
     @pytest.mark.parametrize("command,reason_fragment", [
         ("git push --force origin main", "git push --force"),
         ("rm -rf /", "rm -rf /"),
@@ -510,6 +516,7 @@ class TestHardcodedNeverE2E:
         checker = PermissionChecker(tier=PermissionTier.AUTOPILOT)
         assert checker.check("shell", "agent-e2e", {"command": command}) is False
 
+    @pytest.mark.ac("AC-03.7.1")
     def test_safe_command_allowed_in_autopilot(self, project_dir: Path) -> None:
         """Sad (reverse): safe commands are NOT blocked."""
         from guild.permissions.checker import PermissionChecker, PermissionTier
@@ -518,6 +525,7 @@ class TestHardcodedNeverE2E:
         assert checker.check("shell", "agent-e2e", {"command": "ls -la"}) is True
         assert checker.check("shell", "agent-e2e", {"command": "git status"}) is True
 
+    @pytest.mark.ac("AC-03.7.2")
     def test_hardcoded_never_override_flag(self, project_dir: Path) -> None:
         """Edge: explicit allow_hardcoded_never flag bypasses the layer."""
         from guild.permissions.checker import PermissionChecker, PermissionTier
@@ -531,6 +539,7 @@ class TestHardcodedNeverE2E:
         assert allowed is True
         assert reason == ""
 
+    @pytest.mark.ac("AC-03.7.1")
     def test_hardcoded_never_blocks_in_all_tiers(self, project_dir: Path) -> None:
         """Edge: destructive command blocked in scoped + autopilot (nothing blocks all)."""
         from guild.permissions.checker import PermissionChecker, PermissionTier
@@ -547,14 +556,13 @@ class TestHardcodedNeverE2E:
 
 
 # ======================================================================
-# REQ-03.8  Reversibility principle
 # ======================================================================
 
 
-@pytest.mark.req("REQ-03.8")
 class TestReversibilityE2E:
     """Safe, reversible operations pass through; irreversible ones are blocked."""
 
+    @pytest.mark.ac("AC-03.8.1")
     def test_read_only_commands_pass_everywhere(self, project_dir: Path) -> None:
         """Happy: read-only commands are allowed in scoped and autopilot tiers."""
         from guild.permissions.checker import PermissionChecker, PermissionTier
@@ -570,6 +578,7 @@ class TestReversibilityE2E:
                     "shell", "agent-e2e", {"command": command}
                 ) is True, f"'{command}' blocked in {tier.value}"
 
+    @pytest.mark.ac("AC-03.8.2")
     def test_irreversible_command_blocked(self, project_dir: Path) -> None:
         """Sad: irreversible commands are blocked by hardcoded-never."""
         from guild.permissions.checker import PermissionChecker, PermissionTier
@@ -579,6 +588,7 @@ class TestReversibilityE2E:
             "shell", "agent-e2e", {"command": "mkfs.ext4 /dev/sda1"}
         ) is False
 
+    @pytest.mark.ac("AC-03.8.1")
     def test_reversible_git_operations_pass(self, project_dir: Path) -> None:
         """Edge: reversible git commands are allowed; force-push is not."""
         from guild.permissions.checker import PermissionChecker, PermissionTier
@@ -598,14 +608,13 @@ class TestReversibilityE2E:
 
 
 # ======================================================================
-# REQ-06.1  Agent doesn't pause unnecessarily
 # ======================================================================
 
 
-@pytest.mark.req("REQ-06.1")
 class TestAgentNoPauseE2E:
     """Agent continues autonomously without unnecessary pauses."""
 
+    @pytest.mark.ac("AC-06.1.1")
     def test_agent_runs_multiple_tools_without_pausing(
         self, project_dir: Path
     ) -> None:
@@ -624,6 +633,7 @@ class TestAgentNoPauseE2E:
         assert (project_dir / "a.txt").exists()
         assert (project_dir / "b.txt").exists()
 
+    @pytest.mark.ac("AC-06.1.2")
     def test_nothing_tier_task_with_tool_call_errors(self, project_dir: Path) -> None:
         """Sad: nothing tier + tool call => task still completes (tool denied)."""
         # The provider tries to call a tool, but since the permission is
@@ -639,6 +649,7 @@ class TestAgentNoPauseE2E:
             )
         assert result.exit_code == 0
 
+    @pytest.mark.ac("AC-06.1.1")
     def test_scoped_tools_proceed_without_prompting(self, project_dir: Path) -> None:
         """Edge: in scoped mode, tools within scope proceed with no prompt."""
         from guild.permissions.checker import PermissionChecker, PermissionTier
@@ -655,14 +666,13 @@ class TestAgentNoPauseE2E:
 
 
 # ======================================================================
-# REQ-06.2  Self-verify completion
 # ======================================================================
 
 
-@pytest.mark.req("REQ-06.2")
 class TestSelfVerifyCompletionE2E:
     """Agent can self-verify task completion via self_review flag."""
 
+    @pytest.mark.ac("AC-06.2.1")
     async def test_self_review_runs_after_task(self) -> None:
         """Happy: self_review=True triggers a review round after completion."""
         from guild.agent.loop import SELF_REVIEW_PROMPT, AgentLoop
@@ -689,6 +699,7 @@ class TestSelfVerifyCompletionE2E:
         assert len(review_msgs) == 1
         assert "Reviewed" in result
 
+    @pytest.mark.ac("AC-06.2.2")
     async def test_self_review_not_run_when_disabled(self) -> None:
         """Sad: self_review=False (default) skips the review round."""
         from guild.agent.loop import SELF_REVIEW_PROMPT, AgentLoop
@@ -705,6 +716,7 @@ class TestSelfVerifyCompletionE2E:
         assert len(review_msgs) == 0
         assert result == "Task complete."
 
+    @pytest.mark.ac("AC-06.2.1")
     async def test_self_review_can_trigger_fixes(self) -> None:
         """Edge: self-review finds an issue and uses a tool to fix it."""
         from guild.agent.loop import AgentLoop
@@ -728,14 +740,13 @@ class TestSelfVerifyCompletionE2E:
 
 
 # ======================================================================
-# REQ-06.3  Stuck detection fires
 # ======================================================================
 
 
-@pytest.mark.req("REQ-06.3")
 class TestStuckDetectionE2E:
     """Stuck detection fires when the agent makes no progress."""
 
+    @pytest.mark.ac("AC-06.3.1")
     async def test_stuck_triggers_recovery(self) -> None:
         """Happy: repeated identical calls trigger recovery prompt injection."""
         from guild.agent.loop import STUCK_RECOVERY_PROMPT, AgentLoop
@@ -766,6 +777,7 @@ class TestStuckDetectionE2E:
         ]
         assert len(recovery_msgs) == 1
 
+    @pytest.mark.ac("AC-06.3.2")
     async def test_double_stuck_escalates(self) -> None:
         """Sad: still stuck after recovery => structured escalation message."""
         from guild.agent.stuck import StuckDetector
@@ -793,6 +805,7 @@ class TestStuckDetectionE2E:
 
         assert "stuck" in result.lower() or "need help" in result.lower()
 
+    @pytest.mark.ac("AC-06.3.1")
     async def test_stuck_not_triggered_with_varied_calls(self) -> None:
         """Edge: varied calls do not trigger stuck detection."""
         from guild.agent.stuck import StuckDetector
@@ -823,14 +836,13 @@ class TestStuckDetectionE2E:
 
 
 # ======================================================================
-# REQ-06.4  Graceful degradation (try alternatives)
 # ======================================================================
 
 
-@pytest.mark.req("REQ-06.4")
 class TestGracefulDegradationE2E:
     """Agent tries alternative approaches when one tool fails."""
 
+    @pytest.mark.ac("AC-06.4.1")
     async def test_agent_continues_after_tool_failure(self) -> None:
         """Happy: first tool fails, agent tries another and succeeds."""
         from guild.agent.loop import AgentLoop
@@ -856,6 +868,7 @@ class TestGracefulDegradationE2E:
         result = await loop.run("sys", "Get contents or create")
         assert "Created" in result
 
+    @pytest.mark.ac("AC-06.4.2")
     async def test_agent_handles_unknown_tool_gracefully(self) -> None:
         """Sad: model requests nonexistent tool, error message returned."""
         from guild.agent.loop import AgentLoop
@@ -868,6 +881,7 @@ class TestGracefulDegradationE2E:
         result = await loop.run("sys", "use a tool")
         assert result != ""  # got a response, did not crash
 
+    @pytest.mark.ac("AC-06.4.1")
     async def test_tool_exception_caught_gracefully(self) -> None:
         """Edge: tool executor raises exception; loop continues."""
         from guild.agent.loop import AgentLoop
@@ -890,14 +904,13 @@ class TestGracefulDegradationE2E:
 
 
 # ======================================================================
-# REQ-06.5  Human escalation as last resort
 # ======================================================================
 
 
-@pytest.mark.req("REQ-06.5")
 class TestHumanEscalationE2E:
     """After exhausting alternatives, agent produces a structured escalation."""
 
+    @pytest.mark.ac("AC-06.5.1")
     async def test_escalation_includes_task_and_tools(self) -> None:
         """Happy: escalation message has task description and tools tried."""
         from guild.agent.loop import AgentLoop
@@ -923,6 +936,7 @@ class TestHumanEscalationE2E:
         assert "Refactor database module" in result
         assert "file_read" in result
 
+    @pytest.mark.ac("AC-06.5.1")
     async def test_escalation_has_structured_format(self) -> None:
         """Sad: escalation is structured with expected fields."""
         from guild.agent.loop import AgentLoop
@@ -946,6 +960,7 @@ class TestHumanEscalationE2E:
         assert "stuck" in result.lower() or "need help" in result.lower()
         assert "Task:" in result or "What I tried:" in result
 
+    @pytest.mark.ac("AC-06.5.2")
     async def test_no_escalation_when_task_succeeds(self) -> None:
         """Edge: a task that completes successfully never produces escalation."""
         from guild.agent.loop import AgentLoop
@@ -965,14 +980,13 @@ class TestHumanEscalationE2E:
 
 
 # ======================================================================
-# REQ-06.9  Multi-turn conversation preserves history
 # ======================================================================
 
 
-@pytest.mark.req("REQ-06.9")
 class TestMultiTurnE2E:
     """Multi-turn conversations preserve full message history."""
 
+    @pytest.mark.ac("AC-06.9.1")
     async def test_send_preserves_context(self) -> None:
         """Happy: send() sees messages from prior turns."""
         from guild.agent.loop import AgentLoop
@@ -990,6 +1004,7 @@ class TestMultiTurnE2E:
         user_msgs = [m for m in loop.messages if m.role == "user"]
         assert len(user_msgs) >= 2
 
+    @pytest.mark.ac("AC-06.9.1")
     async def test_run_resets_history(self) -> None:
         """Sad: calling run() again clears the conversation."""
         from guild.agent.loop import AgentLoop
@@ -1008,6 +1023,7 @@ class TestMultiTurnE2E:
         assert len(user_msgs) == 1
         assert user_msgs[0].content == "fresh start"
 
+    @pytest.mark.ac("AC-06.9.2")
     async def test_send_without_run_raises(self) -> None:
         """Edge: send() before run() raises RuntimeError."""
         from guild.agent.loop import AgentLoop
@@ -1018,6 +1034,7 @@ class TestMultiTurnE2E:
         with pytest.raises(RuntimeError, match="run.*before"):
             await loop.send("hello")
 
+    @pytest.mark.ac("AC-06.9.1")
     async def test_multiple_sends_accumulate(self) -> None:
         """Edge: four consecutive messages all preserved in history."""
         from guild.agent.loop import AgentLoop
@@ -1043,14 +1060,13 @@ class TestMultiTurnE2E:
 
 
 # ======================================================================
-# REQ-06.10  Self-review
 # ======================================================================
 
 
-@pytest.mark.req("REQ-06.10")
 class TestSelfReviewE2E:
     """Agent can perform adversarial self-review on its own work."""
 
+    @pytest.mark.ac("AC-06.10.1")
     async def test_self_review_prompt_injected(self) -> None:
         """Happy: self-review prompt appears in conversation history."""
         from guild.agent.loop import SELF_REVIEW_PROMPT, AgentLoop
@@ -1069,6 +1085,7 @@ class TestSelfReviewE2E:
         assert len(review_msgs) == 1
         assert "Reviewed" in result
 
+    @pytest.mark.ac("AC-06.10.1")
     async def test_self_review_skipped_on_escalation(self) -> None:
         """Sad: if task escalated (stuck), self-review is skipped."""
         from guild.agent.loop import AgentLoop
@@ -1099,6 +1116,7 @@ class TestSelfReviewE2E:
         ]
         assert len(review_msgs) == 0
 
+    @pytest.mark.ac("AC-06.10.2")
     async def test_self_review_default_off(self) -> None:
         """Edge: self_review defaults to False."""
         from guild.agent.loop import SELF_REVIEW_PROMPT, AgentLoop
@@ -1115,14 +1133,13 @@ class TestSelfReviewE2E:
 
 
 # ======================================================================
-# REQ-06.11  Try-test-rollback
 # ======================================================================
 
 
-@pytest.mark.req("REQ-06.11")
 class TestTryTestRollbackE2E:
     """File-level snapshotting and rollback for impactful decisions."""
 
+    @pytest.mark.ac("AC-06.11.2")
     async def test_rollback_on_verification_failure(self, project_dir: Path) -> None:
         """Happy: verification fails => files restored to original state."""
         from guild.agent.rollback import try_with_rollback
@@ -1143,6 +1160,7 @@ class TestTryTestRollbackE2E:
         assert result is None
         assert target.read_text() == "original"
 
+    @pytest.mark.ac("AC-06.11.1")
     async def test_changes_kept_on_verification_success(
         self, project_dir: Path
     ) -> None:
@@ -1165,6 +1183,7 @@ class TestTryTestRollbackE2E:
         assert result == "done"
         assert target.read_text() == "new content"
 
+    @pytest.mark.ac("AC-06.11.2")
     async def test_rollback_deletes_newly_created_files(
         self, project_dir: Path
     ) -> None:
@@ -1186,6 +1205,7 @@ class TestTryTestRollbackE2E:
         assert success is False
         assert not new_file.exists()
 
+    @pytest.mark.ac("AC-06.11.2")
     async def test_rollback_handles_multiple_files(
         self, project_dir: Path
     ) -> None:

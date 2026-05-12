@@ -81,11 +81,10 @@ def project_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return tmp_path
 
 
-# REQ-06.8: task runs and produces output
-@pytest.mark.req("REQ-06.8")
 class TestTaskExecution:
     """Full lifecycle tests for task creation, execution, and observable outcomes."""
 
+    @pytest.mark.ac("AC-06.8.1")
     def test_task_creates_file_and_completes(self, project_dir: Path) -> None:
         """Full lifecycle: task -> agent uses tool -> file created -> history updated."""
         with patch(
@@ -100,6 +99,7 @@ class TestTaskExecution:
         assert (project_dir / "output.txt").exists()
         assert (project_dir / "output.txt").read_text() == "hello from guild"
 
+    @pytest.mark.ac("AC-06.8.2")
     def test_task_appears_in_history(self, project_dir: Path) -> None:
         """After task completes, it shows in guild history."""
         with patch(
@@ -112,17 +112,17 @@ class TestTaskExecution:
         assert history.exit_code == 0
         assert "Create output.txt" in history.output or "completed" in history.output
 
+    @pytest.mark.ac("AC-06.8.1")
     def test_task_empty_description_errors(self, project_dir: Path) -> None:
         """Sad path: empty description raises an error."""
         result = runner.invoke(app, ["task", ""])
         assert result.exit_code != 0 or "error" in result.output.lower()
 
 
-# REQ-06.7: timeout behavior
-@pytest.mark.req("REQ-06.7")
 class TestTaskTimeout:
     """Verify the --timeout flag is accepted and propagated."""
 
+    @pytest.mark.ac("AC-06.7.1")
     def test_task_with_timeout_flag(self, project_dir: Path) -> None:
         """Task accepts --timeout flag and completes successfully."""
         with patch(
@@ -133,11 +133,10 @@ class TestTaskTimeout:
         assert result.exit_code == 0
 
 
-# REQ-10.3: usage tracking
-@pytest.mark.req("REQ-10.3")
 class TestUsageTracking:
     """Verify token usage is persisted and visible after a task runs."""
 
+    @pytest.mark.ac("AC-10.3.1")
     def test_tokens_tracked_after_task(self, project_dir: Path) -> None:
         """After a task runs, token usage is visible in guild usage."""
         with patch(
@@ -154,22 +153,20 @@ class TestUsageTracking:
         assert "50" in usage.output
 
 
-# REQ-09.1: learnings command
-@pytest.mark.req("REQ-09.1")
 class TestLearnings:
     """Verify the learnings command works on a fresh project."""
 
+    @pytest.mark.ac("AC-09.1.1")
     def test_learnings_empty_initially(self, project_dir: Path) -> None:
         """Learnings command returns success on a fresh project."""
         result = runner.invoke(app, ["learnings"])
         assert result.exit_code == 0
 
 
-# REQ-06.12: decisions command
-@pytest.mark.req("REQ-06.12")
 class TestDecisions:
     """Verify the decisions command works on a fresh project."""
 
+    @pytest.mark.ac("AC-06.12.1")
     def test_decisions_empty_initially(self, project_dir: Path) -> None:
         """Decisions command returns success on a fresh project."""
         result = runner.invoke(app, ["decisions"])

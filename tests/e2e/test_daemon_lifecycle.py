@@ -96,10 +96,10 @@ def guild_env(tmp_path: Path) -> dict:
 # ===================================================================
 
 
-@pytest.mark.req("REQ-23.1")
 class TestBackgroundLaunch:
     """guild task --background launches a daemon and returns immediately."""
 
+    @pytest.mark.ac("AC-23.1.2")
     def test_background_flag_prints_task_id(self, project_dir: Path) -> None:
         """--background launches daemon and prints the task ID."""
         with patch("guild.cli.main._launch_background_task") as mock_launch:
@@ -111,6 +111,7 @@ class TestBackgroundLaunch:
         assert "Launched background task" in result.output
         mock_launch.assert_called_once()
 
+    @pytest.mark.ac("AC-23.1.1")
     def test_background_creates_task_in_storage(self, project_dir: Path) -> None:
         """--background persists the task in SQLite before forking."""
         with patch("guild.cli.main._launch_background_task"):
@@ -129,10 +130,10 @@ class TestBackgroundLaunch:
 # ===================================================================
 
 
-@pytest.mark.req("REQ-23.2")
 class TestPidFile:
     """Daemon writes and removes PID files for lifecycle tracking."""
 
+    @pytest.mark.ac("AC-23.2.1")
     async def test_supervisor_writes_pid_file(self, guild_env: dict) -> None:
         """DaemonSupervisor.write_pid_file creates <task_id>.pid in run_dir."""
         run_dir = guild_env["run_dir"]
@@ -143,6 +144,7 @@ class TestPidFile:
         assert sup.pid_path.read_text().strip() == str(os.getpid())
         sup.remove_pid_file()
 
+    @pytest.mark.ac("AC-23.2.3")
     async def test_pid_file_removed_on_cleanup(self, guild_env: dict) -> None:
         """PID file is removed when remove_pid_file is called."""
         run_dir = guild_env["run_dir"]
@@ -153,6 +155,7 @@ class TestPidFile:
         sup.remove_pid_file()
         assert not sup.pid_path.exists()
 
+    @pytest.mark.ac("AC-23.2.1")
     async def test_supervisor_run_creates_and_removes_pid(self, guild_env: dict) -> None:
         """supervisor.run() writes PID before coroutine and removes after."""
         run_dir = guild_env["run_dir"]
@@ -175,16 +178,17 @@ class TestPidFile:
 # ===================================================================
 
 
-@pytest.mark.req("REQ-23.3")
 class TestAttachReconnects:
     """guild attach connects to a running task via the control socket."""
 
+    @pytest.mark.ac("AC-23.3.2")
     def test_attach_fails_without_socket(self, project_dir: Path) -> None:
         """attach errors when no control socket exists for the task."""
         result = runner.invoke(app, ["attach", "nonexistent-task"])
         assert result.exit_code != 0
         assert "not running" in result.output.lower() or "Error" in result.output
 
+    @pytest.mark.ac("AC-23.3.1")
     async def test_attach_can_subscribe_to_socket(self, guild_env: dict) -> None:
         """A client can connect and subscribe to a running control socket."""
         run_dir = guild_env["run_dir"]
@@ -217,16 +221,17 @@ class TestAttachReconnects:
 # ===================================================================
 
 
-@pytest.mark.req("REQ-23.4")
 class TestLogsCommand:
     """guild logs <task_id> streams agent output."""
 
+    @pytest.mark.ac("AC-23.4.1")
     def test_logs_shows_no_messages_for_unknown_task(self, project_dir: Path) -> None:
         """logs on a non-existent task shows 'No messages'."""
         result = runner.invoke(app, ["logs", "unknown-task-id"])
         assert result.exit_code == 0
         assert "No messages" in result.output
 
+    @pytest.mark.ac("AC-23.4.1")
     def test_logs_shows_messages_after_task(self, project_dir: Path) -> None:
         """logs displays messages recorded by a completed task."""
         with patch(
@@ -246,16 +251,17 @@ class TestLogsCommand:
 # ===================================================================
 
 
-@pytest.mark.req("REQ-23.5")
 class TestPsCommand:
     """guild ps shows all running/paused tasks."""
 
+    @pytest.mark.ac("AC-23.5.2")
     def test_ps_empty_project(self, project_dir: Path) -> None:
         """ps on a fresh project shows 'No running tasks'."""
         result = runner.invoke(app, ["ps"])
         assert result.exit_code == 0
         assert "no" in result.output.lower()
 
+    @pytest.mark.ac("AC-23.5.1")
     def test_ps_shows_live_pid(self, project_dir: Path) -> None:
         """ps lists tasks that have a live PID file in the run directory."""
         run_dir = project_dir / ".guild" / "run"
@@ -268,6 +274,7 @@ class TestPsCommand:
         # Clean up
         (run_dir / "live-task.pid").unlink()
 
+    @pytest.mark.ac("AC-23.5.1")
     def test_ps_ignores_dead_pid(self, project_dir: Path) -> None:
         """ps does not show tasks whose PID is dead."""
         run_dir = project_dir / ".guild" / "run"
@@ -284,10 +291,10 @@ class TestPsCommand:
 # ===================================================================
 
 
-@pytest.mark.req("REQ-23.6")
 class TestMinimalSupervisor:
     """DaemonSupervisor wraps AgentLoop with PID, signals, and socket."""
 
+    @pytest.mark.ac("AC-23.6.2")
     async def test_supervisor_manages_full_lifecycle(self, guild_env: dict) -> None:
         """Supervisor writes PID, installs signals, runs coro, cleans up."""
         run_dir = guild_env["run_dir"]
@@ -303,6 +310,7 @@ class TestMinimalSupervisor:
         # After run(), PID is cleaned up and signals restored
         assert not sup.pid_path.exists()
 
+    @pytest.mark.ac("AC-23.6.1")
     async def test_supervisor_cleans_up_on_exception(self, guild_env: dict) -> None:
         """PID file is removed even when the supervised coroutine raises."""
         run_dir = guild_env["run_dir"]
@@ -316,6 +324,7 @@ class TestMinimalSupervisor:
 
         assert not sup.pid_path.exists()
 
+    @pytest.mark.ac("AC-23.6.2")
     async def test_supervisor_starts_and_stops_control_socket(
         self, guild_env: dict,
     ) -> None:
@@ -335,10 +344,10 @@ class TestMinimalSupervisor:
 # ===================================================================
 
 
-@pytest.mark.req("REQ-23.7")
 class TestConcurrentTasks:
     """TaskQueue enforces max_concurrent_agents limit."""
 
+    @pytest.mark.ac("AC-23.7.1")
     async def test_queue_enforces_concurrency_limit(self) -> None:
         """Dequeue returns None when max_concurrent is reached."""
         queue = TaskQueue(max_concurrent=2)
@@ -353,6 +362,7 @@ class TestConcurrentTasks:
         assert await queue.dequeue() is None
         assert queue.active_count == 2
 
+    @pytest.mark.ac("AC-23.7.2")
     async def test_complete_allows_next_dequeue(self) -> None:
         """Completing an active task allows a queued task to dequeue."""
         queue = TaskQueue(max_concurrent=1)
@@ -366,6 +376,7 @@ class TestConcurrentTasks:
         assert queue.active_count == 0
         assert await queue.dequeue() == "t2"
 
+    @pytest.mark.ac("AC-23.7.1")
     async def test_queue_state_reflects_pending_tasks(self) -> None:
         """get_queue_state returns all pending (not yet dequeued) tasks."""
         queue = TaskQueue(max_concurrent=5)
@@ -383,10 +394,10 @@ class TestConcurrentTasks:
 # ===================================================================
 
 
-@pytest.mark.req("REQ-23.8")
 class TestForegroundDefault:
     """Tasks run in foreground when --background is not specified."""
 
+    @pytest.mark.ac("AC-23.8.1")
     def test_task_runs_foreground_by_default(self, project_dir: Path) -> None:
         """guild task without --background runs synchronously in foreground."""
         with patch(
@@ -398,6 +409,7 @@ class TestForegroundDefault:
         assert result.exit_code == 0
         assert "Done" in result.output
 
+    @pytest.mark.ac("AC-23.8.1")
     def test_background_false_is_default(self, project_dir: Path) -> None:
         """The --background flag defaults to False."""
         # Run with --help to inspect default
@@ -412,10 +424,10 @@ class TestForegroundDefault:
 # ===================================================================
 
 
-@pytest.mark.req("REQ-25.1")
 class TestKillCommand:
     """guild kill sends graceful shutdown to a running task."""
 
+    @pytest.mark.ac("AC-25.1.1")
     async def test_kill_via_control_socket(self, guild_env: dict) -> None:
         """Sending a kill command via the control socket sets shutdown flag."""
         run_dir = guild_env["run_dir"]
@@ -435,6 +447,7 @@ class TestKillCommand:
         await writer.wait_closed()
         await sup.stop_control_socket()
 
+    @pytest.mark.ac("AC-25.1.1")
     async def test_lifecycle_manager_kill_sends_sigterm(self, guild_env: dict) -> None:
         """LifecycleManager.kill_task sends SIGTERM to the target PID."""
         run_dir = guild_env["run_dir"]
@@ -455,6 +468,7 @@ class TestKillCommand:
         mock_kill.assert_any_call(12345, signal.SIGTERM)
         await store.close()
 
+    @pytest.mark.ac("AC-25.1.3")
     def test_kill_cli_no_task_id_errors(self, project_dir: Path) -> None:
         """guild kill without task_id or --all shows error."""
         result = runner.invoke(app, ["kill"])
@@ -467,10 +481,10 @@ class TestKillCommand:
 # ===================================================================
 
 
-@pytest.mark.req("REQ-25.2")
 class TestPauseCommand:
     """guild pause sets task to paused state."""
 
+    @pytest.mark.ac("AC-25.2.1")
     async def test_pause_via_control_socket(self, guild_env: dict) -> None:
         """Pause command via control socket sets paused flag."""
         run_dir = guild_env["run_dir"]
@@ -492,6 +506,7 @@ class TestPauseCommand:
         await writer.wait_closed()
         await cs.stop()
 
+    @pytest.mark.ac("AC-25.2.3")
     async def test_pause_updates_storage(self, guild_env: dict) -> None:
         """LifecycleManager.pause_task updates task status in storage."""
         run_dir = guild_env["run_dir"]
@@ -508,6 +523,7 @@ class TestPauseCommand:
         assert task["status"] == "paused"
         await store.close()
 
+    @pytest.mark.ac("AC-25.2.1")
     async def test_pause_fails_if_not_running(self, guild_env: dict) -> None:
         """pause_task returns False when task is not in running state."""
         run_dir = guild_env["run_dir"]
@@ -526,10 +542,10 @@ class TestPauseCommand:
 # ===================================================================
 
 
-@pytest.mark.req("REQ-25.3")
 class TestResumeCommand:
     """guild resume resumes a paused task."""
 
+    @pytest.mark.ac("AC-25.3.1")
     async def test_resume_via_control_socket(self, guild_env: dict) -> None:
         """Resume command via control socket clears paused flag."""
         run_dir = guild_env["run_dir"]
@@ -552,6 +568,7 @@ class TestResumeCommand:
         await writer.wait_closed()
         await cs.stop()
 
+    @pytest.mark.ac("AC-25.3.1")
     async def test_resume_updates_storage(self, guild_env: dict) -> None:
         """LifecycleManager.resume_task updates task status in storage."""
         run_dir = guild_env["run_dir"]
@@ -568,6 +585,7 @@ class TestResumeCommand:
         assert task["status"] == "running"
         await store.close()
 
+    @pytest.mark.ac("AC-25.3.3")
     async def test_resume_fails_if_not_paused(self, guild_env: dict) -> None:
         """resume_task returns False when task is not in paused state."""
         run_dir = guild_env["run_dir"]
@@ -587,10 +605,10 @@ class TestResumeCommand:
 # ===================================================================
 
 
-@pytest.mark.req("REQ-25.4")
 class TestSignalHandling:
     """Supervisor installs SIGTERM/SIGINT handlers for graceful shutdown."""
 
+    @pytest.mark.ac("AC-25.4.1")
     async def test_signal_handlers_installed_and_restored(
         self, guild_env: dict,
     ) -> None:
@@ -612,6 +630,7 @@ class TestSignalHandling:
         restored = signal.getsignal(signal.SIGTERM)
         assert restored == original_sigterm
 
+    @pytest.mark.ac("AC-25.4.1")
     async def test_sigterm_sets_shutdown_flag(self, guild_env: dict) -> None:
         """Calling the shutdown signal handler sets shutdown_requested."""
         run_dir = guild_env["run_dir"]
@@ -625,6 +644,7 @@ class TestSignalHandling:
         sup.restore_signal_handlers()
         sup.remove_pid_file()
 
+    @pytest.mark.ac("AC-25.4.3")
     async def test_checkpoint_callback_invoked_on_signal(
         self, guild_env: dict,
     ) -> None:
@@ -655,10 +675,10 @@ class TestSignalHandling:
 # ===================================================================
 
 
-@pytest.mark.req("REQ-25.5")
 class TestOrphanDetection:
     """Detect PID files whose processes are no longer alive."""
 
+    @pytest.mark.ac("AC-25.5.1")
     async def test_detect_orphaned_pid_files(self, guild_env: dict) -> None:
         """detect_orphans returns task IDs for dead processes."""
         run_dir = guild_env["run_dir"]
@@ -675,6 +695,7 @@ class TestOrphanDetection:
         assert set(orphans) == {"orphan-1", "orphan-2"}
         await store.close()
 
+    @pytest.mark.ac("AC-25.5.1")
     async def test_skips_live_processes(self, guild_env: dict) -> None:
         """detect_orphans does not report tasks with alive processes."""
         run_dir = guild_env["run_dir"]
@@ -702,10 +723,10 @@ class TestOrphanDetection:
 # ===================================================================
 
 
-@pytest.mark.req("REQ-25.6")
 class TestStatePersisted:
     """State is persisted to storage on every turn boundary."""
 
+    @pytest.mark.ac("AC-25.6.1")
     async def test_storage_persists_messages(self, guild_env: dict) -> None:
         """Messages appended via storage are immediately durable."""
         store = await _make_storage(guild_env["guild_dir"])
@@ -719,6 +740,7 @@ class TestStatePersisted:
         assert msgs[1]["content"] == "doing it"
         await store.close()
 
+    @pytest.mark.ac("AC-25.6.1")
     async def test_task_status_persisted_on_update(self, guild_env: dict) -> None:
         """Task status updates are immediately reflected in storage."""
         store = await _make_storage(guild_env["guild_dir"])
@@ -741,10 +763,10 @@ class TestStatePersisted:
 # ===================================================================
 
 
-@pytest.mark.req("REQ-25.7")
 class TestStaleLockCleanup:
     """Dead socket/PID files are cleaned up automatically."""
 
+    @pytest.mark.ac("AC-25.7.1")
     async def test_cleanup_removes_stale_pid_and_sock(self, guild_env: dict) -> None:
         """cleanup_stale_locks removes .pid and .sock for dead processes."""
         run_dir = guild_env["run_dir"]
@@ -763,6 +785,7 @@ class TestStaleLockCleanup:
         assert not (run_dir / "stale-1.sock").exists()
         await store.close()
 
+    @pytest.mark.ac("AC-25.7.2")
     async def test_cleanup_preserves_live_locks(self, guild_env: dict) -> None:
         """cleanup_stale_locks keeps PID files for alive processes."""
         run_dir = guild_env["run_dir"]
@@ -790,10 +813,10 @@ class TestStaleLockCleanup:
 # ===================================================================
 
 
-@pytest.mark.req("REQ-25.8")
 class TestKillAll:
     """guild kill --all stops all running tasks."""
 
+    @pytest.mark.ac("AC-25.8.1")
     async def test_kill_all_signals_every_task(self, guild_env: dict) -> None:
         """kill_all sends SIGTERM to every task with a PID file."""
         run_dir = guild_env["run_dir"]
@@ -818,6 +841,7 @@ class TestKillAll:
             mock_kill.assert_any_call(20000 + i, signal.SIGTERM)
         await store.close()
 
+    @pytest.mark.ac("AC-25.8.1")
     def test_kill_all_cli_flag(self, project_dir: Path) -> None:
         """guild kill --all via CLI prints count of killed tasks."""
         # No running tasks, so count should be 0
@@ -832,10 +856,10 @@ class TestKillAll:
 # ===================================================================
 
 
-@pytest.mark.req("REQ-25.9")
 class TestExitCodes:
     """Meaningful exit codes for Guild processes."""
 
+    @pytest.mark.ac("AC-25.9.1")
     def test_exit_code_values(self) -> None:
         """ExitCode enum has the documented integer values."""
         assert ExitCode.SUCCESS == 0
@@ -843,11 +867,13 @@ class TestExitCodes:
         assert ExitCode.INTERRUPTED == 2
         assert ExitCode.CRASH_RECOVERY == 3
 
+    @pytest.mark.ac("AC-25.9.1")
     def test_exit_code_is_int(self) -> None:
         """Exit codes are usable as plain integers."""
         assert int(ExitCode.SUCCESS) == 0
         assert int(ExitCode.CRASH_RECOVERY) == 3
 
+    @pytest.mark.ac("AC-25.9.1")
     def test_successful_task_exits_zero(self, project_dir: Path) -> None:
         """A successfully completed task results in exit code 0."""
         with patch(
@@ -863,10 +889,10 @@ class TestExitCodes:
 # ===================================================================
 
 
-@pytest.mark.req("REQ-26.1")
 class TestDetectSleep:
     """Detect system sleep via monotonic time-drift."""
 
+    @pytest.mark.ac("AC-26.1.1")
     def test_large_drift_detected_as_sleep(self) -> None:
         """Time drift exceeding threshold triggers sleep detection."""
         detector = SleepWakeDetector(
@@ -878,6 +904,7 @@ class TestDetectSleep:
             assert detector.check_for_sleep() is True
         assert detector.sleep_detected is True
 
+    @pytest.mark.ac("AC-26.1.3")
     def test_normal_delay_not_flagged(self) -> None:
         """Delay within threshold is not flagged as sleep."""
         detector = SleepWakeDetector(
@@ -889,6 +916,7 @@ class TestDetectSleep:
             assert detector.check_for_sleep() is False
         assert detector.sleep_detected is False
 
+    @pytest.mark.ac("AC-26.1.1")
     def test_clear_sleep_flag(self) -> None:
         """clear_sleep_flag resets the detected state after handling."""
         detector = SleepWakeDetector(
@@ -906,10 +934,10 @@ class TestDetectSleep:
 # ===================================================================
 
 
-@pytest.mark.req("REQ-26.2")
 class TestResumeOnWake:
     """On wake, detect sleep occurred and decide whether to resume."""
 
+    @pytest.mark.ac("AC-26.2.1")
     def test_resume_after_sleep_with_resume_config(self) -> None:
         """With RESUME behavior, should_resume returns True after sleep."""
         detector = SleepWakeDetector(
@@ -923,6 +951,7 @@ class TestResumeOnWake:
         assert detector.sleep_detected is True
         assert detector.should_resume() is True
 
+    @pytest.mark.ac("AC-26.2.1")
     def test_stay_paused_after_sleep_when_configured(self) -> None:
         """With STAY_PAUSED behavior, should_resume returns False after sleep."""
         detector = SleepWakeDetector(
@@ -942,10 +971,10 @@ class TestResumeOnWake:
 # ===================================================================
 
 
-@pytest.mark.req("REQ-26.3")
 class TestOllamaReconnect:
     """Ollama connection re-validated on wake with retries."""
 
+    @pytest.mark.ac("AC-26.3.1")
     async def test_health_check_called_on_wake(self) -> None:
         """Provider health_check is called during wake recovery."""
         detector = SleepWakeDetector(
@@ -958,6 +987,7 @@ class TestOllamaReconnect:
         assert result is True
         provider.health_check.assert_called_once()
 
+    @pytest.mark.ac("AC-26.3.2")
     async def test_retries_until_provider_recovers(self) -> None:
         """Health check retries until provider responds positively."""
         detector = SleepWakeDetector(
@@ -973,6 +1003,7 @@ class TestOllamaReconnect:
         assert result is True
         assert provider.health_check.call_count == 4
 
+    @pytest.mark.ac("AC-26.3.3")
     async def test_returns_false_after_max_retries(self) -> None:
         """Recovery returns False when provider does not recover in time."""
         detector = SleepWakeDetector(
@@ -994,10 +1025,10 @@ class TestOllamaReconnect:
 # ===================================================================
 
 
-@pytest.mark.req("REQ-26.4")
 class TestInterruptedCallsRetried:
     """In-flight LLM calls interrupted by sleep are retried."""
 
+    @pytest.mark.ac("AC-26.4.1")
     async def test_retry_succeeds_after_connection_error(self) -> None:
         """Detector retries a failed LLM call after validating provider."""
         detector = SleepWakeDetector(
@@ -1026,6 +1057,7 @@ class TestInterruptedCallsRetried:
         assert call_count == 2
         provider.health_check.assert_called()
 
+    @pytest.mark.ac("AC-26.4.1")
     async def test_retry_fails_when_provider_unrecoverable(self) -> None:
         """retry_after_sleep re-raises when provider cannot recover."""
         detector = SleepWakeDetector(
@@ -1051,10 +1083,10 @@ class TestInterruptedCallsRetried:
 # ===================================================================
 
 
-@pytest.mark.req("REQ-26.5")
 class TestSleepWakeAuditLog:
     """Sleep/wake events are logged in the audit trail."""
 
+    @pytest.mark.ac("AC-26.5.1")
     async def test_sleep_event_logged(self) -> None:
         """log_sleep_event writes to audit storage."""
         detector = SleepWakeDetector()
@@ -1068,6 +1100,7 @@ class TestSleepWakeAuditLog:
             details="System sleep detected via time-drift",
         )
 
+    @pytest.mark.ac("AC-26.5.1")
     async def test_wake_event_logged(self) -> None:
         """log_wake_event writes to audit storage."""
         detector = SleepWakeDetector()
@@ -1081,6 +1114,7 @@ class TestSleepWakeAuditLog:
             details="System wake — provider reconnected",
         )
 
+    @pytest.mark.ac("AC-26.5.2")
     async def test_audit_events_persisted_in_real_storage(
         self, guild_env: dict,
     ) -> None:
@@ -1103,32 +1137,36 @@ class TestSleepWakeAuditLog:
 # ===================================================================
 
 
-@pytest.mark.req("REQ-26.6")
 class TestConfigurableWakeBehavior:
     """Wake behavior is configurable via SleepWakeConfig."""
 
+    @pytest.mark.ac("AC-26.6.1")
     def test_resume_is_default(self) -> None:
         """Default wake behavior is RESUME."""
         config = SleepWakeConfig()
         assert config.wake_behavior == WakeBehavior.RESUME
 
+    @pytest.mark.ac("AC-26.6.2")
     def test_stay_paused_configurable(self) -> None:
         """Wake behavior can be set to STAY_PAUSED."""
         config = SleepWakeConfig(wake_behavior=WakeBehavior.STAY_PAUSED)
         detector = SleepWakeDetector(config=config)
         assert detector.should_resume() is False
 
+    @pytest.mark.ac("AC-26.6.1")
     def test_resume_configurable(self) -> None:
         """Wake behavior can be explicitly set to RESUME."""
         config = SleepWakeConfig(wake_behavior=WakeBehavior.RESUME)
         detector = SleepWakeDetector(config=config)
         assert detector.should_resume() is True
 
+    @pytest.mark.ac("AC-26.6.3")
     def test_config_threshold_customizable(self) -> None:
         """Sleep threshold can be customized."""
         config = SleepWakeConfig(sleep_threshold_seconds=120.0)
         assert config.sleep_threshold_seconds == 120.0
 
+    @pytest.mark.ac("AC-26.6.3")
     def test_config_health_check_params_customizable(self) -> None:
         """Health check retries and delay can be customized."""
         config = SleepWakeConfig(

@@ -83,10 +83,10 @@ def _simple_team(entry: str = "entry", blocks: dict[str, str] | None = None) -> 
 # REQ-04.2  Entry agent present in preset team compositions
 # ---------------------------------------------------------------------------
 
-@pytest.mark.req("REQ-04.2")
 class TestEntryAgentInPreset:
     """Entry agent is present even in preset team compositions."""
 
+    @pytest.mark.ac("AC-04.2.1")
     async def test_entry_block_first_in_execution_order(self) -> None:
         """TeamRunner always executes entry_block first."""
         registry = BlockRegistry()
@@ -101,6 +101,7 @@ class TestEntryAgentInPreset:
         order = runner._execution_order()
         assert order[0] == "orchestrator"
 
+    @pytest.mark.ac("AC-04.2.2")
     async def test_entry_agent_receives_initial_input(self) -> None:
         """The entry agent gets the user input as its first data."""
         registry = BlockRegistry()
@@ -120,10 +121,10 @@ class TestEntryAgentInPreset:
 # REQ-04.3  Any agent can spawn other agents
 # ---------------------------------------------------------------------------
 
-@pytest.mark.req("REQ-04.3")
 class TestAgentSpawning:
     """Any agent can spawn other agents, including other orchestrators."""
 
+    @pytest.mark.ac("AC-04.3.1")
     async def test_spawner_creates_subagent(self) -> None:
         """AgentSpawner creates and runs a sub-agent to completion."""
         provider = _mock_provider("sub-result")
@@ -133,6 +134,7 @@ class TestAgentSpawning:
         assert result == "sub-result"
         assert "child-1" in spawner.active_agents
 
+    @pytest.mark.ac("AC-04.3.2")
     async def test_spawn_multiple_agents(self) -> None:
         """Multiple agents can be spawned from the same spawner."""
         provider = _mock_provider("ok")
@@ -147,10 +149,10 @@ class TestAgentSpawning:
 # REQ-04.4  Agent spawning is just another tool call
 # ---------------------------------------------------------------------------
 
-@pytest.mark.req("REQ-04.4")
 class TestSpawnAsToolCall:
     """Agent spawning is exposed as a tool call — flat architecture."""
 
+    @pytest.mark.ac("AC-04.4.2")
     async def test_execute_spawn_tool(self) -> None:
         """execute_spawn returns a ToolResult like any other tool."""
         provider = _mock_provider("tool-result")
@@ -160,6 +162,7 @@ class TestSpawnAsToolCall:
         assert result.success is True
         assert result.output == "tool-result"
 
+    @pytest.mark.ac("AC-04.4.1")
     async def test_execute_spawn_missing_task(self) -> None:
         """Missing 'task' argument returns failure ToolResult."""
         provider = _mock_provider()
@@ -174,10 +177,10 @@ class TestSpawnAsToolCall:
 # REQ-04.5  Worker agents that execute specific subtasks
 # ---------------------------------------------------------------------------
 
-@pytest.mark.req("REQ-04.5")
 class TestWorkerAgents:
     """Worker agents are specialized and run specific subtasks."""
 
+    @pytest.mark.ac("AC-04.5.1")
     async def test_coder_block_has_tools(self) -> None:
         """Coder block is specialized with file_write/shell tools."""
         reg = BlockRegistry()
@@ -186,6 +189,7 @@ class TestWorkerAgents:
         assert "file_write" in coder.tools
         assert coder.role == "coder"
 
+    @pytest.mark.ac("AC-04.5.2")
     async def test_worker_runs_independently(self) -> None:
         """A worker block runs independently within a team."""
         reg = BlockRegistry()
@@ -204,10 +208,10 @@ class TestWorkerAgents:
 # REQ-04.6  MCP for agent-to-tool communication
 # ---------------------------------------------------------------------------
 
-@pytest.mark.req("REQ-04.6")
 class TestMCPCommunication:
     """MCP client for agent-to-tool communication."""
 
+    @pytest.mark.ac("AC-04.6.1")
     def test_mcp_client_config(self) -> None:
         """MCPClient stores server configuration."""
         config = MCPServerConfig(name="test", command="echo", args=["hi"])
@@ -215,6 +219,7 @@ class TestMCPCommunication:
         assert client.config.name == "test"
         assert client.config.command == "echo"
 
+    @pytest.mark.ac("AC-04.6.2")
     async def test_mcp_send_request_not_connected_errors(self) -> None:
         """Calling a tool on unconnected client raises MCPError."""
         config = MCPServerConfig(name="test", command="echo")
@@ -227,10 +232,10 @@ class TestMCPCommunication:
 # REQ-04.7  Simple internal message bus for agent-to-agent communication
 # ---------------------------------------------------------------------------
 
-@pytest.mark.req("REQ-04.7")
 class TestMessageBus:
     """Internal message bus for agent-to-agent send/receive."""
 
+    @pytest.mark.ac("AC-04.7.1")
     async def test_send_and_receive(self) -> None:
         """Messages are delivered from sender to receiver."""
         bus = MessageBus()
@@ -240,12 +245,14 @@ class TestMessageBus:
         assert msg.source_agent == "agent-a"
         assert msg.data["result"] == "ok"
 
+    @pytest.mark.ac("AC-04.7.2")
     async def test_receive_timeout_returns_none(self) -> None:
         """Receive times out gracefully when no message is pending."""
         bus = MessageBus()
         msg = await bus.receive("nobody", timeout=0.05)
         assert msg is None
 
+    @pytest.mark.ac("AC-04.7.3")
     async def test_broadcast(self) -> None:
         """Broadcast sends to all known agents except sender."""
         bus = MessageBus()
@@ -268,10 +275,10 @@ class TestMessageBus:
 # REQ-04.8  Skills support — pluggable skill definitions
 # ---------------------------------------------------------------------------
 
-@pytest.mark.req("REQ-04.8")
 class TestSkillsSupport:
     """Agents can have pluggable skill definitions."""
 
+    @pytest.mark.ac("AC-04.8.1")
     def test_skill_registry_register_and_get(self) -> None:
         """Skills are registered and retrieved by name."""
         reg = SkillRegistry()
@@ -280,6 +287,7 @@ class TestSkillsSupport:
         assert reg.get("debug") is not None
         assert reg.get("debug").description == "Debug skill"
 
+    @pytest.mark.ac("AC-04.8.2")
     def test_skill_from_file(self, tmp_path: Path) -> None:
         """SkillDef.from_file loads a markdown skill with frontmatter."""
         skill_file = tmp_path / "test_skill.md"
@@ -293,6 +301,7 @@ class TestSkillsSupport:
         assert "shell" in skill.tools
         assert "Review the code carefully." in skill.prompt_content
 
+    @pytest.mark.ac("AC-04.8.3")
     def test_skill_registry_load_from_dir(self, tmp_path: Path) -> None:
         """SkillRegistry.load_from_dir discovers skill files."""
         (tmp_path / "a.md").write_text("Skill A content")
@@ -302,6 +311,7 @@ class TestSkillsSupport:
         assert count == 2
         assert len(reg.list_skills()) == 2
 
+    @pytest.mark.ac("AC-04.8.4")
     def test_skill_format_for_prompt(self) -> None:
         """format_for_prompt injects selected skill content into prompt."""
         reg = SkillRegistry()
@@ -316,10 +326,10 @@ class TestSkillsSupport:
 # REQ-04.9  Agent lifecycle management
 # ---------------------------------------------------------------------------
 
-@pytest.mark.req("REQ-04.9")
 class TestAgentLifecycle:
     """Agent lifecycle: spawn, monitor, track status."""
 
+    @pytest.mark.ac("AC-04.9.1")
     async def test_status_transitions(self) -> None:
         """Blocks transition through SPAWNED -> RUNNING -> COMPLETED."""
         reg = BlockRegistry()
@@ -329,6 +339,7 @@ class TestAgentLifecycle:
         await runner.run("go")
         assert runner.agent_statuses["entry"] == AgentStatus.COMPLETED
 
+    @pytest.mark.ac("AC-04.9.2")
     async def test_failed_status_on_error(self) -> None:
         """Block that fails all retries is marked FAILED."""
         block = BlockDef(name="fragile", role="worker", max_retries=0)
@@ -346,10 +357,10 @@ class TestAgentLifecycle:
 # REQ-04.10  Shared context/workspace between team members
 # ---------------------------------------------------------------------------
 
-@pytest.mark.req("REQ-04.10")
 class TestSharedContext:
     """Shared key-value context accessible to all team agents."""
 
+    @pytest.mark.ac("AC-04.10.1")
     def test_put_and_get(self) -> None:
         """Agents can store and retrieve shared data."""
         ctx = SharedContext()
@@ -358,6 +369,7 @@ class TestSharedContext:
         assert result is not None
         assert result["steps"] == [1, 2, 3]
 
+    @pytest.mark.ac("AC-04.10.2")
     def test_list_keys(self) -> None:
         """list_keys returns all stored keys."""
         ctx = SharedContext()
@@ -365,6 +377,7 @@ class TestSharedContext:
         ctx.put("b", {"y": 2}, agent_id="agent-2")
         assert set(ctx.list_keys()) == {"a", "b"}
 
+    @pytest.mark.ac("AC-04.10.3")
     def test_get_missing_returns_none(self) -> None:
         """Accessing a non-existent key returns None."""
         ctx = SharedContext()
@@ -375,10 +388,10 @@ class TestSharedContext:
 # REQ-04.11  Dynamic worker spawning
 # ---------------------------------------------------------------------------
 
-@pytest.mark.req("REQ-04.11")
 class TestDynamicSpawning:
     """Workers can be spawned dynamically — not limited to pre-defined team size."""
 
+    @pytest.mark.ac("AC-04.11.1")
     async def test_spawn_arbitrary_number(self) -> None:
         """Spawner is not limited to a fixed number of agents."""
         provider = _mock_provider("ok")
@@ -388,6 +401,7 @@ class TestDynamicSpawning:
             await spawner.spawn(task=f"task-{i}", agent_id=f"w-{i}")
         assert len(spawner.active_agents) == 5
 
+    @pytest.mark.ac("AC-04.11.2")
     async def test_spawned_agents_get_unique_ids(self) -> None:
         """Auto-generated IDs are unique across spawns."""
         provider = _mock_provider("ok")
@@ -403,10 +417,10 @@ class TestDynamicSpawning:
 # REQ-04.12  Git worktrees as isolation model
 # ---------------------------------------------------------------------------
 
-@pytest.mark.req("REQ-04.12")
 class TestGitWorktreeIsolation:
     """Each task gets its own git worktree for parallel file modification."""
 
+    @pytest.mark.ac("AC-04.12.1")
     async def test_create_worktree(self, tmp_path: Path) -> None:
         """WorktreeManager.create produces a separate working directory."""
         # Initialize a real git repo
@@ -428,6 +442,7 @@ class TestGitWorktreeIsolation:
         # Cleanup
         await mgr.remove("task-001")
 
+    @pytest.mark.ac("AC-04.12.3")
     async def test_worktree_has_own_files(self, tmp_path: Path) -> None:
         """Files created in one worktree do not appear in the main repo."""
         proc = await asyncio.create_subprocess_exec(
@@ -452,10 +467,10 @@ class TestGitWorktreeIsolation:
 # REQ-04.13  Branching strategy
 # ---------------------------------------------------------------------------
 
-@pytest.mark.req("REQ-04.13")
 class TestBranchingStrategy:
     """Agents merge freely to staging; main is gated by user review."""
 
+    @pytest.mark.ac("AC-04.13.1")
     def test_protected_branches(self) -> None:
         """main/master are protected by default."""
         policy = BranchPolicy()
@@ -463,11 +478,13 @@ class TestBranchingStrategy:
         assert policy.is_protected("master")
         assert not policy.is_protected("guild/staging")
 
+    @pytest.mark.ac("AC-04.13.2")
     def test_staging_auto_merge_allowed(self) -> None:
         """Auto-merge to staging is allowed by default."""
         policy = BranchPolicy()
         assert policy.can_auto_merge("guild/staging")
 
+    @pytest.mark.ac("AC-04.13.3")
     def test_main_auto_merge_blocked(self) -> None:
         """Auto-merge to main is blocked."""
         policy = BranchPolicy()
@@ -478,15 +495,16 @@ class TestBranchingStrategy:
 # REQ-04.14  Staging area
 # ---------------------------------------------------------------------------
 
-@pytest.mark.req("REQ-04.14")
 class TestStagingArea:
     """A shared staging branch agents can merge to without user approval."""
 
+    @pytest.mark.ac("AC-04.14.1")
     def test_staging_branch_default_name(self) -> None:
         """Default staging branch is guild/staging."""
         policy = BranchPolicy()
         assert policy.staging_branch == "guild/staging"
 
+    @pytest.mark.ac("AC-04.14.1")
     def test_staging_not_protected(self) -> None:
         """Staging branch is not in the protected list."""
         policy = BranchPolicy()
@@ -498,20 +516,22 @@ class TestStagingArea:
 # REQ-04.15  Merge policy configurable per project
 # ---------------------------------------------------------------------------
 
-@pytest.mark.req("REQ-04.15")
 class TestMergePolicyConfigurable:
     """Merge policy is configurable per project."""
 
+    @pytest.mark.ac("AC-04.15.1")
     def test_auto_merge_on_tests_pass(self) -> None:
         """Policy can be configured to auto-merge if tests pass."""
         policy = BranchPolicy(auto_merge_on_tests_pass=True)
         assert policy.can_auto_merge("feature-branch")
 
+    @pytest.mark.ac("AC-04.15.2")
     def test_review_approval_mode(self) -> None:
         """REVIEW mode requires review for everything."""
         policy = BranchPolicy(merge_approval=MergeApproval.REVIEW)
         assert policy.merge_approval == MergeApproval.REVIEW
 
+    @pytest.mark.ac("AC-04.15.3")
     def test_custom_protected_branches(self) -> None:
         """Protected branches are configurable."""
         policy = BranchPolicy(protected_branches=["main", "release"])
@@ -523,10 +543,10 @@ class TestMergePolicyConfigurable:
 # REQ-04.20  Atomic blocks — single-agent building blocks
 # ---------------------------------------------------------------------------
 
-@pytest.mark.req("REQ-04.20")
 class TestAtomicBlocks:
     """Atomic blocks: single-agent building blocks with inputs/outputs/role."""
 
+    @pytest.mark.ac("AC-04.20.1")
     def test_block_has_role_and_ports(self) -> None:
         """A BlockDef has name, role, inputs, and outputs."""
         block = BlockDef(
@@ -540,6 +560,7 @@ class TestAtomicBlocks:
         assert len(block.outputs) == 1
         assert block.inputs[0].type_tag == "plan"
 
+    @pytest.mark.ac("AC-04.20.1")
     def test_builtin_blocks_have_roles(self) -> None:
         """Built-in blocks each define a role and ports."""
         reg = BlockRegistry()
@@ -552,10 +573,10 @@ class TestAtomicBlocks:
 # REQ-04.21  Composite blocks — groups of connected blocks
 # ---------------------------------------------------------------------------
 
-@pytest.mark.req("REQ-04.21")
 class TestCompositeBlocks:
     """Composite blocks: groups of connected blocks as a single reusable unit."""
 
+    @pytest.mark.ac("AC-04.21.1")
     def test_team_is_composite_block(self) -> None:
         """TeamDef acts as a composite block with multiple inner blocks."""
         team = TeamDef(
@@ -567,6 +588,7 @@ class TestCompositeBlocks:
         assert len(team.blocks) == 2
         assert len(team.connections) == 1
 
+    @pytest.mark.ac("AC-04.21.2")
     def test_composite_registers_in_registry(self) -> None:
         """Composite teams can be registered and retrieved."""
         reg = BlockRegistry()
@@ -579,10 +601,10 @@ class TestCompositeBlocks:
 # REQ-04.22  Block connectors — defined input/output ports
 # ---------------------------------------------------------------------------
 
-@pytest.mark.req("REQ-04.22")
 class TestBlockConnectors:
     """Connections wire output ports to input ports between blocks."""
 
+    @pytest.mark.ac("AC-04.22.1")
     def test_connection_has_source_and_target(self) -> None:
         """Connection specifies source_block.port -> target_block.port."""
         conn = Connection("coder", "changes", "reviewer", "changes")
@@ -591,6 +613,7 @@ class TestBlockConnectors:
         assert conn.target_block == "reviewer"
         assert conn.target_port == "changes"
 
+    @pytest.mark.ac("AC-04.22.2")
     def test_validation_detects_missing_port(self) -> None:
         """Validation catches connections to nonexistent ports."""
         reg = BlockRegistry()
@@ -608,16 +631,17 @@ class TestBlockConnectors:
 # REQ-04.23  Block library — local catalog of available blocks
 # ---------------------------------------------------------------------------
 
-@pytest.mark.req("REQ-04.23")
 class TestBlockLibrary:
     """Block library: local catalog of built-in + user-created blocks."""
 
+    @pytest.mark.ac("AC-04.23.1")
     def test_builtins_exist(self) -> None:
         """Registry ships with planner, coder, reviewer, tester, evaluator, researcher."""
         reg = BlockRegistry()
         names = {b.name for b in reg.list_blocks()}
         assert {"planner", "coder", "reviewer", "tester", "evaluator", "researcher"} <= names
 
+    @pytest.mark.ac("AC-04.23.2")
     def test_user_block_registration(self) -> None:
         """Users can register custom blocks."""
         reg = BlockRegistry()
@@ -630,10 +654,10 @@ class TestBlockLibrary:
 # REQ-04.24  CLI team composer — text-based composition via config files
 # ---------------------------------------------------------------------------
 
-@pytest.mark.req("REQ-04.24")
 class TestCLITeamComposer:
     """Teams are composed via TOML config files."""
 
+    @pytest.mark.ac("AC-04.24.1")
     def test_load_team_from_toml(self, tmp_path: Path) -> None:
         """BlockRegistry loads teams from TOML files."""
         toml_content = (
@@ -660,6 +684,7 @@ class TestCLITeamComposer:
         assert team.entry_block == "p"
         assert len(team.connections) == 1
 
+    @pytest.mark.ac("AC-04.24.2")
     def test_load_block_from_toml(self, tmp_path: Path) -> None:
         """BlockRegistry loads custom blocks from TOML files."""
         toml_content = (
@@ -690,10 +715,10 @@ class TestCLITeamComposer:
 # REQ-04.25  Nesting — composite blocks can contain other composites
 # ---------------------------------------------------------------------------
 
-@pytest.mark.req("REQ-04.25")
 class TestNesting:
     """Composite blocks can contain other composite blocks."""
 
+    @pytest.mark.ac("AC-04.25.1")
     def test_nested_team_references(self) -> None:
         """A team can reference blocks that are themselves team names."""
         reg = BlockRegistry()
@@ -723,20 +748,22 @@ class TestNesting:
 # REQ-04.26  Block versioning
 # ---------------------------------------------------------------------------
 
-@pytest.mark.req("REQ-04.26")
 class TestBlockVersioning:
     """Blocks are versioned; references pin a version."""
 
+    @pytest.mark.ac("AC-04.26.1")
     def test_block_has_version(self) -> None:
         """Every block has a version field."""
         block = BlockDef(name="b", role="r", version="1.2.3")
         assert block.version == "1.2.3"
 
+    @pytest.mark.ac("AC-04.26.2")
     def test_default_version(self) -> None:
         """Default version is 1.0.0."""
         block = BlockDef(name="b", role="r")
         assert block.version == "1.0.0"
 
+    @pytest.mark.ac("AC-04.26.3")
     def test_team_has_version(self) -> None:
         """TeamDef also carries a version."""
         team = TeamDef(name="t", version="3.0.0", entry_block="e", blocks={"e": "planner"})
@@ -747,10 +774,10 @@ class TestBlockVersioning:
 # REQ-04.27  Loop/cycle support in block graphs
 # ---------------------------------------------------------------------------
 
-@pytest.mark.req("REQ-04.27")
 class TestLoopSupport:
     """Block graphs support loops: coder -> reviewer -> coder is valid."""
 
+    @pytest.mark.ac("AC-04.27.1")
     def test_loop_def_in_team(self) -> None:
         """TeamDef accepts LoopDef entries."""
         team = TeamDef(
@@ -762,6 +789,7 @@ class TestLoopSupport:
         assert len(team.loops) == 1
         assert team.loops[0].max_iterations == 3
 
+    @pytest.mark.ac("AC-04.27.2")
     def test_validation_accepts_loop(self) -> None:
         """Validation does not reject teams with loops."""
         reg = BlockRegistry()
@@ -779,15 +807,16 @@ class TestLoopSupport:
 # REQ-04.30  Every port has a type tag and optional JSON schema
 # ---------------------------------------------------------------------------
 
-@pytest.mark.req("REQ-04.30")
 class TestPortTypeTags:
     """Every port has a type tag and optional JSON schema."""
 
+    @pytest.mark.ac("AC-04.30.1")
     def test_builtin_type_tags(self) -> None:
         """Built-in types include plan, code-changes, review, test-results, text, any."""
         expected = {"plan", "code-changes", "review", "test-results", "text", "any"}
         assert expected <= PORT_TYPES
 
+    @pytest.mark.ac("AC-04.30.2")
     def test_port_type_with_schema(self) -> None:
         """A port type can have an associated JSON schema."""
         register_port_type(
@@ -805,18 +834,20 @@ class TestPortTypeTags:
 # REQ-04.31  Port compatibility checked at composition time
 # ---------------------------------------------------------------------------
 
-@pytest.mark.req("REQ-04.31")
 class TestPortCompatibility:
     """Port type compatibility is checked at composition time."""
 
+    @pytest.mark.ac("AC-04.31.1")
     def test_matching_types_compatible(self) -> None:
         """Same type tags are compatible."""
         assert check_port_compatibility("plan", "plan") is True
 
+    @pytest.mark.ac("AC-04.31.2")
     def test_mismatched_types_incompatible(self) -> None:
         """Different types are incompatible."""
         assert check_port_compatibility("plan", "code-changes") is False
 
+    @pytest.mark.ac("AC-04.31.3")
     def test_validation_rejects_mismatch(self) -> None:
         """validate_team reports port type mismatches with clear errors."""
         reg = BlockRegistry()
@@ -834,20 +865,22 @@ class TestPortCompatibility:
 # REQ-04.32  'any' type is the escape hatch
 # ---------------------------------------------------------------------------
 
-@pytest.mark.req("REQ-04.32")
 class TestAnyTypeEscapeHatch:
     """'any' type is compatible with all other types."""
 
+    @pytest.mark.ac("AC-04.32.1")
     def test_any_source_compatible(self) -> None:
         """Source 'any' matches any target."""
         assert check_port_compatibility("any", "plan") is True
         assert check_port_compatibility("any", "code-changes") is True
 
+    @pytest.mark.ac("AC-04.32.2")
     def test_any_target_compatible(self) -> None:
         """Target 'any' accepts any source."""
         assert check_port_compatibility("plan", "any") is True
         assert check_port_compatibility("review", "any") is True
 
+    @pytest.mark.ac("AC-04.32.3")
     def test_any_to_any(self) -> None:
         """'any' to 'any' is compatible."""
         assert check_port_compatibility("any", "any") is True
@@ -857,10 +890,10 @@ class TestAnyTypeEscapeHatch:
 # REQ-04.33  Composite blocks expose unconnected inner ports
 # ---------------------------------------------------------------------------
 
-@pytest.mark.req("REQ-04.33")
 class TestCompositePortExposure:
     """Composite blocks expose unconnected inner ports as their own ports."""
 
+    @pytest.mark.ac("AC-04.33.1")
     def test_unconnected_ports_exposed(self) -> None:
         """Unconnected inputs/outputs of inner blocks become composite ports."""
         reg = BlockRegistry()
@@ -878,6 +911,7 @@ class TestCompositePortExposure:
         output_names = [p.name for p in exposed_out]
         assert "changes" in output_names
 
+    @pytest.mark.ac("AC-04.33.2")
     def test_connected_ports_not_exposed(self) -> None:
         """Ports that are wired internally are NOT exposed."""
         reg = BlockRegistry()
@@ -901,16 +935,17 @@ class TestCompositePortExposure:
 # REQ-04.34  New type tags can be registered by users
 # ---------------------------------------------------------------------------
 
-@pytest.mark.req("REQ-04.34")
 class TestUserTypeRegistration:
     """Users can register new port type tags."""
 
+    @pytest.mark.ac("AC-04.34.1")
     def test_register_custom_type(self) -> None:
         """Custom type tags are added to the global registry."""
         register_port_type("my-custom-type", description="A custom type")
         assert "my-custom-type" in PORT_TYPES
         assert check_port_compatibility("my-custom-type", "my-custom-type") is True
 
+    @pytest.mark.ac("AC-04.34.2")
     def test_custom_type_with_schema(self) -> None:
         """Custom types can include JSON schema for validation."""
         register_port_type(
@@ -921,6 +956,7 @@ class TestUserTypeRegistration:
         assert valid is True
         assert err == ""
 
+    @pytest.mark.ac("AC-04.34.3")
     def test_custom_type_schema_validation_fails(self) -> None:
         """Data failing schema check is rejected."""
         register_port_type(
@@ -936,21 +972,23 @@ class TestUserTypeRegistration:
 # REQ-04.35  Port data is always serializable (JSON)
 # ---------------------------------------------------------------------------
 
-@pytest.mark.req("REQ-04.35")
 class TestPortDataSerializable:
     """All port data must be JSON-serializable."""
 
+    @pytest.mark.ac("AC-04.35.1")
     def test_json_serializable_data_valid(self) -> None:
         """Standard dicts/lists/strings pass validation."""
         valid, err = validate_port_data({"key": "value", "nested": [1, 2]}, "text")
         assert valid is True
 
+    @pytest.mark.ac("AC-04.35.2")
     def test_non_serializable_data_rejected(self) -> None:
         """Non-JSON-serializable data (e.g., set) is rejected."""
         valid, err = validate_port_data({"bad": {1, 2, 3}}, "text")  # type: ignore[dict-item]
         assert valid is False
         assert "json-serializable" in err.lower()
 
+    @pytest.mark.ac("AC-04.35.3")
     def test_unknown_type_still_requires_serializable(self) -> None:
         """Even unknown type tags require JSON serializability."""
         valid, err = validate_port_data({"ok": True}, "unknown-type")
@@ -961,10 +999,10 @@ class TestPortDataSerializable:
 # REQ-04.40  Standard evaluator output
 # ---------------------------------------------------------------------------
 
-@pytest.mark.req("REQ-04.40")
 class TestEvaluatorOutput:
     """Standard evaluator output: {pass, score, feedback, details}."""
 
+    @pytest.mark.ac("AC-04.40.1")
     def test_evaluator_result_dataclass(self) -> None:
         """EvaluatorResult holds all required fields."""
         result = EvaluatorResult(passed=True, score=85, feedback="Good work")
@@ -973,6 +1011,7 @@ class TestEvaluatorOutput:
         assert result.feedback == "Good work"
         assert result.details == {}
 
+    @pytest.mark.ac("AC-04.40.1")
     async def test_json_evaluator_parsed(self) -> None:
         """TeamRunner parses JSON evaluator output into EvaluatorResult."""
         reg = BlockRegistry()
@@ -985,6 +1024,7 @@ class TestEvaluatorOutput:
         assert parsed.score == 90
         assert parsed.feedback == "LGTM"
 
+    @pytest.mark.ac("AC-04.40.3")
     async def test_heuristic_evaluator_fallback(self) -> None:
         """Non-JSON output falls back to keyword heuristic parsing."""
         reg = BlockRegistry()
@@ -999,10 +1039,10 @@ class TestEvaluatorOutput:
 # REQ-04.41  Each evaluator defines its own rubric/criteria
 # ---------------------------------------------------------------------------
 
-@pytest.mark.req("REQ-04.41")
 class TestEvaluatorCriteria:
     """Evaluators define their own rubric/criteria."""
 
+    @pytest.mark.ac("AC-04.41.1")
     def test_evaluator_has_system_prompt(self) -> None:
         """Evaluator block's system_prompt holds the rubric."""
         reg = BlockRegistry()
@@ -1010,6 +1050,7 @@ class TestEvaluatorCriteria:
         assert evaluator is not None
         assert evaluator.system_prompt  # non-empty rubric
 
+    @pytest.mark.ac("AC-04.41.2")
     def test_custom_evaluator_criteria(self) -> None:
         """Custom evaluator block can have any criteria in system_prompt."""
         block = BlockDef(
@@ -1026,10 +1067,10 @@ class TestEvaluatorCriteria:
 # REQ-04.42  Loop exit checks 'pass'
 # ---------------------------------------------------------------------------
 
-@pytest.mark.req("REQ-04.42")
 class TestLoopExitOnPass:
     """Loop continues until evaluator says pass: true."""
 
+    @pytest.mark.ac("AC-04.42.2")
     async def test_loop_exits_on_pass(self) -> None:
         """Loop runs generator/evaluator until pass is returned."""
         reg = BlockRegistry()
@@ -1066,6 +1107,7 @@ class TestLoopExitOnPass:
         # Generator called once, evaluator called once = 2 total
         assert call_count == 2
 
+    @pytest.mark.ac("AC-04.42.1")
     async def test_loop_continues_on_fail(self) -> None:
         """Loop re-runs generator when evaluator says pass: false."""
         reg = BlockRegistry()
@@ -1106,15 +1148,16 @@ class TestLoopExitOnPass:
 # REQ-04.43  Max iteration safety limit per loop
 # ---------------------------------------------------------------------------
 
-@pytest.mark.req("REQ-04.43")
 class TestMaxIterationLimit:
     """Max iteration safety limit prevents infinite loops."""
 
+    @pytest.mark.ac("AC-04.43.2")
     async def test_default_max_iterations_is_5(self) -> None:
         """Default max_iterations is 5."""
         loop = LoopDef(generator_block="g", evaluator_block="e")
         assert loop.max_iterations == 5
 
+    @pytest.mark.ac("AC-04.43.1")
     async def test_loop_stops_at_max(self) -> None:
         """Loop stops after max_iterations even if evaluator never passes."""
         reg = BlockRegistry()
@@ -1136,6 +1179,7 @@ class TestMaxIterationLimit:
         # Should have been called: 2 iterations x 2 calls = 4
         assert provider.generate.call_count == 4
 
+    @pytest.mark.ac("AC-04.43.3")
     async def test_validation_rejects_zero_iterations(self) -> None:
         """Validation catches max_iterations < 1."""
         reg = BlockRegistry()
@@ -1153,10 +1197,10 @@ class TestMaxIterationLimit:
 # REQ-04.44  Evaluator criteria are part of block config
 # ---------------------------------------------------------------------------
 
-@pytest.mark.req("REQ-04.44")
 class TestEvaluatorCriteriaConfig:
     """Evaluator criteria are editable per-instance in block config."""
 
+    @pytest.mark.ac("AC-04.44.1")
     async def test_criteria_injected_into_evaluator_input(self) -> None:
         """TeamRunner injects evaluator system_prompt as criteria."""
         custom_eval = BlockDef(
@@ -1182,10 +1226,10 @@ class TestEvaluatorCriteriaConfig:
 # REQ-04.50  Block fails -> retry N times
 # ---------------------------------------------------------------------------
 
-@pytest.mark.req("REQ-04.50")
 class TestBlockRetry:
     """Block fails -> retry N times (configurable, default 1)."""
 
+    @pytest.mark.ac("AC-04.50.1")
     async def test_retry_on_transient_failure(self) -> None:
         """Block retries after first failure and succeeds on second attempt."""
         block = BlockDef(name="flaky", role="worker", max_retries=1)
@@ -1205,11 +1249,13 @@ class TestBlockRetry:
         assert result == "success"
         assert provider.generate.call_count == 2
 
+    @pytest.mark.ac("AC-04.50.2")
     async def test_default_retry_count_is_1(self) -> None:
         """Default max_retries is 1 (1 retry after initial failure)."""
         block = BlockDef(name="b", role="r")
         assert block.max_retries == 1
 
+    @pytest.mark.ac("AC-04.50.3")
     async def test_no_retry_when_zero(self) -> None:
         """max_retries=0 means no retries; immediate failure."""
         block = BlockDef(name="no-retry", role="worker", max_retries=0)
@@ -1223,6 +1269,7 @@ class TestBlockRetry:
             await runner.run("go")
         assert provider.generate.call_count == 1
 
+    @pytest.mark.ac("AC-04.50.4")
     async def test_higher_retry_count(self) -> None:
         """max_retries=3 allows up to 4 total attempts."""
         block = BlockDef(name="retrier", role="worker", max_retries=3)
@@ -1247,10 +1294,10 @@ class TestBlockRetry:
 # REQ-04.51  Still failing -> escalate to caller
 # ---------------------------------------------------------------------------
 
-@pytest.mark.req("REQ-04.51")
 class TestEscalateToCaller:
     """After all retries exhausted, error escalates to caller."""
 
+    @pytest.mark.ac("AC-04.51.1")
     async def test_block_error_raised_after_retries(self) -> None:
         """BlockError is raised when all retries are exhausted."""
         block = BlockDef(name="broken", role="worker", max_retries=1)
@@ -1263,6 +1310,7 @@ class TestEscalateToCaller:
         with pytest.raises(EscalationError, match="broken"):
             await runner.run("go")
 
+    @pytest.mark.ac("AC-04.51.2")
     async def test_error_includes_failure_details(self) -> None:
         """Escalation error message includes block instance name and what failed."""
         block = BlockDef(name="analyzer", role="worker", max_retries=0)
@@ -1282,10 +1330,10 @@ class TestEscalateToCaller:
 # REQ-04.52  Caller decides: retry differently, skip, substitute, or escalate
 # ---------------------------------------------------------------------------
 
-@pytest.mark.req("REQ-04.52")
 class TestCallerDecision:
     """Caller decides how to handle failure: skip, escalate, etc."""
 
+    @pytest.mark.ac("AC-04.52.1")
     async def test_caller_decides_skip(self) -> None:
         """Caller pre-sets 'skip' decision; failed block is skipped."""
         block = BlockDef(name="optional", role="worker", max_retries=0)
@@ -1299,6 +1347,7 @@ class TestCallerDecision:
         result = await runner.run("go")
         assert "SKIPPED" in result
 
+    @pytest.mark.ac("AC-04.52.2")
     async def test_caller_decides_escalate(self) -> None:
         """Caller pre-sets 'escalate' decision; EscalationError raised."""
         block = BlockDef(name="critical", role="worker", max_retries=0)
@@ -1312,6 +1361,7 @@ class TestCallerDecision:
         with pytest.raises(EscalationError, match="critical"):
             await runner.run("go")
 
+    @pytest.mark.ac("AC-04.52.3")
     async def test_default_decision_is_escalate(self) -> None:
         """Without explicit decision, default is escalate."""
         block = BlockDef(name="x", role="worker", max_retries=0)
@@ -1329,10 +1379,10 @@ class TestCallerDecision:
 # REQ-04.53  Error reaches entry agent with no resolution -> escalate to human
 # ---------------------------------------------------------------------------
 
-@pytest.mark.req("REQ-04.53")
 class TestEscalateToHuman:
     """Unresolved errors at entry level escalate to human."""
 
+    @pytest.mark.ac("AC-04.53.1")
     async def test_escalation_error_propagates(self) -> None:
         """EscalationError propagates up to the caller (human)."""
         block = BlockDef(name="entry-block", role="orchestrator", max_retries=0)
@@ -1345,6 +1395,7 @@ class TestEscalateToHuman:
         with pytest.raises(EscalationError, match="human intervention"):
             await runner.run("go")
 
+    @pytest.mark.ac("AC-04.53.2")
     async def test_escalation_mentions_block_and_error(self) -> None:
         """EscalationError message is informative: instance name + error."""
         block = BlockDef(name="fatal-block", role="worker", max_retries=0)
@@ -1365,10 +1416,10 @@ class TestEscalateToHuman:
 # REQ-04.54  Partial failure in parallel branches — other branches continue
 # ---------------------------------------------------------------------------
 
-@pytest.mark.req("REQ-04.54")
 class TestPartialFailureIsolation:
     """Partial failure in parallel branches — other branches continue."""
 
+    @pytest.mark.ac("AC-04.54.1")
     async def test_skip_failed_branch_continue_others(self) -> None:
         """When one branch fails with skip policy, other blocks still run."""
         ok_block = BlockDef(name="ok-worker", role="worker", max_retries=0)
@@ -1421,6 +1472,7 @@ class TestPartialFailureIsolation:
         statuses = runner.agent_statuses
         assert AgentStatus.COMPLETED in statuses.values() or "SKIPPED" in result
 
+    @pytest.mark.ac("AC-04.54.2")
     async def test_failed_branch_marked_appropriately(self) -> None:
         """Failed branch gets FAILED status while others complete."""
         block = BlockDef(name="unreliable", role="worker", max_retries=0)

@@ -62,10 +62,10 @@ def project_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-08.1")
 class TestToolContract:
     """Every built-in tool exposes name, description, parameter schema, and execute."""
 
+    @pytest.mark.ac("AC-08.1.1")
     def test_all_tools_have_name_description_schema(self) -> None:
         """Each schema entry contains name, description, and parameters keys."""
         for tool_name, schema in TOOL_SCHEMAS.items():
@@ -74,6 +74,7 @@ class TestToolContract:
             assert "parameters" in schema, f"{tool_name} missing 'parameters'"
             assert schema["name"] == tool_name
 
+    @pytest.mark.ac("AC-08.1.2")
     def test_all_tools_have_executors(self) -> None:
         """build_tool_executors returns a callable for every core tool."""
         executors = build_tool_executors()
@@ -82,6 +83,7 @@ class TestToolContract:
         for name, fn in executors.items():
             assert callable(fn), f"{name} executor is not callable"
 
+    @pytest.mark.ac("AC-08.1.1")
     def test_parameter_schemas_have_required_fields(self) -> None:
         """Each tool schema specifies required parameters."""
         for tool_name, schema in TOOL_SCHEMAS.items():
@@ -91,6 +93,7 @@ class TestToolContract:
             assert "required" in params, f"{tool_name} params missing 'required'"
             assert len(params["required"]) > 0, f"{tool_name} has empty 'required'"
 
+    @pytest.mark.ac("AC-08.1.3")
     async def test_executor_returns_tool_result(self, tmp_path: Path) -> None:
         """Executors return ToolResult instances."""
         test_file = tmp_path / "contract.txt"
@@ -109,10 +112,10 @@ class TestToolContract:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-08.2")
 class TestTypedTools:
     """Purpose-built tools exist instead of relying solely on generic shell."""
 
+    @pytest.mark.ac("AC-08.2.1")
     def test_dedicated_tools_registered(self) -> None:
         """file_read, file_write, search, glob are registered as typed tools."""
         executors = build_tool_executors()
@@ -120,6 +123,7 @@ class TestTypedTools:
         for tool in typed_tools:
             assert tool in executors, f"Typed tool '{tool}' not registered"
 
+    @pytest.mark.ac("AC-08.2.2")
     def test_typed_tools_have_structured_schemas(self) -> None:
         """Typed tools have specific parameter definitions, not free-form strings."""
         for tool_name in ("file_read", "file_write", "search", "glob"):
@@ -138,10 +142,10 @@ class TestTypedTools:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-08.3")
 class TestBuiltInTools:
     """End-to-end tests of built-in tool executors against real filesystem."""
 
+    @pytest.mark.ac("AC-08.3.1")
     async def test_file_read_reads_content(self, tmp_path: Path) -> None:
         """file_read returns the full content of an existing file."""
         test_file = tmp_path / "read_test.txt"
@@ -153,6 +157,7 @@ class TestBuiltInTools:
         assert result.success is True
         assert "hello world" in result.output
 
+    @pytest.mark.ac("AC-08.3.1")
     async def test_file_read_missing_file(self, tmp_path: Path) -> None:
         """file_read returns an error for a nonexistent file."""
         result = await execute_file_read(
@@ -162,6 +167,7 @@ class TestBuiltInTools:
         assert result.error is not None
         assert "not found" in result.error.lower()
 
+    @pytest.mark.ac("AC-08.3.1")
     async def test_file_write_creates_file(self, tmp_path: Path) -> None:
         """file_write creates a new file with the given content."""
         target = tmp_path / "output.txt"
@@ -173,6 +179,7 @@ class TestBuiltInTools:
         assert target.exists()
         assert target.read_text() == "created by tool"
 
+    @pytest.mark.ac("AC-08.3.1")
     async def test_file_write_creates_parent_dirs(self, tmp_path: Path) -> None:
         """file_write creates intermediate directories as needed."""
         target = tmp_path / "sub" / "deep" / "output.txt"
@@ -183,6 +190,7 @@ class TestBuiltInTools:
         assert result.success is True
         assert target.exists()
 
+    @pytest.mark.ac("AC-08.3.1")
     async def test_shell_runs_command(self, tmp_path: Path) -> None:
         """Shell executes a command and returns stdout."""
         result = await execute_shell(
@@ -191,6 +199,7 @@ class TestBuiltInTools:
         assert result.success is True
         assert "hello_from_shell" in result.output
 
+    @pytest.mark.ac("AC-08.3.1")
     async def test_shell_captures_exit_code(self, tmp_path: Path) -> None:
         """Shell reports non-zero exit codes as failures."""
         result = await execute_shell(
@@ -199,6 +208,7 @@ class TestBuiltInTools:
         assert result.success is False
         assert "42" in result.output
 
+    @pytest.mark.ac("AC-08.3.1")
     async def test_search_finds_pattern(self, tmp_path: Path) -> None:
         """Search finds lines matching a regex pattern in files."""
         (tmp_path / "haystack.py").write_text("def foo():\n    return 42\n")
@@ -212,6 +222,7 @@ class TestBuiltInTools:
         assert "foo" in result.output
         assert "haystack.py" in result.output
 
+    @pytest.mark.ac("AC-08.3.1")
     async def test_search_with_include_filter(self, tmp_path: Path) -> None:
         """Search respects the include glob filter."""
         (tmp_path / "code.py").write_text("target_line = True\n")
@@ -225,6 +236,7 @@ class TestBuiltInTools:
         assert "code.py" in result.output
         assert "data.txt" not in result.output
 
+    @pytest.mark.ac("AC-08.3.1")
     async def test_glob_finds_files(self, tmp_path: Path) -> None:
         """Glob discovers files matching a pattern."""
         (tmp_path / "a.py").write_text("")
@@ -240,6 +252,7 @@ class TestBuiltInTools:
         assert "b.py" in result.output
         assert "c.txt" not in result.output
 
+    @pytest.mark.ac("AC-08.3.1")
     async def test_glob_recursive(self, tmp_path: Path) -> None:
         """Glob with ** pattern finds files in subdirectories."""
         subdir = tmp_path / "pkg"
@@ -259,10 +272,10 @@ class TestBuiltInTools:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-08.5")
 class TestToolTimeoutAndLimits:
     """Shell tool enforces timeouts and output truncation."""
 
+    @pytest.mark.ac("AC-08.5.1")
     async def test_shell_timeout_kills_long_command(self, tmp_path: Path) -> None:
         """Commands exceeding timeout are killed and return a timeout error."""
         result = await execute_shell(
@@ -272,6 +285,7 @@ class TestToolTimeoutAndLimits:
         assert result.error is not None
         assert "timeout" in result.error.lower()
 
+    @pytest.mark.ac("AC-08.5.1")
     async def test_shell_custom_timeout_respected(self, tmp_path: Path) -> None:
         """A short custom timeout terminates quickly."""
         result = await execute_shell(
@@ -280,6 +294,7 @@ class TestToolTimeoutAndLimits:
         assert result.success is False
         assert "timeout" in result.error.lower()
 
+    @pytest.mark.ac("AC-08.5.2")
     async def test_file_read_with_relative_path(self, tmp_path: Path) -> None:
         """file_read resolves relative paths against working_dir."""
         (tmp_path / "rel.txt").write_text("relative content")
@@ -293,20 +308,22 @@ class TestToolTimeoutAndLimits:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-08.6")
 class TestToolSafetyDescriptions:
     """Tool descriptions document safety rules and constraints."""
 
+    @pytest.mark.ac("AC-08.6.1")
     def test_shell_description_mentions_denylist(self) -> None:
         """The shell tool description warns about blocked commands."""
         desc = TOOL_SCHEMAS["shell"]["description"]
         assert "blocked" in desc.lower() or "denylist" in desc.lower()
 
+    @pytest.mark.ac("AC-08.6.1")
     def test_shell_description_mentions_timeout(self) -> None:
         """The shell tool description mentions the timeout constraint."""
         desc = TOOL_SCHEMAS["shell"]["description"]
         assert "timeout" in desc.lower()
 
+    @pytest.mark.ac("AC-08.6.2")
     def test_shell_description_mentions_dangerous_commands(self) -> None:
         """The shell tool description lists specific dangerous commands."""
         desc = TOOL_SCHEMAS["shell"]["description"]
@@ -322,10 +339,10 @@ class TestToolSafetyDescriptions:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-08.7")
 class TestShellDenylist:
     """Dangerous shell commands are blocked by the denylist."""
 
+    @pytest.mark.ac("AC-08.7.1")
     async def test_rm_rf_root_blocked(self, tmp_path: Path) -> None:
         """Dangerous rm -rf / is blocked."""
         result = await execute_shell(
@@ -335,6 +352,7 @@ class TestShellDenylist:
         assert result.error is not None
         assert "blocked" in result.error.lower()
 
+    @pytest.mark.ac("AC-08.7.1")
     async def test_sudo_rm_blocked(self, tmp_path: Path) -> None:
         """Privileged sudo rm is blocked."""
         result = await execute_shell(
@@ -343,6 +361,7 @@ class TestShellDenylist:
         assert result.success is False
         assert "blocked" in result.error.lower()
 
+    @pytest.mark.ac("AC-08.7.1")
     async def test_git_push_force_blocked(self, tmp_path: Path) -> None:
         """Forced git push --force is blocked."""
         result = await execute_shell(
@@ -351,6 +370,7 @@ class TestShellDenylist:
         assert result.success is False
         assert "blocked" in result.error.lower()
 
+    @pytest.mark.ac("AC-08.7.1")
     async def test_git_reset_hard_blocked(self, tmp_path: Path) -> None:
         """Destructive git reset --hard is blocked."""
         result = await execute_shell(
@@ -359,6 +379,7 @@ class TestShellDenylist:
         assert result.success is False
         assert "blocked" in result.error.lower()
 
+    @pytest.mark.ac("AC-08.7.1")
     async def test_curl_pipe_bash_blocked(self, tmp_path: Path) -> None:
         """Piped curl | bash is blocked."""
         result = await execute_shell(
@@ -368,6 +389,7 @@ class TestShellDenylist:
         assert result.success is False
         assert "blocked" in result.error.lower()
 
+    @pytest.mark.ac("AC-08.7.1")
     async def test_fork_bomb_blocked(self, tmp_path: Path) -> None:
         """Fork bombs are blocked."""
         result = await execute_shell(
@@ -376,6 +398,7 @@ class TestShellDenylist:
         assert result.success is False
         assert "blocked" in result.error.lower()
 
+    @pytest.mark.ac("AC-08.7.1")
     async def test_safe_command_allowed(self, tmp_path: Path) -> None:
         """Normal commands are not blocked by the denylist."""
         result = await execute_shell(
@@ -384,6 +407,7 @@ class TestShellDenylist:
         assert result.success is True
         assert "safe" in result.output
 
+    @pytest.mark.ac("AC-08.7.2")
     def test_denylist_has_entries(self) -> None:
         """The denylist contains multiple patterns."""
         assert len(SHELL_DENYLIST) >= 10
@@ -394,10 +418,10 @@ class TestShellDenylist:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-24.2")
 class TestResourceDetection:
     """ResourceMonitor detects CPU, GPU, and memory via injected readers."""
 
+    @pytest.mark.ac("AC-24.2.1")
     def test_cpu_reader_returns_value(self) -> None:
         """Injected cpu_reader value is accessible via get_cpu_percent."""
         monitor = ResourceMonitor(
@@ -407,6 +431,7 @@ class TestResourceDetection:
         )
         assert monitor.get_cpu_percent() == 65.5
 
+    @pytest.mark.ac("AC-24.2.3")
     def test_gpu_reader_returns_status(self) -> None:
         """Injected gpu_reader returns GPU/VRAM metrics."""
         gpu_data = {
@@ -424,6 +449,7 @@ class TestResourceDetection:
         assert status["gpu_percent"] == 70.0
         assert status["vram_used_mb"] == 4096
 
+    @pytest.mark.ac("AC-24.2.3")
     def test_no_gpu_reader_returns_none(self) -> None:
         """Without gpu_reader, get_gpu_status returns None."""
         monitor = ResourceMonitor(
@@ -432,6 +458,7 @@ class TestResourceDetection:
         )
         assert monitor.get_gpu_status() is None
 
+    @pytest.mark.ac("AC-24.2.1")
     def test_status_includes_all_readings(self) -> None:
         """get_status snapshot includes cpu, gpu, thermal, and activity."""
         gpu_data = {"gpu_percent": 40.0, "vram_used_mb": 2000, "vram_total_mb": 8192}
@@ -456,10 +483,10 @@ class TestResourceDetection:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-24.3")
 class TestSchedulingModes:
     """Three scheduling modes: FULL, POLITE, STEALTH."""
 
+    @pytest.mark.ac("AC-24.3.2")
     async def test_full_mode_no_throttle(self) -> None:
         """FULL mode never throttles, even with active user."""
         monitor = ResourceMonitor(
@@ -475,6 +502,7 @@ class TestSchedulingModes:
         elapsed = asyncio.get_event_loop().time() - start
         assert elapsed < 0.1
 
+    @pytest.mark.ac("AC-24.3.1")
     async def test_polite_mode_throttles_active_user(self) -> None:
         """POLITE mode is throttled when user is active."""
         thresholds = ResourceThresholds(polite_delay_seconds=0.05)
@@ -488,6 +516,7 @@ class TestSchedulingModes:
         assert status.is_throttled
         assert "polite" in status.reason.lower()
 
+    @pytest.mark.ac("AC-24.3.2")
     async def test_stealth_mode_throttles_active_user(self) -> None:
         """STEALTH mode is throttled when user is active."""
         monitor = ResourceMonitor(
@@ -499,6 +528,7 @@ class TestSchedulingModes:
         assert status.is_throttled
         assert "paused" in status.reason.lower()
 
+    @pytest.mark.ac("AC-24.3.3")
     def test_all_modes_in_enum(self) -> None:
         """SchedulingMode enum has exactly three values."""
         modes = list(SchedulingMode)
@@ -513,10 +543,10 @@ class TestSchedulingModes:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-24.4")
 class TestPoliteDelay:
     """Polite mode inserts a delay when user is active."""
 
+    @pytest.mark.ac("AC-24.4.1")
     async def test_polite_delay_applied(self) -> None:
         """When user is active in POLITE mode, a delay is applied."""
         thresholds = ResourceThresholds(polite_delay_seconds=0.1)
@@ -531,6 +561,7 @@ class TestPoliteDelay:
         elapsed = asyncio.get_event_loop().time() - start
         assert elapsed >= 0.09  # Allow timing variance
 
+    @pytest.mark.ac("AC-24.4.2")
     async def test_polite_no_delay_when_idle(self) -> None:
         """When user is idle in POLITE mode, no delay is applied."""
         thresholds = ResourceThresholds(polite_delay_seconds=5.0)
@@ -545,6 +576,7 @@ class TestPoliteDelay:
         elapsed = asyncio.get_event_loop().time() - start
         assert elapsed < 0.1
 
+    @pytest.mark.ac("AC-24.4.3")
     async def test_polite_delay_matches_config(self) -> None:
         """The actual delay duration matches polite_delay_seconds."""
         thresholds = ResourceThresholds(polite_delay_seconds=0.15)
@@ -565,10 +597,10 @@ class TestPoliteDelay:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-24.5")
 class TestStealthPause:
     """Stealth mode pauses all work until user goes idle."""
 
+    @pytest.mark.ac("AC-24.5.1")
     async def test_stealth_blocks_until_idle(self) -> None:
         """Stealth mode polls until user becomes idle, then returns."""
         call_count = 0
@@ -590,6 +622,7 @@ class TestStealthPause:
         await monitor.wait_if_throttled()
         assert call_count >= 3
 
+    @pytest.mark.ac("AC-24.5.2")
     async def test_stealth_returns_immediately_when_idle(self) -> None:
         """If user is already idle, STEALTH mode returns immediately."""
         monitor = ResourceMonitor(
@@ -602,6 +635,7 @@ class TestStealthPause:
         elapsed = asyncio.get_event_loop().time() - start
         assert elapsed < 0.05
 
+    @pytest.mark.ac("AC-24.5.1")
     async def test_stealth_blocks_for_multiple_polls(self) -> None:
         """Stealth mode blocks across multiple active polls."""
         polls: list[float] = []
@@ -631,10 +665,10 @@ class TestStealthPause:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-24.7")
 class TestThermalAwareness:
     """ResourceMonitor detects thermal throttling and reduces activity."""
 
+    @pytest.mark.ac("AC-24.7.1")
     def test_thermal_throttle_triggers_status(self) -> None:
         """When the system reports thermal throttling, monitor is throttled."""
         monitor = ResourceMonitor(
@@ -646,6 +680,7 @@ class TestThermalAwareness:
         assert status.is_throttled
         assert "thermal" in status.reason.lower()
 
+    @pytest.mark.ac("AC-24.7.1")
     def test_no_thermal_throttle_when_cool(self) -> None:
         """When thermal is fine, no thermal-based throttling."""
         monitor = ResourceMonitor(
@@ -656,6 +691,7 @@ class TestThermalAwareness:
         status = monitor.get_status()
         assert not status.is_throttled
 
+    @pytest.mark.ac("AC-24.7.1")
     def test_thermal_status_in_snapshot(self) -> None:
         """ResourceStatus includes the full thermal_status dict."""
         thermal = {"is_throttled": False, "cpu_temp_celsius": 60.0}
@@ -668,6 +704,7 @@ class TestThermalAwareness:
         assert status.thermal_status is not None
         assert status.thermal_status["cpu_temp_celsius"] == 60.0
 
+    @pytest.mark.ac("AC-24.7.2")
     def test_vram_pressure_also_throttles(self) -> None:
         """High VRAM usage also triggers throttling independent of thermal."""
 
@@ -695,10 +732,10 @@ class TestThermalAwareness:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-24.8")
 class TestResourceStatusCommand:
     """guild resource-status CLI command displays scheduling state."""
 
+    @pytest.mark.ac("AC-24.8.1")
     def test_resource_status_shows_mode(self, project_dir: Path) -> None:
         """resource-status displays the current scheduling mode."""
         result = runner.invoke(app, ["resource-status"])
@@ -706,24 +743,28 @@ class TestResourceStatusCommand:
         output_lower = result.output.lower()
         assert "polite" in output_lower or "full" in output_lower or "stealth" in output_lower
 
+    @pytest.mark.ac("AC-24.8.1")
     def test_resource_status_shows_activity(self, project_dir: Path) -> None:
         """resource-status includes the Activity field."""
         result = runner.invoke(app, ["resource-status"])
         assert result.exit_code == 0
         assert "Activity:" in result.output
 
+    @pytest.mark.ac("AC-24.8.1")
     def test_resource_status_shows_cpu(self, project_dir: Path) -> None:
         """resource-status includes the CPU percentage."""
         result = runner.invoke(app, ["resource-status"])
         assert result.exit_code == 0
         assert "CPU:" in result.output
 
+    @pytest.mark.ac("AC-24.8.1")
     def test_resource_status_shows_throttled(self, project_dir: Path) -> None:
         """resource-status includes the Throttled field."""
         result = runner.invoke(app, ["resource-status"])
         assert result.exit_code == 0
         assert "Throttled:" in result.output
 
+    @pytest.mark.ac("AC-24.8.1")
     def test_resource_status_no_project_errors(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
@@ -738,35 +779,40 @@ class TestResourceStatusCommand:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-24.9")
 class TestConfigurableThresholds:
     """All resource thresholds are configurable via ResourceThresholds."""
 
+    @pytest.mark.ac("AC-24.9.1")
     def test_custom_cpu_threshold(self) -> None:
         """cpu_threshold_percent can be customized."""
         thresholds = ResourceThresholds(cpu_threshold_percent=50.0)
         assert thresholds.cpu_threshold_percent == 50.0
 
+    @pytest.mark.ac("AC-24.9.1")
     def test_custom_polite_delay(self) -> None:
         """polite_delay_seconds can be customized."""
         thresholds = ResourceThresholds(polite_delay_seconds=2.0)
         assert thresholds.polite_delay_seconds == 2.0
 
+    @pytest.mark.ac("AC-24.9.1")
     def test_custom_poll_interval(self) -> None:
         """poll_interval_seconds can be customized."""
         thresholds = ResourceThresholds(poll_interval_seconds=15.0)
         assert thresholds.poll_interval_seconds == 15.0
 
+    @pytest.mark.ac("AC-24.9.1")
     def test_custom_idle_timeout(self) -> None:
         """idle_timeout_seconds can be customized."""
         thresholds = ResourceThresholds(idle_timeout_seconds=600.0)
         assert thresholds.idle_timeout_seconds == 600.0
 
+    @pytest.mark.ac("AC-24.9.1")
     def test_custom_vram_pressure(self) -> None:
         """vram_pressure_percent can be customized."""
         thresholds = ResourceThresholds(vram_pressure_percent=90.0)
         assert thresholds.vram_pressure_percent == 90.0
 
+    @pytest.mark.ac("AC-24.9.2")
     def test_all_defaults_are_sensible(self) -> None:
         """Default thresholds have reasonable production values."""
         thresholds = ResourceThresholds()
@@ -776,6 +822,7 @@ class TestConfigurableThresholds:
         assert thresholds.poll_interval_seconds > 0
         assert 0 < thresholds.vram_pressure_percent <= 100
 
+    @pytest.mark.ac("AC-24.9.1")
     async def test_custom_thresholds_affect_behavior(self) -> None:
         """Changed thresholds produce different throttle behavior."""
 
@@ -815,10 +862,10 @@ class TestConfigurableThresholds:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-24.10")
 class TestResourceMonitorPolling:
     """Resource monitor polls at the configured interval in stealth mode."""
 
+    @pytest.mark.ac("AC-24.10.3")
     async def test_polling_interval_respected(self) -> None:
         """Stealth mode polls at approximately poll_interval_seconds."""
         timestamps: list[float] = []
@@ -846,6 +893,7 @@ class TestResourceMonitorPolling:
             gap = timestamps[i] - timestamps[i - 1]
             assert gap >= 0.04, f"Poll gap {i} was {gap}s, expected >= 0.04s"
 
+    @pytest.mark.ac("AC-24.10.1")
     async def test_polling_multiple_cycles(self) -> None:
         """Monitor polls through multiple cycles before idle detection."""
         poll_count = 0
@@ -867,6 +915,7 @@ class TestResourceMonitorPolling:
         await monitor.wait_if_throttled()
         assert poll_count >= 6
 
+    @pytest.mark.ac("AC-24.10.2")
     async def test_no_polling_in_full_mode(self) -> None:
         """FULL mode does not poll; it returns immediately."""
         call_count = 0
@@ -887,10 +936,10 @@ class TestResourceMonitorPolling:
 
 
 # REQ-08.8: MCP-native tool interface
-@pytest.mark.req("REQ-08.8")
 class TestMCPToolInterface:
     """Tools expose MCP-compatible schemas."""
 
+    @pytest.mark.ac("AC-08.8.1")
     def test_mcp_client_config_accepts_server_spec(self) -> None:
         """MCPClient can be configured with a server command and args."""
         from guild.mcp.client import MCPClient, MCPServerConfig
@@ -900,6 +949,7 @@ class TestMCPToolInterface:
         assert client.config.name == "test"
         assert client.config.command == "echo"
 
+    @pytest.mark.ac("AC-08.8.2")
     def test_mcp_registry_manages_multiple_servers(self) -> None:
         """MCPToolRegistry tracks tools across multiple servers."""
         from guild.mcp.registry import MCPToolRegistry
@@ -909,10 +959,10 @@ class TestMCPToolInterface:
 
 
 # REQ-08.9: Plugin-based tool loading
-@pytest.mark.req("REQ-08.9")
 class TestPluginToolLoading:
     """Tools loaded from file-per-tool TOML definitions."""
 
+    @pytest.mark.ac("AC-08.9.1")
     def test_load_tool_from_toml_file(self, tmp_path: Path) -> None:
         """A .toml file in the tools directory defines a loadable tool."""
         from guild.tools.plugin import PluginLoader, ToolPlugin
@@ -924,6 +974,7 @@ class TestPluginToolLoading:
         assert plugin is not None
         assert plugin.name == "my_tool"
 
+    @pytest.mark.ac("AC-08.9.2")
     def test_load_tools_from_directory(self, tmp_path: Path) -> None:
         """All .toml files in a directory are loaded as plugins."""
         from guild.tools.plugin import PluginLoader, ToolPlugin
@@ -939,10 +990,10 @@ class TestPluginToolLoading:
 
 
 # REQ-08.10: Tool behavioral properties
-@pytest.mark.req("REQ-08.10")
 class TestToolBehavioralProperties:
     """Tools declare concurrency safety and read-only flags."""
 
+    @pytest.mark.ac("AC-08.10.1")
     def test_tool_schemas_have_behavioral_hints(self) -> None:
         """Built-in tool schemas include behavioral metadata."""
         from guild.tools.base import TOOL_SCHEMAS
@@ -952,6 +1003,7 @@ class TestToolBehavioralProperties:
         # shell is not read-only (can mutate state)
         assert "shell" in TOOL_SCHEMAS
 
+    @pytest.mark.ac("AC-08.10.2")
     def test_plugin_tool_declares_properties(self, tmp_path: Path) -> None:
         """Plugin TOML can declare behavioral properties."""
         from guild.tools.plugin import PluginLoader, ToolPlugin
@@ -967,10 +1019,10 @@ class TestToolBehavioralProperties:
 
 
 # REQ-08.11: Tool result caching
-@pytest.mark.req("REQ-08.11")
 class TestToolResultCaching:
     """Tool results can be cached to avoid redundant calls."""
 
+    @pytest.mark.ac("AC-08.11.1")
     def test_plugin_cache_flag(self, tmp_path: Path) -> None:
         """Plugin can declare caching enabled."""
         from guild.tools.plugin import PluginLoader, ToolPlugin
@@ -983,6 +1035,7 @@ class TestToolResultCaching:
         plugin = loader.load_from_file(tool_file)
         assert plugin is not None
 
+    @pytest.mark.ac("AC-08.11.2")
     def test_file_read_is_idempotent(self, tmp_path: Path) -> None:
         """file_read returns same result for same input (cacheable behavior)."""
         import asyncio

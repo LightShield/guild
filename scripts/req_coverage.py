@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Requirements Traceability Matrix (RTM) generator for Guild.
 
-Parses REQUIREMENTS.md for all requirement IDs, scans test files for
-@pytest.mark.req markers, and produces a coverage report.
+Parses REQUIREMENTS.md for all requirement IDs and acceptance criteria,
+scans test files for @pytest.mark.req and @pytest.mark.ac markers, and
+produces a coverage report at both requirement and AC granularity.
 
 Only E2E/acceptance tests count toward the primary coverage gate.
 A test qualifies as E2E if it:
@@ -12,9 +13,15 @@ A test qualifies as E2E if it:
 
 Unit-level coverage is reported separately as supplementary information.
 
+Backward compatibility:
+  - @pytest.mark.req("REQ-XX.X") covers ALL ACs of that requirement
+    (graceful migration path while tests are being retagged to AC-level).
+  - Playwright E2E tests referencing REQ IDs in test.describe strings
+    likewise cover all ACs of the referenced requirements.
+
 Exit codes:
-    0 — All P0 requirements have at least one E2E covering test
-    1 — One or more P0 requirements have zero E2E covering tests
+    0 — All P0 requirements have all ACs covered by at least one E2E test
+    1 — One or more P0 requirements have ACs without E2E test coverage
 """
 
 from __future__ import annotations
@@ -38,6 +45,7 @@ TESTS_DIR = PROJECT_ROOT / "tests"
 REQ_ID_PATTERN = re.compile(r"\bREQ-(\d+\.\d+[a-z]?)\b")
 TIER_HEADING_PATTERN = re.compile(r"^##\s+P(\d)\s")
 AC_ID_PATTERN = re.compile(r"^- (AC-(\d+\.\d+[a-z]?)\.(\d+)):")
+AC_MARKER_PATTERN = re.compile(r"\bAC-(\d+\.\d+[a-z]?\.\d+)\b")
 
 
 # ---------------------------------------------------------------------------
@@ -124,6 +132,25 @@ def _extract_req_ids_from_decorator(node: ast.expr) -> list[str]:
     return []
 
 
+def _extract_ac_ids_from_decorator(node: ast.expr) -> list[str]:
+    """Extract AC-XX.X.X strings from a pytest.mark.ac(...) decorator node."""
+    # Match: @pytest.mark.ac("AC-XX.X.X")
+    if not isinstance(node, ast.Call):
+        return []
+
+    func = node.func
+    # Check for pytest.mark.ac or mark.ac attribute chain
+    if isinstance(func, ast.Attribute) and func.attr == "ac":
+        ids: list[str] = []
+        for arg in node.args:
+            if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+                if AC_MARKER_PATTERN.search(arg.value):
+                    ids.append(arg.value)
+        return ids
+
+    return []
+
+
 def _get_test_node_id(file_path: Path, class_name: str | None, func_name: str) -> str:
     """Build a pytest-style test node ID."""
     rel = file_path.relative_to(PROJECT_ROOT)
@@ -155,18 +182,36 @@ def _is_e2e_path(path: Path) -> bool:
         return False
 
 
+def _record_coverage(
+    cov_map: dict[str, list[str]],
+    ids: list[str],
+    node_id: str,
+) -> None:
+    """Add *node_id* to *cov_map* for each id in *ids*."""
+    for cov_id in ids:
+        cov_map[cov_id].append(node_id)
+
+
 def scan_test_file(
     path: Path,
-) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
-    """Scan a single test file and return (e2e_coverage, unit_coverage).
+) -> tuple[
+    dict[str, list[str]],
+    dict[str, list[str]],
+    dict[str, list[str]],
+    dict[str, list[str]],
+]:
+    """Scan a single test file.
 
-    Both are {req_id: [test_node_ids]}.
+    Returns (e2e_req_cov, unit_req_cov, e2e_ac_cov, unit_ac_cov).
+    All are ``{id: [test_node_ids]}``.
 
     A test counts as E2E if it (or its parent class) has @pytest.mark.e2e,
     or if the file lives under tests/e2e/. Otherwise it counts as unit.
     """
     e2e_cov: dict[str, list[str]] = defaultdict(list)
     unit_cov: dict[str, list[str]] = defaultdict(list)
+    e2e_ac: dict[str, list[str]] = defaultdict(list)
+    unit_ac: dict[str, list[str]] = defaultdict(list)
 
     # Files under tests/e2e/ are E2E by definition
     file_is_e2e = _is_e2e_path(path)
@@ -175,19 +220,21 @@ def scan_test_file(
         source = path.read_text(encoding="utf-8")
         tree = ast.parse(source, filename=str(path))
     except (SyntaxError, UnicodeDecodeError):
-        return dict(e2e_cov), dict(unit_cov)
+        return dict(e2e_cov), dict(unit_cov), dict(e2e_ac), dict(unit_ac)
 
     for node in ast.iter_child_nodes(tree):
         if isinstance(node, ast.ClassDef):
             # Check class-level decorators
             class_req_ids: list[str] = []
+            class_ac_ids: list[str] = []
             for decorator in node.decorator_list:
                 class_req_ids.extend(_extract_req_ids_from_decorator(decorator))
+                class_ac_ids.extend(_extract_ac_ids_from_decorator(decorator))
 
             class_is_e2e = file_is_e2e or _has_e2e_marker(node.decorator_list)
 
             # Collect test methods in the class
-            test_methods: list[str] = []
+            test_methods: list[tuple[str, bool]] = []
             for item in ast.iter_child_nodes(node):
                 if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
                     continue
@@ -199,30 +246,33 @@ def scan_test_file(
                 )
                 test_methods.append((item.name, method_is_e2e))
 
-                # Check method-level decorators too
+                # Check method-level decorators
                 for decorator in item.decorator_list:
-                    method_req_ids = _extract_req_ids_from_decorator(
-                        decorator,
-                    )
-                    for req_id in method_req_ids:
-                        node_id = _get_test_node_id(
-                            path, node.name, item.name,
-                        )
-                        if method_is_e2e:
-                            e2e_cov[req_id].append(node_id)
-                        else:
-                            unit_cov[req_id].append(node_id)
-
-            # Apply class-level req IDs to all test methods
-            for req_id in class_req_ids:
-                for method_name, method_is_e2e in test_methods:
                     node_id = _get_test_node_id(
-                        path, node.name, method_name,
+                        path, node.name, item.name,
                     )
-                    if method_is_e2e:
-                        e2e_cov[req_id].append(node_id)
-                    else:
-                        unit_cov[req_id].append(node_id)
+                    target_req = e2e_cov if method_is_e2e else unit_cov
+                    target_ac = e2e_ac if method_is_e2e else unit_ac
+                    _record_coverage(
+                        target_req,
+                        _extract_req_ids_from_decorator(decorator),
+                        node_id,
+                    )
+                    _record_coverage(
+                        target_ac,
+                        _extract_ac_ids_from_decorator(decorator),
+                        node_id,
+                    )
+
+            # Apply class-level IDs to all test methods
+            for method_name, method_is_e2e in test_methods:
+                node_id = _get_test_node_id(
+                    path, node.name, method_name,
+                )
+                target_req = e2e_cov if method_is_e2e else unit_cov
+                target_ac = e2e_ac if method_is_e2e else unit_ac
+                _record_coverage(target_req, class_req_ids, node_id)
+                _record_coverage(target_ac, class_ac_ids, node_id)
 
         elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             if node.name.startswith("test_"):
@@ -230,15 +280,21 @@ def scan_test_file(
                     file_is_e2e or _has_e2e_marker(node.decorator_list)
                 )
                 for decorator in node.decorator_list:
-                    func_req_ids = _extract_req_ids_from_decorator(decorator)
-                    for req_id in func_req_ids:
-                        node_id = _get_test_node_id(path, None, node.name)
-                        if func_is_e2e:
-                            e2e_cov[req_id].append(node_id)
-                        else:
-                            unit_cov[req_id].append(node_id)
+                    node_id = _get_test_node_id(path, None, node.name)
+                    target_req = e2e_cov if func_is_e2e else unit_cov
+                    target_ac = e2e_ac if func_is_e2e else unit_ac
+                    _record_coverage(
+                        target_req,
+                        _extract_req_ids_from_decorator(decorator),
+                        node_id,
+                    )
+                    _record_coverage(
+                        target_ac,
+                        _extract_ac_ids_from_decorator(decorator),
+                        node_id,
+                    )
 
-    return dict(e2e_cov), dict(unit_cov)
+    return dict(e2e_cov), dict(unit_cov), dict(e2e_ac), dict(unit_ac)
 
 
 def scan_e2e_tests(e2e_dir: Path) -> dict[str, list[str]]:
@@ -276,26 +332,39 @@ def scan_e2e_tests(e2e_dir: Path) -> dict[str, list[str]]:
 
 def scan_all_tests(
     tests_dir: Path,
-) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
-    """Scan all test files and return (e2e_coverage, unit_coverage).
+) -> tuple[
+    dict[str, list[str]],
+    dict[str, list[str]],
+    dict[str, list[str]],
+    dict[str, list[str]],
+]:
+    """Scan all test files.
+
+    Returns (e2e_req_cov, unit_req_cov, e2e_ac_cov, unit_ac_cov).
 
     E2E coverage includes:
       - Python tests with @pytest.mark.e2e (or in tests/e2e/)
       - Playwright specs in ui/e2e/
 
     Unit coverage includes:
-      - Python tests with @pytest.mark.req but NOT e2e-marked
+      - Python tests with @pytest.mark.req/@pytest.mark.ac but NOT e2e-marked
     """
     all_e2e: dict[str, list[str]] = defaultdict(list)
     all_unit: dict[str, list[str]] = defaultdict(list)
+    all_e2e_ac: dict[str, list[str]] = defaultdict(list)
+    all_unit_ac: dict[str, list[str]] = defaultdict(list)
 
     # Python tests
     for test_file in sorted(tests_dir.rglob("test_*.py")):
-        e2e_cov, unit_cov = scan_test_file(test_file)
+        e2e_cov, unit_cov, e2e_ac, unit_ac = scan_test_file(test_file)
         for req_id, node_ids in e2e_cov.items():
             all_e2e[req_id].extend(node_ids)
         for req_id, node_ids in unit_cov.items():
             all_unit[req_id].extend(node_ids)
+        for ac_id, node_ids in e2e_ac.items():
+            all_e2e_ac[ac_id].extend(node_ids)
+        for ac_id, node_ids in unit_ac.items():
+            all_unit_ac[ac_id].extend(node_ids)
 
     # Playwright E2E tests (always E2E by definition)
     e2e_dir = PROJECT_ROOT / "ui" / "e2e"
@@ -303,7 +372,38 @@ def scan_all_tests(
     for req_id, node_ids in playwright_coverage.items():
         all_e2e[req_id].extend(node_ids)
 
-    return dict(all_e2e), dict(all_unit)
+    return dict(all_e2e), dict(all_unit), dict(all_e2e_ac), dict(all_unit_ac)
+
+
+def expand_req_to_ac_coverage(
+    req_coverage: dict[str, list[str]],
+    ac_by_req: dict[str, list[str]],
+) -> dict[str, list[str]]:
+    """Expand requirement-level coverage to AC-level coverage.
+
+    If a test has @pytest.mark.req("REQ-XX.X"), it counts as covering
+    ALL ACs of that requirement. This provides backward compatibility
+    during migration from req-level to ac-level markers.
+    """
+    expanded: dict[str, list[str]] = defaultdict(list)
+    for req_id, test_nodes in req_coverage.items():
+        if req_id in ac_by_req:
+            for ac_id in ac_by_req[req_id]:
+                expanded[ac_id].extend(test_nodes)
+    return dict(expanded)
+
+
+def merge_ac_coverage(
+    *sources: dict[str, list[str]],
+) -> dict[str, list[str]]:
+    """Merge multiple AC coverage dicts, deduplicating test node IDs."""
+    merged: dict[str, list[str]] = defaultdict(list)
+    for source in sources:
+        for ac_id, nodes in source.items():
+            for node in nodes:
+                if node not in merged[ac_id]:
+                    merged[ac_id].append(node)
+    return dict(merged)
 
 
 # ---------------------------------------------------------------------------
@@ -331,15 +431,42 @@ def _sort_req_id(req_id: str) -> tuple[int, int]:
     return (999, 999, "")
 
 
+def _sort_ac_id(ac_id: str) -> tuple[int, int, str, int]:
+    """Sort key for AC IDs: AC-01.2.3 -> (1, 2, '', 3)."""
+    match = AC_MARKER_PATTERN.search(ac_id)
+    if match:
+        raw = match.group(1)  # e.g. "01.2.3" or "05.4a.2"
+        parts = raw.split(".")
+        major = int(parts[0])
+        minor_str = parts[1] if len(parts) > 1 else "0"
+        suffix = ""
+        minor_digits = ""
+        for ch in minor_str:
+            if ch.isdigit():
+                minor_digits += ch
+            else:
+                suffix = ch
+                break
+        ac_num = int(parts[2]) if len(parts) > 2 else 0
+        return (major, int(minor_digits) if minor_digits else 0, suffix, ac_num)
+    return (999, 999, "", 999)
+
+
 def generate_report(
     tiers: dict[str, dict[str, str]],
     e2e_coverage: dict[str, list[str]],
     unit_coverage: dict[str, list[str]],
     ac_by_req: dict[str, list[str]] | None = None,
+    e2e_ac_coverage: dict[str, list[str]] | None = None,
+    unit_ac_coverage: dict[str, list[str]] | None = None,
 ) -> str:
     """Generate the full RTM report as a string."""
     if ac_by_req is None:
         ac_by_req = {}
+    if e2e_ac_coverage is None:
+        e2e_ac_coverage = {}
+    if unit_ac_coverage is None:
+        unit_ac_coverage = {}
 
     lines: list[str] = []
     lines.append("=== Requirements Traceability Matrix ===")
@@ -367,12 +494,17 @@ def generate_report(
         f"(supplementary -- informational only)"
     )
 
-    # --- AC completeness summary ---
+    # --- AC coverage summary ---
     total_acs = sum(len(acs) for acs in ac_by_req.values())
     reqs_with_acs = len(ac_by_req)
+    acs_with_e2e_tests = sum(
+        1 for ac_id_list in ac_by_req.values()
+        for ac_id in ac_id_list
+        if ac_id in e2e_ac_coverage and len(e2e_ac_coverage[ac_id]) > 0
+    )
     lines.append(
-        f"AC Completeness: {total_acs} ACs defined across "
-        f"{reqs_with_acs} requirements"
+        f"AC Coverage: {acs_with_e2e_tests}/{total_acs} acceptance criteria "
+        f"have linked tests"
     )
     lines.append("")
 
@@ -404,6 +536,33 @@ def generate_report(
         lines.append(f"{tier}: {covered}/{total} requirements unit-covered{suffix}")
     lines.append("")
 
+    # --- Per-requirement AC coverage ---
+    lines.append("--- AC Coverage by Requirement ---")
+    for tier in tier_order:
+        for req_id in sorted(tiers[tier], key=_sort_req_id):
+            acs = ac_by_req.get(req_id, [])
+            if not acs:
+                continue
+            covered_acs = [
+                ac for ac in acs
+                if ac in e2e_ac_coverage and len(e2e_ac_coverage[ac]) > 0
+            ]
+            missing_acs = [
+                ac for ac in acs
+                if ac not in e2e_ac_coverage or len(e2e_ac_coverage[ac]) == 0
+            ]
+            n_covered = len(covered_acs)
+            n_total = len(acs)
+            if missing_acs:
+                missing_str = ", ".join(sorted(missing_acs, key=_sort_ac_id))
+                lines.append(
+                    f"{req_id}: {n_covered}/{n_total} ACs covered "
+                    f"(missing: {missing_str})"
+                )
+            else:
+                lines.append(f"{req_id}: {n_covered}/{n_total} ACs covered")
+    lines.append("")
+
     # --- Uncovered E2E requirements per tier ---
     for tier in tier_order:
         reqs = tiers[tier]
@@ -420,6 +579,22 @@ def generate_report(
             for req_id, desc in uncovered_reqs:
                 lines.append(f"{req_id}  {desc}")
             lines.append("")
+
+    # --- ACs without linked tests ---
+    all_uncovered_acs = sorted(
+        [
+            ac_id
+            for acs in ac_by_req.values()
+            for ac_id in acs
+            if ac_id not in e2e_ac_coverage or len(e2e_ac_coverage[ac_id]) == 0
+        ],
+        key=_sort_ac_id,
+    )
+    if all_uncovered_acs:
+        lines.append(f"--- ACs Without Linked Tests ({len(all_uncovered_acs)}) ---")
+        for ac_id in all_uncovered_acs:
+            lines.append(f"  {ac_id}")
+        lines.append("")
 
     # --- E2E coverage details per tier ---
     for tier in tier_order:
@@ -459,51 +634,6 @@ def generate_report(
                     lines.append(f"  {test}")
             lines.append("")
 
-    # --- AC-level report (informational) ---
-    if ac_by_req:
-        lines.append("--- Acceptance Criteria Summary (informational) ---")
-        lines.append(
-            f"Total ACs: {total_acs} across {reqs_with_acs} requirements"
-        )
-
-        # Count ACs whose parent requirement has at least one E2E test
-        acs_with_e2e = sum(
-            len(acs) for req_id, acs in ac_by_req.items()
-            if req_id in e2e_coverage and len(e2e_coverage[req_id]) > 0
-        )
-        lines.append(
-            f"ACs under E2E-covered requirements: {acs_with_e2e}/{total_acs} "
-            f"(parent requirement has >= 1 E2E test)"
-        )
-
-        # Flag requirements that have ACs but no E2E test at all
-        reqs_with_acs_no_e2e = sorted(
-            [
-                (req_id, ac_by_req[req_id])
-                for req_id in ac_by_req
-                if req_id not in e2e_coverage or len(e2e_coverage.get(req_id, [])) == 0
-            ],
-            key=lambda x: _sort_req_id(x[0]),
-        )
-        if reqs_with_acs_no_e2e:
-            lines.append(
-                f"Requirements with ACs but NO E2E test: "
-                f"{len(reqs_with_acs_no_e2e)}"
-            )
-            for req_id, acs in reqs_with_acs_no_e2e:
-                lines.append(f"  {req_id} ({len(acs)} ACs)")
-        else:
-            lines.append(
-                "All requirements with ACs have at least one E2E test."
-            )
-
-        lines.append("")
-        lines.append(
-            "Note: AC-to-test-assertion mapping is not yet automated. "
-            "The above tracks requirement-level coverage only."
-        )
-        lines.append("")
-
     return "\n".join(lines)
 
 
@@ -524,32 +654,74 @@ def main() -> int:
 
     tiers = parse_requirements(REQUIREMENTS_FILE)
     ac_by_req = parse_acceptance_criteria(REQUIREMENTS_FILE)
-    e2e_coverage, unit_coverage = scan_all_tests(TESTS_DIR)
-
-    report = generate_report(tiers, e2e_coverage, unit_coverage, ac_by_req)
-    print(report)
-
-    # Check P0 E2E coverage for exit code
-    p0_reqs = tiers.get("P0", {})
-    all_p0_covered = all(
-        req_id in e2e_coverage and len(e2e_coverage[req_id]) > 0
-        for req_id in p0_reqs
+    e2e_coverage, unit_coverage, e2e_ac_direct, unit_ac_direct = scan_all_tests(
+        TESTS_DIR,
     )
 
-    if not all_p0_covered:
-        uncovered_count = sum(
-            1
-            for r in p0_reqs
-            if r not in e2e_coverage or len(e2e_coverage[r]) == 0
+    # Backward compatibility: @pytest.mark.req("REQ-XX.X") covers ALL ACs
+    # of that requirement. Expand req-level coverage to AC-level.
+    e2e_ac_from_req = expand_req_to_ac_coverage(e2e_coverage, ac_by_req)
+    unit_ac_from_req = expand_req_to_ac_coverage(unit_coverage, ac_by_req)
+
+    # Merge direct AC markers with expanded req-level coverage
+    e2e_ac_coverage = merge_ac_coverage(e2e_ac_direct, e2e_ac_from_req)
+    unit_ac_coverage = merge_ac_coverage(unit_ac_direct, unit_ac_from_req)
+
+    # Derive requirement-level coverage from AC coverage:
+    # A requirement is "E2E covered" if ALL its ACs have linked tests,
+    # OR if it has a direct @pytest.mark.req marker (backward compat).
+    for req_id, ac_ids in ac_by_req.items():
+        if req_id in e2e_coverage:
+            continue  # Already covered via @pytest.mark.req
+        if not ac_ids:
+            continue
+        all_covered = all(
+            ac_id in e2e_ac_coverage and len(e2e_ac_coverage[ac_id]) > 0
+            for ac_id in ac_ids
         )
+        if all_covered:
+            # Synthesize requirement-level coverage from AC tests
+            tests: list[str] = []
+            for ac_id in ac_ids:
+                tests.extend(e2e_ac_coverage.get(ac_id, []))
+            e2e_coverage[req_id] = tests
+
+    report = generate_report(
+        tiers, e2e_coverage, unit_coverage, ac_by_req,
+        e2e_ac_coverage, unit_ac_coverage,
+    )
+    print(report)
+
+    # Exit code gate: all P0 requirement ACs must be covered.
+    # A P0 requirement is fully covered when ALL its ACs have at least
+    # one E2E test tagged with that AC ID (directly or via req expansion).
+    p0_reqs = tiers.get("P0", {})
+    p0_uncovered_acs: list[str] = []
+    for req_id in p0_reqs:
+        for ac_id in ac_by_req.get(req_id, []):
+            if ac_id not in e2e_ac_coverage or len(e2e_ac_coverage[ac_id]) == 0:
+                p0_uncovered_acs.append(ac_id)
+
+    if p0_uncovered_acs:
+        # Count how many P0 requirements are not fully covered
+        p0_incomplete_reqs = set()
+        for ac_id in p0_uncovered_acs:
+            # Extract parent req from AC ID: AC-01.2.3 -> REQ-01.2
+            ac_match = AC_MARKER_PATTERN.search(ac_id)
+            if ac_match:
+                parts = ac_match.group(1).rsplit(".", 1)
+                parent_req = f"REQ-{parts[0]}"
+                if parent_req in p0_reqs:
+                    p0_incomplete_reqs.add(parent_req)
+
         print(
-            f"\nFAILED: {uncovered_count} P0 requirement(s) without E2E "
-            f"test coverage.",
+            f"\nFAILED: {len(p0_uncovered_acs)} P0 AC(s) without E2E "
+            f"test coverage across {len(p0_incomplete_reqs)} requirement(s).",
             file=sys.stderr,
         )
         return 1
 
-    print("\nPASSED: All P0 requirements have E2E test coverage.")
+    print("\nPASSED: All P0 requirement ACs have E2E test coverage.")
     return 0
 
 

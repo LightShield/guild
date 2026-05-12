@@ -77,10 +77,10 @@ async def storage(tmp_path: Path) -> Storage:
 # ------------------------------------------------------------------
 
 
-@pytest.mark.req("REQ-10.1")
 class TestTokenTracking:
     """Token usage is tracked per agent and aggregated across sessions."""
 
+    @pytest.mark.ac("AC-10.1.1")
     async def test_agent_tokens_tracked(self, storage: Storage) -> None:
         """Registering an agent and updating token counts persists data."""
         await storage.register_agent("agent-t1", "coder")
@@ -91,6 +91,7 @@ class TestTokenTracking:
         assert summary["total_output"] == 200
         assert summary["agent_count"] == 1
 
+    @pytest.mark.ac("AC-10.1.2")
     async def test_multiple_agents_aggregated(self, storage: Storage) -> None:
         """Token totals are aggregated across multiple agents."""
         await storage.register_agent("agent-a", "coder")
@@ -104,6 +105,7 @@ class TestTokenTracking:
         assert summary["total_output"] == 700
         assert summary["agent_count"] == 2
 
+    @pytest.mark.ac("AC-10.1.2")
     async def test_token_summary_includes_task_count(self, storage: Storage) -> None:
         """Token summary also reports the number of tasks in the system."""
         await storage.register_agent("agent-c", "planner")
@@ -113,6 +115,7 @@ class TestTokenTracking:
         summary = await storage.get_token_summary()
         assert summary["task_count"] == 2
 
+    @pytest.mark.ac("AC-10.1.3")
     async def test_token_tracking_survives_restart(self, tmp_path: Path) -> None:
         """Token data persists across storage close and reopen."""
         db_path = tmp_path / "tokens.db"
@@ -137,16 +140,17 @@ class TestTokenTracking:
 # ------------------------------------------------------------------
 
 
-@pytest.mark.req("REQ-10.2")
 class TestBudgetLimits:
     """Budget checking correctly detects when limits are exceeded."""
 
+    @pytest.mark.ac("AC-10.2.1")
     def test_under_budget_returns_none(self) -> None:
         """No alert when usage is below all thresholds."""
         alerted: set[float] = set()
         result = check_budget_alert(50, 1000, alerted)
         assert result is None
 
+    @pytest.mark.ac("AC-10.2.1")
     def test_at_80_percent_triggers_warning(self) -> None:
         """Reaching 80% of budget triggers a warning alert."""
         alerted: set[float] = set()
@@ -155,6 +159,7 @@ class TestBudgetLimits:
         assert "80%" in result
         assert "warning" in result.lower()
 
+    @pytest.mark.ac("AC-10.2.1")
     def test_at_90_percent_triggers_warning(self) -> None:
         """Reaching 90% of budget triggers a warning alert."""
         alerted: set[float] = set()
@@ -164,6 +169,7 @@ class TestBudgetLimits:
         assert result is not None
         assert "90%" in result
 
+    @pytest.mark.ac("AC-10.2.1")
     def test_at_100_percent_triggers_exceeded(self) -> None:
         """Reaching 100% of budget triggers an exceeded alert."""
         alerted: set[float] = set()
@@ -173,12 +179,14 @@ class TestBudgetLimits:
         assert result is not None
         assert "exceeded" in result.lower()
 
+    @pytest.mark.ac("AC-10.2.4")
     def test_zero_budget_means_unlimited(self) -> None:
         """A budget of 0 means no limit; no alerts ever fire."""
         alerted: set[float] = set()
         result = check_budget_alert(999999, 0, alerted)
         assert result is None
 
+    @pytest.mark.ac("AC-10.2.1")
     def test_already_alerted_threshold_not_repeated(self) -> None:
         """Once a threshold fires, the same threshold does not fire again."""
         alerted: set[float] = set()
@@ -187,6 +195,7 @@ class TestBudgetLimits:
         second = check_budget_alert(860, 1000, alerted)
         assert second is None  # 80% already alerted
 
+    @pytest.mark.ac("AC-10.2.1")
     def test_budget_thresholds_are_defined(self) -> None:
         """The standard budget alert thresholds exist at 80%, 90%, 100%."""
         assert BUDGET_ALERT_THRESHOLDS == [0.8, 0.9, 1.0]
@@ -197,10 +206,10 @@ class TestBudgetLimits:
 # ------------------------------------------------------------------
 
 
-@pytest.mark.req("REQ-10.4")
 class TestBudgetAlerts:
     """Progressive alerts fire as usage approaches the budget limit."""
 
+    @pytest.mark.ac("AC-10.4.2")
     def test_progressive_alerts_fire_in_order(self) -> None:
         """Alerts fire at 80%, 90%, 100% in that order as usage grows."""
         alerted: set[float] = set()
@@ -227,6 +236,7 @@ class TestBudgetAlerts:
         assert a6 is not None
         assert "100%" in a6
 
+    @pytest.mark.ac("AC-10.4.2")
     def test_all_thresholds_tracked_in_set(self) -> None:
         """The alerted set accumulates all triggered thresholds."""
         alerted: set[float] = set()
@@ -238,6 +248,7 @@ class TestBudgetAlerts:
         assert 0.9 in alerted
         assert 1.0 in alerted
 
+    @pytest.mark.ac("AC-10.4.1")
     def test_alert_message_includes_token_counts(self) -> None:
         """Alert messages include both current and budget token counts."""
         alerted: set[float] = set()
@@ -252,25 +263,28 @@ class TestBudgetAlerts:
 # ------------------------------------------------------------------
 
 
-@pytest.mark.req("REQ-10.5")
 class TestCostEstimation:
     """Cost is estimated based on token usage and provider pricing."""
 
+    @pytest.mark.ac("AC-10.5.2")
     def test_ollama_is_free(self) -> None:
         """Local providers like ollama have zero cost."""
         cost = estimate_cost(10000, 5000, provider="ollama")
         assert cost == 0.0
 
+    @pytest.mark.ac("AC-10.5.1")
     def test_claude_sonnet_cost_calculation(self) -> None:
         """Claude Sonnet: $3/1M input, $15/1M output."""
         cost = estimate_cost(1_000_000, 1_000_000, provider="claude-sonnet")
         assert cost == pytest.approx(18.0)
 
+    @pytest.mark.ac("AC-10.5.2")
     def test_unknown_provider_is_free(self) -> None:
         """Unknown providers are treated as free (local)."""
         cost = estimate_cost(5000, 3000, provider="unknown-model")
         assert cost == 0.0
 
+    @pytest.mark.ac("AC-10.5.2")
     def test_format_cost_summary_free(self) -> None:
         """Free providers show 'free' in the summary."""
         summary = format_cost_summary(1000, 500, "ollama")
@@ -278,18 +292,21 @@ class TestCostEstimation:
         assert "1,000 in" in summary
         assert "500 out" in summary
 
+    @pytest.mark.ac("AC-10.5.1")
     def test_format_cost_summary_paid(self) -> None:
         """Paid providers show approximate USD cost."""
         summary = format_cost_summary(10000, 5000, "claude-sonnet")
         assert "$" in summary
         assert "claude-sonnet" in summary
 
+    @pytest.mark.ac("AC-10.5.3")
     def test_cost_table_has_expected_providers(self) -> None:
         """Cost table includes entries for all documented providers."""
         expected = {"ollama", "gemini-cli", "openai-gpt4", "openai-gpt4o",
                     "claude-sonnet", "claude-opus", "claude-haiku"}
         assert expected == set(COST_TABLE.keys())
 
+    @pytest.mark.ac("AC-10.5.1")
     def test_zero_tokens_zero_cost(self) -> None:
         """Zero tokens produce zero cost for any provider."""
         cost = estimate_cost(0, 0, provider="claude-opus")
@@ -301,10 +318,10 @@ class TestCostEstimation:
 # ------------------------------------------------------------------
 
 
-@pytest.mark.req("REQ-11.1")
 class TestReasoningChainTrace:
     """Every LLM call, tool call, and decision is recorded as a TraceEvent."""
 
+    @pytest.mark.ac("AC-11.1.1")
     def test_trace_records_events(self) -> None:
         """Tracer captures all events in order."""
         tracer = Tracer()
@@ -318,6 +335,7 @@ class TestReasoningChainTrace:
         assert events[1].event_type == "tool_call"
         assert events[2].event_type == "decision"
 
+    @pytest.mark.ac("AC-11.1.1")
     def test_trace_events_have_timestamps(self) -> None:
         """Each trace event gets an ISO timestamp."""
         tracer = Tracer()
@@ -328,6 +346,7 @@ class TestReasoningChainTrace:
         # Should be valid ISO format
         datetime.fromisoformat(event.timestamp)
 
+    @pytest.mark.ac("AC-11.1.2")
     def test_trace_events_capture_agent_and_task(self) -> None:
         """Events record agent_id and task_id for correlation."""
         tracer = Tracer()
@@ -338,6 +357,7 @@ class TestReasoningChainTrace:
         assert event.agent_id == "agent-7"
         assert event.task_id == "task-42"
 
+    @pytest.mark.ac("AC-11.1.2")
     def test_trace_captures_duration(self) -> None:
         """Events can record execution duration in milliseconds."""
         tracer = Tracer()
@@ -345,6 +365,7 @@ class TestReasoningChainTrace:
 
         assert tracer.events[0].duration_ms == 1500
 
+    @pytest.mark.ac("AC-11.1.1")
     def test_clear_removes_all_events(self) -> None:
         """Tracer.clear() removes all recorded events."""
         tracer = Tracer()
@@ -355,6 +376,7 @@ class TestReasoningChainTrace:
         tracer.clear()
         assert len(tracer.events) == 0
 
+    @pytest.mark.ac("AC-11.1.1")
     def test_events_property_returns_copy(self) -> None:
         """Tracer.events returns a copy, not the internal list."""
         tracer = Tracer()
@@ -370,10 +392,10 @@ class TestReasoningChainTrace:
 # ------------------------------------------------------------------
 
 
-@pytest.mark.req("REQ-11.2")
 class TestSessionReplay:
     """Past agent sessions can be replayed from stored messages."""
 
+    @pytest.mark.ac("AC-11.2.1")
     async def test_replay_retrieves_session(self, storage: Storage) -> None:
         """SessionReplay.get_session returns all messages in order."""
         await storage.register_agent("agent-replay", "coder")
@@ -389,6 +411,7 @@ class TestSessionReplay:
         assert messages[1]["content"] == "Fix the bug."
         assert messages[2]["role"] == "assistant"
 
+    @pytest.mark.ac("AC-11.2.1")
     async def test_replay_summary(self, storage: Storage) -> None:
         """Session summary computes turn count, tool calls, and message count."""
         await storage.register_agent("agent-sum", "coder")
@@ -409,6 +432,7 @@ class TestSessionReplay:
         assert summary["roles"]["assistant"] == 2
         assert summary["roles"]["tool"] == 1
 
+    @pytest.mark.ac("AC-11.2.3")
     async def test_replay_empty_session(self, storage: Storage) -> None:
         """Empty session returns zero counts."""
         replay = SessionReplay(storage)
@@ -417,6 +441,7 @@ class TestSessionReplay:
         assert summary["turn_count"] == 0
         assert summary["message_count"] == 0
 
+    @pytest.mark.ac("AC-11.2.2")
     async def test_format_for_display(self, storage: Storage) -> None:
         """Messages are formatted as [ROLE] content with separators."""
         await storage.register_agent("agent-fmt", "coder")
@@ -431,12 +456,14 @@ class TestSessionReplay:
         assert "[ASSISTANT] Hi there" in formatted
         assert "---" in formatted
 
+    @pytest.mark.ac("AC-11.2.3")
     def test_format_empty_session_display(self) -> None:
         """Empty session displays a placeholder message."""
         replay = SessionReplay.__new__(SessionReplay)
         result = replay.format_for_display([])
         assert result == "(empty session)"
 
+    @pytest.mark.ac("AC-11.2.2")
     async def test_replay_truncates_long_content(self, storage: Storage) -> None:
         """Content longer than REPLAY_CONTENT_MAX_CHARS is truncated in display."""
         await storage.register_agent("agent-long", "coder")
@@ -457,10 +484,10 @@ class TestSessionReplay:
 # ------------------------------------------------------------------
 
 
-@pytest.mark.req("REQ-11.3")
 class TestStructuredLogging:
     """Logging output is structured JSON with configurable levels."""
 
+    @pytest.mark.ac("AC-11.3.3")
     def test_structured_formatter_produces_json(self) -> None:
         """StructuredFormatter outputs valid JSON log lines."""
         formatter = StructuredFormatter()
@@ -481,6 +508,7 @@ class TestStructuredLogging:
         assert parsed["message"] == "Test message"
         assert "timestamp" in parsed
 
+    @pytest.mark.ac("AC-11.3.3")
     def test_structured_formatter_includes_exception(self) -> None:
         """Exception info is included in the JSON output when present."""
         formatter = StructuredFormatter()
@@ -506,6 +534,7 @@ class TestStructuredLogging:
         assert "exception" in parsed
         assert "ValueError" in parsed["exception"]
 
+    @pytest.mark.ac("AC-11.3.1")
     def test_configure_logging_sets_level(self) -> None:
         """configure_logging sets the logger to the requested level."""
         configure_logging(level="DEBUG", structured=True)
@@ -515,6 +544,7 @@ class TestStructuredLogging:
         # Restore to INFO to not pollute other tests
         configure_logging(level="INFO", structured=True)
 
+    @pytest.mark.ac("AC-11.3.1")
     def test_configure_logging_structured_mode(self) -> None:
         """In structured mode, the handler uses StructuredFormatter."""
         configure_logging(level="INFO", structured=True)
@@ -522,6 +552,7 @@ class TestStructuredLogging:
         assert len(guild_logger.handlers) >= 1
         assert isinstance(guild_logger.handlers[0].formatter, StructuredFormatter)
 
+    @pytest.mark.ac("AC-11.3.2")
     def test_configure_logging_unstructured_mode(self) -> None:
         """In unstructured mode, the handler uses standard Formatter."""
         configure_logging(level="INFO", structured=False)
@@ -532,6 +563,7 @@ class TestStructuredLogging:
         # Restore structured mode
         configure_logging(level="INFO", structured=True)
 
+    @pytest.mark.ac("AC-11.3.3")
     def test_structured_log_all_levels(self) -> None:
         """All standard log levels produce valid JSON output."""
         formatter = StructuredFormatter()
@@ -556,10 +588,10 @@ class TestStructuredLogging:
 # ------------------------------------------------------------------
 
 
-@pytest.mark.req("REQ-11.4")
 class TestErrorRecoveryFromCheckpoint:
     """Agent state can be recovered from a checkpoint after failure."""
 
+    @pytest.mark.ac("AC-11.4.1")
     async def test_checkpoint_preserves_all_state(self, storage: Storage) -> None:
         """All checkpoint fields survive save and load."""
         original = Checkpoint(
@@ -587,6 +619,7 @@ class TestErrorRecoveryFromCheckpoint:
         assert recovered.total_tool_calls == 5
         assert len(recovered.messages) == 3
 
+    @pytest.mark.ac("AC-11.4.1")
     async def test_recovery_after_simulated_crash(self, tmp_path: Path) -> None:
         """Checkpoint written before crash is available after restart."""
         db_path = tmp_path / "crash.db"
@@ -617,6 +650,7 @@ class TestErrorRecoveryFromCheckpoint:
         assert recovered.turn_number == 3
         assert recovered.messages[0].content == "Start task"
 
+    @pytest.mark.ac("AC-11.4.2")
     async def test_recovery_restores_message_types(self, storage: Storage) -> None:
         """Messages with tool_calls and tool_call_id survive checkpoint."""
         tool_msg = Message(
@@ -646,6 +680,7 @@ class TestErrorRecoveryFromCheckpoint:
         assert recovered.messages[0].tool_calls[0]["function"]["name"] == "shell"
         assert recovered.messages[1].tool_call_id == "call-123"
 
+    @pytest.mark.ac("AC-11.4.2")
     async def test_no_checkpoint_returns_none(self, storage: Storage) -> None:
         """Loading a checkpoint for an agent with no saved state returns None."""
         result = await load_checkpoint(storage, "nonexistent-agent")
@@ -657,10 +692,10 @@ class TestErrorRecoveryFromCheckpoint:
 # ------------------------------------------------------------------
 
 
-@pytest.mark.req("REQ-11.5")
 class TestLogExport:
     """Trace events can be exported as JSON or JSON Lines (OpenTelemetry-compatible)."""
 
+    @pytest.mark.ac("AC-11.5.1")
     def test_export_json_produces_valid_array(self) -> None:
         """export_events_json returns a valid JSON array of events."""
         tracer = Tracer()
@@ -675,6 +710,7 @@ class TestLogExport:
         assert parsed[0]["event_type"] == "llm_call"
         assert parsed[1]["event_type"] == "tool_call"
 
+    @pytest.mark.ac("AC-11.5.2")
     def test_export_jsonl_produces_valid_lines(self) -> None:
         """export_events_jsonl returns one JSON object per line."""
         tracer = Tracer()
@@ -691,6 +727,7 @@ class TestLogExport:
             assert "event_type" in parsed
             assert "timestamp" in parsed
 
+    @pytest.mark.ac("AC-11.5.1")
     def test_export_json_includes_all_fields(self) -> None:
         """All TraceEvent fields appear in JSON export."""
         tracer = Tracer()
@@ -711,11 +748,13 @@ class TestLogExport:
         assert event["duration_ms"] == 250
         assert event["details"]["tokens"] == 500
 
+    @pytest.mark.ac("AC-11.5.3")
     def test_export_empty_events(self) -> None:
         """Exporting empty event list returns valid empty structures."""
         assert export_events_json([]) == "[]"
         assert export_events_jsonl([]) == ""
 
+    @pytest.mark.ac("AC-11.5.2")
     def test_jsonl_compatible_with_line_by_line_parsing(self) -> None:
         """JSONL output can be parsed line-by-line for streaming ingestion."""
         tracer = Tracer()
@@ -737,10 +776,10 @@ class TestLogExport:
 # ------------------------------------------------------------------
 
 
-@pytest.mark.req("REQ-12.1")
 class TestTaskDefinitionFormat:
     """Tasks can be defined with descriptions, criteria, and verification steps."""
 
+    @pytest.mark.ac("AC-12.1.2")
     def test_from_string_creates_minimal_spec(self) -> None:
         """TaskSpec.from_string creates a spec with description only."""
         spec = TaskSpec.from_string("Fix the login bug")
@@ -748,6 +787,7 @@ class TestTaskDefinitionFormat:
         assert spec.acceptance_criteria == []
         assert spec.verification_steps == []
 
+    @pytest.mark.ac("AC-12.1.1")
     def test_full_task_spec(self) -> None:
         """TaskSpec with all fields set is complete."""
         spec = TaskSpec(
@@ -765,6 +805,7 @@ class TestTaskDefinitionFormat:
         assert len(spec.acceptance_criteria) == 2
         assert len(spec.verification_steps) == 2
 
+    @pytest.mark.ac("AC-12.1.1")
     def test_from_toml_parses_correctly(self, tmp_path: Path) -> None:
         """TaskSpec.from_toml loads a TOML file into a proper spec."""
         toml_content = """\
@@ -791,6 +832,7 @@ target = "src/api/endpoint.py"
         assert spec.verification_steps[0].type == "command"
         assert spec.verification_steps[1].type == "file_exists"
 
+    @pytest.mark.ac("AC-12.1.1")
     def test_verification_step_types(self) -> None:
         """VerificationStep supports command, file_exists, file_contains, custom."""
         for step_type in ("command", "file_exists", "file_contains", "custom"):
@@ -803,10 +845,10 @@ target = "src/api/endpoint.py"
 # ------------------------------------------------------------------
 
 
-@pytest.mark.req("REQ-12.2")
 class TestVerificationExecution:
     """Verification steps are executed and results reported."""
 
+    @pytest.mark.ac("AC-12.2.1")
     async def test_command_step_success(self, tmp_path: Path) -> None:
         """A passing command verification returns PASS."""
         spec = TaskSpec(
@@ -819,6 +861,7 @@ class TestVerificationExecution:
         assert passed is True
         assert "PASS" in results[0]
 
+    @pytest.mark.ac("AC-12.2.2")
     async def test_command_step_failure(self, tmp_path: Path) -> None:
         """A failing command verification returns FAIL."""
         spec = TaskSpec(
@@ -831,6 +874,7 @@ class TestVerificationExecution:
         assert passed is False
         assert "FAIL" in results[0]
 
+    @pytest.mark.ac("AC-12.2.1")
     async def test_file_exists_step_pass(self, tmp_path: Path) -> None:
         """file_exists verification passes when the file is present."""
         (tmp_path / "target.py").write_text("content")
@@ -844,6 +888,7 @@ class TestVerificationExecution:
         assert passed is True
         assert "PASS" in results[0]
 
+    @pytest.mark.ac("AC-12.2.2")
     async def test_file_exists_step_fail(self, tmp_path: Path) -> None:
         """file_exists verification fails when the file is missing."""
         spec = TaskSpec(
@@ -856,6 +901,7 @@ class TestVerificationExecution:
         assert passed is False
         assert "FAIL" in results[0]
 
+    @pytest.mark.ac("AC-12.2.1")
     async def test_file_contains_step_pass(self, tmp_path: Path) -> None:
         """file_contains verification passes when expected text is found."""
         (tmp_path / "readme.md").write_text("# Hello World\nSome content")
@@ -872,6 +918,7 @@ class TestVerificationExecution:
         passed, results = await run_verification(spec, str(tmp_path))
         assert passed is True
 
+    @pytest.mark.ac("AC-12.2.2")
     async def test_file_contains_step_fail(self, tmp_path: Path) -> None:
         """file_contains verification fails when expected text is absent."""
         (tmp_path / "readme.md").write_text("# Other content")
@@ -888,6 +935,7 @@ class TestVerificationExecution:
         passed, results = await run_verification(spec, str(tmp_path))
         assert passed is False
 
+    @pytest.mark.ac("AC-12.2.1")
     async def test_no_verification_steps_passes(self, tmp_path: Path) -> None:
         """A spec with no verification steps passes trivially."""
         spec = TaskSpec(description="No steps")
@@ -895,6 +943,7 @@ class TestVerificationExecution:
         assert passed is True
         assert "No verification steps defined" in results[0]
 
+    @pytest.mark.ac("AC-12.2.3")
     async def test_mixed_steps_partial_failure(self, tmp_path: Path) -> None:
         """One failing step causes overall failure even if others pass."""
         (tmp_path / "exists.py").write_text("ok")
@@ -916,10 +965,10 @@ class TestVerificationExecution:
 # ------------------------------------------------------------------
 
 
-@pytest.mark.req("REQ-12.3")
 class TestTaskDecomposition:
     """Tasks can be decomposed into subtasks with parent-child relationships."""
 
+    @pytest.mark.ac("AC-12.3.1")
     def test_add_parent_and_children(self) -> None:
         """Parent task can have children tracked via parent_id."""
         graph = TaskGraph()
@@ -940,6 +989,7 @@ class TestTaskDecomposition:
         child_ids = {c.task_id for c in children}
         assert child_ids == {"child-1", "child-2"}
 
+    @pytest.mark.ac("AC-12.3.1")
     def test_children_default_to_pending(self) -> None:
         """Newly added child tasks start with pending status."""
         graph = TaskGraph()
@@ -948,6 +998,7 @@ class TestTaskDecomposition:
 
         assert node.status == TaskStatus.PENDING
 
+    @pytest.mark.ac("AC-12.3.1")
     def test_no_children_returns_empty(self) -> None:
         """A task with no children returns empty list."""
         graph = TaskGraph()
@@ -956,6 +1007,7 @@ class TestTaskDecomposition:
         children = graph.get_children("lonely")
         assert children == []
 
+    @pytest.mark.ac("AC-12.3.2")
     def test_mark_completed_updates_status(self) -> None:
         """Marking a decomposed task as completed updates its status."""
         graph = TaskGraph()
@@ -972,10 +1024,10 @@ class TestTaskDecomposition:
 # ------------------------------------------------------------------
 
 
-@pytest.mark.req("REQ-12.4")
 class TestTaskDependencies:
     """Tasks can depend on other tasks; execution order respects dependencies."""
 
+    @pytest.mark.ac("AC-12.4.1")
     def test_ready_tasks_without_dependencies(self) -> None:
         """Tasks with no dependencies are immediately ready."""
         graph = TaskGraph()
@@ -986,6 +1038,7 @@ class TestTaskDependencies:
         ids = {t.task_id for t in ready}
         assert ids == {"a", "b"}
 
+    @pytest.mark.ac("AC-12.4.1")
     def test_blocked_task_not_ready(self) -> None:
         """A task with unmet dependencies is not in the ready list."""
         graph = TaskGraph()
@@ -999,6 +1052,7 @@ class TestTaskDependencies:
         assert "dep" in ids
         assert "blocked" not in ids
 
+    @pytest.mark.ac("AC-12.4.1")
     def test_task_becomes_ready_after_dependency_completes(self) -> None:
         """Once a dependency is marked completed, the dependent task becomes ready."""
         graph = TaskGraph()
@@ -1013,6 +1067,7 @@ class TestTaskDependencies:
         ids = {t.task_id for t in ready}
         assert "run" in ids
 
+    @pytest.mark.ac("AC-12.4.1")
     def test_chain_of_dependencies(self) -> None:
         """A -> B -> C chain: only A is ready initially."""
         graph = TaskGraph()
@@ -1035,6 +1090,7 @@ class TestTaskDependencies:
         ready = graph.get_ready_tasks()
         assert [t.task_id for t in ready] == ["c"]
 
+    @pytest.mark.ac("AC-12.4.2")
     def test_multiple_dependencies(self) -> None:
         """A task depending on two others waits for both to complete."""
         graph = TaskGraph()
@@ -1054,6 +1110,7 @@ class TestTaskDependencies:
         ready = graph.get_ready_tasks()
         assert any(t.task_id == "final" for t in ready)
 
+    @pytest.mark.ac("AC-12.4.1")
     def test_diamond_dependency(self) -> None:
         """Diamond: A -> B, A -> C, B+C -> D."""
         graph = TaskGraph()
@@ -1082,10 +1139,10 @@ class TestTaskDependencies:
 # ------------------------------------------------------------------
 
 
-@pytest.mark.req("REQ-12.5")
 class TestTaskStatusLifecycle:
     """Task status transitions follow a defined lifecycle with validation."""
 
+    @pytest.mark.ac("AC-12.5.1")
     async def test_valid_transition_pending_to_in_progress(
         self, storage: Storage
     ) -> None:
@@ -1098,6 +1155,7 @@ class TestTaskStatusLifecycle:
         assert task is not None
         assert task["status"] == TaskStatus.IN_PROGRESS
 
+    @pytest.mark.ac("AC-12.5.1")
     async def test_valid_transition_in_progress_to_verifying(
         self, storage: Storage
     ) -> None:
@@ -1107,6 +1165,7 @@ class TestTaskStatusLifecycle:
         ok = await transition_task(storage, "t-lc2", TaskStatus.VERIFYING)
         assert ok is True
 
+    @pytest.mark.ac("AC-12.5.1")
     async def test_valid_transition_verifying_to_done(
         self, storage: Storage
     ) -> None:
@@ -1117,6 +1176,7 @@ class TestTaskStatusLifecycle:
         ok = await transition_task(storage, "t-lc3", TaskStatus.DONE)
         assert ok is True
 
+    @pytest.mark.ac("AC-12.5.2")
     async def test_invalid_transition_rejected(self, storage: Storage) -> None:
         """Invalid transition (e.g. pending -> done) returns False."""
         await storage.create_task("t-lc4", "Bad transition")
@@ -1128,6 +1188,7 @@ class TestTaskStatusLifecycle:
         assert task is not None
         assert task["status"] == "pending"
 
+    @pytest.mark.ac("AC-12.5.2")
     async def test_done_is_terminal(self, storage: Storage) -> None:
         """Done status allows no further transitions."""
         await storage.create_task("t-lc5", "Terminal task")
@@ -1137,6 +1198,7 @@ class TestTaskStatusLifecycle:
         ok = await transition_task(storage, "t-lc5", TaskStatus.IN_PROGRESS)
         assert ok is False
 
+    @pytest.mark.ac("AC-12.5.1")
     async def test_failed_can_retry_to_pending(self, storage: Storage) -> None:
         """Failed tasks can be retried by transitioning back to pending."""
         await storage.create_task("t-lc6", "Retry task")
@@ -1146,6 +1208,7 @@ class TestTaskStatusLifecycle:
         ok = await transition_task(storage, "t-lc6", TaskStatus.PENDING)
         assert ok is True
 
+    @pytest.mark.ac("AC-12.5.1")
     async def test_blocked_can_unblock_to_pending(
         self, storage: Storage
     ) -> None:
@@ -1157,6 +1220,7 @@ class TestTaskStatusLifecycle:
         ok = await transition_task(storage, "t-lc7", TaskStatus.PENDING)
         assert ok is True
 
+    @pytest.mark.ac("AC-12.5.2")
     async def test_transition_nonexistent_task_returns_false(
         self, storage: Storage
     ) -> None:
@@ -1164,6 +1228,7 @@ class TestTaskStatusLifecycle:
         ok = await transition_task(storage, "does-not-exist", TaskStatus.IN_PROGRESS)
         assert ok is False
 
+    @pytest.mark.ac("AC-12.5.3")
     def test_valid_transitions_table_complete(self) -> None:
         """The VALID_TRANSITIONS table covers all non-terminal statuses."""
         assert TaskStatus.PENDING in VALID_TRANSITIONS
@@ -1175,6 +1240,7 @@ class TestTaskStatusLifecycle:
         # Done has no outgoing transitions
         assert VALID_TRANSITIONS[TaskStatus.DONE] == []
 
+    @pytest.mark.ac("AC-12.5.1")
     async def test_full_lifecycle_happy_path(self, storage: Storage) -> None:
         """Full lifecycle: pending -> in_progress -> verifying -> done."""
         await storage.create_task("t-full", "Full lifecycle test")

@@ -77,11 +77,10 @@ def project_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return tmp_path
 
 
-# REQ-04.1: team execution
-@pytest.mark.req("REQ-04.1")
 class TestTeamExecution:
     """Team pipeline execution through the CLI."""
 
+    @pytest.mark.ac("AC-04.1.2")
     def test_team_command_runs_pipeline(
         self, project_dir: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
@@ -97,6 +96,7 @@ class TestTeamExecution:
         assert result.exit_code == 0, f"team command failed: {result.output}"
         assert "Team done" in result.output
 
+    @pytest.mark.ac("AC-04.1.1")
     def test_team_not_found_errors(
         self, project_dir: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
@@ -111,6 +111,7 @@ class TestTeamExecution:
             )
         assert result.exit_code != 0 or "not found" in result.output.lower()
 
+    @pytest.mark.ac("AC-04.1.1")
     def test_team_no_project_errors(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
@@ -119,6 +120,7 @@ class TestTeamExecution:
         result = runner.invoke(app, ["team", "Something"])
         assert result.exit_code == 1
 
+    @pytest.mark.ac("AC-04.1.2")
     def test_team_subtasks_appear_in_history(
         self, project_dir: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
@@ -140,6 +142,7 @@ class TestTeamExecution:
             or "coder" in history.output.lower()
         )
 
+    @pytest.mark.ac("AC-04.1.1")
     def test_team_audit_trail_logged(
         self, project_dir: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
@@ -156,11 +159,10 @@ class TestTeamExecution:
         assert "task_created" in audit.output or "task_completed" in audit.output
 
 
-# REQ-05.4: REST API
-@pytest.mark.req("REQ-05.4")
 class TestRestApi:
     """REST API endpoint tests using Starlette test client."""
 
+    @pytest.mark.ac("AC-05.4.1")
     def test_api_status_endpoint(self, project_dir: Path) -> None:
         """GET /api/status returns project info."""
         from starlette.testclient import TestClient
@@ -174,6 +176,7 @@ class TestRestApi:
         assert resp.status_code == 200
         assert resp.json()["status"] == "ok"
 
+    @pytest.mark.ac("AC-05.4.2")
     def test_api_create_and_list_task(self, project_dir: Path) -> None:
         """POST /api/tasks creates, GET /api/tasks lists."""
         from starlette.testclient import TestClient
@@ -193,11 +196,10 @@ class TestRestApi:
             assert len(list_resp.json()) >= 1
 
 
-# REQ-04.7a: A2A gateway
-@pytest.mark.req("REQ-04.7a")
 class TestA2AGateway:
     """A2A protocol gateway tests."""
 
+    @pytest.mark.ac("AC-04.7a.1")
     def test_agent_card_discovery(self, project_dir: Path) -> None:
         """GET /.well-known/agent.json returns valid agent card."""
         from starlette.testclient import TestClient
@@ -213,6 +215,7 @@ class TestA2AGateway:
         assert card["name"] == "Guild"
         assert "tasks/send" in card["capabilities"]["methods"]
 
+    @pytest.mark.ac("AC-04.7a.2")
     def test_a2a_task_lifecycle(self, project_dir: Path) -> None:
         """Send task via A2A, get status, cancel."""
         from starlette.testclient import TestClient
@@ -250,6 +253,7 @@ class TestA2AGateway:
             })
             assert cancel_resp.json()["result"]["status"]["state"] == "canceled"
 
+    @pytest.mark.ac("AC-04.7a.3")
     def test_a2a_invalid_method_errors(self, project_dir: Path) -> None:
         """Sad path: unknown method."""
         from starlette.testclient import TestClient

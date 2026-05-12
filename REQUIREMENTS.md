@@ -1621,6 +1621,13 @@ These emerged from design review and govern all implementation decisions:
 - AC-04.1.2: Entry agent delegates subtasks to workers rather than doing everything itself
   - verify: Run a complex task that requires multiple skills -> entry agent spawns at least one worker via the spawn tool
 
+**REQ-04.2 — Entry agent present in preset team compositions**
+
+- AC-04.2.1: Entry block is always first in team execution order
+  - verify: Create a preset team with entry_block set -> TeamRunner._execution_order() returns entry_block as the first element
+- AC-04.2.2: Entry agent receives the initial user input
+  - verify: Run a team with an entry agent -> entry agent gets the user request as its first data and completes with COMPLETED status
+
 **REQ-04.3 — Any agent can spawn other agents, including other orchestrators**
 
 - AC-04.3.1: A worker agent can spawn its own sub-workers
@@ -1635,6 +1642,20 @@ These emerged from design review and govern all implementation decisions:
 - AC-04.4.2: Spawned agent results are returned as a tool result to the calling agent
   - verify: Agent calls `spawn_agent` -> receives the spawned agent's output as a `ToolResult`
 
+**REQ-04.5 — Worker agents that execute specific subtasks**
+
+- AC-04.5.1: Worker blocks are specialized with role-specific tools
+  - verify: Load the "coder" block -> it has file_write and shell tools and role "coder"
+- AC-04.5.2: A worker block runs independently within a team
+  - verify: Run a single-worker team -> worker produces output matching the task description
+
+**REQ-04.6 — MCP for agent-to-tool communication**
+
+- AC-04.6.1: MCPClient stores server configuration
+  - verify: Create MCPClient with a server config -> config attributes (name, command) are preserved
+- AC-04.6.2: Calling a tool on an unconnected MCP client raises MCPError
+  - verify: Call call_tool on an unconnected MCPClient -> raises MCPError with "Not connected"
+
 **REQ-04.7 — Simple internal message bus for agent-to-agent communication**
 
 - AC-04.7.1: `send(agent_id, port, data)` delivers a message to the target agent
@@ -1644,12 +1665,48 @@ These emerged from design review and govern all implementation decisions:
 - AC-04.7.3: Message data is JSON-serializable
   - verify: Send a message containing a dict with nested structures -> received message is identical after serialization round-trip
 
+**REQ-04.7a — A2A as optional external gateway**
+
+- AC-04.7a.1: Agent card is discoverable at `/.well-known/agent.json`
+  - verify: GET `/.well-known/agent.json` -> returns 200 with agent card containing name and capabilities
+- AC-04.7a.2: A2A task lifecycle (send, get, cancel) works via JSON-RPC
+  - verify: POST `/a2a` with tasks/send, tasks/get, tasks/cancel -> each returns correct JSON-RPC result
+- AC-04.7a.3: Unknown A2A methods return JSON-RPC method-not-found error
+  - verify: POST `/a2a` with method "invalid/method" -> response contains error code -32601
+
+**REQ-04.8 — Skills support: agents can have pluggable skill definitions**
+
+- AC-04.8.1: Skills are registered and retrieved by name
+  - verify: Register a skill in SkillRegistry -> get by name returns the skill with correct description
+- AC-04.8.2: SkillDef loads from a markdown file with frontmatter
+  - verify: Create a .md file with YAML frontmatter -> SkillDef.from_file parses name, description, tools, and prompt content
+- AC-04.8.3: SkillRegistry discovers skill files from a directory
+  - verify: Place 2 .md files in a directory -> SkillRegistry.load_from_dir returns count of 2
+- AC-04.8.4: format_for_prompt injects selected skill content into the prompt
+  - verify: Register 2 skills and call format_for_prompt with both -> returned string contains both skill contents
+
 **REQ-04.9 — Agent lifecycle management: spawn, monitor, pause, resume, kill**
 
 - AC-04.9.1: All five lifecycle operations are available for any agent
   - verify: Spawn an agent, pause it, resume it, then kill it -> each operation succeeds with correct state transitions
 - AC-04.9.2: Killing a parent agent also stops its child agents
   - verify: Kill an orchestrator with 2 running workers -> both workers are stopped within the graceful shutdown timeout
+
+**REQ-04.10 — Shared context/workspace between team members**
+
+- AC-04.10.1: Agents can store and retrieve shared key-value data
+  - verify: Agent stores data via SharedContext.put -> SharedContext.get returns the same data
+- AC-04.10.2: list_keys returns all stored keys
+  - verify: Store 2 keys -> list_keys returns both keys
+- AC-04.10.3: Accessing a non-existent key returns None
+  - verify: SharedContext.get on a missing key -> returns None
+
+**REQ-04.11 — Dynamic worker spawning**
+
+- AC-04.11.1: Spawner is not limited to a fixed number of agents
+  - verify: Spawn 5 agents from one spawner -> all 5 are tracked in active_agents
+- AC-04.11.2: Auto-generated agent IDs are unique across spawns
+  - verify: Spawn 2 agents without explicit IDs -> active_agents contains 2 distinct IDs
 
 **REQ-04.12 — Git worktrees as isolation model**
 
@@ -1667,6 +1724,24 @@ These emerged from design review and govern all implementation decisions:
 - AC-04.14.2: Merge to main/release requires explicit user approval
   - verify: Attempt to merge staging into main -> Guild prompts "Approve merge to protected branch main? [yes/no]"
 
+**REQ-04.13 — Branching strategy: agents merge freely to staging; main is gated**
+
+- AC-04.13.1: main and master branches are protected by default
+  - verify: BranchPolicy.is_protected("main") and is_protected("master") -> both return True
+- AC-04.13.2: Staging branch allows auto-merge
+  - verify: BranchPolicy.can_auto_merge("guild/staging") -> returns True
+- AC-04.13.3: Auto-merge to main is blocked
+  - verify: BranchPolicy.can_auto_merge("main") -> returns False
+
+**REQ-04.15 — Merge policy configurable per project**
+
+- AC-04.15.1: Policy can be configured to auto-merge if tests pass
+  - verify: BranchPolicy(auto_merge_on_tests_pass=True) -> can_auto_merge("feature-branch") returns True
+- AC-04.15.2: REVIEW mode requires review for everything
+  - verify: BranchPolicy(merge_approval=MergeApproval.REVIEW) -> merge_approval is REVIEW
+- AC-04.15.3: Protected branches are configurable
+  - verify: BranchPolicy(protected_branches=["main", "release"]) -> is_protected("release") is True, is_protected("master") is False
+
 **REQ-04.20 — Atomic blocks: single-agent building blocks with defined inputs/outputs/role**
 
 - AC-04.20.1: Each atomic block has defined input ports, output ports, and a role
@@ -1681,12 +1756,113 @@ These emerged from design review and govern all implementation decisions:
 - AC-04.21.2: Composite block definition is saveable and reloadable
   - verify: Create a composite block from coder + reviewer, save it -> reload and execute with identical behavior
 
+**REQ-04.22 — Block connectors: defined input/output ports**
+
+- AC-04.22.1: Connection specifies source_block.port to target_block.port
+  - verify: Create a Connection -> source_block, source_port, target_block, target_port are all accessible
+- AC-04.22.2: Validation catches connections to nonexistent ports
+  - verify: validate_team with a connection referencing "nonexistent" port -> errors list contains the port name
+
+**REQ-04.23 — Block library: local catalog of available blocks**
+
+- AC-04.23.1: Registry ships with built-in blocks (planner, coder, reviewer, tester, evaluator, researcher)
+  - verify: BlockRegistry().list_blocks() -> names include all 6 built-in blocks
+- AC-04.23.2: Users can register custom blocks
+  - verify: Register a custom BlockDef -> get_block returns it
+
+**REQ-04.24 — CLI team composer: text-based composition via config files**
+
+- AC-04.24.1: BlockRegistry loads teams from TOML files
+  - verify: Write a team TOML file -> BlockRegistry.load_from_dir loads it and get_team returns the team
+- AC-04.24.2: BlockRegistry loads custom blocks from TOML files
+  - verify: Write a block TOML file -> BlockRegistry.load_from_dir loads it and get_block returns the block with correct attributes
+
+**REQ-04.25 — Nesting: composite blocks can contain other composites**
+
+- AC-04.25.1: A team can reference blocks that are themselves composite team names
+  - verify: Register an inner composite, create an outer team referencing it -> validate_team returns no errors
+
+**REQ-04.26 — Block versioning**
+
+- AC-04.26.1: Every block has a version field
+  - verify: BlockDef(version="1.2.3") -> block.version is "1.2.3"
+- AC-04.26.2: Default version is 1.0.0
+  - verify: BlockDef with no version -> block.version is "1.0.0"
+- AC-04.26.3: TeamDef carries a version
+  - verify: TeamDef(version="3.0.0") -> team.version is "3.0.0"
+
+**REQ-04.27 — Loop/cycle support in block graphs**
+
+- AC-04.27.1: TeamDef accepts LoopDef entries
+  - verify: Create a TeamDef with a LoopDef -> team.loops has 1 entry with correct max_iterations
+- AC-04.27.2: Validation does not reject teams with loops
+  - verify: validate_team on a team with LoopDef -> errors list is empty
+
+**REQ-04.30 — Every port has a type tag and optional JSON schema**
+
+- AC-04.30.1: Built-in types include plan, code-changes, review, test-results, text, any
+  - verify: PORT_TYPES contains all 6 expected type tags
+- AC-04.30.2: A port type can have an associated JSON schema
+  - verify: register_port_type with json_schema -> PORT_TYPE_REGISTRY entry has the schema
+
+**REQ-04.31 — Port compatibility checked at composition time**
+
+- AC-04.31.1: Same type tags are compatible
+  - verify: check_port_compatibility("plan", "plan") -> True
+- AC-04.31.2: Different types are incompatible
+  - verify: check_port_compatibility("plan", "code-changes") -> False
+- AC-04.31.3: validate_team reports port type mismatches
+  - verify: validate_team with mismatched port connection -> errors contain "mismatch"
+
+**REQ-04.32 — 'any' type is the escape hatch**
+
+- AC-04.32.1: Source 'any' matches any target
+  - verify: check_port_compatibility("any", "plan") and ("any", "code-changes") -> both True
+- AC-04.32.2: Target 'any' accepts any source
+  - verify: check_port_compatibility("plan", "any") and ("review", "any") -> both True
+- AC-04.32.3: 'any' to 'any' is compatible
+  - verify: check_port_compatibility("any", "any") -> True
+
+**REQ-04.33 — Composite blocks expose unconnected inner ports**
+
+- AC-04.33.1: Unconnected inputs/outputs become composite ports
+  - verify: get_composite_ports on a team -> exposed inputs include unconnected input, exposed outputs include unconnected output
+- AC-04.33.2: Connected ports are not exposed
+  - verify: get_composite_ports on a team -> internally wired ports do not appear in exposed lists
+
+**REQ-04.34 — New type tags can be registered by users**
+
+- AC-04.34.1: Custom type tags are added to the global registry
+  - verify: register_port_type("my-custom-type") -> PORT_TYPES contains it and self-compatibility holds
+- AC-04.34.2: Custom types can include JSON schema for validation
+  - verify: register_port_type with json_schema -> validate_port_data with matching data returns valid
+- AC-04.34.3: Data failing schema check is rejected
+  - verify: validate_port_data with missing required field -> returns invalid with type name in error
+
+**REQ-04.35 — Port data is always serializable (JSON)**
+
+- AC-04.35.1: Standard dicts/lists/strings pass validation
+  - verify: validate_port_data with a dict -> valid is True
+- AC-04.35.2: Non-JSON-serializable data is rejected
+  - verify: validate_port_data with a set -> valid is False with "json-serializable" in error
+- AC-04.35.3: Unknown type tags still require JSON serializability
+  - verify: validate_port_data with unknown type and valid JSON -> valid is True
+
 **REQ-04.40 — Standard evaluator output**
 
 - AC-04.40.1: All evaluator blocks return `{pass, score, feedback, details}`
   - verify: Run the evaluator block -> output is a dict with `pass` (bool), `score` (0-100), `feedback` (string), `details` (dict)
 - AC-04.40.2: Evaluator output missing a required field raises a validation error
   - verify: Evaluator returns `{pass: true}` without `score` -> `EvaluatorOutputError` is raised
+- AC-04.40.3: Non-JSON evaluator output falls back to keyword heuristic parsing
+  - verify: TeamRunner._parse_evaluator_result with plain text containing "pass" -> returns EvaluatorResult with passed=True
+
+**REQ-04.41 — Each evaluator defines its own rubric/criteria**
+
+- AC-04.41.1: Evaluator block has a system_prompt containing the rubric
+  - verify: Built-in evaluator block -> system_prompt is non-empty
+- AC-04.41.2: Custom evaluator blocks can have any criteria in system_prompt
+  - verify: Create a BlockDef with role "evaluator" and custom system_prompt -> system_prompt contains the custom criteria
 
 **REQ-04.42 — Loop exit checks pass**
 
@@ -1701,6 +1877,13 @@ These emerged from design review and govern all implementation decisions:
   - verify: Set `max_iterations = 3` and evaluator always returns `pass: false` -> loop exits after 3 iterations with status "max iterations reached"
 - AC-04.43.2: Default max iteration limit is 5
   - verify: Create a loop block with no explicit max_iterations config -> it stops after 5 iterations if evaluator never passes
+- AC-04.43.3: Validation rejects max_iterations less than 1
+  - verify: validate_team with LoopDef(max_iterations=0) -> errors contain "max_iterations"
+
+**REQ-04.44 — Evaluator criteria are part of the block config**
+
+- AC-04.44.1: TeamRunner injects evaluator system_prompt as criteria into evaluator input
+  - verify: _build_evaluator_input for a custom evaluator -> output contains the evaluator's system_prompt criteria
 
 **REQ-04.50 — Block fails then retry N times**
 
@@ -1708,6 +1891,33 @@ These emerged from design review and govern all implementation decisions:
   - verify: Set `retry_count = 2` for a block that fails on first call -> block is retried twice (3 total attempts) before escalating
 - AC-04.50.2: Default retry count is 1
   - verify: Block fails with no explicit retry config -> retried once (2 total attempts), then escalates
+- AC-04.50.3: max_retries=0 means no retries; immediate failure
+  - verify: Block with max_retries=0 fails -> generate called exactly once, then EscalationError
+- AC-04.50.4: Higher retry counts allow more total attempts
+  - verify: Block with max_retries=3 fails 3 times then succeeds -> 4 total generate calls, returns success
+
+**REQ-04.51 — Still failing: escalate to caller**
+
+- AC-04.51.1: BlockError is raised when all retries are exhausted
+  - verify: Block with max_retries=1 always fails -> EscalationError raised matching block name
+- AC-04.51.2: Escalation error includes block instance name and failure details
+  - verify: Block "analyzer" fails with "OOM" -> EscalationError message contains both "analyzer" and "OOM"
+
+**REQ-04.52 — Caller decides: retry differently, skip, substitute, or escalate**
+
+- AC-04.52.1: Caller pre-sets 'skip' decision; failed block is skipped
+  - verify: set_caller_decision("w", DECISION_SKIP) -> failed block returns "SKIPPED" instead of raising
+- AC-04.52.2: Caller pre-sets 'escalate' decision; EscalationError raised
+  - verify: set_caller_decision("critical", DECISION_ESCALATE) -> EscalationError raised on failure
+- AC-04.52.3: Default decision without explicit setting is escalate
+  - verify: No caller decision set -> block failure raises EscalationError
+
+**REQ-04.53 — Error reaches entry agent with no resolution: escalate to human**
+
+- AC-04.53.1: EscalationError propagates up to the caller (human)
+  - verify: Entry block fails with max_retries=0 -> EscalationError with "human intervention" message
+- AC-04.53.2: EscalationError message includes block instance name and original error
+  - verify: Block "fatal" fails with "disk full" -> EscalationError contains both "fatal" and "disk full"
 
 **REQ-04.54 — Partial failure in parallel branches: other branches continue**
 
@@ -1795,6 +2005,15 @@ These emerged from design review and govern all implementation decisions:
 | REQ-05.5 | **GUI** — web-based (localhost) real-time monitoring and interaction | Dashboard: agent status, tasks, output |
 | REQ-05.6 | **Visual team composer** — drag-and-drop block editor | Node-based editor; equivalent to TOML configs |
 | REQ-05.7 | GUI shows agent communication graph / message flow | Visual who's-talking-to-whom |
+
+#### Acceptance Criteria (REQ-05.4)
+
+**REQ-05.4 — CLI exposes a local REST API that a GUI consumes**
+
+- AC-05.4.1: GET /api/status returns project status
+  - verify: Create app with guild_dir, GET /api/status -> 200 with status "ok"
+- AC-05.4.2: POST /api/tasks creates a task and GET /api/tasks lists tasks
+  - verify: POST /api/tasks with description -> 200; GET /api/tasks -> list contains at least 1 task
 
 ### REQ-18: Artifact Management
 

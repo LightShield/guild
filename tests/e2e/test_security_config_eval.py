@@ -122,10 +122,10 @@ async def storage(tmp_path: Path) -> Storage:
 # ===================================================================
 
 
-@pytest.mark.req("REQ-13.1")
 class TestSandboxPathBoundaries:
     """REQ-13.1: Sandboxed execution — file system path boundaries."""
 
+    @pytest.mark.ac("AC-13.1.1")
     def test_allowed_path_permits_subpath(self, tmp_path: Path) -> None:
         """Paths within allowed_paths are accepted."""
         policy = SandboxPolicy(allowed_paths=[str(tmp_path)])
@@ -133,6 +133,7 @@ class TestSandboxPathBoundaries:
         assert allowed is True
         assert reason == ""
 
+    @pytest.mark.ac("AC-13.1.1")
     def test_path_outside_allowed_is_rejected(self, tmp_path: Path) -> None:
         """Paths outside all allowed_paths are rejected."""
         policy = SandboxPolicy(allowed_paths=[str(tmp_path / "safe")])
@@ -140,12 +141,14 @@ class TestSandboxPathBoundaries:
         assert allowed is False
         assert "outside all allowed" in reason
 
+    @pytest.mark.ac("AC-13.1.3")
     def test_no_allowed_paths_means_all_allowed(self) -> None:
         """Empty allowed_paths permits everything."""
         policy = SandboxPolicy()
         allowed, _ = policy.check_path("/any/path")
         assert allowed is True
 
+    @pytest.mark.ac("AC-13.1.2")
     def test_denied_takes_precedence_over_allowed(self, tmp_path: Path) -> None:
         """Denied paths override allowed paths."""
         policy = SandboxPolicy(
@@ -156,6 +159,7 @@ class TestSandboxPathBoundaries:
         assert allowed is False
         assert "denied" in reason.lower()
 
+    @pytest.mark.ac("AC-13.1.3")
     def test_load_sandbox_policy_from_toml(self, guild_dir: Path) -> None:
         """Load policy from a security.toml file with filesystem rules."""
         security_toml = guild_dir / "security.toml"
@@ -169,15 +173,16 @@ class TestSandboxPathBoundaries:
         assert str(guild_dir.parent / "private") in policy.denied_paths
 
 
-@pytest.mark.req("REQ-13.2")
 class TestSandboxNetwork:
     """REQ-13.2: Network access controls per agent."""
 
+    @pytest.mark.ac("AC-13.2.2")
     def test_network_disabled_by_policy(self) -> None:
         """When network_allowed=False, policy reflects it."""
         policy = SandboxPolicy(network_allowed=False)
         assert policy.network_allowed is False
 
+    @pytest.mark.ac("AC-13.2.1")
     def test_network_hosts_allowlist(self) -> None:
         """Hosts allowlist restricts which endpoints are contactable."""
         policy = SandboxPolicy(
@@ -186,6 +191,7 @@ class TestSandboxNetwork:
         assert "api.example.com" in policy.network_hosts_allowlist
         assert "evil.com" not in policy.network_hosts_allowlist
 
+    @pytest.mark.ac("AC-13.2.1")
     def test_load_network_policy_from_toml(self, guild_dir: Path) -> None:
         """Load network controls from security.toml."""
         security_toml = guild_dir / "security.toml"
@@ -199,10 +205,10 @@ class TestSandboxNetwork:
         assert policy.network_hosts_allowlist == ["localhost"]
 
 
-@pytest.mark.req("REQ-13.3")
 class TestSandboxSecrets:
     """REQ-13.3: Secret management — agents use API keys without seeing values."""
 
+    @pytest.mark.ac("AC-13.3.2")
     def test_mask_secrets_in_text(self) -> None:
         """Secret values are replaced with [REDACTED:name] in output text."""
         policy = SandboxPolicy(secrets={"API_KEY": "sk-12345"})
@@ -210,18 +216,21 @@ class TestSandboxSecrets:
         assert "sk-12345" not in masked
         assert "[REDACTED:API_KEY]" in masked
 
+    @pytest.mark.ac("AC-13.3.1")
     def test_inject_secret_into_command(self) -> None:
         """${SECRET_NAME} placeholders are replaced with actual values."""
         policy = SandboxPolicy(secrets={"DB_PASS": "hunter2"})
         result = policy.inject_secret("psql -p ${DB_PASS} mydb")
         assert result == "psql -p hunter2 mydb"
 
+    @pytest.mark.ac("AC-13.3.1")
     def test_unknown_placeholder_left_unchanged(self) -> None:
         """Unregistered ${PLACEHOLDERS} pass through unchanged."""
         policy = SandboxPolicy(secrets={"KNOWN": "val"})
         result = policy.inject_secret("echo ${UNKNOWN}")
         assert result == "echo ${UNKNOWN}"
 
+    @pytest.mark.ac("AC-13.3.1")
     def test_secrets_loaded_from_toml(self, guild_dir: Path) -> None:
         """Secrets section in security.toml is parsed into policy."""
         security_toml = guild_dir / "security.toml"
@@ -233,16 +242,17 @@ class TestSandboxSecrets:
         assert policy.secrets["API_KEY"] == "test-secret-val"
 
 
-@pytest.mark.req("REQ-13.4")
 class TestSandboxFileBoundaries:
     """REQ-13.4: File system boundaries — agents only access allowed paths."""
 
+    @pytest.mark.ac("AC-13.4.1")
     def test_exact_path_match_is_allowed(self, tmp_path: Path) -> None:
         """Exact match on an allowed path is permitted."""
         policy = SandboxPolicy(allowed_paths=[str(tmp_path / "workspace")])
         allowed, _ = policy.check_path(str(tmp_path / "workspace"))
         assert allowed is True
 
+    @pytest.mark.ac("AC-13.4.2")
     def test_parent_traversal_blocked(self, tmp_path: Path) -> None:
         """Paths with .. that escape allowed boundaries are blocked."""
         workspace = tmp_path / "workspace"
@@ -253,10 +263,10 @@ class TestSandboxFileBoundaries:
         assert "outside" in reason
 
 
-@pytest.mark.req("REQ-13.5")
 class TestSandboxCommandDenylist:
     """REQ-13.5: Command allowlist/denylist for shell execution."""
 
+    @pytest.mark.ac("AC-13.5.1")
     def test_denied_command_rejected(self) -> None:
         """Commands in denylist are blocked."""
         policy = SandboxPolicy(denied_commands=["rm", "curl"])
@@ -264,12 +274,14 @@ class TestSandboxCommandDenylist:
         assert allowed is False
         assert "denylist" in reason
 
+    @pytest.mark.ac("AC-13.5.3")
     def test_allowed_command_accepted(self) -> None:
         """Commands in allowlist are accepted."""
         policy = SandboxPolicy(allowed_commands=["ls", "cat", "grep"])
         allowed, _ = policy.check_command("ls -la")
         assert allowed is True
 
+    @pytest.mark.ac("AC-13.5.3")
     def test_command_not_in_allowlist_rejected(self) -> None:
         """When allowlist is set, unlisted commands are rejected."""
         policy = SandboxPolicy(allowed_commands=["ls", "cat"])
@@ -277,6 +289,7 @@ class TestSandboxCommandDenylist:
         assert allowed is False
         assert "not in allowlist" in reason
 
+    @pytest.mark.ac("AC-13.5.2")
     def test_deny_takes_precedence_over_allow(self) -> None:
         """Denylist overrides allowlist."""
         policy = SandboxPolicy(
@@ -286,6 +299,7 @@ class TestSandboxCommandDenylist:
         allowed, reason = policy.check_command("curl http://example.com")
         assert allowed is False
 
+    @pytest.mark.ac("AC-13.5.3")
     def test_no_restrictions_allows_all(self) -> None:
         """Empty allow and deny lists permit everything."""
         policy = SandboxPolicy()
@@ -298,10 +312,10 @@ class TestSandboxCommandDenylist:
 # ===================================================================
 
 
-@pytest.mark.req("REQ-14.1")
 class TestConfigAgentDefinitions:
     """REQ-14.1: TOML-based agent definitions in .guild/agents.toml."""
 
+    @pytest.mark.ac("AC-14.1.1")
     def test_load_agent_profiles_from_toml(self, guild_dir: Path) -> None:
         """Agent profiles are loaded from agents.toml."""
         agents_toml = guild_dir / "agents.toml"
@@ -323,6 +337,7 @@ class TestConfigAgentDefinitions:
         assert planner.max_turns == 20
         assert planner.token_budget == 5000
 
+    @pytest.mark.ac("AC-14.1.1")
     def test_multiple_agent_profiles(self, guild_dir: Path) -> None:
         """Multiple agent profiles can coexist in one file."""
         agents_toml = guild_dir / "agents.toml"
@@ -336,10 +351,10 @@ class TestConfigAgentDefinitions:
         assert "coder" in profiles
 
 
-@pytest.mark.req("REQ-14.2")
 class TestConfigTeamDefinitions:
     """REQ-14.2: TOML-based team definitions loaded from block files."""
 
+    @pytest.mark.ac("AC-14.2.1")
     def test_team_block_loading(self, project_dir: Path) -> None:
         """Team block TOML files are loadable from .guild/blocks."""
         blocks_dir = project_dir / ".guild" / "blocks"
@@ -357,10 +372,10 @@ class TestConfigTeamDefinitions:
         assert data["team"]["entry_block"] == "test"
 
 
-@pytest.mark.req("REQ-14.3")
 class TestConfigPermissionProfiles:
     """REQ-14.3: Named permission profiles from .guild/permissions.toml."""
 
+    @pytest.mark.ac("AC-14.3.1")
     def test_load_permission_profiles(self, guild_dir: Path) -> None:
         """Permission profiles are loaded from permissions.toml."""
         perms_toml = guild_dir / "permissions.toml"
@@ -376,16 +391,17 @@ class TestConfigPermissionProfiles:
         assert profiles["restricted"].allowed_paths == ["/safe"]
         assert profiles["restricted"].allowed_tools == ["file_read"]
 
+    @pytest.mark.ac("AC-14.3.2")
     def test_empty_permission_profiles(self, guild_dir: Path) -> None:
         """Missing permissions.toml returns empty dict, not error."""
         profiles = load_permission_profiles(guild_dir)
         assert profiles == {}
 
 
-@pytest.mark.req("REQ-14.4")
 class TestConfigOverrides:
     """REQ-14.4: Project config overrides global config."""
 
+    @pytest.mark.ac("AC-14.4.1")
     def test_project_overrides_global(self, tmp_path: Path) -> None:
         """Project config.toml values override global defaults."""
         guild_dir = tmp_path / ".guild"
@@ -398,6 +414,7 @@ class TestConfigOverrides:
         assert config.model == "custom-model"
         assert config.base_url == "http://custom:11434"
 
+    @pytest.mark.ac("AC-14.4.1")
     def test_cli_args_override_config_file(self, tmp_path: Path) -> None:
         """CLI arguments take highest priority over file config."""
         guild_dir = tmp_path / ".guild"
@@ -408,10 +425,10 @@ class TestConfigOverrides:
         assert config.model == "from-cli"
 
 
-@pytest.mark.req("REQ-14.5")
 class TestConfigValidation:
     """REQ-14.5: Config validation on startup."""
 
+    @pytest.mark.ac("AC-14.5.3")
     def test_valid_config_no_errors(self, project_dir: Path) -> None:
         """A properly initialized project passes validation."""
         guild_dir = project_dir / ".guild"
@@ -419,6 +436,7 @@ class TestConfigValidation:
         errors = validate_config(config, guild_dir)
         assert errors == []
 
+    @pytest.mark.ac("AC-14.5.1")
     def test_missing_model_is_error(self, tmp_path: Path) -> None:
         """Empty model name is flagged as validation error."""
         guild_dir = tmp_path / ".guild"
@@ -430,6 +448,7 @@ class TestConfigValidation:
         errors = validate_config(config, guild_dir)
         assert any("model" in e.lower() for e in errors)
 
+    @pytest.mark.ac("AC-14.5.1")
     def test_invalid_agent_permission_is_error(self, tmp_path: Path) -> None:
         """Agent profile referencing an invalid permission tier is flagged."""
         guild_dir = tmp_path / ".guild"
@@ -445,10 +464,10 @@ class TestConfigValidation:
         assert any("bad_agent" in e for e in errors)
 
 
-@pytest.mark.req("REQ-14.6")
 class TestConfigHotReload:
     """REQ-14.6: Hot-reload config on file change."""
 
+    @pytest.mark.ac("AC-14.6.1")
     def test_config_watcher_detects_change(self, tmp_path: Path) -> None:
         """ConfigWatcher fires callback when config file mtime changes."""
         config_file = tmp_path / "config.toml"
@@ -468,6 +487,7 @@ class TestConfigHotReload:
         assert watcher.check_for_changes() is True
         assert len(callback_called) == 1
 
+    @pytest.mark.ac("AC-14.6.2")
     def test_config_watcher_no_spurious_reload(self, tmp_path: Path) -> None:
         """ConfigWatcher does not fire when mtime is unchanged."""
         config_file = tmp_path / "config.toml"
@@ -481,6 +501,7 @@ class TestConfigHotReload:
             assert watcher.check_for_changes() is False
         assert len(callback_called) == 0
 
+    @pytest.mark.ac("AC-14.6.3")
     def test_config_watcher_missing_file(self, tmp_path: Path) -> None:
         """ConfigWatcher handles missing config file gracefully."""
         missing = tmp_path / "nonexistent.toml"
@@ -493,10 +514,10 @@ class TestConfigHotReload:
 # ===================================================================
 
 
-@pytest.mark.req("REQ-15.2")
 class TestEscalationPresenceNotify:
     """REQ-15.2: Presence-aware notification for escalation questions."""
 
+    @pytest.mark.ac("AC-15.2.1")
     async def test_notify_via_terminal_bell(self) -> None:
         """Terminal bell notification channel sends bell character."""
         notifier = Notifier(channels=[NotificationChannel.TERMINAL_BELL])
@@ -506,12 +527,14 @@ class TestEscalationPresenceNotify:
             await notifier.notify("Test notification")
         mock_stdout.write.assert_called_with("\a")
 
+    @pytest.mark.ac("AC-15.2.2")
     async def test_notify_via_none_channel(self) -> None:
         """None channel silently discards notifications."""
         notifier = Notifier(channels=[NotificationChannel.NONE])
         # Should not raise
         await notifier.notify("Silenced")
 
+    @pytest.mark.ac("AC-15.2.1")
     async def test_notify_high_priority(self) -> None:
         """High-priority notifications are dispatched through channels."""
         notifier = Notifier(channels=[NotificationChannel.TERMINAL_BELL])
@@ -524,10 +547,10 @@ class TestEscalationPresenceNotify:
         mock_stdout.write.assert_called()
 
 
-@pytest.mark.req("REQ-15.3")
 class TestEscalationContext:
     """REQ-15.3: Questions carry context for the human reviewer."""
 
+    @pytest.mark.ac("AC-15.3.1")
     async def test_question_includes_context(self, storage: Storage) -> None:
         """Posted questions include context string for human review."""
         queue = QuestionQueue(storage)
@@ -542,6 +565,7 @@ class TestEscalationContext:
         assert len(matched) == 1
         assert "200 lines" in matched[0].context
 
+    @pytest.mark.ac("AC-15.3.2")
     async def test_question_preserves_agent_and_task_ids(self, storage: Storage) -> None:
         """Questions carry task_id and agent_id for traceability."""
         queue = QuestionQueue(storage)
@@ -557,10 +581,10 @@ class TestEscalationContext:
         assert matched[0].agent_id == "a-7"
 
 
-@pytest.mark.req("REQ-15.4")
 class TestEscalationBatchApproval:
     """REQ-15.4: Batch approval of multiple pending questions."""
 
+    @pytest.mark.ac("AC-15.4.1")
     async def test_batch_answer_multiple_questions(self, storage: Storage) -> None:
         """Multiple questions can be answered in a single batch call."""
         queue = QuestionQueue(storage)
@@ -585,6 +609,7 @@ class TestEscalationBatchApproval:
         assert a2 == "No"
         assert a3 == "Maybe"
 
+    @pytest.mark.ac("AC-15.4.2")
     async def test_batch_answer_returns_correct_count(self, storage: Storage) -> None:
         """Batch answer returns the exact count of answered questions."""
         queue = QuestionQueue(storage)
@@ -594,10 +619,10 @@ class TestEscalationBatchApproval:
         assert count == 2
 
 
-@pytest.mark.req("REQ-15.5")
 class TestEscalationChannels:
     """REQ-15.5: Configurable notification channels."""
 
+    @pytest.mark.ac("AC-15.5.3")
     async def test_multiple_channels(self) -> None:
         """Notifier dispatches to all configured channels."""
         notifier = Notifier(
@@ -610,6 +635,7 @@ class TestEscalationChannels:
         # Bell should have fired (NONE is silent)
         mock_stdout.write.assert_called_with("\a")
 
+    @pytest.mark.ac("AC-15.5.2")
     async def test_webhook_channel_posts_json(self) -> None:
         """Webhook channel sends an HTTP POST with JSON payload."""
         notifier = Notifier(
@@ -622,6 +648,7 @@ class TestEscalationChannels:
             "http://hooks.example.com/notify", {"text": "Webhook test"},
         )
 
+    @pytest.mark.ac("AC-15.5.4")
     async def test_webhook_without_url_logs_warning(self) -> None:
         """Webhook channel without URL logs a warning instead of crashing."""
         notifier = Notifier(
@@ -631,6 +658,7 @@ class TestEscalationChannels:
         # Should not raise
         await notifier.notify("No URL configured")
 
+    @pytest.mark.ac("AC-15.5.1")
     async def test_desktop_channel_calls_platform_adapter(self) -> None:
         """Desktop channel invokes the platform adapter."""
         notifier = Notifier(channels=[NotificationChannel.DESKTOP])
@@ -648,10 +676,10 @@ class TestEscalationChannels:
 # ===================================================================
 
 
-@pytest.mark.req("REQ-16.1")
 class TestEvalABTest:
     """REQ-16.1: A/B testing of different configs/models."""
 
+    @pytest.mark.ac("AC-16.1.1")
     async def test_ab_test_runs_both_providers(self, storage: Storage) -> None:
         """A/B test runs the same task on two providers and returns both results."""
         framework = EvalFramework(storage)
@@ -670,6 +698,7 @@ class TestEvalABTest:
         assert result_b.model == "model-b"
         assert result_a.task_name == result_b.task_name == "ab_test_task"
 
+    @pytest.mark.ac("AC-16.1.2")
     async def test_compare_results_determines_winner(self, storage: Storage) -> None:
         """Compare results picks a winner based on metrics."""
         framework = EvalFramework(storage)
@@ -693,10 +722,10 @@ class TestEvalABTest:
         assert comparison["winner"] == "a"
 
 
-@pytest.mark.req("REQ-16.2")
 class TestEvalBenchmarkSuite:
     """REQ-16.2: Standard benchmark suite execution."""
 
+    @pytest.mark.ac("AC-16.2.1")
     async def test_run_suite_returns_results_for_all_tasks(self, storage: Storage) -> None:
         """run_suite returns one result per task."""
         framework = EvalFramework(storage)
@@ -710,6 +739,7 @@ class TestEvalBenchmarkSuite:
         assert len(results) == 3
         assert [r.task_name for r in results] == ["t1", "t2", "t3"]
 
+    @pytest.mark.ac("AC-16.2.2")
     async def test_suite_collects_metrics(self, storage: Storage) -> None:
         """Each suite result contains valid metrics."""
         framework = EvalFramework(storage)
@@ -723,10 +753,10 @@ class TestEvalBenchmarkSuite:
         assert r.metrics.turns >= 1
 
 
-@pytest.mark.req("REQ-16.3")
 class TestEvalRegressionDetection:
     """REQ-16.3: Regression detection via metric comparison."""
 
+    @pytest.mark.ac("AC-16.3.1")
     async def test_task_failure_is_regression(self, storage: Storage) -> None:
         """If baseline completed but current failed, it is a regression."""
         framework = EvalFramework(storage)
@@ -751,6 +781,7 @@ class TestEvalRegressionDetection:
         assert regressed is True
         assert "no longer completes" in reason
 
+    @pytest.mark.ac("AC-16.3.1")
     async def test_duration_regression(self, storage: Storage) -> None:
         """2x duration increase is flagged as regression."""
         framework = EvalFramework(storage)
@@ -774,6 +805,7 @@ class TestEvalRegressionDetection:
         assert regressed is True
         assert "duration" in reason
 
+    @pytest.mark.ac("AC-16.3.2")
     async def test_no_regression_within_threshold(self, storage: Storage) -> None:
         """Slightly slower run is not a regression."""
         framework = EvalFramework(storage)
@@ -797,10 +829,10 @@ class TestEvalRegressionDetection:
         assert regressed is False
 
 
-@pytest.mark.req("REQ-16.4")
 class TestEvalMetricsCollection:
     """REQ-16.4: Eval metrics — tokens, duration, tool calls, turns."""
 
+    @pytest.mark.ac("AC-16.4.1")
     async def test_eval_run_collects_all_metric_fields(self, storage: Storage) -> None:
         """A single eval run populates all EvalMetrics fields."""
         framework = EvalFramework(storage)
@@ -815,6 +847,7 @@ class TestEvalMetricsCollection:
         assert m.turns >= 1
         assert m.error is None
 
+    @pytest.mark.ac("AC-16.4.1")
     async def test_eval_captures_errors(self, storage: Storage) -> None:
         """Provider failure is captured in metrics error field."""
         framework = EvalFramework(storage)
@@ -826,10 +859,10 @@ class TestEvalMetricsCollection:
         assert "network down" in result.metrics.error
 
 
-@pytest.mark.req("REQ-16.5")
 class TestEvalResultsPersistence:
     """REQ-16.5: Persistent storage and retrieval of eval results."""
 
+    @pytest.mark.ac("AC-16.5.1")
     async def test_store_and_retrieve_result(self, storage: Storage) -> None:
         """Eval results persist to SQLite and can be retrieved."""
         framework = EvalFramework(storage)
@@ -849,6 +882,7 @@ class TestEvalResultsPersistence:
         assert stored.model == "test-model"
         assert stored.metrics.input_tokens == 150
 
+    @pytest.mark.ac("AC-16.5.2")
     async def test_retrieve_with_limit(self, storage: Storage) -> None:
         """Result retrieval respects the limit parameter."""
         framework = EvalFramework(storage)
@@ -866,10 +900,10 @@ class TestEvalResultsPersistence:
         assert len(results) == 3
 
 
-@pytest.mark.req("REQ-16.6")
 class TestEvalProgressiveConfidence:
     """REQ-16.6: Progressive confidence — benchmark difficulty ramps up."""
 
+    @pytest.mark.ac("AC-16.6.1")
     def test_self_dev_benchmarks_ordered_by_complexity(self) -> None:
         """Built-in benchmarks progress from simple to complex."""
         assert len(SELF_DEV_BENCHMARKS) >= 2
@@ -878,6 +912,7 @@ class TestEvalProgressiveConfidence:
         last = SELF_DEV_BENCHMARKS[-1]
         assert len(last.verification) >= len(first.verification)
 
+    @pytest.mark.ac("AC-16.6.2")
     def test_self_dev_benchmarks_have_required_fields(self) -> None:
         """Each benchmark has name, description, and verification."""
         for task in SELF_DEV_BENCHMARKS:
@@ -886,16 +921,17 @@ class TestEvalProgressiveConfidence:
             assert isinstance(task.verification, list)
 
 
-@pytest.mark.req("REQ-16.7")
 class TestEvalSelfDevBenchmarks:
     """REQ-16.7: Self-development benchmark suite for Guild itself."""
 
+    @pytest.mark.ac("AC-16.7.1")
     def test_self_dev_benchmarks_cover_categories(self) -> None:
         """Self-dev benchmarks include both general and coding categories."""
         categories = {t.category for t in SELF_DEV_BENCHMARKS}
         assert "general" in categories
         assert "coding" in categories
 
+    @pytest.mark.ac("AC-16.7.2")
     async def test_self_dev_benchmarks_runnable(self, storage: Storage) -> None:
         """Self-dev benchmarks can be executed against a mock provider."""
         framework = EvalFramework(storage)
@@ -911,10 +947,10 @@ class TestEvalSelfDevBenchmarks:
 # ===================================================================
 
 
-@pytest.mark.req("REQ-17.1")
 class TestProviderPerAgentModel:
     """REQ-17.1: Per-agent model selection via agent profiles."""
 
+    @pytest.mark.ac("AC-17.1.1")
     def test_agent_profile_specifies_model(self, guild_dir: Path) -> None:
         """Agent profiles carry per-agent model selection."""
         (guild_dir / "agents.toml").write_text(
@@ -925,6 +961,7 @@ class TestProviderPerAgentModel:
         assert profiles["fast_agent"].model == "gemma4-2b-edge-fast"
         assert profiles["smart_agent"].model == "gemma4-26b-moe-agent"
 
+    @pytest.mark.ac("AC-17.1.2")
     def test_agent_profile_without_model_uses_none(self, guild_dir: Path) -> None:
         """Agent profiles without explicit model default to None (use global)."""
         (guild_dir / "agents.toml").write_text(
@@ -934,10 +971,10 @@ class TestProviderPerAgentModel:
         assert profiles["default_agent"].model is None
 
 
-@pytest.mark.req("REQ-17.2")
 class TestProviderFallbackChains:
     """REQ-17.2: Escalation chain — fallback through ordered provider list."""
 
+    @pytest.mark.ac("AC-17.2.1")
     async def test_chain_escalates_on_failure(self) -> None:
         """EscalationChain moves to next provider when current fails."""
         primary = _failing_provider(ConnectionError("down"))
@@ -950,6 +987,7 @@ class TestProviderFallbackChains:
         assert result.model == "secondary"
         assert chain.current_index == 1
 
+    @pytest.mark.ac("AC-17.2.3")
     async def test_chain_raises_when_exhausted(self) -> None:
         """When all providers fail, the last exception propagates."""
         p1 = _failing_provider(ConnectionError("down1"))
@@ -961,16 +999,17 @@ class TestProviderFallbackChains:
         with pytest.raises(ConnectionError):
             await ep.generate([{"role": "user", "content": "Hello"}])
 
+    @pytest.mark.ac("AC-17.2.2")
     def test_chain_requires_at_least_one_provider(self) -> None:
         """Empty provider list raises ValueError."""
         with pytest.raises(ValueError, match="at least one"):
             EscalationChain([])
 
 
-@pytest.mark.req("REQ-17.3")
 class TestProviderCheapModels:
     """REQ-17.3: Select cheapest capable model for a task type."""
 
+    @pytest.mark.ac("AC-17.3.1")
     def test_select_cheapest_for_simple_qa(self) -> None:
         """Simple QA selects the cheapest model with simple_qa tag."""
         models = list(MODEL_CAPABILITIES.keys())
@@ -979,6 +1018,7 @@ class TestProviderCheapModels:
         assert "simple_qa" in cap.tags
         assert cap.cost_tier == "free"
 
+    @pytest.mark.ac("AC-17.3.1")
     def test_select_model_for_code_generation(self) -> None:
         """Code generation selects a capable model."""
         models = list(MODEL_CAPABILITIES.keys())
@@ -986,27 +1026,30 @@ class TestProviderCheapModels:
         cap = MODEL_CAPABILITIES[selected]
         assert "code_generation" in cap.tags
 
+    @pytest.mark.ac("AC-17.3.2")
     def test_no_capable_model_raises(self) -> None:
         """ValueError when no model supports the requested capability."""
         with pytest.raises(ValueError, match="No available model"):
             select_model_for_task("nonexistent_capability", list(MODEL_CAPABILITIES.keys()))
 
 
-@pytest.mark.req("REQ-17.4")
 class TestProviderCapabilityTags:
     """REQ-17.4: Models have capability tags for routing decisions."""
 
+    @pytest.mark.ac("AC-17.4.1")
     def test_model_capabilities_have_tags(self) -> None:
         """All registered models have at least one capability tag."""
         for key, cap in MODEL_CAPABILITIES.items():
             assert len(cap.tags) > 0, f"Model {key} has no tags"
 
+    @pytest.mark.ac("AC-17.4.1")
     def test_model_capabilities_have_cost_tier(self) -> None:
         """All registered models have a valid cost tier."""
         valid_tiers = {"free", "cheap", "expensive"}
         for key, cap in MODEL_CAPABILITIES.items():
             assert cap.cost_tier in valid_tiers, f"Model {key} has invalid cost tier"
 
+    @pytest.mark.ac("AC-17.4.2")
     def test_capability_tag_filtering(self) -> None:
         """Models can be filtered by capability tag."""
         reasoning_models = [
@@ -1015,10 +1058,10 @@ class TestProviderCapabilityTags:
         assert len(reasoning_models) >= 1
 
 
-@pytest.mark.req("REQ-17.5")
 class TestProviderStuckEscalation:
     """REQ-17.5: Stuck detection triggers model escalation."""
 
+    @pytest.mark.ac("AC-17.5.1")
     async def test_notify_stuck_escalates(self) -> None:
         """notify_stuck() moves the chain to the next provider."""
         primary = _mock_provider(model="small")
@@ -1031,6 +1074,7 @@ class TestProviderStuckEscalation:
         assert escalated is True
         assert chain.current_index == 1
 
+    @pytest.mark.ac("AC-17.5.2")
     async def test_notify_stuck_returns_false_when_exhausted(self) -> None:
         """notify_stuck() returns False when chain has no more providers."""
         single = _mock_provider(model="only")
@@ -1041,10 +1085,10 @@ class TestProviderStuckEscalation:
         assert escalated is False
 
 
-@pytest.mark.req("REQ-17.6")
 class TestProviderCLITools:
     """REQ-17.6: CLI tool providers as last-resort escalation."""
 
+    @pytest.mark.ac("AC-17.6.1")
     def test_cli_provider_builds_command(self) -> None:
         """CLIToolProvider builds correct command from prompt."""
         provider = CLIToolProvider(command="gemini", model="gemini-pro")
@@ -1055,6 +1099,7 @@ class TestProviderCLITools:
         assert "-p" in cmd
         assert "Hello world" in cmd
 
+    @pytest.mark.ac("AC-17.6.1")
     def test_cli_provider_extracts_prompt(self) -> None:
         """CLIToolProvider extracts last user message as prompt."""
         provider = CLIToolProvider(command="claude")
@@ -1067,12 +1112,14 @@ class TestProviderCLITools:
         prompt = provider._extract_prompt(messages)
         assert prompt == "Second question."
 
+    @pytest.mark.ac("AC-17.6.2")
     async def test_cli_provider_health_check(self) -> None:
         """Health check returns False for nonexistent CLI tools."""
         provider = CLIToolProvider(command="nonexistent_cli_tool_xyz")
         healthy = await provider.health_check()
         assert healthy is False
 
+    @pytest.mark.ac("AC-17.6.3")
     def test_cli_provider_command_without_model(self) -> None:
         """CLI provider without explicit model uses command as model name."""
         provider = CLIToolProvider(command="claude")
@@ -1082,16 +1129,17 @@ class TestProviderCLITools:
         assert "--model" not in cmd
 
 
-@pytest.mark.req("REQ-17.7")
 class TestProviderConfigurableChains:
     """REQ-17.7: Configurable escalation chains via config."""
 
+    @pytest.mark.ac("AC-17.7.1")
     def test_escalation_chain_config_field_exists(self) -> None:
         """GuildConfig has escalation_chain field for configurable chains."""
         config = GuildConfig.load(args=[], file=None)
         assert hasattr(config, "escalation_chain")
         assert hasattr(config, "escalation_cli_providers")
 
+    @pytest.mark.ac("AC-17.7.1")
     def test_chain_length_and_navigation(self) -> None:
         """Chain tracks length and current position correctly."""
         providers = [_mock_provider(model=f"m{i}") for i in range(3)]
@@ -1111,6 +1159,7 @@ class TestProviderConfigurableChains:
         chain.reset()
         assert chain.current_index == 0
 
+    @pytest.mark.ac("AC-17.7.1")
     def test_config_escalation_chain_from_toml(self, tmp_path: Path) -> None:
         """Escalation chain value loads from TOML config."""
         guild_dir = tmp_path / ".guild"
@@ -1127,10 +1176,10 @@ class TestProviderConfigurableChains:
         assert "gemini" in config.escalation_cli_providers
 
 
-@pytest.mark.req("REQ-17.8")
 class TestProviderMalformedRecovery:
     """REQ-17.8: Recovery from malformed model output."""
 
+    @pytest.mark.ac("AC-17.8.1")
     async def test_retry_with_correction_appends_hint(self) -> None:
         """retry_with_correction adds a correction hint message."""
         primary = _mock_provider(content="Fixed output")
@@ -1147,6 +1196,7 @@ class TestProviderMalformedRecovery:
         assert len(sent_messages) == 2
         assert "malformed" in sent_messages[-1]["content"].lower()
 
+    @pytest.mark.ac("AC-17.8.2")
     async def test_escalate_and_retry_on_malformed(self) -> None:
         """Escalation happens when correction on current provider fails."""
         primary = _mock_provider(content="Still bad")
@@ -1159,6 +1209,7 @@ class TestProviderMalformedRecovery:
         assert result.content == "Good output"
         assert chain.current_index == 1
 
+    @pytest.mark.ac("AC-17.8.2")
     async def test_malformed_error_when_chain_exhausted(self) -> None:
         """MalformedOutputError raised when no providers remain."""
         single = _mock_provider()
@@ -1169,6 +1220,7 @@ class TestProviderMalformedRecovery:
         with pytest.raises(MalformedOutputError, match="exhausted"):
             await ep.escalate_and_retry(messages)
 
+    @pytest.mark.ac("AC-17.8.3")
     async def test_generate_with_malformed_recovery_first_attempt(self) -> None:
         """generate_with_malformed_recovery is a plain generate on step 1."""
         primary = _mock_provider(content="First try")

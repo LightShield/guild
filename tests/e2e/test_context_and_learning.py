@@ -89,10 +89,10 @@ def memory_index(storage: Storage) -> MemoryIndex:
 # ------------------------------------------------------------------
 
 
-@pytest.mark.req("REQ-07.1")
 class TestPersistentContext:
     """Messages stored in one session are retrievable in a subsequent session."""
 
+    @pytest.mark.ac("AC-07.1.1")
     async def test_messages_persist_across_sessions(self, tmp_path: Path) -> None:
         """Append messages, close DB, reopen, and verify they survive."""
         db_path = tmp_path / "persist.db"
@@ -117,6 +117,7 @@ class TestPersistentContext:
         assert messages[1]["content"] == "Fix the parser."
         assert messages[2]["role"] == "assistant"
 
+    @pytest.mark.ac("AC-07.1.2")
     async def test_learnings_survive_restart(self, tmp_path: Path) -> None:
         """Learnings persisted in session 1 are available in session 2."""
         db_path = tmp_path / "learn_persist.db"
@@ -145,10 +146,10 @@ class TestPersistentContext:
 # ------------------------------------------------------------------
 
 
-@pytest.mark.req("REQ-07.2")
 class TestCheckpointResume:
     """Save agent state, shut down, reload, and continue from where we left off."""
 
+    @pytest.mark.ac("AC-07.2.1")
     async def test_checkpoint_save_and_restore(self, storage: Storage) -> None:
         """Full round-trip: save checkpoint -> load checkpoint -> same state."""
         original = Checkpoint(
@@ -178,6 +179,7 @@ class TestCheckpointResume:
         assert len(loaded.messages) == 3
         assert loaded.messages[1].content == "Refactor module X."
 
+    @pytest.mark.ac("AC-07.2.3")
     async def test_latest_checkpoint_wins(self, storage: Storage) -> None:
         """When multiple checkpoints exist, the most recent is loaded."""
         cp1 = Checkpoint(
@@ -206,6 +208,7 @@ class TestCheckpointResume:
         assert loaded.turn_number == 10
         assert loaded.messages[0].content == "second"
 
+    @pytest.mark.ac("AC-07.2.1")
     async def test_checkpoint_survives_db_reopen(self, tmp_path: Path) -> None:
         """Checkpoint written before close is available after reopen."""
         db_path = tmp_path / "ckpt_reopen.db"
@@ -237,10 +240,10 @@ class TestCheckpointResume:
 # ------------------------------------------------------------------
 
 
-@pytest.mark.req("REQ-07.3")
 class TestSharedKnowledge:
     """Agents share knowledge through the SharedContext store and Storage."""
 
+    @pytest.mark.ac("AC-07.3.1")
     async def test_shared_context_between_agents(self) -> None:
         """Agent A writes to SharedContext, Agent B reads the same data."""
         shared = SharedContext()
@@ -251,6 +254,7 @@ class TestSharedKnowledge:
         assert data["indent"] == 4
         assert data["quotes"] == "double"
 
+    @pytest.mark.ac("AC-07.3.2")
     async def test_learnings_visible_across_agents(self, storage: Storage) -> None:
         """Learnings stored by agent A's task are available to agent B."""
         # Agent A's task stores a learning
@@ -271,6 +275,7 @@ class TestSharedKnowledge:
         injection = format_learnings_for_injection(learnings)
         assert "Always validate request bodies" in injection
 
+    @pytest.mark.ac("AC-07.3.1")
     async def test_shared_context_list_keys(self) -> None:
         """SharedContext.list_keys returns all stored keys."""
         shared = SharedContext()
@@ -285,10 +290,10 @@ class TestSharedKnowledge:
 # ------------------------------------------------------------------
 
 
-@pytest.mark.req("REQ-07.4")
 class TestContextCompression:
     """Compression reduces token count while preserving essential context."""
 
+    @pytest.mark.ac("AC-07.4.1")
     def test_compression_reduces_tokens(self) -> None:
         """After compaction, token estimate is lower than before."""
         cm = ContextManager(max_tokens=200, preserve_recent=2, compact_threshold=0.5)
@@ -306,6 +311,7 @@ class TestContextCompression:
 
         assert after_tokens < before_tokens
 
+    @pytest.mark.ac("AC-07.4.1")
     def test_compression_preserves_message_count(self) -> None:
         """Compaction never drops messages, only shortens content."""
         cm = ContextManager(max_tokens=100, preserve_recent=2, compact_threshold=0.5)
@@ -317,6 +323,7 @@ class TestContextCompression:
         compacted = cm.compact(messages)
         assert len(compacted) == len(messages)
 
+    @pytest.mark.ac("AC-07.4.3")
     def test_system_prompt_never_truncated(self) -> None:
         """System prompt is protected from compaction regardless of size."""
         long_system = "You are an agent. " * 200
@@ -335,10 +342,10 @@ class TestContextCompression:
 # ------------------------------------------------------------------
 
 
-@pytest.mark.req("REQ-07.5")
 class TestSkepticalMemory:
     """Memories are unverified until explicitly verified; index reflects status."""
 
+    @pytest.mark.ac("AC-07.5.1")
     async def test_new_memory_is_unverified(self, memory_index: MemoryIndex) -> None:
         """Freshly added memory appears with [unverified] in index."""
         await memory_index.add(
@@ -350,6 +357,7 @@ class TestSkepticalMemory:
         assert len(index) == 1
         assert "[unverified]" in index[0]
 
+    @pytest.mark.ac("AC-07.5.2")
     async def test_verified_memory_loses_prefix(self, memory_index: MemoryIndex) -> None:
         """After verification, the [unverified] prefix is removed."""
         mid = await memory_index.add(
@@ -364,6 +372,7 @@ class TestSkepticalMemory:
         assert "[unverified]" not in index[0]
         assert "Uses SQLite" in index[0]
 
+    @pytest.mark.ac("AC-07.5.2")
     async def test_verify_records_timestamp(
         self, memory_index: MemoryIndex, storage: Storage
     ) -> None:
@@ -385,10 +394,10 @@ class TestSkepticalMemory:
 # ------------------------------------------------------------------
 
 
-@pytest.mark.req("REQ-07.6")
 class TestLightweightMemoryIndex:
     """Index holds summaries only; full content fetched on demand."""
 
+    @pytest.mark.ac("AC-07.6.1")
     async def test_index_contains_summaries_not_content(
         self, memory_index: MemoryIndex
     ) -> None:
@@ -402,6 +411,7 @@ class TestLightweightMemoryIndex:
         assert "Short summary here" in index[0]
         assert "much longer detailed body" not in index[0]
 
+    @pytest.mark.ac("AC-07.6.2")
     async def test_fetch_detail_returns_full_content(
         self, memory_index: MemoryIndex
     ) -> None:
@@ -416,6 +426,7 @@ class TestLightweightMemoryIndex:
         assert entry.content == "Full detailed content here."
         assert entry.category == "decision"
 
+    @pytest.mark.ac("AC-07.6.1")
     async def test_index_capped_at_200(self, memory_index: MemoryIndex) -> None:
         """Index never returns more than 200 entries."""
         for i in range(210):
@@ -427,6 +438,7 @@ class TestLightweightMemoryIndex:
         index = await memory_index.get_index()
         assert len(index) <= 200
 
+    @pytest.mark.ac("AC-07.6.1")
     async def test_format_index_for_prompt(self, memory_index: MemoryIndex) -> None:
         """format_index_for_prompt produces injectable markdown."""
         await memory_index.add(
@@ -445,10 +457,10 @@ class TestLightweightMemoryIndex:
 # ------------------------------------------------------------------
 
 
-@pytest.mark.req("REQ-07.7")
 class TestMemoryConsolidation:
     """Stale unverified memories are cleaned; duplicates are merged."""
 
+    @pytest.mark.ac("AC-07.7.1")
     async def test_consolidate_removes_stale_unverified(
         self, memory_index: MemoryIndex, storage: Storage
     ) -> None:
@@ -475,6 +487,7 @@ class TestMemoryConsolidation:
         assert await memory_index.fetch_detail("stale-id") is None
         assert await memory_index.fetch_detail(fresh_id) is not None
 
+    @pytest.mark.ac("AC-07.7.2")
     async def test_consolidate_deduplicates(self, memory_index: MemoryIndex) -> None:
         """Duplicate summaries are merged: only one copy remains."""
         await memory_index.add("Same summary", "Content v1", "fact")
@@ -496,10 +509,10 @@ class TestMemoryConsolidation:
 # ------------------------------------------------------------------
 
 
-@pytest.mark.req("REQ-07.8")
 class TestContextResetHandoff:
     """When context is reset, a structured handoff preserves essential info."""
 
+    @pytest.mark.ac("AC-07.8.1")
     def test_handoff_captures_task_and_decisions(self, ctx: ContextManager) -> None:
         """Handoff artifact contains task, decisions, and completed actions."""
         messages = [
@@ -516,6 +529,7 @@ class TestContextResetHandoff:
         assert "Created schema.sql successfully" in artifact
         assert "### Remaining Work" in artifact
 
+    @pytest.mark.ac("AC-07.8.1")
     def test_handoff_with_no_decisions_or_actions(self, ctx: ContextManager) -> None:
         """Handoff still produces valid structure with empty conversation."""
         artifact = ctx.create_handoff_artifact([], "Empty task")
@@ -529,10 +543,10 @@ class TestContextResetHandoff:
 # ------------------------------------------------------------------
 
 
-@pytest.mark.req("REQ-07.10")
 class TestStaticDynamicSeparation:
     """System prompt is static (cacheable); learnings + task are dynamic."""
 
+    @pytest.mark.ac("AC-07.10.1")
     def test_static_part_equals_system_prompt(self) -> None:
         """Static partition contains only the system prompt."""
         static, dynamic = ContextManager.separate_static_dynamic(
@@ -544,6 +558,7 @@ class TestStaticDynamicSeparation:
         assert "guard clauses" in dynamic
         assert "Fix bug #123" in dynamic
 
+    @pytest.mark.ac("AC-07.10.2")
     def test_static_part_stable_across_different_tasks(self) -> None:
         """Static part does not change when learnings or task change."""
         system = "You are a coder."
@@ -551,6 +566,7 @@ class TestStaticDynamicSeparation:
         s2, _ = ContextManager.separate_static_dynamic(system, "L2", "T2")
         assert s1 == s2 == system
 
+    @pytest.mark.ac("AC-07.10.1")
     def test_dynamic_empty_when_no_learnings_or_task(self) -> None:
         """Dynamic part is empty string when both inputs are empty."""
         _, dynamic = ContextManager.separate_static_dynamic("sys", "", "")
@@ -562,10 +578,10 @@ class TestStaticDynamicSeparation:
 # ------------------------------------------------------------------
 
 
-@pytest.mark.req("REQ-09.2")
 class TestKnowledgeCategories:
     """Learnings are stored with valid categories and filterable by category."""
 
+    @pytest.mark.ac("AC-09.2.1")
     async def test_store_all_valid_categories(self, storage: Storage) -> None:
         """All four valid categories can be stored and retrieved."""
         categories = ["pattern", "anti_pattern", "tool_tip", "domain_knowledge"]
@@ -582,6 +598,7 @@ class TestKnowledgeCategories:
         stored_cats = {l["category"] for l in all_learnings}
         assert stored_cats == set(categories)
 
+    @pytest.mark.ac("AC-09.2.2")
     async def test_filter_by_category(self, storage: Storage) -> None:
         """list_learnings(category=...) returns only matching entries."""
         await storage.add_learning(category="pattern", content="Use early returns", confidence=0.6)
@@ -598,6 +615,7 @@ class TestKnowledgeCategories:
         assert len(tips) == 1
         assert tips[0]["content"] == "Use --verbose"
 
+    @pytest.mark.ac("AC-09.2.1")
     async def test_extract_learnings_respects_categories(self, storage: Storage) -> None:
         """extract_learnings via LLM stores only valid categories."""
         await storage.create_task("task-cat", "Test categories")
@@ -630,10 +648,10 @@ class TestKnowledgeCategories:
 # ------------------------------------------------------------------
 
 
-@pytest.mark.req("REQ-09.3")
 class TestConfidenceScoring:
     """Confidence increases on validation, decreases on invalidation, decays over time."""
 
+    @pytest.mark.ac("AC-09.3.1")
     async def test_initial_confidence(self, storage: Storage) -> None:
         """New learning starts at default confidence of 0.3."""
         lid = await storage.add_learning(
@@ -643,6 +661,7 @@ class TestConfidenceScoring:
         assert learning is not None
         assert learning["confidence"] == pytest.approx(0.3)
 
+    @pytest.mark.ac("AC-09.3.2")
     async def test_validate_increases_confidence(self, storage: Storage) -> None:
         """Each validation call increases confidence by the increment constant."""
         lid = await storage.add_learning(category="pattern", content="A", confidence=0.3)
@@ -653,6 +672,7 @@ class TestConfidenceScoring:
         expected = 0.3 + CONFIDENCE_VALIDATE_INCREMENT
         assert after["confidence"] == pytest.approx(expected)
 
+    @pytest.mark.ac("AC-09.3.3")
     async def test_invalidate_decreases_confidence(self, storage: Storage) -> None:
         """Invalidation decreases confidence by the decrement constant."""
         lid = await storage.add_learning(category="pattern", content="B", confidence=0.6)
@@ -663,6 +683,7 @@ class TestConfidenceScoring:
         expected = 0.6 - CONFIDENCE_INVALIDATE_DECREMENT
         assert after["confidence"] == pytest.approx(expected)
 
+    @pytest.mark.ac("AC-09.3.2")
     async def test_confidence_capped_at_one(self, storage: Storage) -> None:
         """Confidence cannot exceed 1.0 no matter how many validations."""
         lid = await storage.add_learning(category="pattern", content="C", confidence=0.95)
@@ -675,6 +696,7 @@ class TestConfidenceScoring:
         assert after is not None
         assert after["confidence"] <= 1.0
 
+    @pytest.mark.ac("AC-09.3.3")
     async def test_confidence_floored_at_zero(self, storage: Storage) -> None:
         """Confidence cannot go below 0.0 on repeated invalidation."""
         lid = await storage.add_learning(category="pattern", content="D", confidence=0.1)
@@ -687,6 +709,7 @@ class TestConfidenceScoring:
         assert after is not None
         assert after["confidence"] >= 0.0
 
+    @pytest.mark.ac("AC-09.3.3")
     async def test_decay_reduces_stale_confidence(self, storage: Storage) -> None:
         """decay_learnings reduces confidence of entries not validated recently."""
         lid = await storage.add_learning(category="pattern", content="E", confidence=0.8)
@@ -708,6 +731,7 @@ class TestConfidenceScoring:
         expected = 0.8 - CONFIDENCE_DECAY_DECREMENT
         assert after["confidence"] == pytest.approx(expected)
 
+    @pytest.mark.ac("AC-09.3.1")
     async def test_injection_filters_low_confidence(self, storage: Storage) -> None:
         """format_learnings_for_injection excludes items below MIN_INJECTION_CONFIDENCE."""
         low = {"category": "pattern", "content": "Low conf", "confidence": 0.2}
@@ -717,6 +741,7 @@ class TestConfidenceScoring:
         assert "High conf" in result
         assert "Low conf" not in result
 
+    @pytest.mark.ac("AC-09.3.2")
     async def test_confidence_lifecycle(self, storage: Storage) -> None:
         """Full lifecycle: add -> validate x2 -> invalidate -> verify final score."""
         lid = await storage.add_learning(category="tool_tip", content="Lifecycle", confidence=0.3)
@@ -744,10 +769,10 @@ class TestConfidenceScoring:
 # ------------------------------------------------------------------
 
 
-@pytest.mark.req("REQ-09.4")
 class TestLearningInjection:
     """Learnings stored in session 1 are injected into session 2 prompts."""
 
+    @pytest.mark.ac("AC-09.4.1")
     async def test_high_confidence_learnings_appear_in_injection(
         self, storage: Storage
     ) -> None:
@@ -766,6 +791,7 @@ class TestLearningInjection:
         assert "Always use guard clauses" in injection
         assert "Run ruff before commit" in injection
 
+    @pytest.mark.ac("AC-09.4.2")
     async def test_low_confidence_learnings_excluded_from_injection(
         self, storage: Storage
     ) -> None:
@@ -783,6 +809,7 @@ class TestLearningInjection:
         assert "Dubious pattern" not in injection
         assert "Solid pattern" in injection
 
+    @pytest.mark.ac("AC-09.4.1")
     async def test_injection_into_dynamic_prompt_section(
         self, storage: Storage
     ) -> None:
@@ -801,6 +828,7 @@ class TestLearningInjection:
         assert "Use early returns" not in static
         assert "Use early returns" in dynamic
 
+    @pytest.mark.ac("AC-09.4.1")
     async def test_injection_survives_db_restart(self, tmp_path: Path) -> None:
         """Learnings persisted in session 1 are injectable in session 2."""
         db_path = tmp_path / "inject.db"
@@ -828,10 +856,10 @@ class TestLearningInjection:
 # ------------------------------------------------------------------
 
 
-@pytest.mark.req("REQ-09.5")
 class TestHumanLearningManagement:
     """Humans can list, approve (validate), and reject (delete) learnings."""
 
+    @pytest.mark.ac("AC-09.5.1")
     async def test_browse_learnings(self, storage: Storage) -> None:
         """List learnings returns all stored items for human review."""
         await storage.add_learning(
@@ -846,6 +874,7 @@ class TestHumanLearningManagement:
         contents = {l["content"] for l in all_learnings}
         assert contents == {"Pattern A", "Anti B"}
 
+    @pytest.mark.ac("AC-09.5.2")
     async def test_approve_learning_boosts_confidence(self, storage: Storage) -> None:
         """Approving (validating) a learning increases its confidence."""
         lid = await storage.add_learning(
@@ -859,6 +888,7 @@ class TestHumanLearningManagement:
             0.4 + CONFIDENCE_VALIDATE_INCREMENT
         )
 
+    @pytest.mark.ac("AC-09.5.3")
     async def test_reject_learning_deletes_it(self, storage: Storage) -> None:
         """Rejecting a learning removes it from storage entirely."""
         lid = await storage.add_learning(
@@ -869,6 +899,7 @@ class TestHumanLearningManagement:
         learning = await storage.get_learning(lid)
         assert learning is None
 
+    @pytest.mark.ac("AC-09.5.3")
     async def test_reject_removes_from_listing(self, storage: Storage) -> None:
         """After rejection, the learning no longer appears in list_learnings."""
         lid = await storage.add_learning(
@@ -883,6 +914,7 @@ class TestHumanLearningManagement:
         assert len(remaining) == 1
         assert remaining[0]["content"] == "Keep me"
 
+    @pytest.mark.ac("AC-09.5.1")
     async def test_filter_learnings_by_category(self, storage: Storage) -> None:
         """Browsing can be filtered by category for focused review."""
         await storage.add_learning(
@@ -905,10 +937,10 @@ class TestHumanLearningManagement:
 # ------------------------------------------------------------------
 
 
-@pytest.mark.req("REQ-09.6")
 class TestCrossTaskLearning:
     """Learnings extracted from one task are available to agents on other tasks."""
 
+    @pytest.mark.ac("AC-09.6.1")
     async def test_learning_from_task_a_visible_to_task_b(
         self, storage: Storage
     ) -> None:
@@ -928,6 +960,7 @@ class TestCrossTaskLearning:
 
         assert "Validate all inputs at boundary" in injection
 
+    @pytest.mark.ac("AC-09.6.1")
     async def test_cross_task_learnings_via_extract_and_inject(
         self, storage: Storage
     ) -> None:
@@ -965,10 +998,10 @@ class TestCrossTaskLearning:
 # ------------------------------------------------------------------
 
 
-@pytest.mark.req("REQ-09.7")
 class TestBlockLevelScope:
     """Learnings can be scoped to a specific block and filtered accordingly."""
 
+    @pytest.mark.ac("AC-09.7.1")
     async def test_scoped_learning_stored_and_filtered(
         self, storage: Storage
     ) -> None:
@@ -989,6 +1022,7 @@ class TestBlockLevelScope:
         assert len(parser_learnings) == 1
         assert parser_learnings[0]["content"] == "Use recursive descent"
 
+    @pytest.mark.ac("AC-09.7.1")
     async def test_unscoped_listing_includes_all(self, storage: Storage) -> None:
         """Without a scope filter, all learnings are returned."""
         await storage.add_learning(
@@ -1001,6 +1035,7 @@ class TestBlockLevelScope:
         all_learnings = await storage.list_learnings()
         assert len(all_learnings) == 2
 
+    @pytest.mark.ac("AC-09.7.2")
     async def test_suggest_prompt_refinements_scoped(
         self, storage: Storage
     ) -> None:
@@ -1027,10 +1062,10 @@ class TestBlockLevelScope:
 # ------------------------------------------------------------------
 
 
-@pytest.mark.req("REQ-09.8")
 class TestLearningDecay:
     """Old unvalidated learnings lose confidence over time."""
 
+    @pytest.mark.ac("AC-09.8.1")
     async def test_decay_reduces_stale_learning_confidence(
         self, storage: Storage
     ) -> None:
@@ -1055,6 +1090,7 @@ class TestLearningDecay:
         assert after is not None
         assert after["confidence"] == pytest.approx(0.7 - CONFIDENCE_DECAY_DECREMENT)
 
+    @pytest.mark.ac("AC-09.8.2")
     async def test_recently_validated_not_decayed(self, storage: Storage) -> None:
         """Learnings validated recently are not affected by decay."""
         lid = await storage.add_learning(
@@ -1068,6 +1104,7 @@ class TestLearningDecay:
         assert after is not None
         assert after["confidence"] >= 0.7
 
+    @pytest.mark.ac("AC-09.8.1")
     async def test_repeated_decay_floors_at_zero(self, storage: Storage) -> None:
         """Multiple decay cycles cannot push confidence below 0.0."""
         lid = await storage.add_learning(
@@ -1088,6 +1125,7 @@ class TestLearningDecay:
         assert after is not None
         assert after["confidence"] >= 0.0
 
+    @pytest.mark.ac("AC-09.8.3")
     async def test_decayed_learning_drops_below_injection_threshold(
         self, storage: Storage
     ) -> None:
@@ -1119,10 +1157,10 @@ class TestLearningDecay:
 # ------------------------------------------------------------------
 
 
-@pytest.mark.req("REQ-09.9")
 class TestPromptRefinementSuggestions:
     """High-confidence anti-patterns and tool tips generate prompt suggestions."""
 
+    @pytest.mark.ac("AC-09.9.1")
     async def test_anti_pattern_generates_guard_suggestion(
         self, storage: Storage
     ) -> None:
@@ -1136,6 +1174,7 @@ class TestPromptRefinementSuggestions:
         assert len(suggestions) == 1
         assert suggestions[0] == "Add guard against: Avoid busy waits in async code"
 
+    @pytest.mark.ac("AC-09.9.1")
     async def test_tool_tip_generates_include_suggestion(
         self, storage: Storage
     ) -> None:
@@ -1149,6 +1188,7 @@ class TestPromptRefinementSuggestions:
         assert len(suggestions) == 1
         assert suggestions[0] == "Include tip in prompt: Use --dry-run for destructive commands"
 
+    @pytest.mark.ac("AC-09.9.2")
     async def test_patterns_and_domain_knowledge_not_suggested(
         self, storage: Storage
     ) -> None:
@@ -1162,6 +1202,7 @@ class TestPromptRefinementSuggestions:
         suggestions = await suggest_prompt_refinements(storage)
         assert suggestions == []
 
+    @pytest.mark.ac("AC-09.9.2")
     async def test_low_confidence_learnings_not_suggested(
         self, storage: Storage
     ) -> None:
@@ -1174,6 +1215,7 @@ class TestPromptRefinementSuggestions:
         suggestions = await suggest_prompt_refinements(storage)
         assert suggestions == []
 
+    @pytest.mark.ac("AC-09.9.1")
     async def test_mixed_suggestions(self, storage: Storage) -> None:
         """Multiple qualifying learnings produce multiple suggestions."""
         await storage.add_learning(

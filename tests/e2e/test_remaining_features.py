@@ -75,10 +75,10 @@ def _init_db(db_path: Path) -> None:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-05.3")
 class TestSendMessageToAgent:
     """Send messages to a running agent via the control socket."""
 
+    @pytest.mark.ac("AC-05.3.1")
     async def test_message_delivered_via_socket(self, tmp_path: Path) -> None:
         """Happy: client sends a message, server queues it."""
         from guild.daemon.control_socket import ControlSocket
@@ -102,6 +102,7 @@ class TestSendMessageToAgent:
         await writer.wait_closed()
         await cs.stop()
 
+    @pytest.mark.ac("AC-05.3.1")
     async def test_multiple_messages_queued_in_order(self, tmp_path: Path) -> None:
         """Happy: multiple messages arrive and are dequeued in FIFO order."""
         from guild.daemon.control_socket import ControlSocket
@@ -126,6 +127,7 @@ class TestSendMessageToAgent:
         await writer.wait_closed()
         await cs.stop()
 
+    @pytest.mark.ac("AC-05.3.2")
     async def test_invalid_json_returns_error(self, tmp_path: Path) -> None:
         """Sad: malformed JSON returns an error response."""
         from guild.daemon.control_socket import ControlSocket
@@ -150,10 +152,10 @@ class TestSendMessageToAgent:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-05.4a")
 class TestInteractiveAttach:
     """Attach to a running task via the control socket and interact."""
 
+    @pytest.mark.ac("AC-05.4a.1")
     async def test_subscribe_and_receive_broadcast(self, tmp_path: Path) -> None:
         """Happy: subscribed client receives broadcast messages."""
         from guild.daemon.control_socket import ControlSocket
@@ -183,6 +185,7 @@ class TestInteractiveAttach:
         await writer.wait_closed()
         await cs.stop()
 
+    @pytest.mark.ac("AC-05.4a.3")
     async def test_pause_and_resume_via_attach(self, tmp_path: Path) -> None:
         """Happy: attached client can pause and resume the agent."""
         from guild.daemon.control_socket import ControlSocket
@@ -215,6 +218,7 @@ class TestInteractiveAttach:
         await writer.wait_closed()
         await cs.stop()
 
+    @pytest.mark.ac("AC-05.4a.1")
     async def test_unknown_command_returns_error(self, tmp_path: Path) -> None:
         """Sad: unknown command action yields an error response."""
         from guild.daemon.control_socket import ControlSocket
@@ -241,10 +245,10 @@ class TestInteractiveAttach:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-05.5")
 class TestWebGUI:
     """REST API serves status, tasks, and WebSocket for real-time updates."""
 
+    @pytest.mark.ac("AC-05.5.1")
     def test_api_status_endpoint(self, tmp_path: Path) -> None:
         """Happy: GET /api/status returns project status with version."""
         from starlette.testclient import TestClient
@@ -267,6 +271,7 @@ class TestWebGUI:
             assert "version" in data
             assert data["status"] == "ok"
 
+    @pytest.mark.ac("AC-05.5.2")
     def test_api_tasks_crud(self, tmp_path: Path) -> None:
         """Happy: POST /api/tasks creates a task, GET retrieves it."""
         from starlette.testclient import TestClient
@@ -295,6 +300,7 @@ class TestWebGUI:
             tasks = resp.json()
             assert any(t["task_id"] == task_id for t in tasks)
 
+    @pytest.mark.ac("AC-05.5.3")
     def test_api_missing_task_returns_404(self, tmp_path: Path) -> None:
         """Sad: GET /api/tasks/nonexistent returns 404."""
         from starlette.testclient import TestClient
@@ -319,10 +325,10 @@ class TestWebGUI:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-18.2")
 class TestArtifactDiff:
     """Diff between artifact versions shows changes."""
 
+    @pytest.mark.ac("AC-18.2.1")
     def test_diff_shows_added_lines(self, tmp_path: Path) -> None:
         """Happy: diff between v1 and v2 includes added lines."""
         from guild.artifacts.manager import ArtifactManager
@@ -336,6 +342,7 @@ class TestArtifactDiff:
         assert "code.py.v1" in diff
         assert "code.py.v2" in diff
 
+    @pytest.mark.ac("AC-18.2.2")
     def test_diff_shows_removed_lines(self, tmp_path: Path) -> None:
         """Happy: diff between v1 and v2 includes removed lines."""
         from guild.artifacts.manager import ArtifactManager
@@ -347,6 +354,7 @@ class TestArtifactDiff:
         diff = mgr.get_diff("task-d2", "code.py", 1, 2)
         assert "-remove_me" in diff
 
+    @pytest.mark.ac("AC-18.2.1")
     def test_diff_empty_when_versions_identical(self, tmp_path: Path) -> None:
         """Edge: diff between identical versions is empty."""
         from guild.artifacts.manager import ArtifactManager
@@ -358,6 +366,7 @@ class TestArtifactDiff:
         diff = mgr.get_diff("task-d3", "same.py", 1, 2)
         assert diff == ""
 
+    @pytest.mark.ac("AC-18.2.2")
     def test_diff_nonexistent_version_uses_empty(self, tmp_path: Path) -> None:
         """Sad: diffing against a nonexistent version treats it as empty."""
         from guild.artifacts.manager import ArtifactManager
@@ -374,10 +383,10 @@ class TestArtifactDiff:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-18.4")
 class TestArtifactVersioning:
     """Artifacts support multiple versions with auto-increment."""
 
+    @pytest.mark.ac("AC-18.4.1")
     def test_save_version_auto_increments(self, tmp_path: Path) -> None:
         """Happy: each save_version produces an incrementing version number."""
         from guild.artifacts.manager import ArtifactManager
@@ -392,6 +401,7 @@ class TestArtifactVersioning:
         a3 = mgr.save_version("task-v1", "file.py", "v3 content")
         assert a3.version == 3
 
+    @pytest.mark.ac("AC-18.4.2")
     def test_get_retrieves_specific_version(self, tmp_path: Path) -> None:
         """Happy: get(version=N) returns the content of that version."""
         from guild.artifacts.manager import ArtifactManager
@@ -403,6 +413,7 @@ class TestArtifactVersioning:
         assert mgr.get("task-v2", "file.py", version=1) == "original"
         assert mgr.get("task-v2", "file.py", version=2) == "updated"
 
+    @pytest.mark.ac("AC-18.4.2")
     def test_get_without_version_returns_latest(self, tmp_path: Path) -> None:
         """Happy: get() without version returns the latest version."""
         from guild.artifacts.manager import ArtifactManager
@@ -414,6 +425,7 @@ class TestArtifactVersioning:
 
         assert mgr.get("task-v3", "file.py") == "third"
 
+    @pytest.mark.ac("AC-18.4.1")
     def test_list_for_task_includes_all_versions(self, tmp_path: Path) -> None:
         """Edge: list_for_task returns all version files."""
         from guild.artifacts.manager import ArtifactManager
@@ -426,6 +438,7 @@ class TestArtifactVersioning:
         artifacts = mgr.list_for_task("task-v4")
         assert len(artifacts) == 3
 
+    @pytest.mark.ac("AC-18.4.2")
     def test_get_nonexistent_artifact_returns_none(self, tmp_path: Path) -> None:
         """Sad: getting a nonexistent artifact returns None."""
         from guild.artifacts.manager import ArtifactManager
@@ -439,10 +452,10 @@ class TestArtifactVersioning:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-18.5")
 class TestArtifactExport:
     """Export artifacts for a task to an external directory."""
 
+    @pytest.mark.ac("AC-18.5.1")
     def test_export_copies_all_versions(self, tmp_path: Path) -> None:
         """Happy: export copies all version files to the output directory."""
         from guild.artifacts.manager import ArtifactManager
@@ -459,6 +472,7 @@ class TestArtifactExport:
         assert (output / "code.py.v1").read_text() == "v1"
         assert (output / "code.py.v2").read_text() == "v2"
 
+    @pytest.mark.ac("AC-18.5.1")
     def test_export_excludes_status_file(self, tmp_path: Path) -> None:
         """Happy: export does not copy the internal .status.json file."""
         from guild.artifacts.manager import ArtifactManager
@@ -471,6 +485,7 @@ class TestArtifactExport:
 
         assert not (output / ".status.json").exists()
 
+    @pytest.mark.ac("AC-18.5.3")
     def test_export_empty_task_creates_directory(self, tmp_path: Path) -> None:
         """Edge: exporting a task with no artifacts creates an empty output dir."""
         from guild.artifacts.manager import ArtifactManager
@@ -488,10 +503,10 @@ class TestArtifactExport:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-19.1")
 class TestTemplateSave:
     """Save workflow templates for reuse."""
 
+    @pytest.mark.ac("AC-19.1.1")
     def test_save_and_retrieve_template(self, tmp_path: Path) -> None:
         """Happy: saved template is retrievable by name."""
         from guild.templates.manager import Template, TemplateManager
@@ -511,6 +526,7 @@ class TestTemplateSave:
         assert loaded.description == "Standard deploy workflow"
         assert loaded.parameters == ["service", "env"]
 
+    @pytest.mark.ac("AC-19.1.2")
     def test_list_templates(self, tmp_path: Path) -> None:
         """Happy: list returns all saved templates."""
         from guild.templates.manager import Template, TemplateManager
@@ -524,6 +540,7 @@ class TestTemplateSave:
         assert "alpha" in names
         assert "beta" in names
 
+    @pytest.mark.ac("AC-19.1.3")
     def test_get_nonexistent_template_returns_none(self, tmp_path: Path) -> None:
         """Sad: getting a nonexistent template returns None."""
         from guild.templates.manager import TemplateManager
@@ -537,10 +554,10 @@ class TestTemplateSave:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-19.2")
 class TestTemplateParameterize:
     """Templates support parameter substitution when rendered."""
 
+    @pytest.mark.ac("AC-19.2.1")
     def test_render_substitutes_parameters(self, tmp_path: Path) -> None:
         """Happy: render replaces {placeholders} with provided values."""
         from guild.templates.manager import Template, TemplateManager
@@ -554,6 +571,7 @@ class TestTemplateParameterize:
         result = mgr.render(tpl, service="auth-api", env="production", replicas="3")
         assert result == "Deploy auth-api to production with 3 replicas"
 
+    @pytest.mark.ac("AC-19.2.2")
     def test_render_leaves_missing_params_as_placeholder(self, tmp_path: Path) -> None:
         """Sad: missing parameters remain as {placeholder} in output."""
         from guild.templates.manager import Template, TemplateManager
@@ -567,6 +585,7 @@ class TestTemplateParameterize:
         result = mgr.render(tpl, service="api")
         assert result == "Deploy api to {env}"
 
+    @pytest.mark.ac("AC-19.2.3")
     def test_render_with_no_params_returns_raw_template(self, tmp_path: Path) -> None:
         """Edge: rendering with no params returns the raw template string."""
         from guild.templates.manager import Template, TemplateManager
@@ -582,10 +601,10 @@ class TestTemplateParameterize:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-19.3")
 class TestTemplateImportExport:
     """Templates can be exported to and imported from external files."""
 
+    @pytest.mark.ac("AC-19.3.1")
     def test_export_creates_json_file(self, tmp_path: Path) -> None:
         """Happy: export writes a valid JSON file to the output directory."""
         from guild.templates.manager import Template, TemplateManager
@@ -600,6 +619,7 @@ class TestTemplateImportExport:
         data = json.loads(dest.read_text())
         assert data["name"] == "exportable"
 
+    @pytest.mark.ac("AC-19.3.2")
     def test_import_loads_template_from_file(self, tmp_path: Path) -> None:
         """Happy: import from a JSON file adds the template to the manager."""
         from guild.templates.manager import Template, TemplateManager
@@ -623,6 +643,7 @@ class TestTemplateImportExport:
         # Verify it's now stored
         assert mgr.get("imported") is not None
 
+    @pytest.mark.ac("AC-19.3.1")
     def test_export_nonexistent_template_raises(self, tmp_path: Path) -> None:
         """Sad: exporting a template that does not exist raises FileNotFoundError."""
         from guild.templates.manager import TemplateManager
@@ -631,6 +652,7 @@ class TestTemplateImportExport:
         with pytest.raises(FileNotFoundError):
             mgr.export("nonexistent", tmp_path / "export")
 
+    @pytest.mark.ac("AC-19.3.2")
     def test_import_invalid_json_raises(self, tmp_path: Path) -> None:
         """Sad: importing a file with invalid JSON raises ValueError."""
         from guild.templates.manager import TemplateManager
@@ -648,10 +670,10 @@ class TestTemplateImportExport:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-20.1")
 class TestRateLimiting:
     """Sliding-window rate limiter enforces call limits."""
 
+    @pytest.mark.ac("AC-20.1.1")
     async def test_rate_limiter_allows_within_limit(self) -> None:
         """Happy: calls within the limit proceed immediately."""
         from guild.agent.ratelimit import RateLimiter
@@ -661,6 +683,7 @@ class TestRateLimiting:
             await rl.acquire()
         assert rl.available == 0
 
+    @pytest.mark.ac("AC-20.1.1")
     async def test_rate_limiter_available_count(self) -> None:
         """Happy: available count decreases as calls are made."""
         from guild.agent.ratelimit import RateLimiter
@@ -672,6 +695,7 @@ class TestRateLimiting:
         await rl.acquire()
         assert rl.available == 8
 
+    @pytest.mark.ac("AC-20.1.2")
     async def test_rate_limiter_window_expiry(self) -> None:
         """Edge: calls expire from the window, freeing capacity."""
         from guild.agent.ratelimit import RateLimiter
@@ -690,10 +714,10 @@ class TestRateLimiting:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-20.2")
 class TestToolQueue:
     """ToolQueue limits concurrent tool executions."""
 
+    @pytest.mark.ac("AC-20.2.1")
     async def test_tool_queue_limits_concurrency(self) -> None:
         """Happy: at most max_concurrent coroutines run simultaneously."""
         from guild.agent.ratelimit import ToolQueue
@@ -713,6 +737,7 @@ class TestToolQueue:
         await asyncio.gather(*tasks)
         assert max_active <= 2
 
+    @pytest.mark.ac("AC-20.2.2")
     async def test_tool_queue_returns_result(self) -> None:
         """Happy: execute returns the coroutine result."""
         from guild.agent.ratelimit import ToolQueue
@@ -725,6 +750,7 @@ class TestToolQueue:
         result = await tq.execute(compute())
         assert result == 42
 
+    @pytest.mark.ac("AC-20.2.3")
     async def test_tool_queue_propagates_exception(self) -> None:
         """Sad: exceptions from the coroutine propagate to the caller."""
         from guild.agent.ratelimit import ToolQueue
@@ -743,10 +769,10 @@ class TestToolQueue:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-20.3")
 class TestBackpressure:
     """BackpressureManager pauses low-priority work when system is loaded."""
 
+    @pytest.mark.ac("AC-20.3.1")
     async def test_backpressure_under_pressure(self) -> None:
         """Happy: when all slots taken, is_under_pressure is True."""
         from guild.agent.ratelimit import BackpressureManager
@@ -757,6 +783,7 @@ class TestBackpressure:
         bp.release()
         assert bp.is_under_pressure is False
 
+    @pytest.mark.ac("AC-20.3.2")
     async def test_backpressure_blocks_when_full(self) -> None:
         """Happy: acquire() blocks when all slots are occupied."""
         from guild.agent.ratelimit import BackpressureManager
@@ -780,6 +807,7 @@ class TestBackpressure:
         assert acquired is True
         bp.release()
 
+    @pytest.mark.ac("AC-20.3.1")
     async def test_backpressure_multiple_slots(self) -> None:
         """Edge: with max_concurrent=3, three acquires succeed before pressure."""
         from guild.agent.ratelimit import BackpressureManager
@@ -803,10 +831,10 @@ class TestBackpressure:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-21.1")
 class TestNoInternetDetection:
     """OfflineManager detects when the LLM provider is unreachable."""
 
+    @pytest.mark.ac("AC-21.1.1")
     async def test_online_detected_when_provider_healthy(self) -> None:
         """Happy: health check passes -> is_online is True."""
         from guild.offline.manager import OfflineManager
@@ -819,6 +847,7 @@ class TestNoInternetDetection:
         assert result is True
         assert mgr.is_online is True
 
+    @pytest.mark.ac("AC-21.1.2")
     async def test_offline_detected_when_provider_unreachable(self) -> None:
         """Happy: health check fails -> is_online is False."""
         from guild.offline.manager import OfflineManager
@@ -831,6 +860,7 @@ class TestNoInternetDetection:
         assert result is False
         assert mgr.is_online is False
 
+    @pytest.mark.ac("AC-21.1.2")
     async def test_is_online_none_before_first_check(self) -> None:
         """Edge: before any check, is_online is None."""
         from guild.offline.manager import OfflineManager
@@ -845,10 +875,10 @@ class TestNoInternetDetection:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-21.2")
 class TestGracefulDegradeOffline:
     """System degrades gracefully when the network is unavailable."""
 
+    @pytest.mark.ac("AC-21.2.1")
     async def test_timeout_error_sets_offline(self) -> None:
         """Happy: TimeoutError from provider marks system as offline."""
         from guild.offline.manager import OfflineManager
@@ -861,6 +891,7 @@ class TestGracefulDegradeOffline:
         assert result is False
         assert mgr.is_online is False
 
+    @pytest.mark.ac("AC-21.2.2")
     async def test_oserror_sets_offline(self) -> None:
         """Sad: OSError (e.g. no route to host) marks system as offline."""
         from guild.offline.manager import OfflineManager
@@ -872,6 +903,7 @@ class TestGracefulDegradeOffline:
         result = await mgr.check_connectivity()
         assert result is False
 
+    @pytest.mark.ac("AC-21.2.3")
     async def test_recovery_after_reconnect(self) -> None:
         """Edge: after going offline, re-checking when online returns True."""
         from guild.offline.manager import OfflineManager
@@ -894,10 +926,10 @@ class TestGracefulDegradeOffline:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-21.3")
 class TestLocalModelSupport:
     """Local Ollama models can be discovered when offline."""
 
+    @pytest.mark.ac("AC-21.3.1")
     async def test_offline_manager_has_list_local_models(self) -> None:
         """Happy: OfflineManager exposes list_local_models method."""
         from guild.offline.manager import OfflineManager
@@ -907,6 +939,7 @@ class TestLocalModelSupport:
         # The method exists and is callable (actual execution requires ollama binary)
         assert callable(mgr.list_local_models)
 
+    @pytest.mark.ac("AC-21.3.2")
     async def test_offline_manager_has_pull_model(self) -> None:
         """Happy: OfflineManager exposes pull_model method."""
         from guild.offline.manager import OfflineManager
@@ -921,10 +954,10 @@ class TestLocalModelSupport:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-21.4")
 class TestOfflineDocs:
     """Offline documentation is available without network access."""
 
+    @pytest.mark.ac("AC-21.4.1")
     async def test_get_help_returns_docs(self) -> None:
         """Happy: get_help with a known topic returns documentation."""
         from guild.offline.manager import OfflineManager
@@ -936,6 +969,7 @@ class TestOfflineDocs:
         assert docs is not None
         assert "guild init" in docs.lower() or "Guild" in docs
 
+    @pytest.mark.ac("AC-21.4.1")
     async def test_get_help_all_topics(self) -> None:
         """Happy: all documented topics return non-empty content."""
         from guild.offline.manager import OfflineManager
@@ -948,6 +982,7 @@ class TestOfflineDocs:
             assert docs is not None, f"No docs for topic: {topic}"
             assert len(docs) > 20, f"Docs too short for topic: {topic}"
 
+    @pytest.mark.ac("AC-21.4.2")
     async def test_get_help_unknown_topic_returns_none(self) -> None:
         """Sad: unknown topic returns None."""
         from guild.offline.manager import OfflineManager
@@ -962,10 +997,10 @@ class TestOfflineDocs:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-22.1")
 class TestRPGModeToggle:
     """RPG mode can be enabled and disabled."""
 
+    @pytest.mark.ac("AC-22.1.1")
     def test_rpg_mode_default_disabled(self) -> None:
         """Happy: RPG mode is disabled by default."""
         from guild.ui.rpg import RPGMode
@@ -973,6 +1008,7 @@ class TestRPGModeToggle:
         rpg = RPGMode()
         assert rpg.enabled is False
 
+    @pytest.mark.ac("AC-22.1.2")
     def test_rpg_mode_enable(self) -> None:
         """Happy: RPG mode can be enabled via constructor."""
         from guild.ui.rpg import RPGMode
@@ -980,6 +1016,7 @@ class TestRPGModeToggle:
         rpg = RPGMode(enabled=True)
         assert rpg.enabled is True
 
+    @pytest.mark.ac("AC-22.1.3")
     def test_rpg_mode_toggle_at_runtime(self) -> None:
         """Happy: RPG mode can be toggled at runtime."""
         from guild.ui.rpg import RPGMode
@@ -990,6 +1027,7 @@ class TestRPGModeToggle:
         rpg.enabled = False
         assert rpg.enabled is False
 
+    @pytest.mark.ac("AC-22.1.1")
     def test_rpg_disabled_passthrough(self) -> None:
         """Edge: when disabled, translate returns text unchanged."""
         from guild.ui.rpg import RPGMode
@@ -1003,10 +1041,10 @@ class TestRPGModeToggle:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-22.2")
 class TestRPGRename:
     """RPG mode renames standard terms to fantasy equivalents."""
 
+    @pytest.mark.ac("AC-22.2.1")
     def test_translate_task_to_quest(self) -> None:
         """Happy: 'task' becomes 'quest' when RPG enabled."""
         from guild.ui.rpg import RPGMode
@@ -1014,6 +1052,7 @@ class TestRPGRename:
         rpg = RPGMode(enabled=True)
         assert "quest" in rpg.translate("task")
 
+    @pytest.mark.ac("AC-22.2.1")
     def test_translate_agent_to_hero(self) -> None:
         """Happy: 'agent' becomes 'hero'."""
         from guild.ui.rpg import RPGMode
@@ -1021,6 +1060,7 @@ class TestRPGRename:
         rpg = RPGMode(enabled=True)
         assert "hero" in rpg.translate("agent")
 
+    @pytest.mark.ac("AC-22.2.1")
     def test_translate_team_to_party(self) -> None:
         """Happy: 'team' becomes 'party'."""
         from guild.ui.rpg import RPGMode
@@ -1028,6 +1068,7 @@ class TestRPGRename:
         rpg = RPGMode(enabled=True)
         assert "party" in rpg.translate("team")
 
+    @pytest.mark.ac("AC-22.2.1")
     def test_translate_tokens_to_gold(self) -> None:
         """Happy: 'tokens' becomes 'gold'."""
         from guild.ui.rpg import RPGMode
@@ -1035,6 +1076,7 @@ class TestRPGRename:
         rpg = RPGMode(enabled=True)
         assert "gold" in rpg.translate("tokens")
 
+    @pytest.mark.ac("AC-22.2.2")
     def test_translate_preserves_unrecognized_text(self) -> None:
         """Edge: text with no known terms passes through unchanged."""
         from guild.ui.rpg import RPGMode
@@ -1048,10 +1090,10 @@ class TestRPGRename:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-22.3")
 class TestRPGProgress:
     """RPG mode displays XP-style progress bars."""
 
+    @pytest.mark.ac("AC-22.3.1")
     def test_progress_bar_format(self) -> None:
         """Happy: progress_bar returns an XP-style bar with fraction."""
         from guild.ui.rpg import RPGMode
@@ -1061,6 +1103,7 @@ class TestRPGProgress:
         assert "XP" in bar
         assert "5/10" in bar
 
+    @pytest.mark.ac("AC-22.3.1")
     def test_progress_bar_full(self) -> None:
         """Happy: full progress shows all filled."""
         from guild.ui.rpg import RPGMode
@@ -1069,6 +1112,7 @@ class TestRPGProgress:
         bar = rpg.progress_bar(10, 10)
         assert "==========" in bar
 
+    @pytest.mark.ac("AC-22.3.1")
     def test_progress_bar_empty(self) -> None:
         """Happy: zero progress shows all dashes."""
         from guild.ui.rpg import RPGMode
@@ -1077,6 +1121,7 @@ class TestRPGProgress:
         bar = rpg.progress_bar(0, 10)
         assert "----------" in bar
 
+    @pytest.mark.ac("AC-22.3.2")
     def test_progress_bar_zero_total(self) -> None:
         """Sad: zero total returns 0 XP bar."""
         from guild.ui.rpg import RPGMode
@@ -1091,10 +1136,10 @@ class TestRPGProgress:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-22.4")
 class TestRPGQuestLog:
     """RPG mode formats tasks as quest log entries."""
 
+    @pytest.mark.ac("AC-22.4.1")
     def test_quest_log_entry_format(self) -> None:
         """Happy: quest_log_entry includes quest number, name, and status."""
         from guild.ui.rpg import RPGMode
@@ -1106,6 +1151,7 @@ class TestRPGQuestLog:
         assert "Fix the parser" in entry
         assert "adventure" in entry  # 'running' -> 'on adventure'
 
+    @pytest.mark.ac("AC-22.4.1")
     def test_quest_log_entry_pending(self) -> None:
         """Happy: pending status translates to 'quest posted'."""
         from guild.ui.rpg import RPGMode
@@ -1115,6 +1161,7 @@ class TestRPGQuestLog:
         entry = rpg.quest_log_entry(task)
         assert "quest posted" in entry
 
+    @pytest.mark.ac("AC-22.4.2")
     def test_quest_log_entry_missing_fields(self) -> None:
         """Edge: missing fields use defaults without crashing."""
         from guild.ui.rpg import RPGMode
@@ -1130,10 +1177,10 @@ class TestRPGQuestLog:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-22.5")
 class TestRPGCharacterSheets:
     """RPG mode formats agent info as character sheets."""
 
+    @pytest.mark.ac("AC-22.5.1")
     def test_character_sheet_includes_all_fields(self) -> None:
         """Happy: character sheet contains name, class, level, status."""
         from guild.ui.rpg import RPGMode
@@ -1151,6 +1198,7 @@ class TestRPGCharacterSheets:
         assert "5" in sheet
         assert "adventure" in sheet  # 'running' -> 'on adventure'
 
+    @pytest.mark.ac("AC-22.5.1")
     def test_character_sheet_defaults(self) -> None:
         """Edge: missing fields produce sensible defaults."""
         from guild.ui.rpg import RPGMode
@@ -1160,6 +1208,7 @@ class TestRPGCharacterSheets:
         assert "Unknown" in sheet
         assert "adventurer" in sheet
 
+    @pytest.mark.ac("AC-22.5.1")
     def test_character_sheet_disabled_no_translation(self) -> None:
         """Edge: with RPG disabled, character sheet shows raw status."""
         from guild.ui.rpg import RPGMode
@@ -1176,10 +1225,10 @@ class TestRPGCharacterSheets:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-22.6")
 class TestRPGNotifications:
     """RPG-themed notifications for task events."""
 
+    @pytest.mark.ac("AC-22.6.1")
     def test_notification_task_completed(self) -> None:
         """Happy: task_completed returns a celebration notification."""
         from guild.ui.rpg import RPGMode
@@ -1188,6 +1237,7 @@ class TestRPGNotifications:
         msg = rpg.notification("task_completed")
         assert "quest" in msg.lower() or "glory" in msg.lower()
 
+    @pytest.mark.ac("AC-22.6.1")
     def test_notification_task_failed(self) -> None:
         """Happy: task_failed returns a failure notification."""
         from guild.ui.rpg import RPGMode
@@ -1196,6 +1246,7 @@ class TestRPGNotifications:
         msg = rpg.notification("task_failed")
         assert "failed" in msg.lower() or "regroup" in msg.lower()
 
+    @pytest.mark.ac("AC-22.6.1")
     def test_notification_agent_started(self) -> None:
         """Happy: agent_started returns a hero entrance notification."""
         from guild.ui.rpg import RPGMode
@@ -1204,6 +1255,7 @@ class TestRPGNotifications:
         msg = rpg.notification("agent_started")
         assert "hero" in msg.lower() or "fray" in msg.lower()
 
+    @pytest.mark.ac("AC-22.6.2")
     def test_notification_unknown_event(self) -> None:
         """Sad: unknown event returns the event name as-is."""
         from guild.ui.rpg import RPGMode
@@ -1217,10 +1269,10 @@ class TestRPGNotifications:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-27.1")
 class TestTemporalDecisions:
     """Temporal knowledge includes decision history with rationale."""
 
+    @pytest.mark.ac("AC-27.1.1")
     async def test_decision_history_returned(self, storage: Storage) -> None:
         """Happy: logged decisions appear in get_decision_history."""
         from guild.knowledge.temporal import TemporalKnowledge
@@ -1242,6 +1294,7 @@ class TestTemporalDecisions:
         decisions = await tk.get_decision_history(limit=10)
         assert len(decisions) == 2
 
+    @pytest.mark.ac("AC-27.1.2")
     async def test_decision_history_limit(self, storage: Storage) -> None:
         """Edge: limit parameter caps the number of returned decisions."""
         from guild.knowledge.temporal import TemporalKnowledge
@@ -1256,6 +1309,7 @@ class TestTemporalDecisions:
         decisions = await tk.get_decision_history(limit=3)
         assert len(decisions) == 3
 
+    @pytest.mark.ac("AC-27.1.3")
     async def test_decisions_included_in_relevant_context(
         self, storage: Storage, tmp_path: Path
     ) -> None:
@@ -1278,10 +1332,10 @@ class TestTemporalDecisions:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-27.2")
 class TestPresentState:
     """TemporalKnowledge provides present state and key past info."""
 
+    @pytest.mark.ac("AC-27.2.1")
     async def test_present_state_includes_git_sections(
         self, storage: Storage, tmp_path: Path
     ) -> None:
@@ -1313,6 +1367,7 @@ class TestPresentState:
         assert "Present State" in state
         assert "Recent Commits" in state or "Top-Level Files" in state
 
+    @pytest.mark.ac("AC-27.2.2")
     async def test_present_state_no_git(
         self, storage: Storage, tmp_path: Path
     ) -> None:
@@ -1326,6 +1381,7 @@ class TestPresentState:
         # Should still have top-level files at minimum
         assert "Top-Level Files" in state or "No project state" in state
 
+    @pytest.mark.ac("AC-27.2.1")
     async def test_get_key_past_info_with_decisions(
         self, storage: Storage, tmp_path: Path
     ) -> None:
@@ -1347,6 +1403,7 @@ class TestPresentState:
         assert "Use REST" in past
         assert "Validate inputs early" in past
 
+    @pytest.mark.ac("AC-27.2.2")
     async def test_get_key_past_info_empty(
         self, storage: Storage, tmp_path: Path
     ) -> None:
@@ -1363,10 +1420,10 @@ class TestPresentState:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-27.3")
 class TestProjectInstructions:
     """TemporalKnowledge loads .guild/prompt.md as project instructions."""
 
+    @pytest.mark.ac("AC-27.3.1")
     async def test_instructions_loaded_from_prompt_md(
         self, storage: Storage, tmp_path: Path
     ) -> None:
@@ -1383,6 +1440,7 @@ class TestProjectInstructions:
         assert "type hints" in instructions
         assert "composition" in instructions
 
+    @pytest.mark.ac("AC-27.3.2")
     async def test_instructions_none_when_missing(
         self, storage: Storage, tmp_path: Path
     ) -> None:
@@ -1396,6 +1454,7 @@ class TestProjectInstructions:
         instructions = await tk.get_project_instructions()
         assert instructions is None
 
+    @pytest.mark.ac("AC-27.3.3")
     async def test_instructions_in_relevant_context(
         self, storage: Storage, tmp_path: Path
     ) -> None:
@@ -1418,10 +1477,10 @@ class TestProjectInstructions:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-27.4")
 class TestRelevantLearningsContext:
     """Temporal context assembly includes relevant learnings."""
 
+    @pytest.mark.ac("AC-27.4.1")
     async def test_learnings_included_in_context(
         self, storage: Storage, tmp_path: Path
     ) -> None:
@@ -1445,6 +1504,7 @@ class TestRelevantLearningsContext:
         assert "guard clauses" in context
         assert "--verbose" in context
 
+    @pytest.mark.ac("AC-27.4.2")
     async def test_low_confidence_learnings_excluded(
         self, storage: Storage, tmp_path: Path
     ) -> None:
@@ -1462,6 +1522,7 @@ class TestRelevantLearningsContext:
         # The learning has confidence 0.2, below the 0.5 threshold
         assert "Low confidence tip" not in context
 
+    @pytest.mark.ac("AC-27.4.3")
     async def test_empty_context_when_no_data(
         self, storage: Storage, tmp_path: Path
     ) -> None:
