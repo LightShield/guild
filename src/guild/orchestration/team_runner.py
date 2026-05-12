@@ -406,14 +406,18 @@ class TeamRunner:
 
     async def _invoke_agent(self, block_def: BlockDef, input_data: str) -> str:
         """Invoke an AgentLoop for a block definition."""
+        from guild.tools.registry import build_tool_executors
+
+        tool_executors = build_tool_executors() if block_def.tools else {}
         loop = AgentLoop(
             provider=self._provider,
-            tool_executors={},
+            tool_executors=tool_executors,
             working_dir=self._working_dir,
             max_turns=SUB_AGENT_MAX_TURNS,
         )
         result = await loop.run(
             system_prompt=block_def.system_prompt,
             user_input=input_data,
+            self_review=block_def.role == "reviewer",
         )
         return result

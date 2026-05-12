@@ -14,6 +14,7 @@ from guild.cli.task_runner import (
     create_resilient_provider,
     persist_task_result,
     run_task,
+    run_team_task,
 )
 
 
@@ -265,3 +266,64 @@ class TestPersistTaskResult:
         call_args = mock_store.append_message.await_args
         assert call_args[0][1] == "assistant"
         assert call_args[0][2] == "hello"
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-04.1")
+class TestRunTeamTask:
+    """run_team_task loads blocks and delegates to TeamRunner."""
+
+    async def test_team_not_found_raises(self, tmp_path) -> None:
+        """run_team_task raises ValueError when team is not found."""
+        guild_dir = tmp_path / ".guild"
+        guild_dir.mkdir()
+        blocks_dir = guild_dir / "blocks"
+        blocks_dir.mkdir()
+
+        config = MagicMock()
+        config.provider_name = "ollama"
+        config.base_url = "http://localhost:11434"
+        config.model = "test"
+        config.escalation_chain = ""
+        config.escalation_cli_providers = ""
+
+        with (
+            patch("guild.cli.task_runner.create_resilient_provider"),
+            pytest.raises(ValueError, match="Team 'nonexistent' not found"),
+        ):
+            await run_team_task(config, str(tmp_path), guild_dir, "nonexistent", "do work")
+
+    async def test_team_runs_successfully(self, tmp_path) -> None:
+        """run_team_task runs a team and returns the result."""
+        guild_dir = tmp_path / ".guild"
+        guild_dir.mkdir()
+        blocks_dir = guild_dir / "blocks"
+        blocks_dir.mkdir()
+
+        config = MagicMock()
+        config.provider_name = "ollama"
+        config.base_url = "http://localhost:11434"
+        config.model = "test"
+        config.escalation_chain = ""
+        config.escalation_cli_providers = ""
+
+        mock_provider = MagicMock()
+        mock_run = AsyncMock(return_value="team result")
+
+        with (
+            patch("guild.cli.task_runner.create_resilient_provider", return_value=mock_provider),
+            patch("guild.orchestration.team_runner.TeamRunner.run", new=mock_run),
+            patch("guild.blocks.registry.BlockRegistry.get_team") as mock_get_team,
+        ):
+            from guild.blocks.definition import TeamDef
+
+            mock_get_team.return_value = TeamDef(
+                name="test",
+                blocks={"entry": "planner"},
+                entry_block="entry",
+            )
+            result = await run_team_task(
+                config, str(tmp_path), guild_dir, "test", "build feature"
+            )
+
+        assert result == "team result"

@@ -83,6 +83,9 @@ from guild.cli.task_runner import (
 from guild.cli.task_runner import (
     run_task as _run_task,
 )
+from guild.cli.task_runner import (
+    run_team_task as _run_team_task,
+)
 from guild.cli.toml_utils import set_config_value as _set_config_value
 from guild.config.loader import (
     CONFIG_FILENAME,
@@ -220,6 +223,27 @@ def task(
         _run_task(config, working_dir, description, permission, timeout, guild_dir)
     )
     console.print(f"\n[green]Done.[/green] {result}")
+
+
+@app.command()
+def team(
+    task_description: str = typer.Argument(..., help="Task description for the team."),
+    team_name: str = typer.Option("default", "--team", "-t", help="Team name from .guild/teams/."),
+    timeout: int = typer.Option(0, "--timeout", help="Timeout in seconds (0=unlimited)."),
+) -> None:
+    """Run a task using a multi-agent team composition."""
+    guild_dir = find_guild_dir()
+    if guild_dir is None:
+        console.print("[red]Error:[/red] Not a guild project (no .guild/ found).")
+        raise typer.Exit(code=1)
+
+    config = load_config(guild_dir)
+    working_dir = str(guild_dir.parent)
+
+    result = asyncio.run(
+        _run_team_task(config, working_dir, guild_dir, team_name, task_description)
+    )
+    console.print(f"\n[green]Team done.[/green] {result}")
 
 
 @app.command()

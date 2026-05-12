@@ -36,6 +36,7 @@ __all__ = [
     "extract_post_task_learnings",
     "persist_task_result",
     "run_task",
+    "run_team_task",
 ]
 
 logger = logging.getLogger(__name__)
@@ -251,3 +252,36 @@ async def extract_post_task_learnings(
             await extract_learnings(task_id, store, provider)
     except (ImportError, OSError, ValueError):
         logger.debug("Learning extraction failed (non-critical)", exc_info=True)
+
+
+async def run_team_task(
+    config: GuildConfig,
+    working_dir: str,
+    guild_dir: Path,
+    team_name: str,
+    description: str,
+) -> str:
+    """Run a task through a multi-agent team composition."""
+    from guild.blocks.registry import BlockRegistry
+    from guild.orchestration.team_runner import TeamRunner
+    from guild.storage.sqlite import Storage
+
+    db_path = guild_dir / DB_FILENAME
+    async with Storage(db_path) as store:
+        registry = BlockRegistry()
+        registry.load_from_dir(guild_dir / "blocks")
+
+        team_def = registry.get_team(team_name)
+        if team_def is None:
+            raise ValueError(f"Team '{team_name}' not found in {guild_dir / 'blocks'}")
+
+        provider = create_resilient_provider(config)
+        runner = TeamRunner(
+            team=team_def,
+            registry=registry,
+            provider=provider,
+            storage=store,
+            working_dir=working_dir,
+        )
+        result = await runner.run(description)
+    return result

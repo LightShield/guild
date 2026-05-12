@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -1109,3 +1109,111 @@ class TestParseJsonPermissiveEmbeddedFailure:
         # Falls through to heuristic: "pass" present, "fail" absent -> passed
         assert result.passed is True
         assert result.feedback == output
+
+
+# ---------------------------------------------------------------------------
+# Tests: _invoke_agent uses real tools (REQ-04.9)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-04.9")
+class TestInvokeAgentToolExecutors:
+    """_invoke_agent passes real tool executors when block has tools."""
+
+    async def test_invoke_agent_passes_tools_when_block_has_tools(self) -> None:
+        """Blocks with tools get real tool executors, not empty dict."""
+        team = _make_team_with_entry()
+        registry = BlockRegistry()
+        provider = _make_provider(
+            LLMResponse(content="Plan", tool_calls=None),
+            LLMResponse(content="Done", tool_calls=None),
+        )
+        runner = TeamRunner(team, registry, provider)
+
+        # The coder block has tools defined
+        coder_def = registry.get_block("coder")
+        assert coder_def is not None
+        assert len(coder_def.tools) > 0
+
+        with patch("guild.orchestration.team_runner.AgentLoop") as mock_loop_cls:
+            mock_loop = AsyncMock()
+            mock_loop.run = AsyncMock(return_value="coded result")
+            mock_loop_cls.return_value = mock_loop
+
+            await runner._invoke_agent(coder_def, "implement feature")
+
+        # Verify AgentLoop was created with non-empty tool_executors
+        call_kwargs = mock_loop_cls.call_args[1]
+        assert len(call_kwargs["tool_executors"]) > 0
+        assert "file_read" in call_kwargs["tool_executors"]
+
+    async def test_invoke_agent_empty_tools_when_block_has_no_tools(self) -> None:
+        """Blocks without tools get an empty tool executor dict."""
+        team = _make_team_with_entry()
+        registry = BlockRegistry()
+        provider = _make_provider(
+            LLMResponse(content="Plan", tool_calls=None),
+        )
+        runner = TeamRunner(team, registry, provider)
+
+        # The planner block has no tools
+        planner_def = registry.get_block("planner")
+        assert planner_def is not None
+        assert len(planner_def.tools) == 0
+
+        with patch("guild.orchestration.team_runner.AgentLoop") as mock_loop_cls:
+            mock_loop = AsyncMock()
+            mock_loop.run = AsyncMock(return_value="planned result")
+            mock_loop_cls.return_value = mock_loop
+
+            await runner._invoke_agent(planner_def, "plan feature")
+
+        # Verify AgentLoop was created with empty tool_executors
+        call_kwargs = mock_loop_cls.call_args[1]
+        assert call_kwargs["tool_executors"] == {}
+
+    async def test_invoke_agent_reviewer_gets_self_review(self) -> None:
+        """Reviewer role blocks are invoked with self_review=True."""
+        team = _make_team_with_entry()
+        registry = BlockRegistry()
+        provider = _make_provider()
+        runner = TeamRunner(team, registry, provider)
+
+        reviewer_def = registry.get_block("reviewer")
+        assert reviewer_def is not None
+        assert reviewer_def.role == "reviewer"
+
+        with patch("guild.orchestration.team_runner.AgentLoop") as mock_loop_cls:
+            mock_loop = AsyncMock()
+            mock_loop.run = AsyncMock(return_value="review complete")
+            mock_loop_cls.return_value = mock_loop
+
+            await runner._invoke_agent(reviewer_def, "review code")
+
+        # Verify run was called with self_review=True
+        mock_loop.run.assert_called_once()
+        call_kwargs = mock_loop.run.call_args[1]
+        assert call_kwargs["self_review"] is True
+
+    async def test_invoke_agent_non_reviewer_no_self_review(self) -> None:
+        """Non-reviewer role blocks are invoked with self_review=False."""
+        team = _make_team_with_entry()
+        registry = BlockRegistry()
+        provider = _make_provider()
+        runner = TeamRunner(team, registry, provider)
+
+        coder_def = registry.get_block("coder")
+        assert coder_def is not None
+        assert coder_def.role != "reviewer"
+
+        with patch("guild.orchestration.team_runner.AgentLoop") as mock_loop_cls:
+            mock_loop = AsyncMock()
+            mock_loop.run = AsyncMock(return_value="code done")
+            mock_loop_cls.return_value = mock_loop
+
+            await runner._invoke_agent(coder_def, "write code")
+
+        # Verify run was called with self_review=False
+        call_kwargs = mock_loop.run.call_args[1]
+        assert call_kwargs["self_review"] is False

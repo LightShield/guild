@@ -941,6 +941,7 @@ class TestNoGuildDirErrors:
             ["answer", "qid", "response"],
             ["serve"],
             ["attach", "some-id"],
+            ["team", "build something"],
         ],
     )
     def test_command_fails_without_guild_dir(
@@ -1180,6 +1181,36 @@ class TestMainCallbackNoSubcommand:
         assert result.exit_code == 0
         # Should contain help text with available commands
         assert "init" in result.output or "Usage" in result.output
+
+
+@pytest.mark.unit
+@pytest.mark.req("REQ-04.1")
+class TestTeamCommand:
+    """Tests for `guild team`."""
+
+    def test_team_command_exists_in_help(self, guild_app) -> None:
+        """Verify team command is registered and shows in help."""
+        result = runner.invoke(guild_app, ["team", "--help"])
+
+        assert result.exit_code == 0
+        assert "team" in result.output.lower()
+        assert "task description" in result.output.lower() or "task_description" in result.output.lower()
+
+    def test_team_fails_without_guild_dir(
+        self, guild_app, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Team fails gracefully when no .guild/ directory."""
+        monkeypatch.chdir(tmp_path)
+        result = runner.invoke(guild_app, ["team", "build something"])
+        assert result.exit_code != 0 or "not a guild project" in result.output.lower()
+
+    def test_team_invokes_run_team_task(self, guild_app, guild_project: Path) -> None:
+        """Team command delegates to run_team_task."""
+        with patch("guild.cli.main.asyncio.run", return_value="Team result"):
+            result = runner.invoke(guild_app, ["team", "build a feature"])
+
+        assert result.exit_code == 0
+        assert "team done" in result.output.lower()
 
 
 @pytest.mark.unit

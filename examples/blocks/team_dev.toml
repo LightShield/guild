@@ -1,0 +1,21 @@
+[team]
+name = "dev"
+description = "Planner -> Coder -> Reviewer pipeline"
+entry_block = "plan"
+
+[team.blocks]
+plan = "planner"
+code = "coder"
+review = "reviewer"
+
+[[team.connections]]
+source_block = "plan"
+source_port = "output"
+target_block = "code"
+target_port = "input"
+
+[[team.connections]]
+source_block = "code"
+source_port = "output"
+target_block = "review"
+target_port = "input"
