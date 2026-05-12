@@ -119,6 +119,42 @@ class TestTeamExecution:
         result = runner.invoke(app, ["team", "Something"])
         assert result.exit_code == 1
 
+    def test_team_subtasks_appear_in_history(
+        self, project_dir: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """After team runs, sub-tasks are visible in guild history."""
+        monkeypatch.chdir(project_dir)
+        with patch(
+            "guild.cli.task_runner.create_resilient_provider",
+            return_value=_mock_provider(),
+        ):
+            runner.invoke(app, ["team", "Build hello world", "--team", "dev"])
+
+        # Observable outcome: sub-tasks visible in history
+        history = runner.invoke(app, ["history"], terminal_width=200)
+        assert history.exit_code == 0
+        # Should show tasks for the team blocks (planner and/or coder)
+        assert (
+            "completed" in history.output.lower()
+            or "planner" in history.output.lower()
+            or "coder" in history.output.lower()
+        )
+
+    def test_team_audit_trail_logged(
+        self, project_dir: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """After team runs, audit trail contains task_created entries."""
+        monkeypatch.chdir(project_dir)
+        with patch(
+            "guild.cli.task_runner.create_resilient_provider",
+            return_value=_mock_provider(),
+        ):
+            runner.invoke(app, ["team", "Build something", "--team", "dev"])
+
+        audit = runner.invoke(app, ["audit"], terminal_width=200)
+        assert audit.exit_code == 0
+        assert "task_created" in audit.output or "task_completed" in audit.output
+
 
 # REQ-05.4: REST API
 @pytest.mark.req("REQ-05.4")

@@ -83,6 +83,57 @@ These emerged from design review and govern all implementation decisions:
 | REQ-01.4 | Provider-specific prompt formatting handled transparently | Chat templates, system prompt handling differences |
 | REQ-01.5 | Connection health checks and graceful error handling | Detect if Ollama is down, report clearly |
 
+#### Acceptance Criteria (REQ-01.1 through REQ-01.5)
+
+**REQ-01.1 — Unified LLM interface with a common request/response contract**
+
+- AC-01.1.1: `Provider.generate()` returns `LLMResponse` with `content`, `tool_calls`, `input_tokens`, `output_tokens`, `model`
+  - verify: Call `generate()` on any provider -> response has all 5 fields populated
+- AC-01.1.2: `Provider.health_check()` returns `bool`
+  - verify: Call `health_check()` -> returns `True` (reachable) or `False` (unreachable)
+- AC-01.1.3: Any new provider implements the same interface
+  - verify: Create a new provider subclass -> must implement `generate()` and `health_check()` or `TypeError`
+
+**REQ-01.2 — Ollama backend as the default and first-class provider**
+
+- AC-01.2.1: `OllamaProvider` is registered as the default when no provider is explicitly configured
+  - verify: Load default config with no `[provider]` section -> `OllamaProvider` is selected
+- AC-01.2.2: Streaming responses are supported and yield incremental tokens
+  - verify: Call `generate()` with `stream=True` -> receive an async iterator of partial tokens that concatenate to the full response
+- AC-01.2.3: Ollama-specific parameters (e.g., `num_ctx`, `num_gpu`) are forwarded correctly
+  - verify: Set `num_ctx=4096` in config -> Ollama `/api/chat` request body includes `"num_ctx": 4096`
+
+**REQ-01.3 — Provider configuration via config files (not hardcoded)**
+
+- AC-01.3.1: Provider endpoint URL is read from config, not hardcoded
+  - verify: Set `provider.base_url = "http://custom:11434"` in config -> provider connects to that URL
+- AC-01.3.2: Model name is configurable per-project
+  - verify: Set `provider.model = "gemma4:4b"` in config -> LLM calls use that model name
+- AC-01.3.3: Generation parameters (temperature, max_tokens, top_p) are configurable
+  - verify: Set `provider.temperature = 0.2` in config -> API call includes `"temperature": 0.2`
+- AC-01.3.4: Invalid config values are rejected at startup with a clear error
+  - verify: Set `provider.temperature = "banana"` -> startup fails with validation error naming the field and expected type
+
+**REQ-01.4 — Provider-specific prompt formatting handled transparently**
+
+- AC-01.4.1: System prompt is injected in the provider-appropriate position
+  - verify: Send a message with a system prompt through `OllamaProvider` -> the Ollama API request places it in the `system` field (not as a user message)
+- AC-01.4.2: Chat history is formatted per the provider's expected schema
+  - verify: Send a multi-turn conversation through `OllamaProvider` -> messages array uses `role`/`content` pairs matching Ollama's `/api/chat` format
+- AC-01.4.3: Tool call formatting is adapter-specific and transparent to the caller
+  - verify: Define a tool and call `generate()` -> the tool schema is serialized in the provider's native format (Ollama JSON function calling schema) without the caller specifying format details
+
+**REQ-01.5 — Connection health checks and graceful error handling**
+
+- AC-01.5.1: `health_check()` detects an unreachable provider within the configured timeout
+  - verify: Point provider at a non-existent host -> `health_check()` returns `False` within 5 seconds (default timeout)
+- AC-01.5.2: Connection failure during `generate()` raises a typed exception, not a generic error
+  - verify: Kill Ollama mid-request -> `generate()` raises `ProviderConnectionError` (not `Exception` or `ConnectionError`)
+- AC-01.5.3: Transient failures are retried with backoff before surfacing to the agent loop
+  - verify: Simulate one transient 503 followed by success -> `generate()` returns the successful response without the caller needing retry logic
+- AC-01.5.4: A clear, human-readable message is logged when the provider is down
+  - verify: Start Guild with Ollama stopped -> log output includes a message like "Cannot reach Ollama at http://localhost:11434 - is it running?"
+
 ### REQ-02: Cross-Platform Support (Windows, macOS, Linux)
 
 **Goal:** Single codebase that works on all three major OSes. Windows is the primary development machine today.
