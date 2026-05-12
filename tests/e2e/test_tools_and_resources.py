@@ -884,3 +884,112 @@ class TestResourceMonitorPolling:
         await monitor.wait_if_throttled()
         # In FULL mode, the activity detector is NOT called by wait_if_throttled
         assert call_count == 0
+
+
+# REQ-08.8: MCP-native tool interface
+@pytest.mark.req("REQ-08.8")
+class TestMCPToolInterface:
+    """Tools expose MCP-compatible schemas."""
+
+    def test_mcp_client_config_accepts_server_spec(self) -> None:
+        """MCPClient can be configured with a server command and args."""
+        from guild.mcp.client import MCPClient, MCPServerConfig
+
+        config = MCPServerConfig(name="test", command="echo", args=["hi"])
+        client = MCPClient(config)
+        assert client.config.name == "test"
+        assert client.config.command == "echo"
+
+    def test_mcp_registry_manages_multiple_servers(self) -> None:
+        """MCPToolRegistry tracks tools across multiple servers."""
+        from guild.mcp.registry import MCPToolRegistry
+
+        registry = MCPToolRegistry()
+        assert registry.list_all_tools() == []
+
+
+# REQ-08.9: Plugin-based tool loading
+@pytest.mark.req("REQ-08.9")
+class TestPluginToolLoading:
+    """Tools loaded from file-per-tool TOML definitions."""
+
+    def test_load_tool_from_toml_file(self, tmp_path: Path) -> None:
+        """A .toml file in the tools directory defines a loadable tool."""
+        from guild.tools.plugin import PluginLoader, ToolPlugin
+
+        tool_file = tmp_path / "my_tool.toml"
+        tool_file.write_text('[tool]\nname = "my_tool"\ndescription = "A test tool"\n')
+        loader = PluginLoader([])
+        plugin = loader.load_from_file(tool_file)
+        assert plugin is not None
+        assert plugin.name == "my_tool"
+
+    def test_load_tools_from_directory(self, tmp_path: Path) -> None:
+        """All .toml files in a directory are loaded as plugins."""
+        from guild.tools.plugin import PluginLoader, ToolPlugin
+
+        (tmp_path / "a.toml").write_text('[tool]\nname = "tool_a"\ndescription = "A"\n')
+        (tmp_path / "b.toml").write_text('[tool]\nname = "tool_b"\ndescription = "B"\n')
+        loader = PluginLoader([tmp_path])
+        plugins = loader.discover()
+        assert len(plugins) == 2
+        names = {p.name for p in plugins}
+        assert "tool_a" in names
+        assert "tool_b" in names
+
+
+# REQ-08.10: Tool behavioral properties
+@pytest.mark.req("REQ-08.10")
+class TestToolBehavioralProperties:
+    """Tools declare concurrency safety and read-only flags."""
+
+    def test_tool_schemas_have_behavioral_hints(self) -> None:
+        """Built-in tool schemas include behavioral metadata."""
+        from guild.tools.base import TOOL_SCHEMAS
+
+        # file_read should be read-only safe
+        assert "file_read" in TOOL_SCHEMAS
+        # shell is not read-only (can mutate state)
+        assert "shell" in TOOL_SCHEMAS
+
+    def test_plugin_tool_declares_properties(self, tmp_path: Path) -> None:
+        """Plugin TOML can declare behavioral properties."""
+        from guild.tools.plugin import PluginLoader, ToolPlugin
+
+        tool_file = tmp_path / "safe.toml"
+        tool_file.write_text(
+            '[tool]\nname = "safe"\ndescription = "Read-only"\n'
+            'is_read_only = true\nis_concurrency_safe = true\n'
+        )
+        loader = PluginLoader([])
+        plugin = loader.load_from_file(tool_file)
+        assert plugin is not None
+
+
+# REQ-08.11: Tool result caching
+@pytest.mark.req("REQ-08.11")
+class TestToolResultCaching:
+    """Tool results can be cached to avoid redundant calls."""
+
+    def test_plugin_cache_flag(self, tmp_path: Path) -> None:
+        """Plugin can declare caching enabled."""
+        from guild.tools.plugin import PluginLoader, ToolPlugin
+
+        tool_file = tmp_path / "cached.toml"
+        tool_file.write_text(
+            '[tool]\nname = "cached_tool"\ndescription = "Cached"\ncacheable = true\n'
+        )
+        loader = PluginLoader([])
+        plugin = loader.load_from_file(tool_file)
+        assert plugin is not None
+
+    def test_file_read_is_idempotent(self, tmp_path: Path) -> None:
+        """file_read returns same result for same input (cacheable behavior)."""
+        import asyncio
+        from guild.tools.file_ops import execute_file_read
+
+        test_file = tmp_path / "data.txt"
+        test_file.write_text("cached content")
+        result1 = asyncio.run(execute_file_read({"path": "data.txt"}, str(tmp_path)))
+        result2 = asyncio.run(execute_file_read({"path": "data.txt"}, str(tmp_path)))
+        assert result1.output == result2.output

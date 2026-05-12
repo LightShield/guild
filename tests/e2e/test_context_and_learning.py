@@ -15,6 +15,12 @@ Requirements covered:
   REQ-07.10 Static/dynamic prompt separation
   REQ-09.2  Knowledge categories
   REQ-09.3  Confidence scoring
+  REQ-09.4  Learning injection into future sessions
+  REQ-09.5  Human can browse/edit/approve/reject learnings
+  REQ-09.6  Cross-task learning
+  REQ-09.7  Block-level learning scope
+  REQ-09.8  Learning decay
+  REQ-09.9  Prompt refinement suggestions
 """
 
 from __future__ import annotations
@@ -32,7 +38,11 @@ from guild.agent.context import (
     TRUNCATION_MARKER,
     ContextManager,
 )
-from guild.agent.learning import extract_learnings, format_learnings_for_injection
+from guild.agent.learning import (
+    extract_learnings,
+    format_learnings_for_injection,
+    suggest_prompt_refinements,
+)
 from guild.agent.message import Message
 from guild.config.constants import (
     CONFIDENCE_DECAY_DECREMENT,
@@ -727,3 +737,461 @@ class TestConfidenceScoring:
         # At 0.35, this learning should NOT appear in injection
         injection = format_learnings_for_injection([final])
         assert injection == ""
+
+
+# ------------------------------------------------------------------
+# REQ-09.4: Learning injection into future sessions
+# ------------------------------------------------------------------
+
+
+@pytest.mark.req("REQ-09.4")
+class TestLearningInjection:
+    """Learnings stored in session 1 are injected into session 2 prompts."""
+
+    async def test_high_confidence_learnings_appear_in_injection(
+        self, storage: Storage
+    ) -> None:
+        """Learnings with confidence >= MIN_INJECTION_CONFIDENCE are injected."""
+        await storage.add_learning(
+            category="pattern", content="Always use guard clauses", confidence=0.8
+        )
+        await storage.add_learning(
+            category="tool_tip", content="Run ruff before commit", confidence=0.7
+        )
+
+        learnings = await storage.list_learnings(min_confidence=MIN_INJECTION_CONFIDENCE)
+        injection = format_learnings_for_injection(learnings)
+
+        assert "## Learnings from previous tasks" in injection
+        assert "Always use guard clauses" in injection
+        assert "Run ruff before commit" in injection
+
+    async def test_low_confidence_learnings_excluded_from_injection(
+        self, storage: Storage
+    ) -> None:
+        """Learnings below the confidence threshold are not injected."""
+        await storage.add_learning(
+            category="pattern", content="Dubious pattern", confidence=0.2
+        )
+        await storage.add_learning(
+            category="pattern", content="Solid pattern", confidence=0.9
+        )
+
+        learnings = await storage.list_learnings()
+        injection = format_learnings_for_injection(learnings)
+
+        assert "Dubious pattern" not in injection
+        assert "Solid pattern" in injection
+
+    async def test_injection_into_dynamic_prompt_section(
+        self, storage: Storage
+    ) -> None:
+        """Injected learnings appear in the dynamic (not static) prompt section."""
+        await storage.add_learning(
+            category="pattern", content="Use early returns", confidence=0.8
+        )
+        learnings = await storage.list_learnings(min_confidence=MIN_INJECTION_CONFIDENCE)
+        injection = format_learnings_for_injection(learnings)
+
+        static, dynamic = ContextManager.separate_static_dynamic(
+            system_prompt="You are an agent.",
+            learnings=injection,
+            task="Do something",
+        )
+        assert "Use early returns" not in static
+        assert "Use early returns" in dynamic
+
+    async def test_injection_survives_db_restart(self, tmp_path: Path) -> None:
+        """Learnings persisted in session 1 are injectable in session 2."""
+        db_path = tmp_path / "inject.db"
+
+        store1 = Storage(db_path)
+        await store1.connect()
+        await store1.add_learning(
+            category="domain_knowledge",
+            content="API rate limit is 100 req/min",
+            confidence=0.85,
+        )
+        await store1.close()
+
+        store2 = Storage(db_path)
+        await store2.connect()
+        learnings = await store2.list_learnings(min_confidence=MIN_INJECTION_CONFIDENCE)
+        injection = format_learnings_for_injection(learnings)
+        await store2.close()
+
+        assert "API rate limit is 100 req/min" in injection
+
+
+# ------------------------------------------------------------------
+# REQ-09.5: Human can browse/edit/approve/reject learnings
+# ------------------------------------------------------------------
+
+
+@pytest.mark.req("REQ-09.5")
+class TestHumanLearningManagement:
+    """Humans can list, approve (validate), and reject (delete) learnings."""
+
+    async def test_browse_learnings(self, storage: Storage) -> None:
+        """List learnings returns all stored items for human review."""
+        await storage.add_learning(
+            category="pattern", content="Pattern A", confidence=0.5
+        )
+        await storage.add_learning(
+            category="anti_pattern", content="Anti B", confidence=0.3
+        )
+
+        all_learnings = await storage.list_learnings()
+        assert len(all_learnings) == 2
+        contents = {l["content"] for l in all_learnings}
+        assert contents == {"Pattern A", "Anti B"}
+
+    async def test_approve_learning_boosts_confidence(self, storage: Storage) -> None:
+        """Approving (validating) a learning increases its confidence."""
+        lid = await storage.add_learning(
+            category="pattern", content="Use async", confidence=0.4
+        )
+        await storage.validate_learning(lid)
+
+        learning = await storage.get_learning(lid)
+        assert learning is not None
+        assert learning["confidence"] == pytest.approx(
+            0.4 + CONFIDENCE_VALIDATE_INCREMENT
+        )
+
+    async def test_reject_learning_deletes_it(self, storage: Storage) -> None:
+        """Rejecting a learning removes it from storage entirely."""
+        lid = await storage.add_learning(
+            category="tool_tip", content="Bad tip", confidence=0.3
+        )
+        await storage.delete_learning(lid)
+
+        learning = await storage.get_learning(lid)
+        assert learning is None
+
+    async def test_reject_removes_from_listing(self, storage: Storage) -> None:
+        """After rejection, the learning no longer appears in list_learnings."""
+        lid = await storage.add_learning(
+            category="pattern", content="Reject me", confidence=0.5
+        )
+        await storage.add_learning(
+            category="pattern", content="Keep me", confidence=0.6
+        )
+        await storage.delete_learning(lid)
+
+        remaining = await storage.list_learnings()
+        assert len(remaining) == 1
+        assert remaining[0]["content"] == "Keep me"
+
+    async def test_filter_learnings_by_category(self, storage: Storage) -> None:
+        """Browsing can be filtered by category for focused review."""
+        await storage.add_learning(
+            category="pattern", content="P1", confidence=0.5
+        )
+        await storage.add_learning(
+            category="anti_pattern", content="AP1", confidence=0.5
+        )
+        await storage.add_learning(
+            category="tool_tip", content="T1", confidence=0.5
+        )
+
+        patterns = await storage.list_learnings(category="pattern")
+        assert len(patterns) == 1
+        assert patterns[0]["content"] == "P1"
+
+
+# ------------------------------------------------------------------
+# REQ-09.6: Cross-task learning
+# ------------------------------------------------------------------
+
+
+@pytest.mark.req("REQ-09.6")
+class TestCrossTaskLearning:
+    """Learnings extracted from one task are available to agents on other tasks."""
+
+    async def test_learning_from_task_a_visible_to_task_b(
+        self, storage: Storage
+    ) -> None:
+        """A learning extracted from task-A is injectable for task-B."""
+        await storage.create_task("task-A", "Build feature A")
+        await storage.update_task("task-A", assigned_agent="agent-A")
+        await storage.add_learning(
+            category="pattern",
+            content="Validate all inputs at boundary",
+            confidence=0.8,
+            source_task_id="task-A",
+        )
+
+        # Task B's agent queries learnings -- no task filter
+        learnings = await storage.list_learnings(min_confidence=MIN_INJECTION_CONFIDENCE)
+        injection = format_learnings_for_injection(learnings)
+
+        assert "Validate all inputs at boundary" in injection
+
+    async def test_cross_task_learnings_via_extract_and_inject(
+        self, storage: Storage
+    ) -> None:
+        """Full flow: extract from task-A, inject into task-B prompt."""
+        # Setup task-A with messages
+        await storage.create_task("task-X", "Refactor module")
+        await storage.update_task("task-X", assigned_agent="agent-X")
+        await storage.register_agent("agent-X", "coder")
+        await storage.append_message("agent-X", "user", "Refactor the parser.")
+        await storage.append_message("agent-X", "assistant", "Done with guard clauses.")
+
+        # Mock LLM extracts a learning
+        provider = AsyncMock()
+        provider.generate = AsyncMock(
+            return_value=LLMResponse(
+                content='{"category": "pattern", "content": "Guard clauses improve readability"}\n',
+                model="mock",
+            )
+        )
+        extracted = await extract_learnings("task-X", storage, provider)
+        assert len(extracted) == 1
+
+        # Validate the learning to boost confidence
+        await storage.validate_learning(extracted[0]["id"])
+        await storage.validate_learning(extracted[0]["id"])
+
+        # Task-Y agent picks up the learning
+        learnings = await storage.list_learnings(min_confidence=MIN_INJECTION_CONFIDENCE)
+        injection = format_learnings_for_injection(learnings)
+        assert "Guard clauses improve readability" in injection
+
+
+# ------------------------------------------------------------------
+# REQ-09.7: Block-level learning scope
+# ------------------------------------------------------------------
+
+
+@pytest.mark.req("REQ-09.7")
+class TestBlockLevelScope:
+    """Learnings can be scoped to a specific block and filtered accordingly."""
+
+    async def test_scoped_learning_stored_and_filtered(
+        self, storage: Storage
+    ) -> None:
+        """Learning with scope='parser' only appears when filtered by that scope."""
+        await storage.add_learning(
+            category="pattern",
+            content="Use recursive descent",
+            confidence=0.7,
+            scope="parser",
+        )
+        await storage.add_learning(
+            category="pattern",
+            content="Global pattern",
+            confidence=0.7,
+        )
+
+        parser_learnings = await storage.list_learnings(scope="parser")
+        assert len(parser_learnings) == 1
+        assert parser_learnings[0]["content"] == "Use recursive descent"
+
+    async def test_unscoped_listing_includes_all(self, storage: Storage) -> None:
+        """Without a scope filter, all learnings are returned."""
+        await storage.add_learning(
+            category="pattern", content="Scoped A", confidence=0.6, scope="block-a"
+        )
+        await storage.add_learning(
+            category="pattern", content="Global B", confidence=0.6
+        )
+
+        all_learnings = await storage.list_learnings()
+        assert len(all_learnings) == 2
+
+    async def test_suggest_prompt_refinements_scoped(
+        self, storage: Storage
+    ) -> None:
+        """suggest_prompt_refinements respects block_name scope."""
+        await storage.add_learning(
+            category="anti_pattern",
+            content="Avoid nested callbacks",
+            confidence=0.8,
+            scope="async-block",
+        )
+        await storage.add_learning(
+            category="anti_pattern",
+            content="Global anti-pattern",
+            confidence=0.8,
+        )
+
+        suggestions = await suggest_prompt_refinements(storage, block_name="async-block")
+        assert len(suggestions) == 1
+        assert "Avoid nested callbacks" in suggestions[0]
+
+
+# ------------------------------------------------------------------
+# REQ-09.8: Learning decay
+# ------------------------------------------------------------------
+
+
+@pytest.mark.req("REQ-09.8")
+class TestLearningDecay:
+    """Old unvalidated learnings lose confidence over time."""
+
+    async def test_decay_reduces_stale_learning_confidence(
+        self, storage: Storage
+    ) -> None:
+        """Learnings not validated within the decay window lose confidence."""
+        lid = await storage.add_learning(
+            category="pattern", content="Stale pattern", confidence=0.7
+        )
+
+        # Backdate to make it stale
+        old_date = (datetime.now(UTC) - timedelta(days=45)).isoformat()
+        assert storage._db is not None
+        await storage._db.execute(
+            "UPDATE learnings SET created_at = ?, last_validated = NULL WHERE id = ?",
+            (old_date, lid),
+        )
+        await storage._db.commit()
+
+        affected = await storage.decay_learnings(days_since_validation=30)
+        assert affected >= 1
+
+        after = await storage.get_learning(lid)
+        assert after is not None
+        assert after["confidence"] == pytest.approx(0.7 - CONFIDENCE_DECAY_DECREMENT)
+
+    async def test_recently_validated_not_decayed(self, storage: Storage) -> None:
+        """Learnings validated recently are not affected by decay."""
+        lid = await storage.add_learning(
+            category="pattern", content="Fresh pattern", confidence=0.7
+        )
+        await storage.validate_learning(lid)
+
+        affected = await storage.decay_learnings(days_since_validation=30)
+        # The learning was just validated, so it should not be affected
+        after = await storage.get_learning(lid)
+        assert after is not None
+        assert after["confidence"] >= 0.7
+
+    async def test_repeated_decay_floors_at_zero(self, storage: Storage) -> None:
+        """Multiple decay cycles cannot push confidence below 0.0."""
+        lid = await storage.add_learning(
+            category="pattern", content="Fading", confidence=0.1
+        )
+        old_date = (datetime.now(UTC) - timedelta(days=60)).isoformat()
+        assert storage._db is not None
+        await storage._db.execute(
+            "UPDATE learnings SET created_at = ?, last_validated = NULL WHERE id = ?",
+            (old_date, lid),
+        )
+        await storage._db.commit()
+
+        for _ in range(10):
+            await storage.decay_learnings(days_since_validation=30)
+
+        after = await storage.get_learning(lid)
+        assert after is not None
+        assert after["confidence"] >= 0.0
+
+    async def test_decayed_learning_drops_below_injection_threshold(
+        self, storage: Storage
+    ) -> None:
+        """After sufficient decay, a learning is no longer injected."""
+        lid = await storage.add_learning(
+            category="pattern", content="Was good once", confidence=0.55
+        )
+        old_date = (datetime.now(UTC) - timedelta(days=60)).isoformat()
+        assert storage._db is not None
+        await storage._db.execute(
+            "UPDATE learnings SET created_at = ?, last_validated = NULL WHERE id = ?",
+            (old_date, lid),
+        )
+        await storage._db.commit()
+
+        # Decay twice: 0.55 -> 0.50 -> 0.45 (below 0.5 threshold)
+        await storage.decay_learnings(days_since_validation=30)
+        await storage.decay_learnings(days_since_validation=30)
+
+        after = await storage.get_learning(lid)
+        assert after is not None
+
+        injection = format_learnings_for_injection([after])
+        assert injection == ""
+
+
+# ------------------------------------------------------------------
+# REQ-09.9: Prompt refinement suggestions
+# ------------------------------------------------------------------
+
+
+@pytest.mark.req("REQ-09.9")
+class TestPromptRefinementSuggestions:
+    """High-confidence anti-patterns and tool tips generate prompt suggestions."""
+
+    async def test_anti_pattern_generates_guard_suggestion(
+        self, storage: Storage
+    ) -> None:
+        """Anti-patterns produce 'Add guard against: ...' suggestions."""
+        await storage.add_learning(
+            category="anti_pattern",
+            content="Avoid busy waits in async code",
+            confidence=0.8,
+        )
+        suggestions = await suggest_prompt_refinements(storage)
+        assert len(suggestions) == 1
+        assert suggestions[0] == "Add guard against: Avoid busy waits in async code"
+
+    async def test_tool_tip_generates_include_suggestion(
+        self, storage: Storage
+    ) -> None:
+        """Tool tips produce 'Include tip in prompt: ...' suggestions."""
+        await storage.add_learning(
+            category="tool_tip",
+            content="Use --dry-run for destructive commands",
+            confidence=0.7,
+        )
+        suggestions = await suggest_prompt_refinements(storage)
+        assert len(suggestions) == 1
+        assert suggestions[0] == "Include tip in prompt: Use --dry-run for destructive commands"
+
+    async def test_patterns_and_domain_knowledge_not_suggested(
+        self, storage: Storage
+    ) -> None:
+        """Only anti_pattern and tool_tip categories generate suggestions."""
+        await storage.add_learning(
+            category="pattern", content="Use guard clauses", confidence=0.9
+        )
+        await storage.add_learning(
+            category="domain_knowledge", content="API uses REST", confidence=0.9
+        )
+        suggestions = await suggest_prompt_refinements(storage)
+        assert suggestions == []
+
+    async def test_low_confidence_learnings_not_suggested(
+        self, storage: Storage
+    ) -> None:
+        """Learnings below MIN_INJECTION_CONFIDENCE are excluded from suggestions."""
+        await storage.add_learning(
+            category="anti_pattern",
+            content="Maybe avoid this",
+            confidence=0.2,
+        )
+        suggestions = await suggest_prompt_refinements(storage)
+        assert suggestions == []
+
+    async def test_mixed_suggestions(self, storage: Storage) -> None:
+        """Multiple qualifying learnings produce multiple suggestions."""
+        await storage.add_learning(
+            category="anti_pattern",
+            content="No bare except",
+            confidence=0.8,
+        )
+        await storage.add_learning(
+            category="tool_tip",
+            content="Pass --verbose to debug",
+            confidence=0.6,
+        )
+        await storage.add_learning(
+            category="pattern",
+            content="Ignored pattern",
+            confidence=0.9,
+        )
+        suggestions = await suggest_prompt_refinements(storage)
+        assert len(suggestions) == 2
+        assert any("No bare except" in s for s in suggestions)
+        assert any("Pass --verbose to debug" in s for s in suggestions)
