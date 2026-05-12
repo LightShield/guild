@@ -38,6 +38,15 @@ STUCK_RECOVERY_PROMPT = (
     "If you cannot find an alternative, explain what you're stuck on."
 )
 
+_TEST_FAILURE_RECOVERY_PROMPT = (
+    "A test or command keeps failing with the same error. "
+    "Do NOT re-run the same command. Instead:\n"
+    "1. Read the error message carefully\n"
+    "2. Identify the root cause (typo? wrong assertion? missing import?)\n"
+    "3. Fix the SOURCE CODE that's causing the failure\n"
+    "4. Then re-run to verify"
+)
+
 SELF_REVIEW_PROMPT = (
     "Review what you just did. Look for bugs, edge cases, security issues, "
     "and spec violations. If you find problems, fix them now. "
@@ -218,10 +227,18 @@ class AgentLoop:
         self._recovery_attempted = True
         reason = self.stuck_detector.get_reason() if self.stuck_detector else ""
         logger.warning("Stuck detected (%s), attempting recovery", reason)
+        prompt = self._select_recovery_prompt(reason)
         if self.stuck_detector:
             self.stuck_detector.reset()
-        self.messages.append(Message(role="user", content=STUCK_RECOVERY_PROMPT))
+        self.messages.append(Message(role="user", content=prompt))
         return None  # Continue the loop
+
+    def _select_recovery_prompt(self, reason: str) -> str:
+        """Choose recovery prompt based on the type of stuck condition."""
+        reason_lower = reason.lower()
+        if any(kw in reason_lower for kw in ("exit", "code 1", "failed", "error", "assert")):
+            return _TEST_FAILURE_RECOVERY_PROMPT
+        return STUCK_RECOVERY_PROMPT
 
     def _produce_escalation(self) -> str:
         """Build and return a structured escalation message."""
