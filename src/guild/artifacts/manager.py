@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import difflib
+import json
 import logging
 import shutil
 from dataclasses import dataclass, field
@@ -51,13 +52,34 @@ class ArtifactManager:
         ]
         return max(versions) if versions else 0
 
+    def _status_path(self, task_id: str) -> Path:
+        """Return path to the status JSON file for a task."""
+        return self._task_dir(task_id) / ".status.json"
+
+    def _load_status(self, task_id: str) -> dict[str, str]:
+        """Load the status dict for a task (name -> 'pending'|'accepted')."""
+        path = self._status_path(task_id)
+        if not path.exists():
+            return {}
+        return json.loads(path.read_text(encoding="utf-8"))  # type: ignore[no-any-return]
+
+    def _save_status(self, task_id: str, status: dict[str, str]) -> None:
+        """Persist the status dict for a task."""
+        path = self._status_path(task_id)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(status), encoding="utf-8")
+
     def save(self, task_id: str, name: str, content: str) -> Artifact:
-        """Save an artifact (version 1). Overwrites if v1 exists."""
+        """Save an artifact (version 1). Marks as pending."""
         task_dir = self._task_dir(task_id)
         task_dir.mkdir(parents=True, exist_ok=True)
         path = self._version_path(task_id, name, 1)
         path.write_text(content, encoding="utf-8")
         now = datetime.now(UTC).isoformat()
+        # Mark artifact as pending in status file
+        status = self._load_status(task_id)
+        status[name] = "pending"
+        self._save_status(task_id, status)
         logger.debug("Saved artifact %s/%s v1", task_id, name)
         return Artifact(task_id=task_id, name=name, path=path, version=1, created_at=now)
 
@@ -122,6 +144,75 @@ class ArtifactManager:
         output_path.mkdir(parents=True, exist_ok=True)
         if task_dir.exists():
             for p in task_dir.iterdir():
+                if p.name == ".status.json":
+                    continue
                 shutil.copy2(p, output_path / p.name)
         logger.info("Exported artifacts for task %s to %s", task_id, output_path)
         return output_path
+
+    # ------------------------------------------------------------------
+    # Review gate: accept / reject / edit (REQ-18.3)
+    # ------------------------------------------------------------------
+
+    def accept(self, task_id: str, name: str) -> None:
+        """Accept a pending artifact, marking it as final."""
+        status = self._load_status(task_id)
+        if name not in status:
+            msg = f"Artifact '{name}' not found for task '{task_id}'"
+            raise KeyError(msg)
+        status[name] = "accepted"
+        self._save_status(task_id, status)
+        logger.debug("Accepted artifact %s/%s", task_id, name)
+
+    def reject(self, task_id: str, name: str) -> None:
+        """Reject a pending artifact, removing it entirely."""
+        status = self._load_status(task_id)
+        if name not in status:
+            msg = f"Artifact '{name}' not found for task '{task_id}'"
+            raise KeyError(msg)
+        del status[name]
+        self._save_status(task_id, status)
+        # Remove all version files for this artifact
+        task_dir = self._task_dir(task_id)
+        if task_dir.exists():  # pragma: no branch — task_dir exists if status loaded
+            prefix = f"{name}.v"
+            for p in task_dir.iterdir():
+                if p.name.startswith(prefix) and p.name[len(prefix):].isdigit():
+                    p.unlink()
+        logger.debug("Rejected artifact %s/%s", task_id, name)
+
+    def edit(self, task_id: str, name: str, content: str) -> Artifact:
+        """Edit an artifact with new content and auto-accept it."""
+        status = self._load_status(task_id)
+        if name not in status:
+            msg = f"Artifact '{name}' not found for task '{task_id}'"
+            raise KeyError(msg)
+        artifact = self.save_version(task_id, name, content)
+        status[name] = "accepted"
+        self._save_status(task_id, status)
+        logger.debug("Edited and accepted artifact %s/%s", task_id, name)
+        return artifact
+
+    def list_pending(self, task_id: str) -> list[Artifact]:
+        """List artifacts awaiting review (status == 'pending')."""
+        return self._list_by_status(task_id, "pending")
+
+    def list_accepted(self, task_id: str) -> list[Artifact]:
+        """List accepted artifacts (status == 'accepted')."""
+        return self._list_by_status(task_id, "accepted")
+
+    def _list_by_status(
+        self, task_id: str, target_status: str
+    ) -> list[Artifact]:
+        """Return artifacts matching the given status."""
+        status = self._load_status(task_id)
+        artifacts: list[Artifact] = []
+        for name, st in status.items():
+            if st != target_status:
+                continue
+            version = self._latest_version(task_id, name)
+            path = self._version_path(task_id, name, version)
+            artifacts.append(
+                Artifact(task_id=task_id, name=name, path=path, version=version)
+            )
+        return artifacts

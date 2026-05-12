@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import pytest
 
 from guild.artifacts.manager import ArtifactManager
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 @pytest.mark.unit
@@ -156,3 +161,84 @@ class TestArtifactsEdgeCases:
         mgr.export("task-1", output_dir)
         assert (output_dir / "code.v1").exists()
         assert (output_dir / "code.v2").exists()
+
+
+# ======================================================================
+# REQ-18.3: Accept/reject/edit agent outputs before committing
+# ======================================================================
+
+
+@pytest.mark.req("REQ-18.3")
+@pytest.mark.unit
+class TestArtifactReviewGate:
+    """Artifacts have a review gate: pending -> accept/reject/edit."""
+
+    def test_saved_artifact_starts_pending(self, tmp_path: Path) -> None:
+        """Saved artifacts start in pending status."""
+        mgr = ArtifactManager(tmp_path / "artifacts")
+        mgr.save("task-1", "output.py", "print('hello')")
+        pending = mgr.list_pending("task-1")
+        assert len(pending) == 1
+        assert pending[0].name == "output.py"
+
+    def test_accepted_artifact_moves_from_pending(self, tmp_path: Path) -> None:
+        """Accepting moves artifact from pending to accepted."""
+        mgr = ArtifactManager(tmp_path / "artifacts")
+        mgr.save("task-1", "output.py", "print('hello')")
+        mgr.accept("task-1", "output.py")
+        assert mgr.list_pending("task-1") == []
+        accepted = mgr.list_accepted("task-1")
+        assert len(accepted) == 1
+        assert accepted[0].name == "output.py"
+
+    def test_rejected_artifact_is_removed(self, tmp_path: Path) -> None:
+        """Rejecting removes the artifact entirely."""
+        mgr = ArtifactManager(tmp_path / "artifacts")
+        mgr.save("task-1", "output.py", "print('hello')")
+        mgr.reject("task-1", "output.py")
+        assert mgr.list_pending("task-1") == []
+        assert mgr.list_accepted("task-1") == []
+        # Content is gone
+        assert mgr.get("task-1", "output.py") is None
+
+    def test_edit_saves_new_version_and_accepts(self, tmp_path: Path) -> None:
+        """Editing saves new content and auto-accepts."""
+        mgr = ArtifactManager(tmp_path / "artifacts")
+        mgr.save("task-1", "output.py", "print('hello')")
+        mgr.edit("task-1", "output.py", "print('world')")
+        # Should be accepted now with new content
+        assert mgr.list_pending("task-1") == []
+        accepted = mgr.list_accepted("task-1")
+        assert len(accepted) == 1
+        content = mgr.get("task-1", "output.py")
+        assert content == "print('world')"
+
+    def test_accept_nonexistent_raises(self, tmp_path: Path) -> None:
+        """Accepting non-existent artifact raises KeyError."""
+        mgr = ArtifactManager(tmp_path / "artifacts")
+        with pytest.raises(KeyError):
+            mgr.accept("task-1", "ghost.py")
+
+    def test_reject_nonexistent_raises(self, tmp_path: Path) -> None:
+        """Rejecting non-existent artifact raises KeyError."""
+        mgr = ArtifactManager(tmp_path / "artifacts")
+        with pytest.raises(KeyError):
+            mgr.reject("task-1", "ghost.py")
+
+    def test_multiple_pending_artifacts(self, tmp_path: Path) -> None:
+        """Multiple artifacts can be pending, accept/reject independently."""
+        mgr = ArtifactManager(tmp_path / "artifacts")
+        mgr.save("task-1", "a.py", "aaa")
+        mgr.save("task-1", "b.py", "bbb")
+        mgr.save("task-1", "c.py", "ccc")
+        assert len(mgr.list_pending("task-1")) == 3
+        mgr.accept("task-1", "a.py")
+        mgr.reject("task-1", "b.py")
+        assert len(mgr.list_pending("task-1")) == 1
+        assert mgr.list_pending("task-1")[0].name == "c.py"
+
+    def test_edit_nonexistent_raises(self, tmp_path: Path) -> None:
+        """Editing a non-existent artifact raises KeyError."""
+        mgr = ArtifactManager(tmp_path / "artifacts")
+        with pytest.raises(KeyError):
+            mgr.edit("task-1", "ghost.py", "content")
