@@ -30,7 +30,6 @@ async def queue(storage: Storage) -> QuestionQueue:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-15.1")
 class TestPostQuestion:
     """Posting questions to the escalation queue."""
 
@@ -97,7 +96,6 @@ class TestPostQuestion:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-15.3")
 class TestEscalationContext:
     """Escalation context preservation."""
 
@@ -121,7 +119,6 @@ class TestEscalationContext:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-15.4")
 class TestBatchAnswer:
     """Batch approval of multiple questions."""
 
@@ -147,7 +144,6 @@ class TestBatchAnswer:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-15.1")
 class TestPriorityOrdering:
     """Questions are returned in priority order."""
 
@@ -171,7 +167,6 @@ class TestPriorityOrdering:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-15.1")
 class TestQuestionQueueEdgeCases:
     """Edge cases for QuestionQueue."""
 

@@ -12,7 +12,6 @@ from guild.permissions.checker import HARDCODED_NEVER, PermissionChecker, Permis
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-03.1")
 class TestNothingTier:
     """Nothing tier blocks all tool invocations unconditionally."""
 
@@ -52,7 +51,6 @@ class TestNothingTier:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-03.2")
 class TestAskTier:
     """Ask tier delegates decisions to a prompt function."""
 
@@ -103,7 +101,6 @@ class TestAskTier:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-03.3")
 class TestScopedTier:
     """Scoped tier allows tools in the allowlist within path boundaries."""
 
@@ -172,7 +169,6 @@ class TestScopedTier:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-03.4")
 class TestAutopilotTier:
     """Autopilot tier allows all tools unconditionally."""
 
@@ -203,7 +199,6 @@ class TestAutopilotTier:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-03.5")
 class TestSetTier:
     """Runtime tier switching and its side effects."""
 
@@ -259,7 +254,6 @@ class TestSetTier:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-03.7")
 class TestHardcodedNever:
     """Hardcoded-never layer blocks destructive actions regardless of tier."""
 
@@ -357,7 +351,6 @@ class TestHardcodedNever:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-03.6")
 class TestPermissionDecisionAuditable:
     """Permission decisions expose enough info for audit logging."""
 
@@ -410,7 +403,6 @@ class TestPermissionDecisionAuditable:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-03.8")
 class TestReversibilitySafeOperations:
     """Safe, reversible operations remain allowed in all tiers."""
 
@@ -452,7 +444,6 @@ class TestReversibilitySafeOperations:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-03.2")
 @pytest.mark.unit
 class TestPermissionsCheckerEdges:
     """Cover permissions checker uncovered branches."""

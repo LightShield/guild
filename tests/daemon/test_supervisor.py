@@ -16,7 +16,6 @@ from guild.daemon.supervisor import DaemonSupervisor
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-23.2")
 class TestPidFile:
     """PID file creation and removal."""
 
@@ -60,7 +59,6 @@ class TestPidFile:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-23.6")
 class TestSupervisorExecution:
     """Supervisor runs the agent coroutine and handles exceptions."""
 
@@ -91,7 +89,6 @@ class TestSupervisorExecution:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-23.8")
 class TestForegroundMode:
     """Foreground mode blocks until the coroutine completes."""
 
@@ -113,7 +110,6 @@ class TestForegroundMode:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-25.4")
 class TestSignalHandling:
     """SIGTERM and SIGINT trigger graceful shutdown."""
 
@@ -174,7 +170,6 @@ class TestSignalHandling:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-25.6")
 class TestStatePersistence:
     """State is persisted before shutdown."""
 
@@ -209,7 +204,6 @@ class TestStatePersistence:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-23.8")
 class TestSupervisorEdgeCases:
     """Cover supervisor edge cases."""
 

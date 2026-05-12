@@ -34,7 +34,6 @@ async def storage(tmp_path: Path) -> Storage:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-12.1")
 class TestTaskSpecFromString:
     """TaskSpec.from_string parses a plain description."""
 
@@ -47,7 +46,6 @@ class TestTaskSpecFromString:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-12.1")
 class TestTaskSpecFromToml:
     """TaskSpec.from_toml loads structured specs from TOML files."""
 
@@ -80,7 +78,6 @@ target = "src/auth/module.py"
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-12.1")
 class TestTaskSpecFromTomlEdgeCases:
     """Edge cases for TaskSpec.from_toml loading."""
 
@@ -116,7 +113,6 @@ acceptance_criteria = ["All tests green", "No regressions", "Code reviewed"]
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-12.1")
 class TestTaskSpecWithCriteriaAndSteps:
     """TaskSpec constructed directly with all fields."""
 
@@ -148,7 +144,6 @@ class TestTaskSpecWithCriteriaAndSteps:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-12.2")
 class TestVerificationCommand:
     """Verification steps that run shell commands."""
 
@@ -178,7 +173,6 @@ class TestVerificationCommand:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-12.2")
 class TestVerificationFileExists:
     """Verification steps that check file existence."""
 
@@ -216,7 +210,6 @@ class TestVerificationFileExists:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-12.5")
 class TestStatusTransitions:
     """Task status lifecycle enforcement."""
 
@@ -278,7 +271,6 @@ class TestStatusTransitions:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-12.3")
 class TestTaskDecomposition:
     """Task decomposition into subtasks with parent tracking."""
 
@@ -326,7 +318,6 @@ class TestTaskDecomposition:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-12.4")
 class TestTaskDependencies:
     """Task dependency graph — do B after A completes."""
 
@@ -381,7 +372,6 @@ class TestTaskDependencies:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-12.2")
 class TestVerificationFileContains:
     """Verification steps that check file content."""
 
@@ -444,7 +434,6 @@ class TestVerificationFileContains:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-12.2")
 class TestVerificationUnknownType:
     """Verification step with an unknown type."""
 
@@ -462,7 +451,6 @@ class TestVerificationUnknownType:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-12.2")
 class TestVerificationNoSteps:
     """Verification with no steps defined."""
 
@@ -475,7 +463,6 @@ class TestVerificationNoSteps:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-12.2")
 class TestVerificationCommandEdgeCases:
     """Additional command verification tests."""
 
@@ -498,7 +485,6 @@ class TestVerificationCommandEdgeCases:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-12.5")
 @pytest.mark.unit
 class TestTaskSpecEdges:
     """Cover task/spec.py uncovered branches."""

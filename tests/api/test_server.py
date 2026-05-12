@@ -25,7 +25,6 @@ def guild_api_dir(tmp_path: Path) -> Path:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-05.4")
 def test_api_routes_defined() -> None:
     """All expected API routes are defined in the registry."""
     expected_routes = [
@@ -49,7 +48,6 @@ def test_api_routes_defined() -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-05.4")
 def test_create_app_raises_without_fastapi() -> None:
     """create_app raises ImportError when fastapi is not installed."""
     import builtins
@@ -69,7 +67,6 @@ def test_create_app_raises_without_fastapi() -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-05.5")
 def test_api_status_returns_project_info(guild_api_dir: Path) -> None:
     """GET /api/status returns version and counts."""
     from starlette.testclient import TestClient
@@ -88,7 +85,6 @@ def test_api_status_returns_project_info(guild_api_dir: Path) -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-05.5")
 def test_api_tasks_returns_list(guild_api_dir: Path) -> None:
     """GET /api/tasks returns an empty list for a fresh project."""
     from starlette.testclient import TestClient
@@ -103,7 +99,6 @@ def test_api_tasks_returns_list(guild_api_dir: Path) -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-05.5")
 def test_api_create_and_get_task(guild_api_dir: Path) -> None:
     """POST /api/tasks creates a task; GET /api/tasks returns it."""
     from starlette.testclient import TestClient
@@ -128,7 +123,6 @@ def test_api_create_and_get_task(guild_api_dir: Path) -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-05.5")
 def test_frontend_serves_html(tmp_path: Path) -> None:
     """When ui/dist exists, the SPA endpoint serves index.html."""
     from starlette.testclient import TestClient
@@ -157,7 +151,6 @@ def test_frontend_serves_html(tmp_path: Path) -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-05.5")
 def test_websocket_sends_status_updates(guild_api_dir: Path) -> None:
     """WebSocket /ws sends JSON status updates."""
     from starlette.testclient import TestClient
@@ -174,7 +167,6 @@ def test_websocket_sends_status_updates(guild_api_dir: Path) -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-05.5")
 def test_guild_serve_command_exists() -> None:
     """The serve command is registered in the Typer app."""
     from typer.testing import CliRunner
@@ -188,7 +180,6 @@ def test_guild_serve_command_exists() -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-05.4")
 def test_visual_composer_api_routes_exist() -> None:
     """The API provides blocks/teams data routes (backend side only)."""
     # NOTE: REQ-05.6 (visual composer) and REQ-05.7 (communication graph) are
@@ -205,7 +196,6 @@ def test_visual_composer_api_routes_exist() -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-05.5")
 def test_api_get_task_not_found(guild_api_dir: Path) -> None:
     """GET /api/tasks/{id} returns 404 for nonexistent task."""
     from starlette.testclient import TestClient
@@ -218,7 +208,6 @@ def test_api_get_task_not_found(guild_api_dir: Path) -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-05.5")
 def test_api_create_task_missing_description(guild_api_dir: Path) -> None:
     """POST /api/tasks with empty description returns 400."""
     from starlette.testclient import TestClient
@@ -231,7 +220,6 @@ def test_api_create_task_missing_description(guild_api_dir: Path) -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-05.5")
 def test_api_kill_task_not_found(guild_api_dir: Path) -> None:
     """POST /api/tasks/{id}/kill returns 404 for nonexistent task."""
     from starlette.testclient import TestClient
@@ -243,7 +231,6 @@ def test_api_kill_task_not_found(guild_api_dir: Path) -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-05.5")
 def test_api_pause_task_not_found(guild_api_dir: Path) -> None:
     """POST /api/tasks/{id}/pause returns 404 for nonexistent task."""
     from starlette.testclient import TestClient
@@ -255,7 +242,6 @@ def test_api_pause_task_not_found(guild_api_dir: Path) -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-05.5")
 def test_api_resume_task_not_found(guild_api_dir: Path) -> None:
     """POST /api/tasks/{id}/resume returns 404 for nonexistent task."""
     from starlette.testclient import TestClient
@@ -267,7 +253,6 @@ def test_api_resume_task_not_found(guild_api_dir: Path) -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-05.5")
 def test_api_kill_pause_resume_existing_task(guild_api_dir: Path) -> None:
     """Kill, pause, and resume operations work on existing tasks."""
     from starlette.testclient import TestClient
@@ -295,7 +280,6 @@ def test_api_kill_pause_resume_existing_task(guild_api_dir: Path) -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-05.5")
 def test_api_list_agents(guild_api_dir: Path) -> None:
     """GET /api/agents returns a list."""
     from starlette.testclient import TestClient
@@ -308,7 +292,6 @@ def test_api_list_agents(guild_api_dir: Path) -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-05.5")
 def test_api_list_blocks(guild_api_dir: Path) -> None:
     """GET /api/blocks returns a list (may hit serialization issue)."""
     from unittest.mock import patch as mock_patch
@@ -327,7 +310,6 @@ def test_api_list_blocks(guild_api_dir: Path) -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-05.5")
 def test_api_list_teams(guild_api_dir: Path) -> None:
     """GET /api/teams returns a list."""
     from starlette.testclient import TestClient
@@ -340,7 +322,6 @@ def test_api_list_teams(guild_api_dir: Path) -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-05.5")
 def test_api_list_learnings(guild_api_dir: Path) -> None:
     """GET /api/learnings returns a list."""
     from starlette.testclient import TestClient
@@ -353,7 +334,6 @@ def test_api_list_learnings(guild_api_dir: Path) -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-05.5")
 def test_api_get_audit(guild_api_dir: Path) -> None:
     """GET /api/audit returns a list."""
     from starlette.testclient import TestClient
@@ -366,7 +346,6 @@ def test_api_get_audit(guild_api_dir: Path) -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-05.5")
 def test_api_get_config(guild_api_dir: Path) -> None:
     """GET /api/config returns a dict."""
     from starlette.testclient import TestClient
@@ -379,7 +358,6 @@ def test_api_get_config(guild_api_dir: Path) -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-05.5")
 def test_api_post_config(guild_api_dir: Path) -> None:
     """POST /api/config returns ok status (not yet implemented)."""
     from starlette.testclient import TestClient
@@ -397,7 +375,6 @@ def test_api_post_config(guild_api_dir: Path) -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-05.5")
 def test_api_get_task_by_id_success(guild_api_dir: Path) -> None:
     """GET /api/tasks/{id} returns the task when it exists (line 87)."""
     from starlette.testclient import TestClient
@@ -416,7 +393,6 @@ def test_api_get_task_by_id_success(guild_api_dir: Path) -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-05.5")
 def test_api_list_blocks_import_error(guild_api_dir: Path) -> None:
     """GET /api/blocks returns [] when BlockRegistry import raises ImportError (lines 184-185)."""
     from starlette.testclient import TestClient
@@ -433,7 +409,6 @@ def test_api_list_blocks_import_error(guild_api_dir: Path) -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-05.5")
 def test_api_list_blocks_os_error(guild_api_dir: Path) -> None:
     """GET /api/blocks returns [] when BlockRegistry raises OSError (lines 184-185)."""
     from starlette.testclient import TestClient
@@ -453,7 +428,6 @@ def test_api_list_blocks_os_error(guild_api_dir: Path) -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-05.5")
 def test_api_get_config_os_error(guild_api_dir: Path) -> None:
     """GET /api/config returns {} when load_config raises OSError (lines 223-225)."""
     from starlette.testclient import TestClient
@@ -468,7 +442,6 @@ def test_api_get_config_os_error(guild_api_dir: Path) -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-05.5")
 def test_api_get_config_value_error(guild_api_dir: Path) -> None:
     """GET /api/config returns {} when load_config raises ValueError (lines 223-225)."""
     from starlette.testclient import TestClient
@@ -483,7 +456,6 @@ def test_api_get_config_value_error(guild_api_dir: Path) -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-05.5")
 def test_websocket_handles_connection_error(guild_api_dir: Path) -> None:
     """WebSocket /ws handles ConnectionError gracefully (lines 249, 251)."""
     from starlette.testclient import TestClient
@@ -500,7 +472,6 @@ def test_websocket_handles_connection_error(guild_api_dir: Path) -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-05.5")
 def test_websocket_handles_runtime_error(guild_api_dir: Path) -> None:
     """WebSocket /ws handles RuntimeError gracefully (line 251)."""
     from starlette.testclient import TestClient
@@ -518,7 +489,6 @@ def test_websocket_handles_runtime_error(guild_api_dir: Path) -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-05.5")
 def test_static_file_served_directly(tmp_path: Path) -> None:
     """SPA route serves an existing file directly instead of index.html (line 272)."""
     from starlette.testclient import TestClient
@@ -549,7 +519,6 @@ def test_static_file_served_directly(tmp_path: Path) -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-05.5")
 def test_no_static_files_when_ui_dist_missing(guild_api_dir: Path) -> None:
     """When _UI_DIST is not a directory, static file routes are not registered (line 259->exit)."""
     from pathlib import Path as _Path
@@ -567,7 +536,6 @@ def test_no_static_files_when_ui_dist_missing(guild_api_dir: Path) -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-05.5")
 def test_websocket_disconnect_path(guild_api_dir: Path) -> None:
     """WebSocket /ws handles client disconnect via WebSocketDisconnect (line 249)."""
     import asyncio
@@ -590,8 +558,6 @@ def test_websocket_disconnect_path(guild_api_dir: Path) -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-05.5")
-@pytest.mark.req("REQ-14.2")
 def test_api_save_team(guild_api_dir: Path) -> None:
     """POST /api/teams saves a team composition to disk."""
     from starlette.testclient import TestClient
@@ -619,7 +585,6 @@ def test_api_save_team(guild_api_dir: Path) -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-05.5")
 def test_api_save_team_missing_name(guild_api_dir: Path) -> None:
     """POST /api/teams with empty name returns 400."""
     from starlette.testclient import TestClient

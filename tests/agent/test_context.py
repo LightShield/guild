@@ -28,7 +28,6 @@ def _make_messages(
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-07.4")
 class TestEstimateTokens:
     """Token estimation from content length."""
 
@@ -49,7 +48,6 @@ class TestEstimateTokens:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-07.4")
 class TestNeedsCompaction:
     """Compaction threshold detection."""
 
@@ -69,7 +67,6 @@ class TestNeedsCompaction:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-07.4")
 class TestCompact:
     """Tier 1 MicroCompact: truncate old tool outputs."""
 
@@ -133,7 +130,6 @@ class TestCompact:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-07.8")
 class TestHandoffArtifact:
     """Structured handoff for context resets."""
 
@@ -182,7 +178,6 @@ class TestHandoffArtifact:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-07.10")
 class TestSeparateStaticDynamic:
     """Static/dynamic prompt separation for cache efficiency."""
 
@@ -227,7 +222,6 @@ class TestSeparateStaticDynamic:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-07.4")
 @pytest.mark.unit
 class TestContextManagerEmptyContentBranch:
     """Cover context manager branches with empty content."""

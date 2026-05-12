@@ -34,7 +34,6 @@ def _make_tool_executors() -> dict:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-06.8")
 class TestLoopBasics:
     """Core loop mechanics: exit conditions, tool execution, message flow."""
 
@@ -127,7 +126,6 @@ class TestLoopBasics:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-06.8")
 class TestLoopEdgeCases:
     """Edge cases: multiple tool calls, failures mid-sequence, exceptions."""
 
@@ -257,7 +255,6 @@ class TestLoopEdgeCases:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-06.8")
 class TestLoopCompletionHeuristics:
     """Integration of completion heuristics into the loop."""
 
@@ -312,7 +309,6 @@ class TestLoopCompletionHeuristics:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-06.9")
 class TestMultiTurnConversation:
     """Tests for send() — multi-turn conversation support."""
 
@@ -448,7 +444,6 @@ class TestMultiTurnConversation:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-06.4")
 class TestStuckRecovery:
     """Tests for stuck recovery — try alternatives before escalating."""
 
@@ -538,7 +533,6 @@ class TestStuckRecovery:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-06.5")
 class TestHumanEscalation:
     """Tests for structured escalation messages."""
 
@@ -603,7 +597,6 @@ class TestHumanEscalation:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-06.10")
 class TestAdversarialSelfReview:
     """Tests for adversarial self-review after successful task completion."""
 
@@ -682,7 +675,6 @@ class TestAdversarialSelfReview:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-10.1")
 class TestTokenTracking:
     """Tests for token usage tracking per agent loop execution."""
 
@@ -754,7 +746,6 @@ class TestTokenTracking:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-10.2")
 class TestTokenBudget:
     """Tests for budget enforcement — stop loop when budget exceeded."""
 
@@ -858,7 +849,6 @@ class TestTokenBudget:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-10.4")
 class TestBudgetAlerts:
     """Tests for budget alerts when approaching token limits."""
 
@@ -933,7 +923,6 @@ class TestBudgetAlerts:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-06.1")
 class TestAgentDoesNotPause:
     """REQ-06.1 — agents do NOT unnecessarily pause for confirmation."""
 
@@ -983,7 +972,6 @@ class TestAgentDoesNotPause:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-06.7")
 class TestTimeoutBehavior:
     """REQ-06.7 — timeout affects agent loop behavior."""
 
@@ -1020,7 +1008,6 @@ class TestTimeoutBehavior:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-25.6")
 class TestStatePersistencePerTurn:
     """REQ-25.6 — messages accumulate in loop state per turn."""
 
@@ -1052,7 +1039,6 @@ class TestStatePersistencePerTurn:
 
 
 @pytest.mark.integration
-@pytest.mark.req("REQ-06.8")
 class TestRealOllama:
     """Integration test using the real Ollama instance."""
 
@@ -1122,7 +1108,6 @@ class TestRealOllama:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-06.8")
 @pytest.mark.unit
 class TestAgentLoopUncoveredBranches:
     """Cover agent loop branches where stuck_detector is None and tool schemas miss."""
@@ -1156,7 +1141,6 @@ class TestAgentLoopUncoveredBranches:
         assert any("stuck" in msg.content.lower() for msg in loop.messages)
 
 
-@pytest.mark.req("REQ-06.4")
 @pytest.mark.unit
 class TestSmartRecoveryPromptSelection:
     """Recovery prompt is context-aware: test failures get specific guidance."""

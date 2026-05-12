@@ -44,7 +44,6 @@ def _make_provider(*responses: LLMResponse) -> AsyncMock:
     return provider
 
 
-@pytest.mark.req("REQ-06.8")
 class TestAgentLoopWithRealTools:
     """Agent loop executes real file operations via tool calls."""
 
@@ -166,7 +165,6 @@ class TestAgentLoopWithRealTools:
         assert provider.generate.call_count == 2
 
 
-@pytest.mark.req("REQ-06.6")
 class TestAgentLoopWithRealStorage:
     """Agent loop results persist to real SQLite."""
 
@@ -230,8 +228,6 @@ class TestAgentLoopWithRealStorage:
         assert "task_completed" in actions
 
 
-@pytest.mark.req("REQ-04.9")
-@pytest.mark.req("REQ-06.6")
 class TestTeamExecutionPersistsToStorage:
     """Team execution creates proper tasks, agents, messages in storage."""
 

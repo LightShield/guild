@@ -8,7 +8,6 @@ from guild.agent.message import Message
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-06.8")
 class TestMessageAttributes:
     """Message dataclass stores conversation data correctly."""
 
@@ -38,7 +37,6 @@ class TestMessageAttributes:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-06.8")
 class TestToDict:
     """Message.to_dict() produces provider-compatible dicts."""
 
@@ -72,7 +70,6 @@ class TestToDict:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-06.8")
 class TestFromDict:
     """Message.from_dict() round-trips correctly."""
 

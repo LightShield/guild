@@ -16,7 +16,6 @@ from guild.blocks.registry import BlockRegistry
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.30")
 def test_port_type_has_tag_and_schema() -> None:
     """Every port type can have a type tag and optional JSON schema."""
     register_port_type(
@@ -36,7 +35,6 @@ def test_port_type_has_tag_and_schema() -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.31")
 def test_compatibility_checked_at_composition() -> None:
     """Port compatibility is checked at composition time (validate_team)."""
     registry = BlockRegistry()
@@ -59,7 +57,6 @@ def test_compatibility_checked_at_composition() -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.32")
 def test_any_type_accepts_all() -> None:
     """The 'any' type tag is compatible with every other type."""
     assert check_port_compatibility("any", "plan") is True
@@ -69,7 +66,6 @@ def test_any_type_accepts_all() -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.33")
 def test_composite_exposes_unconnected_ports() -> None:
     """Composite blocks expose unconnected inner ports as their own ports."""
     registry = BlockRegistry()
@@ -107,7 +103,6 @@ def test_composite_exposes_unconnected_ports() -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.34")
 def test_register_custom_port_type() -> None:
     """New type tags can be registered by users."""
     register_port_type(
@@ -122,7 +117,6 @@ def test_register_custom_port_type() -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.35")
 def test_port_data_must_be_json_serializable() -> None:
     """Port data must always be JSON-serializable."""
     valid, error = validate_port_data({"key": "value", "count": 42}, "text")
@@ -131,7 +125,6 @@ def test_port_data_must_be_json_serializable() -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.35")
 def test_non_serializable_data_rejected() -> None:
     """Non-JSON-serializable data is rejected."""
     valid, error = validate_port_data({"func": lambda x: x}, "text")  # type: ignore[dict-item]
@@ -145,7 +138,6 @@ def test_non_serializable_data_rejected() -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.35")
 class TestBasicSchemaCheck:
     """Tests for _basic_schema_check and validate_port_data with schemas."""
 
@@ -237,7 +229,6 @@ class TestBasicSchemaCheck:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.33")
 class TestCompositePortsUnknownBlock:
     """get_composite_ports skips blocks unknown to registry."""
 

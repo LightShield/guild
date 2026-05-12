@@ -8,7 +8,6 @@ from guild.tools.base import ToolResult, resolve_path
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-08.1")
 class TestResolve:
     """resolve_path resolves relative and absolute paths correctly."""
 
@@ -30,7 +29,6 @@ class TestResolve:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-08.1")
 class TestToolResult:
     """ToolResult dataclass behaves correctly."""
 

@@ -13,7 +13,6 @@ from guild.tools.base import ToolResult
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-06.8")
 class TestDeduplication:
     """Fix C: Detect and prevent repeated identical tool calls."""
 
@@ -68,7 +67,6 @@ class TestDeduplication:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-06.8")
 class TestCompletionNudge:
     """Fix B: Nudge model to finish after successful simple actions."""
 
@@ -93,7 +91,6 @@ class TestCompletionNudge:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-06.8")
 class TestFormatToolResult:
     """Fix A: Enriched tool result messages include closure signal on success."""
 
@@ -127,7 +124,6 @@ class TestFormatToolResult:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-06.8")
 class TestDeduplicationEdgeCases:
     """Edge cases for the deduplication logic."""
 
@@ -168,7 +164,6 @@ class TestDeduplicationEdgeCases:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-06.8")
 class TestCompletionNudgeEdgeCases:
     """Edge cases for should_nudge_completion."""
 

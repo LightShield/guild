@@ -11,7 +11,6 @@ from guild.escalation.queue import QuestionPriority
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-15.5")
 class TestBellNotification:
     """Terminal bell notification tests."""
 
@@ -27,7 +26,6 @@ class TestBellNotification:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-15.5")
 class TestWebhookNotification:
     """Webhook notification tests."""
 
@@ -49,7 +47,6 @@ class TestWebhookNotification:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-15.5")
 class TestChannelConfiguration:
     """Channel configuration tests."""
 
@@ -91,7 +88,6 @@ class TestChannelConfiguration:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-15.2")
 class TestPresenceAware:
     """Presence-aware notification behavior."""
 
@@ -109,7 +105,6 @@ class TestPresenceAware:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-15.5")
 class TestWebhookEdgeCases:
     """Edge cases for webhook notification."""
 
@@ -141,7 +136,6 @@ class TestWebhookEdgeCases:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-15.5")
 class TestDesktopNotification:
     """Desktop notification tests."""
 
@@ -179,7 +173,6 @@ class TestDesktopNotification:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-15.5")
 class TestNotifierUnsupportedPlatform:
     """Desktop notification on unsupported platform."""
 
@@ -202,7 +195,6 @@ class TestNotifierUnsupportedPlatform:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-15.5")
 class TestNotifierLoopContinue:
     """NONE channel causes a continue without action."""
 
@@ -221,7 +213,6 @@ class TestNotifierLoopContinue:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-15.5")
 @pytest.mark.unit
 class TestNotifyLoopContinuation:
     """Cover the loop continuation branch when NONE is followed by real channels."""

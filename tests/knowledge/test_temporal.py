@@ -37,7 +37,6 @@ def guild_dir(tmp_path: Path) -> Path:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-27.1")
 class TestDecisionHistory:
     """Decision history retrieval."""
 
@@ -71,7 +70,6 @@ class TestDecisionHistory:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-27.3")
 class TestProjectInstructions:
     """Loading .guild/prompt.md for project instructions."""
 
@@ -105,7 +103,6 @@ class TestProjectInstructions:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-27.4")
 class TestRelevantContext:
     """Assembling relevant temporal context for tasks."""
 
@@ -153,7 +150,6 @@ class TestRelevantContext:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-27.2")
 class TestPresentStateAndPastInfo:
     """Tests for get_present_state and get_key_past_info."""
 
@@ -231,7 +227,6 @@ class TestPresentStateAndPastInfo:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-27")
 class TestTemporalKnowledgeEdgeCases:
     """Cover temporal knowledge assembly edge cases."""
 
@@ -301,7 +296,6 @@ class TestTemporalKnowledgeEdgeCases:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-27.1")
 @pytest.mark.unit
 class TestTemporalKnowledgeBranches:
     """Cover temporal knowledge uncovered branches."""

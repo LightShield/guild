@@ -13,7 +13,7 @@ import pytest
 from ollama import AsyncClient, ChatResponse, ListResponse, Message
 
 
-@pytest.mark.unit
+@pytest.mark.learning
 class TestAsyncClientAcceptsHostParam:
     """Verify AsyncClient(host=...) works — used in OllamaProvider.__init__."""
 
@@ -23,7 +23,7 @@ class TestAsyncClientAcceptsHostParam:
         assert client is not None
 
 
-@pytest.mark.unit
+@pytest.mark.learning
 class TestChatResponseHasMessageAttribute:
     """Verify ChatResponse has .message with .content and .tool_calls."""
 
@@ -68,7 +68,7 @@ class TestChatResponseHasMessageAttribute:
         assert response.eval_count is None
 
 
-@pytest.mark.unit
+@pytest.mark.learning
 class TestToolCallsHaveFunctionNameAndArguments:
     """Verify tool_calls have .function.name and .function.arguments."""
 
@@ -106,7 +106,7 @@ class TestToolCallsHaveFunctionNameAndArguments:
         assert not msg.tool_calls
 
 
-@pytest.mark.unit
+@pytest.mark.learning
 class TestListReturnsModelsAttribute:
     """Verify ListResponse has .models attribute — used in health_check."""
 

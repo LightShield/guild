@@ -24,7 +24,6 @@ if TYPE_CHECKING:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-08.8")
 class TestMCPSchema:
     """Tools expose MCP-compatible schemas."""
 
@@ -66,7 +65,6 @@ class TestMCPSchema:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-08.9")
 class TestPluginLoading:
     """Discovers and loads tool plugins from directories."""
 
@@ -175,7 +173,6 @@ class TestPluginLoading:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-08.10")
 class TestToolProperties:
     """Tools declare behavioral properties for optimization."""
 
@@ -202,7 +199,6 @@ class TestToolProperties:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-08.11")
 class TestToolCache:
     """LRU cache for cacheable tool results."""
 
@@ -264,7 +260,6 @@ class TestToolCache:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-08.9")
 class TestPluginLoaderEdgeCases:
     """Cover plugin loader edge cases."""
 
@@ -373,7 +368,6 @@ class TestPluginLoaderEdgeCases:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-08.9")
 @pytest.mark.unit
 class TestToolsPluginEdges:
     """Cover tools/plugin.py uncovered branches."""

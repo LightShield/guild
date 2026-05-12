@@ -50,7 +50,6 @@ async def _setup_task_with_messages(storage: Storage, task_id: str = "task-1") -
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-09.1")
 class TestExtractLearnings:
     """Post-task learning extraction."""
 
@@ -165,7 +164,6 @@ class TestExtractLearnings:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-09.4")
 class TestFormatLearningsForInjection:
     """Learning injection into agent prompts."""
 
@@ -214,7 +212,6 @@ class TestFormatLearningsForInjection:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-09.7")
 class TestBlockScopedLearning:
     """Block-level learning — learnings scoped to specific blocks."""
 
@@ -263,7 +260,6 @@ class TestBlockScopedLearning:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-09.9")
 class TestPromptRefinementSuggestions:
     """Prompt refinement suggestions from learnings."""
 
@@ -293,7 +289,6 @@ class TestPromptRefinementSuggestions:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-09.6")
 class TestCrossTaskLearning:
     """Cross-task learning — patterns from task A inform task B."""
 
@@ -333,7 +328,6 @@ class TestCrossTaskLearning:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-09.1")
 @pytest.mark.unit
 class TestLearningEdgeBranches:
     """Cover learning module uncovered branches."""

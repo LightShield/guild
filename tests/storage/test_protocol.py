@@ -11,7 +11,6 @@ from guild.storage.sqlite import Storage
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-06.6")
 class TestStorageProtocolStructuralMatch:
     """The concrete Storage class satisfies the StorageProtocol structurally."""
 
@@ -40,7 +39,6 @@ class TestStorageProtocolStructuralMatch:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-06.6")
 class TestStorageProtocolMethodSignatures:
     """Protocol method signatures are consistent with Storage implementation."""
 
@@ -64,7 +62,6 @@ class TestStorageProtocolMethodSignatures:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-06.6")
 class TestProtocolModuleExports:
     """The protocol module exports are correct."""
 

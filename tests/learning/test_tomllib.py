@@ -14,7 +14,7 @@ import tomllib
 import pytest
 
 
-@pytest.mark.unit
+@pytest.mark.learning
 class TestNestedTablesParseAsNestedDicts:
     """Verify [a.b] becomes {"a": {"b": ...}} — used for guild.toml config."""
 
@@ -43,7 +43,7 @@ key = "value"
         assert data["a"]["b"]["c"]["key"] == "value"
 
 
-@pytest.mark.unit
+@pytest.mark.learning
 class TestArrayOfTablesParseCorrectly:
     """Verify [[items]] syntax — used for team block definitions."""
 
@@ -75,7 +75,7 @@ max_size = 1024
         assert data["tools"][0]["config"]["max_size"] == 1024
 
 
-@pytest.mark.unit
+@pytest.mark.learning
 class TestMissingFileRaisesNotReturnsEmpty:
     """Verify opening a missing file raises — not silently returning {}."""
 
@@ -94,7 +94,7 @@ class TestMissingFileRaisesNotReturnsEmpty:
             tomllib.load(text_stream)  # type: ignore[arg-type]
 
 
-@pytest.mark.unit
+@pytest.mark.learning
 class TestInvalidTomlRaisesDecodeError:
     """Verify invalid TOML raises TOMLDecodeError — used for config validation."""
 

@@ -9,7 +9,6 @@ import pytest
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-23.6")
 class TestDaemonRunMain:
     """main() validates arguments before running."""
 

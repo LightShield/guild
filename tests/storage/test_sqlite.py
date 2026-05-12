@@ -23,7 +23,6 @@ async def storage(tmp_path: Path) -> Storage:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-06.6")
 class TestConnection:
     """Database creation and schema initialization."""
 
@@ -47,7 +46,6 @@ class TestConnection:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-06.6")
 class TestTasks:
     """Task CRUD operations."""
 
@@ -104,7 +102,6 @@ class TestTasks:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-06.6")
 class TestAgents:
     """Agent registration and listing."""
 
@@ -129,7 +126,6 @@ class TestAgents:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-06.6")
 class TestMessages:
     """Message append and retrieval."""
 
@@ -157,7 +153,6 @@ class TestMessages:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-06.6")
 class TestAudit:
     """Audit log operations."""
 
@@ -188,7 +183,6 @@ class TestAudit:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-06.12")
 class TestDecisions:
     """Decision logging operations."""
 
@@ -280,7 +274,6 @@ class TestDecisions:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-06.6")
 class TestPersistence:
     """Data survives close/reconnect cycles."""
 
@@ -320,7 +313,6 @@ class TestPersistence:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-07.1")
 class TestMessagePersistence:
     """Conversation messages persist across sessions (REQ-07.1)."""
 
@@ -388,7 +380,6 @@ class TestMessagePersistence:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-09.2")
 class TestLearningsCategory:
     """Learning creation with categories."""
 
@@ -425,7 +416,6 @@ class TestLearningsCategory:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-09.3")
 class TestLearningsConfidence:
     """Confidence scoring for learnings."""
 
@@ -488,7 +478,6 @@ class TestLearningsConfidence:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-09.8")
 class TestLearningsDecay:
     """Learning decay for old unvalidated entries."""
 
@@ -525,7 +514,6 @@ class TestLearningsDecay:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-08.1")
 class TestStorageNotConnected:
     """Every public method raises RuntimeError when called before connect()."""
 
@@ -635,7 +623,6 @@ class TestStorageNotConnected:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-07.1")
 @pytest.mark.unit
 class TestStorageEdgeCases:
     """Cover storage update edge cases."""

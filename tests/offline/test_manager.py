@@ -18,7 +18,6 @@ class FakeProvider:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-21.1")
 async def test_works_without_internet() -> None:
     """Core OfflineManager functions work even when provider is offline."""
     provider = FakeProvider(healthy=False)
@@ -36,7 +35,6 @@ async def test_works_without_internet() -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-21.2")
 async def test_graceful_degradation_no_crash() -> None:
     """When health_check raises, manager degrades gracefully."""
     provider = FakeProvider(healthy=True)
@@ -53,7 +51,6 @@ async def test_graceful_degradation_no_crash() -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-21.3")
 async def test_list_local_models() -> None:
     """list_local_models parses ollama list output."""
     fake_output = (
@@ -80,7 +77,6 @@ async def test_list_local_models() -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-21.4")
 async def test_offline_help_returns_content() -> None:
     """get_help returns content for known topics, None for unknown."""
     mgr = OfflineManager(FakeProvider())
@@ -98,7 +94,6 @@ async def test_offline_help_returns_content() -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-21.2")
 class TestOfflineManagerEdgeCases:
     """Offline manager check_connectivity exception path."""
 
@@ -117,7 +112,6 @@ class TestOfflineManagerEdgeCases:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-21.1")
 @pytest.mark.unit
 class TestOfflineManagerHealthCheckSuccess:
     """Cover the branch where health check succeeds (line 45->exit)."""

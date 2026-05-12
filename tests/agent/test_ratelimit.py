@@ -11,7 +11,6 @@ from guild.agent.ratelimit import RateLimiter, ToolQueue
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-20.1")
 class TestRateLimiter:
     """Tests for the sliding-window rate limiter."""
 
@@ -110,7 +109,6 @@ class TestRateLimiter:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-20.2")
 class TestToolQueue:
     """Tests for the concurrency-limited tool queue."""
 
@@ -218,7 +216,6 @@ class TestToolQueue:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-20.3")
 class TestBackpressure:
     """BackpressureManager pauses low-priority work when loaded."""
 
@@ -286,7 +283,6 @@ class TestBackpressure:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-20.3")
 class TestBackpressureReleaseBranch:
     """BackpressureManager release edge case."""
 
@@ -306,7 +302,6 @@ class TestBackpressureReleaseBranch:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-20.1")
 @pytest.mark.unit
 class TestRateLimiterWindowExpiredBranch:
     """Cover the branch where wait computes to <= 0 in RateLimiter."""

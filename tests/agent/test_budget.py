@@ -8,7 +8,6 @@ from guild.agent.budget import BUDGET_ALERT_THRESHOLDS, check_budget_alert
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-10.4")
 class TestBudgetAlertThresholds:
     """BUDGET_ALERT_THRESHOLDS defines expected warning levels."""
 
@@ -22,7 +21,6 @@ class TestBudgetAlertThresholds:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-10.4")
 class TestCheckBudgetAlert:
     """check_budget_alert fires at correct thresholds."""
 

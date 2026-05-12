@@ -13,7 +13,6 @@ if TYPE_CHECKING:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-18.1")
 def test_save_artifact_creates_file(tmp_path: object) -> None:
     """Saving an artifact creates the file on disk."""
     mgr = ArtifactManager(tmp_path)  # type: ignore[arg-type]
@@ -28,7 +27,6 @@ def test_save_artifact_creates_file(tmp_path: object) -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-18.1")
 def test_list_artifacts_for_task(tmp_path: object) -> None:
     """Listing artifacts returns all saved artifacts for a task."""
     mgr = ArtifactManager(tmp_path)  # type: ignore[arg-type]
@@ -45,7 +43,6 @@ def test_list_artifacts_for_task(tmp_path: object) -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-18.2")
 def test_get_diff_between_versions(tmp_path: object) -> None:
     """Diff between two versions shows changes."""
     mgr = ArtifactManager(tmp_path)  # type: ignore[arg-type]
@@ -59,7 +56,6 @@ def test_get_diff_between_versions(tmp_path: object) -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-18.1")
 def test_artifact_get_returns_content(tmp_path: object) -> None:
     """get() returns the content of the artifact."""
     mgr = ArtifactManager(tmp_path)  # type: ignore[arg-type]
@@ -73,7 +69,6 @@ def test_artifact_get_returns_content(tmp_path: object) -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-18.4")
 def test_save_version_increments(tmp_path: object) -> None:
     """save_version increments the version number each time."""
     mgr = ArtifactManager(tmp_path)  # type: ignore[arg-type]
@@ -90,7 +85,6 @@ def test_save_version_increments(tmp_path: object) -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-18.5")
 def test_export_creates_directory(tmp_path: object) -> None:
     """Export copies all task artifacts to the output directory."""
     mgr = ArtifactManager(tmp_path / "artifacts")  # type: ignore[arg-type]
@@ -112,7 +106,6 @@ def test_export_creates_directory(tmp_path: object) -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-18.4")
 class TestArtifactsEdgeCases:
     """Cover artifact manager edge cases."""
 
@@ -168,7 +161,6 @@ class TestArtifactsEdgeCases:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-18.3")
 @pytest.mark.unit
 class TestArtifactReviewGate:
     """Artifacts have a review gate: pending -> accept/reject/edit."""

@@ -8,7 +8,6 @@ from guild.blocks.registry import BlockRegistry
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.20")
 def test_atomic_block_has_inputs_outputs() -> None:
     """An atomic block must define typed input and output ports."""
     block = BlockDef(
@@ -26,7 +25,6 @@ def test_atomic_block_has_inputs_outputs() -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.20")
 def test_builtin_blocks_registered() -> None:
     """All built-in blocks should be registered on init."""
     registry = BlockRegistry()
@@ -37,7 +35,6 @@ def test_builtin_blocks_registered() -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.20")
 def test_block_has_all_required_fields() -> None:
     """A BlockDef has name, role, and all structural fields accessible."""
     block = BlockDef(
@@ -65,7 +62,6 @@ def test_block_has_all_required_fields() -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.20")
 def test_block_default_permission() -> None:
     """A BlockDef without explicit permission defaults to 'ask'."""
     block = BlockDef(name="minimal", role="worker")
@@ -79,7 +75,6 @@ def test_block_default_permission() -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.22")
 def test_port_compatibility_same_type() -> None:
     """Ports with the same type tag are compatible."""
     assert check_port_compatibility("plan", "plan") is True
@@ -88,7 +83,6 @@ def test_port_compatibility_same_type() -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.22")
 def test_port_compatibility_any_accepts_all() -> None:
     """The 'any' type is compatible with all other types."""
     assert check_port_compatibility("any", "plan") is True
@@ -97,7 +91,6 @@ def test_port_compatibility_any_accepts_all() -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.22")
 def test_port_compatibility_mismatch_rejects() -> None:
     """Ports with different non-any types are incompatible."""
     assert check_port_compatibility("plan", "code-changes") is False
@@ -106,7 +99,6 @@ def test_port_compatibility_mismatch_rejects() -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.22")
 def test_incompatible_ports_detected() -> None:
     """Incompatible port types are explicitly detected as False."""
     # All combinations of non-matching, non-any types
@@ -120,7 +112,6 @@ def test_incompatible_ports_detected() -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.22")
 def test_any_connects_to_anything() -> None:
     """'any' type is compatible with all known port types in both directions."""
     port_types = ["plan", "code-changes", "review", "test-results", "text", "files", "any"]

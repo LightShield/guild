@@ -36,7 +36,6 @@ def memory_index(storage: Storage) -> MemoryIndex:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-07.5")
 class TestSkepticalMemory:
     """Tests for memory verification."""
 
@@ -78,7 +77,6 @@ class TestSkepticalMemory:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-07.6")
 class TestLightweightIndex:
     """Tests for lightweight index with on-demand detail fetching."""
 
@@ -133,7 +131,6 @@ class TestLightweightIndex:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-07.7")
 class TestMemoryConsolidation:
     """Tests for memory consolidation."""
 
@@ -202,7 +199,6 @@ class TestMemoryConsolidation:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-07.6")
 class TestMemoryFormatIndex:
     """Tests for MemoryIndex.format_index_for_prompt."""
 

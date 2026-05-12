@@ -9,7 +9,6 @@ from guild.tools.file_ops import MAX_FILE_READ_CHARS, execute_file_read, execute
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-08.3")
 class TestFileRead:
     """Tests for execute_file_read."""
 
@@ -56,7 +55,6 @@ class TestFileRead:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-08.3")
 class TestFileWrite:
     """Tests for execute_file_write."""
 
@@ -109,7 +107,6 @@ class TestFileWrite:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-08.3")
 class TestResolvePath:
     """Tests for resolve_path helper."""
 

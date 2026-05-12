@@ -15,7 +15,6 @@ from guild.daemon.resource import (
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-24.1")
 class TestIdleDetection:
     """User activity state detection."""
 
@@ -51,7 +50,6 @@ class TestIdleDetection:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-24.2")
 class TestCpuLoadDetection:
     """System load detection."""
 
@@ -66,7 +64,6 @@ class TestCpuLoadDetection:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-24.3")
 class TestSchedulingModes:
     """Three scheduling modes: full, polite, stealth."""
 
@@ -122,7 +119,6 @@ class TestSchedulingModes:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-24.4")
 class TestPoliteDelay:
     """Polite mode delay is configurable."""
 
@@ -174,7 +170,6 @@ class TestPoliteDelay:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-24.5")
 class TestStealthWait:
     """Stealth mode waits for idle."""
 
@@ -254,7 +249,6 @@ class TestStealthWait:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-24.9")
 class TestThresholds:
     """Threshold configuration."""
 
@@ -281,7 +275,6 @@ class TestThresholds:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-24.9")
 class TestGetStatus:
     """ResourceMonitor.get_status() returns full status snapshot."""
 
@@ -334,7 +327,6 @@ class TestGetStatus:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-24.10")
 class TestMonitorPolling:
     """Resource monitor polling interval."""
 
@@ -399,7 +391,6 @@ def _thermal_ok_cool() -> dict[str, object]:
     return {"is_throttled": False, "cpu_temp_celsius": 55.0}
 
 
-@pytest.mark.req("REQ-24.6")
 @pytest.mark.unit
 class TestGpuVramAwareness:
     """ResourceMonitor detects GPU/VRAM pressure and throttles."""
@@ -472,7 +463,6 @@ class TestGpuVramAwareness:
         assert status.gpu_status["gpu_percent"] == 45.0
 
 
-@pytest.mark.req("REQ-24.7")
 @pytest.mark.unit
 class TestThermalAwareness:
     """ResourceMonitor detects thermal throttling and reduces rate."""
@@ -531,7 +521,6 @@ class TestThermalAwareness:
         assert status.thermal_status["cpu_temp_celsius"] == 55.0
 
 
-@pytest.mark.req("REQ-24.6")
 @pytest.mark.unit
 class TestGpuVramEdgeCases:
     """Cover remaining branches in GPU/VRAM logic."""
@@ -576,7 +565,6 @@ class TestGpuVramEdgeCases:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-24.1")
 class TestResourceMonitorStealthExit:
     """ResourceMonitor stealth mode exits when user becomes idle."""
 
@@ -607,7 +595,6 @@ class TestResourceMonitorStealthExit:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-24.5")
 @pytest.mark.unit
 class TestResourceThrottleStealthExit:
     """Cover the STEALTH mode exit branch in wait_if_throttled."""

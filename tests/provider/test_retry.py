@@ -23,7 +23,6 @@ def _make_mock_provider(name: str = "test-model") -> LLMProvider:
     return provider
 
 
-@pytest.mark.req("REQ-26.4")
 class TestRetriesOnConnectionError:
     """RetryProvider retries on ConnectionError."""
 
@@ -43,7 +42,6 @@ class TestRetriesOnConnectionError:
         assert inner.generate.await_count == 3
 
 
-@pytest.mark.req("REQ-26.4")
 class TestSucceedsAfterTransientFailure:
     """RetryProvider succeeds after a transient failure."""
 
@@ -65,7 +63,6 @@ class TestSucceedsAfterTransientFailure:
         assert inner.generate.await_count == 2
 
 
-@pytest.mark.req("REQ-26.4")
 class TestGivesUpAfterMaxRetries:
     """RetryProvider raises after exhausting retries."""
 
@@ -83,7 +80,6 @@ class TestGivesUpAfterMaxRetries:
         assert inner.generate.await_count == 3
 
 
-@pytest.mark.req("REQ-26.4")
 class TestExponentialBackoffDelays:
     """RetryProvider uses exponential backoff between retries."""
 
@@ -111,7 +107,6 @@ class TestExponentialBackoffDelays:
         assert sleep_calls == [1.0, 2.0, 4.0]
 
 
-@pytest.mark.req("REQ-26.4")
 class TestDoesNotRetryNonRetryableErrors:
     """RetryProvider does not retry non-retryable exceptions."""
 
@@ -128,7 +123,6 @@ class TestDoesNotRetryNonRetryableErrors:
         assert inner.generate.await_count == 1
 
 
-@pytest.mark.req("REQ-26.4")
 class TestHealthCheckRetries:
     """RetryProvider retries health_check on transient failures."""
 
@@ -150,7 +144,6 @@ class TestHealthCheckRetries:
         assert inner.health_check.await_count == 2
 
 
-@pytest.mark.req("REQ-01.5")
 class TestHealthCheckReturnsFalseAfterAllRetriesFail:
     """health_check returns False after all retries fail."""
 

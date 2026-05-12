@@ -16,7 +16,6 @@ if TYPE_CHECKING:
 pytestmark = pytest.mark.unit
 
 
-@pytest.mark.req("REQ-23.9")
 class TestControlSocketLifecycle:
     """Control socket starts, accepts connections, and cleans up."""
 
@@ -51,7 +50,6 @@ class TestControlSocketLifecycle:
         await cs.stop()  # Should not raise
 
 
-@pytest.mark.req("REQ-23.9")
 class TestControlSocketCommands:
     """Control socket handles command messages."""
 
@@ -135,7 +133,6 @@ class TestControlSocketCommands:
         await cs.stop()
 
 
-@pytest.mark.req("REQ-05.4a")
 class TestControlSocketMessageInjection:
     """Control socket injects user messages into the agent loop."""
 
@@ -196,7 +193,6 @@ class TestControlSocketMessageInjection:
         await cs.stop()
 
 
-@pytest.mark.req("REQ-05.4a")
 class TestControlSocketResponseStreaming:
     """Agent responses stream back to attached clients."""
 
@@ -239,7 +235,6 @@ class TestControlSocketResponseStreaming:
         await cs.stop()
 
 
-@pytest.mark.req("REQ-23.9")
 class TestControlSocketErrorHandling:
     """Socket handles malformed input gracefully."""
 
@@ -289,7 +284,6 @@ class TestControlSocketErrorHandling:
         await cs.stop()
 
 
-@pytest.mark.req("REQ-23.9")
 class TestSupervisorSocketIntegration:
     """Supervisor creates and manages control socket for each task."""
 
@@ -346,7 +340,6 @@ class TestSupervisorSocketIntegration:
         assert sup.socket_path == tmp_path / "task-abc.sock"
 
 
-@pytest.mark.req("REQ-23.9")
 class TestControlSocketEdgeCases:
     """Cover remaining branches in control_socket.py."""
 

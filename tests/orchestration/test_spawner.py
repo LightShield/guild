@@ -26,7 +26,6 @@ def _make_provider(response_text: str = "Task complete.") -> AsyncMock:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.3")
 class TestSpawnCreatesAgent:
     """AgentSpawner.spawn() creates and tracks new agents."""
 
@@ -50,7 +49,6 @@ class TestSpawnCreatesAgent:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.4")
 class TestSpawnAgentToolSchema:
     """The spawn_agent tool is registered in TOOL_SCHEMAS."""
 
@@ -65,7 +63,6 @@ class TestSpawnAgentToolSchema:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.5")
 class TestSpawnedAgentExecution:
     """Spawned agents execute tasks and can coexist."""
 

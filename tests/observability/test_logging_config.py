@@ -11,7 +11,6 @@ from guild.observability.logging_config import StructuredFormatter, configure_lo
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-11.3")
 class TestConfigureLogging:
     """configure_logging sets up the guild logger correctly."""
 
@@ -44,7 +43,6 @@ class TestConfigureLogging:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-11.3")
 class TestStructuredFormatter:
     """StructuredFormatter produces valid JSON log entries."""
 
@@ -74,7 +72,6 @@ class TestStructuredFormatter:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-11.3")
 class TestStructuredFormatterException:
     """StructuredFormatter formatting with exc_info."""
 

@@ -33,7 +33,6 @@ async def guild_env(tmp_path: Path) -> dict:
     await store.close()
 
 
-@pytest.mark.req("REQ-23.9")
 class TestDaemonControlSocketLifecycle:
     """Full lifecycle: start socket -> connect -> send commands -> stop."""
 
@@ -108,7 +107,6 @@ class TestDaemonControlSocketLifecycle:
         await cs.stop()
 
 
-@pytest.mark.req("REQ-23.2")
 class TestSupervisorWithSocket:
     """Supervisor manages both PID file and control socket."""
 

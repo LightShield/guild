@@ -10,7 +10,6 @@ from guild.daemon.sleep_wake import SleepWakeConfig, SleepWakeDetector, WakeBeha
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-26.1")
 class TestDetectsSleep:
     """Sleep detection via time-drift."""
 
@@ -55,7 +54,6 @@ class TestDetectsSleep:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-26.2")
 class TestResumeAfterSleep:
     """Resume behavior after detected sleep."""
 
@@ -84,7 +82,6 @@ class TestResumeAfterSleep:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-26.3")
 class TestHealthCheckOnWake:
     """Ollama connection re-validated on wake."""
 
@@ -118,7 +115,6 @@ class TestHealthCheckOnWake:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-26.4")
 class TestRetryLLMCallAfterSleep:
     """In-flight LLM calls interrupted by sleep are retried."""
 
@@ -154,7 +150,6 @@ class TestRetryLLMCallAfterSleep:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-26.5")
 class TestAuditLogging:
     """Sleep/wake events logged in audit trail."""
 
@@ -186,7 +181,6 @@ class TestAuditLogging:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-26.6")
 class TestWakeBehaviorConfigurable:
     """Wake behavior is configurable via SleepWakeConfig."""
 
@@ -208,7 +202,6 @@ class TestWakeBehaviorConfigurable:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-26.1")
 class TestSleepWakeEdgeCases:
     """Cover sleep/wake detector edge cases."""
 

@@ -12,7 +12,6 @@ from guild.provider.cli_provider import CLIToolProvider
 pytestmark = pytest.mark.unit
 
 
-@pytest.mark.req("REQ-17.6")
 class TestCLIHealthCheck:
     """CLIToolProvider.health_check verifies the CLI tool is available."""
 
@@ -35,7 +34,6 @@ class TestCLIHealthCheck:
         assert result is False
 
 
-@pytest.mark.req("REQ-17.6")
 class TestCLIGenerate:
     """CLIToolProvider.generate sends prompts to CLI tools."""
 
@@ -180,7 +178,6 @@ class TestCLIGenerate:
                 await provider.generate(messages)
 
 
-@pytest.mark.req("REQ-17.6")
 class TestCLIExtractPrompt:
     """Tests for _extract_prompt fallback behavior."""
 

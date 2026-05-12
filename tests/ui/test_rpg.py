@@ -6,7 +6,6 @@ from guild.ui.rpg import RPGMode
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-22.1")
 def test_rpg_mode_disabled_by_default() -> None:
     """RPG mode is disabled by default."""
     mode = RPGMode()
@@ -14,7 +13,6 @@ def test_rpg_mode_disabled_by_default() -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-22.1")
 def test_rpg_mode_toggle() -> None:
     """RPG mode can be toggled on."""
     mode = RPGMode(enabled=True)
@@ -22,7 +20,6 @@ def test_rpg_mode_toggle() -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-22.2")
 def test_translate_task_to_quest() -> None:
     """'task' is translated to 'quest' in RPG mode."""
     mode = RPGMode(enabled=True)
@@ -31,7 +28,6 @@ def test_translate_task_to_quest() -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-22.2")
 def test_translate_agent_to_hero() -> None:
     """'agent' is translated to 'hero' in RPG mode."""
     mode = RPGMode(enabled=True)
@@ -40,7 +36,6 @@ def test_translate_agent_to_hero() -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-22.2")
 def test_translate_no_op_when_disabled() -> None:
     """Translation is a no-op when RPG mode is disabled."""
     mode = RPGMode(enabled=False)
@@ -49,7 +44,6 @@ def test_translate_no_op_when_disabled() -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-22.3")
 def test_progress_bar_xp_style() -> None:
     """Progress bar uses XP-style formatting."""
     mode = RPGMode(enabled=True)
@@ -60,7 +54,6 @@ def test_progress_bar_xp_style() -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-22.4")
 def test_quest_log_entry_format() -> None:
     """Tasks are formatted as quest log entries."""
     mode = RPGMode(enabled=True)
@@ -72,7 +65,6 @@ def test_quest_log_entry_format() -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-22.5")
 def test_character_sheet_format() -> None:
     """Agent info is formatted as a character sheet."""
     mode = RPGMode(enabled=True)
@@ -85,7 +77,6 @@ def test_character_sheet_format() -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-22.6")
 def test_notification_task_completed() -> None:
     """Task completion gives a celebratory notification."""
     mode = RPGMode(enabled=True)
@@ -94,7 +85,6 @@ def test_notification_task_completed() -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-22.6")
 def test_notification_stuck() -> None:
     """Stuck event gives a thematic notification."""
     mode = RPGMode(enabled=True)
@@ -103,7 +93,6 @@ def test_notification_stuck() -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-22.6")
 def test_notification_unknown_event() -> None:
     """Unknown events return the event string itself."""
     mode = RPGMode(enabled=True)

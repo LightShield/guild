@@ -19,7 +19,6 @@ from guild.config.profiles import (
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-14.1")
 class TestAgentProfiles:
     """Tests for loading agent profiles from TOML."""
 
@@ -97,7 +96,6 @@ class TestAgentProfiles:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-14.3")
 class TestPermissionProfiles:
     """Tests for loading permission profiles from TOML."""
 
@@ -161,7 +159,6 @@ class TestPermissionProfiles:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-14.5")
 class TestConfigValidation:
     """Tests for startup config validation."""
 
@@ -248,7 +245,6 @@ class TestConfigValidation:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-14")
 class TestConfigProfilesEdgeCases:
     """Cover config profile loading edge cases."""
 
@@ -378,7 +374,6 @@ class TestConfigProfilesEdgeCases:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-14.1")
 @pytest.mark.unit
 class TestProfilesNonDictValues:
     """Cover branches where non-dict values in TOML are skipped."""
@@ -424,7 +419,6 @@ class TestProfilesNonDictValues:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-14.5")
 @pytest.mark.unit
 class TestProfilesValidateLoopBranch:
     """Cover the loop skip branch in validate_config (line 122->121)."""

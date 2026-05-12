@@ -8,7 +8,6 @@ from guild.agent.rollback import RollbackContext, try_with_rollback
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-06.11")
 class TestRollbackContext:
     """RollbackContext captures and restores file state."""
 
@@ -119,7 +118,6 @@ class TestRollbackContext:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-06.11")
 class TestTryWithRollback:
     """try_with_rollback wraps execute-verify-rollback pattern."""
 
@@ -203,7 +201,6 @@ class TestTryWithRollback:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-06.11")
 class TestRollbackDeletesCreatedFile:
     """Rollback deletes files that were created after capture."""
 
@@ -230,7 +227,6 @@ class TestRollbackDeletesCreatedFile:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-06.8")
 @pytest.mark.unit
 class TestRollbackRestoreExistingFileBranch:
     """Explicitly cover the else branch at line 53->61 in rollback."""

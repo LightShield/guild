@@ -8,7 +8,6 @@ from guild.orchestration.bus import MessageBus
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.7")
 class TestMessageBus:
     """MessageBus delivers messages between agents asynchronously."""
 
@@ -122,8 +121,6 @@ class TestMessageBus:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.10")
-@pytest.mark.req("REQ-07.3")
 class TestSharedContext:
     """SharedContext provides a shared workspace for team members."""
 
@@ -161,7 +158,6 @@ class TestSharedContext:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.11")
 class TestDynamicWorkerSpawning:
     """Dynamic worker spawning during execution."""
 
@@ -203,7 +199,6 @@ class TestDynamicWorkerSpawning:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.7")
 class TestMessageBusTimeout:
     """MessageBus.receive with timeout returns None."""
 
@@ -220,7 +215,6 @@ class TestMessageBusTimeout:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.7")
 class TestBusReceiveNoTimeout:
     """Test bus receive without timeout (blocking)."""
 

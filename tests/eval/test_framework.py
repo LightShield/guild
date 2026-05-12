@@ -89,7 +89,6 @@ def _make_result(
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-16.1")
 class TestABTesting:
     """A/B testing runs same task on two providers and compares."""
 
@@ -142,7 +141,6 @@ class TestABTesting:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-16.2")
 class TestBenchmarkSuite:
     """Benchmark suite runs all tasks and collects results."""
 
@@ -183,7 +181,6 @@ class TestBenchmarkSuite:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-16.3")
 class TestRegressionDetection:
     """Detect when config changes degrade performance."""
 
@@ -217,7 +214,6 @@ class TestRegressionDetection:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-16.4")
 class TestEvalMetrics:
     """Metrics capture all fields from an eval run."""
 
@@ -256,7 +252,6 @@ class TestEvalMetrics:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-16.5")
 class TestResultsStorage:
     """Eval results are stored and retrievable."""
 
@@ -293,7 +288,6 @@ class TestResultsStorage:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-16.6")
 class TestProgressiveConfidence:
     """Suite supports easy-to-hard progressive difficulty."""
 
@@ -315,7 +309,6 @@ class TestProgressiveConfidence:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-16.7")
 class TestSelfDevBenchmarks:
     """Self-development benchmarks for agent capability testing."""
 
@@ -335,7 +328,6 @@ class TestSelfDevBenchmarks:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-16.1")
 class TestCompareResults:
     """Tests for compare_results and _determine_winner scoring logic."""
 
@@ -452,7 +444,6 @@ class TestCompareResults:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-16.4")
 class TestEvalTurnLoopExceptionHandling:
     """Exception during eval turn loop sets completed=False and records error."""
 

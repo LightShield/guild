@@ -123,7 +123,6 @@ def _registry_with_retries(max_retries: int = 1) -> BlockRegistry:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.1")
 class TestEntryAgent:
     """Entry agent is always the orchestrator, first in execution."""
 
@@ -170,7 +169,6 @@ class TestEntryAgent:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.2")
 class TestEntryAgentPresent:
     """Entry agent must be present in preset team compositions."""
 
@@ -196,7 +194,6 @@ class TestEntryAgentPresent:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.9")
 class TestAgentLifecycle:
     """Agent lifecycle management — spawn, monitor, track status."""
 
@@ -252,7 +249,6 @@ class TestAgentLifecycle:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.40")
 class TestEvaluatorResult:
     """Standard evaluator output: {pass, score, feedback}."""
 
@@ -349,7 +345,6 @@ class TestEvaluatorResult:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.41")
 class TestEvaluatorCriteria:
     """Each evaluator defines its own rubric/criteria."""
 
@@ -370,7 +365,6 @@ class TestEvaluatorCriteria:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.44")
 class TestEvaluatorCriteriaConfig:
     """Evaluator criteria are part of block config."""
 
@@ -413,7 +407,6 @@ class TestEvaluatorCriteriaConfig:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.42")
 class TestLoopContinuesUntilPass:
     """Loop exit checks pass — continues until pass: true."""
 
@@ -451,7 +444,6 @@ class TestLoopContinuesUntilPass:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.43")
 class TestLoopMaxIterations:
     """Max iteration safety limit per loop (default 5)."""
 
@@ -520,7 +512,6 @@ class TestLoopMaxIterations:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.50")
 class TestBlockRetries:
     """Block fails -> retry N times."""
 
@@ -573,7 +564,6 @@ class TestBlockRetries:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.51")
 class TestEscalationAfterRetries:
     """Still failing -> escalate to caller."""
 
@@ -618,7 +608,6 @@ class TestEscalationAfterRetries:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.52")
 class TestCallerDecision:
     """Caller decides: retry, skip, substitute, or escalate further."""
 
@@ -664,7 +653,6 @@ class TestCallerDecision:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.53")
 class TestHumanEscalation:
     """Error reaches entry agent -> escalate to human."""
 
@@ -714,7 +702,6 @@ class TestHumanEscalation:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.54")
 class TestParallelBranchIsolation:
     """Partial failure in parallel branches — other branches continue."""
 
@@ -759,7 +746,6 @@ class TestParallelBranchIsolation:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.1")
 class TestTopologicalSortDiamondGraph:
     """Diamond-shaped graph exercises the in-degree > 0 branch in topo sort."""
 
@@ -821,7 +807,6 @@ class TestTopologicalSortDiamondGraph:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.1")
 class TestEntryBlockAlreadyFirst:
     """When topo sort already puts entry_block first, no reordering needed."""
 
@@ -872,7 +857,6 @@ class TestEntryBlockAlreadyFirst:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.2")
 class TestGatherInputUpstreamEmpty:
     """When upstream block has no stored output, _gather_input skips it."""
 
@@ -921,7 +905,6 @@ class TestGatherInputUpstreamEmpty:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.50")
 class TestBlockTypeNotFound:
     """Block type not in registry raises BlockError immediately."""
 
@@ -957,7 +940,6 @@ class TestBlockTypeNotFound:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.52")
 class TestUnknownCallerDecision:
     """Unknown caller decision falls through to default escalation."""
 
@@ -1008,7 +990,6 @@ class TestUnknownCallerDecision:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.44")
 class TestBuildEvaluatorInputNoCriteria:
     """Evaluator with no system_prompt yields input without criteria section."""
 
@@ -1079,7 +1060,6 @@ class TestBuildEvaluatorInputNoCriteria:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.40")
 class TestParseJsonPermissiveEmbeddedFailure:
     """Embedded JSON that is malformed returns None from _parse_json_permissive."""
 
@@ -1117,7 +1097,6 @@ class TestParseJsonPermissiveEmbeddedFailure:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.9")
 class TestInvokeAgentToolExecutors:
     """_invoke_agent passes real tool executors when block has tools."""
 

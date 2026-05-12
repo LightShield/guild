@@ -18,7 +18,6 @@ if TYPE_CHECKING:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-13.4")
 class TestCheckPath:
     """Path boundary enforcement for agent file access."""
 
@@ -81,7 +80,6 @@ class TestCheckPath:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-13.5")
 class TestCheckCommand:
     """Command filtering via allowlist and denylist."""
 
@@ -132,7 +130,6 @@ class TestCheckCommand:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-13.2")
 class TestNetworkControls:
     """Network access policy enforcement."""
 
@@ -166,7 +163,6 @@ class TestNetworkControls:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-13.3")
 class TestSecretManagement:
     """Secret injection and masking for agent isolation."""
 
@@ -224,7 +220,6 @@ class TestSecretManagement:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-13.1")
 class TestLoadSandboxPolicy:
     """Loading sandbox policy from .guild/security.toml."""
 
@@ -299,7 +294,6 @@ allowed = false
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-13")
 class TestSandboxEdgeCases:
     """Cover sandbox policy edge cases."""
 
@@ -408,7 +402,6 @@ class TestSandboxEdgeCases:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-13.4")
 @pytest.mark.unit
 class TestSandboxEdges:
     """Cover security/sandbox.py uncovered branches."""

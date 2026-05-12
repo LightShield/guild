@@ -32,7 +32,6 @@ def _make_chat_response(
     return response
 
 
-@pytest.mark.req("REQ-01.5")
 class TestHealthCheck:
     """OllamaProvider.health_check verifies connectivity."""
 
@@ -64,7 +63,6 @@ class TestHealthCheck:
         assert result is False
 
 
-@pytest.mark.req("REQ-01.2")
 class TestGenerate:
     """OllamaProvider.generate maps chat responses to LLMResponse."""
 
@@ -144,7 +142,6 @@ class TestGenerate:
         assert result.output_tokens == 0
 
 
-@pytest.mark.req("REQ-01.2")
 class TestGenerateEdgeCases:
     """Edge cases: network errors, malformed responses, timeouts."""
 
@@ -234,7 +231,6 @@ class TestGenerateEdgeCases:
         assert result.has_tool_call is False
 
 
-@pytest.mark.req("REQ-01.4")
 class TestProviderPromptFormatting:
     """Provider-specific prompt formatting handled transparently (REQ-01.4).
 
@@ -264,7 +260,6 @@ class TestProviderPromptFormatting:
         mock_client.chat.assert_awaited_once()
 
 
-@pytest.mark.req("REQ-01.2")
 class TestCreateProvider:
     """create_provider factory builds a configured OllamaProvider."""
 
@@ -282,7 +277,6 @@ class TestCreateProvider:
 
 
 @pytest.mark.integration
-@pytest.mark.req("REQ-01.2")
 class TestOllamaIntegration:
     """Integration tests against a real Ollama instance."""
 

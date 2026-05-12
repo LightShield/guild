@@ -21,7 +21,6 @@ def _make_tool(name: str, server: str = "test-server") -> MCPTool:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.6")
 class TestMCPToolRegistryAddServer:
     """Tests for MCPToolRegistry.add_server()."""
 
@@ -48,7 +47,6 @@ class TestMCPToolRegistryAddServer:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.6")
 class TestMCPToolRegistryRemoveServer:
     """Tests for MCPToolRegistry.remove_server()."""
 
@@ -72,7 +70,6 @@ class TestMCPToolRegistryRemoveServer:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.6")
 class TestMCPToolRegistryCallTool:
     """Tests for MCPToolRegistry.call_tool() — routing."""
 
@@ -102,7 +99,6 @@ class TestMCPToolRegistryCallTool:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.6")
 class TestMCPToolRegistrySchemas:
     """Tests for MCPToolRegistry.to_tool_schemas()."""
 
@@ -141,7 +137,6 @@ class TestMCPToolRegistrySchemas:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.6")
 class TestMCPToolRegistryDisconnectAll:
     """Tests for MCPToolRegistry.disconnect_all()."""
 
@@ -169,7 +164,6 @@ class TestMCPToolRegistryDisconnectAll:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.3")
 class TestMCPToolRegistryDisconnectOnFailure:
     """Tests for MCPToolRegistry.add_server() — disconnect on list_tools failure."""
 
@@ -198,7 +192,6 @@ class TestMCPToolRegistryDisconnectOnFailure:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-08.8")
 class TestMCPRegistryEdgeCases:
     """Cover MCP tool registry edge cases."""
 

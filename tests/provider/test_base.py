@@ -9,7 +9,6 @@ from guild.provider.base import LLMProvider, LLMResponse
 pytestmark = pytest.mark.unit
 
 
-@pytest.mark.req("REQ-01.1")
 class TestLLMResponse:
     """LLMResponse is the unified response contract for all providers."""
 
@@ -39,7 +38,6 @@ class TestLLMResponse:
         assert resp.output_tokens == 0
 
 
-@pytest.mark.req("REQ-01.1")
 class TestLLMProviderContract:
     """LLMProvider defines the abstract interface all providers must implement."""
 
@@ -75,7 +73,6 @@ class TestLLMProviderContract:
         assert provider is not None
 
 
-@pytest.mark.req("REQ-01.1")
 class TestLLMResponseEdgeCases:
     """Edge cases for LLMResponse behavior."""
 

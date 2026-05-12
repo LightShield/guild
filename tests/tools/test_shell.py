@@ -12,7 +12,6 @@ from guild.tools.shell import (
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-08.7")
 class TestShellDenylist:
     """Tests that dangerous commands are blocked."""
 
@@ -49,7 +48,6 @@ class TestShellDenylist:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-08.5")
 class TestShellTimeout:
     """Tests for shell command timeout handling."""
 
@@ -80,7 +78,6 @@ class TestShellTimeout:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-08.3")
 class TestShellExecution:
     """Tests for basic shell execution."""
 
@@ -121,7 +118,6 @@ class TestShellExecution:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-08.6")
 class TestShellSchema:
     """Tests for shell tool schema safety rules."""
 
@@ -156,7 +152,6 @@ class TestShellSchema:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-08.4")
 class TestToolAuditLog:
     """Tests for tool call audit logging via storage."""
 
@@ -217,7 +212,6 @@ class TestToolAuditLog:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-08.3")
 class TestShellEdgeCases:
     """Cover shell tool edge-case branches."""
 

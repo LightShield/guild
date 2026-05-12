@@ -13,7 +13,6 @@ from guild.tools.base import TOOL_SCHEMAS, ToolResult
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-08.1")
 class TestToolSchemaStructure:
     """TOOL_SCHEMAS dict has a proper contract for each tool."""
 
@@ -91,7 +90,6 @@ class TestToolSchemaStructure:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-08.1")
 class TestToolResultContract:
     """ToolResult dataclass is the standard return type for all tools."""
 
@@ -138,7 +136,6 @@ class TestToolResultContract:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-08.1")
 class TestToolExecutorsReturnToolResult:
     """All tool executors must return ToolResult consistently."""
 

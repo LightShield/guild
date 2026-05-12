@@ -52,10 +52,11 @@ where = ["src"]
 asyncio_mode = "auto"
 testpaths = ["tests"]
 markers = [
-    "unit: Unit tests (fast, no I/O, use mocks)",
-    "integration: Integration tests (real Ollama required)",
-    "e2e: End-to-end tests (full workflows)",
-    "req(id): Requirement ID this test verifies",
+    "unit: Unit tests (fast, mocks allowed, tests logic in isolation)",
+    "integration: Integration tests (real components wired together, no external services)",
+    "e2e: End-to-end acceptance tests (black-box, exercises system from outside)",
+    "learning: Learning tests (verify third-party library assumptions)",
+    "req(id): Requirement ID this test verifies (required on e2e tests only)",
 ]
 
 [tool.ruff]

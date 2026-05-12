@@ -8,7 +8,6 @@ from guild.agent.stuck import StuckDetector
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-06.3")
 class TestStuckDetector:
     """StuckDetector recognizes when no progress is being made."""
 

@@ -31,7 +31,6 @@ def _make_mock_storage(**method_returns: object) -> MagicMock:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-06.6")
 class TestFetchAudit:
     """fetch_audit reads audit entries from storage."""
 
@@ -55,7 +54,6 @@ class TestFetchAudit:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-06.6")
 class TestFetchDecisions:
     """fetch_decisions reads decision log entries."""
 
@@ -83,7 +81,6 @@ class TestFetchDecisions:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-06.6")
 class TestFetchTaskHistory:
     """fetch_task_history reads and sorts tasks."""
 
@@ -116,7 +113,6 @@ class TestFetchTaskHistory:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-06.6")
 class TestFetchTokenSummary:
     """fetch_token_summary reads token usage."""
 
@@ -140,7 +136,6 @@ class TestFetchTokenSummary:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-06.6")
 class TestFetchTaskMessages:
     """fetch_task_messages retrieves messages for a task's agent."""
 
@@ -158,7 +153,6 @@ class TestFetchTaskMessages:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-09.4")
 class TestFetchLearnings:
     """fetch_learnings reads learning entries."""
 
@@ -183,7 +177,6 @@ class TestFetchLearnings:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-06.6")
 class TestFetchTaskMessagesNoAgent:
     """fetch_task_messages handles tasks with no assigned agent (line 95)."""
 

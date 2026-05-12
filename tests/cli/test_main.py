@@ -41,7 +41,6 @@ def guild_project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-05.1")
 class TestHelpAndVersion:
     """Basic CLI structure tests."""
 
@@ -64,7 +63,6 @@ class TestHelpAndVersion:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-05.1")
 class TestInit:
     """Tests for `guild init`."""
 
@@ -104,7 +102,6 @@ class TestInit:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-05.2")
 class TestStatus:
     """Tests for `guild status`."""
 
@@ -125,7 +122,6 @@ class TestStatus:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-05.2")
 class TestConfig:
     """Tests for `guild config`."""
 
@@ -146,7 +142,6 @@ class TestConfig:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-08.4")
 class TestAudit:
     """Tests for `guild audit`."""
 
@@ -175,7 +170,6 @@ class TestAudit:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-06.7")
 class TestTaskTimeout:
     """Tests for task timeout option."""
 
@@ -207,7 +201,6 @@ class TestTaskTimeout:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-23.1")
 class TestTaskBackgroundFlag:
     """Tests for `guild task --background`."""
 
@@ -268,7 +261,6 @@ class TestTaskBackgroundFlag:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-23.5")
 class TestPsCommand:
     """Tests for `guild ps`."""
 
@@ -313,7 +305,6 @@ class TestPsCommand:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-23.4")
 class TestLogsCommand:
     """Tests for `guild logs`."""
 
@@ -328,7 +319,6 @@ class TestLogsCommand:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-23.3")
 class TestAttachCommand:
     """Tests for `guild attach`."""
 
@@ -341,7 +331,6 @@ class TestAttachCommand:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-25.1")
 class TestKillCommand:
     """Tests for `guild kill`."""
 
@@ -357,7 +346,6 @@ class TestKillCommand:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-25.2")
 class TestPauseCommand:
     """Tests for `guild pause`."""
 
@@ -373,7 +361,6 @@ class TestPauseCommand:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-25.3")
 class TestResumeCommand:
     """Tests for `guild resume`."""
 
@@ -389,7 +376,6 @@ class TestResumeCommand:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-06.12")
 class TestDecisionsCommand:
     """Tests for `guild decisions`."""
 
@@ -421,7 +407,6 @@ class TestDecisionsCommand:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-06.9")
 class TestChatMultiTurn:
     """Tests for multi-turn chat (REQ-06.9)."""
 
@@ -461,7 +446,6 @@ class TestChatMultiTurn:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-25.8")
 class TestKillAllFlag:
     """Tests for `guild kill --all`."""
 
@@ -478,7 +462,6 @@ class TestKillAllFlag:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-05.3")
 class TestChatSendsMessages:
     """Tests for sending messages to the running agent (REQ-05.3)."""
 
@@ -510,7 +493,6 @@ class TestChatSendsMessages:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-10.3")
 class TestUsageCommand:
     """Tests for `guild usage`."""
 
@@ -541,7 +523,6 @@ class TestUsageCommand:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-07.9")
 class TestHistoryCommand:
     """Tests for `guild history`."""
 
@@ -594,7 +575,6 @@ class TestHistoryCommand:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-24.8")
 class TestResourceStatusCommand:
     """Tests for `guild resource-status`."""
 
@@ -621,7 +601,6 @@ class TestResourceStatusCommand:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-06.1")
 class TestAutopilotNeverPrompts:
     """Tests for REQ-06.1 — agents in autopilot never pause for confirmation."""
 
@@ -659,7 +638,6 @@ class TestAutopilotNeverPrompts:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-06.2")
 class TestAgentRecognizesCompletion:
     """Tests for REQ-06.2 — agents self-verify completion."""
 
@@ -689,7 +667,6 @@ class TestAgentRecognizesCompletion:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-09.5")
 class TestLearningsCommand:
     """Tests for `guild learnings` CLI command."""
 
@@ -789,7 +766,6 @@ class TestLearningsCommand:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-15.1")
 class TestQuestionsCommand:
     """Tests for `guild questions`."""
 
@@ -827,7 +803,6 @@ class TestQuestionsCommand:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-15.1")
 class TestAnswerCommand:
     """Tests for `guild answer`."""
 
@@ -859,7 +834,6 @@ class TestAnswerCommand:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-05.5")
 class TestServeCommand:
     """Tests for `guild serve`."""
 
@@ -880,7 +854,6 @@ class TestServeCommand:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-09.5")
 class TestLearningsDecay:
     """Tests for `guild learnings --decay`."""
 
@@ -914,7 +887,6 @@ class TestLearningsDecay:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-05.1")
 class TestNoGuildDirErrors:
     """All commands fail gracefully when no .guild/ directory exists."""
 
@@ -955,7 +927,6 @@ class TestNoGuildDirErrors:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-05.1")
 class TestInitAlreadyExists:
     """Test init when .guild/ already exists."""
 
@@ -973,7 +944,6 @@ class TestInitAlreadyExists:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-05.1")
 class TestNoArgsShowsHelp:
     """Test that no args shows help."""
 
@@ -991,7 +961,6 @@ class TestNoArgsShowsHelp:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-05.2")
 class TestEmptyDataDisplays:
     """Commands show appropriate messages when no data exists."""
 
@@ -1079,7 +1048,6 @@ class TestEmptyDataDisplays:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-05.2")
 class TestConfigSetInvalidFormat:
     """config --set with invalid format shows error (lines 280-282)."""
 
@@ -1091,7 +1059,6 @@ class TestConfigSetInvalidFormat:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-10.3")
 class TestUsageNoData:
     """usage command when summary is None (lines 596-597)."""
 
@@ -1107,7 +1074,6 @@ class TestUsageNoData:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-24.8")
 class TestResourceStatusReason:
     """resource-status shows reason when status.reason is truthy (line 636)."""
 
@@ -1133,7 +1099,6 @@ class TestResourceStatusReason:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-05.5")
 class TestServeImportError:
     """serve command shows error when API deps missing (lines 706-712)."""
 
@@ -1156,7 +1121,6 @@ class TestServeImportError:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-05.2")
 class TestGetTaskAndAgentCountsNoDb:
     """_get_task_and_agent_counts returns (0, 0) when db doesn't exist (line 765)."""
 
@@ -1171,7 +1135,6 @@ class TestGetTaskAndAgentCountsNoDb:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-05.1")
 class TestMainCallbackNoSubcommand:
     """main_callback shows help when no subcommand is given (lines 137-138)."""
 
@@ -1184,7 +1147,6 @@ class TestMainCallbackNoSubcommand:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.1")
 class TestTeamCommand:
     """Tests for `guild team`."""
 
@@ -1214,7 +1176,6 @@ class TestTeamCommand:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-05.4a")
 class TestAttachSocketCommand:
     """guild attach connects to a running task's control socket."""
 

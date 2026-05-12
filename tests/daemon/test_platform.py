@@ -17,7 +17,6 @@ from guild.daemon.platform import (
 pytestmark = pytest.mark.unit
 
 
-@pytest.mark.req("REQ-02.4")
 class TestPlatformAdapterInterface:
     """Verify all adapters satisfy the PlatformAdapter protocol."""
 
@@ -39,7 +38,6 @@ class TestPlatformAdapterInterface:
         assert isinstance(adapter, PlatformAdapter)
 
 
-@pytest.mark.req("REQ-02.4")
 class TestGetPlatformAdapter:
     """Verify get_platform_adapter returns correct adapter per platform."""
 
@@ -65,7 +63,6 @@ class TestGetPlatformAdapter:
         assert isinstance(adapter, FallbackAdapter)
 
 
-@pytest.mark.req("REQ-02.4")
 class TestDarwinAdapter:
     """Test macOS adapter behavior."""
 
@@ -99,7 +96,6 @@ class TestDarwinAdapter:
             assert adapter.send_desktop_notification("T", "B") is False
 
 
-@pytest.mark.req("REQ-02.4")
 class TestLinuxAdapter:
     """Test Linux adapter behavior."""
 
@@ -134,7 +130,6 @@ class TestLinuxAdapter:
             assert adapter.send_desktop_notification("T", "B") is False
 
 
-@pytest.mark.req("REQ-02.4")
 class TestFallbackAdapter:
     """Test fallback adapter (safe defaults for unknown platforms)."""
 
@@ -154,8 +149,6 @@ class TestFallbackAdapter:
         assert adapter.send_desktop_notification("T", "B") is False
 
 
-@pytest.mark.req("REQ-02.1")
-@pytest.mark.req("REQ-02.3")
 class TestCrossPlatformGuarantees:
     """Verify cross-platform coding practices (REQ-02.1, REQ-02.3)."""
 
@@ -183,7 +176,6 @@ class TestCrossPlatformGuarantees:
         assert "db_path" in sig.parameters
 
 
-@pytest.mark.req("REQ-02.2")
 class TestSingleInstallMechanism:
     """Verify pip install works as single mechanism."""
 
@@ -196,7 +188,6 @@ class TestSingleInstallMechanism:
         assert 'guild = "guild.cli.main:app"' in content
 
 
-@pytest.mark.req("REQ-02.4")
 class TestDarwinAdapterEdgeCases:
     """Cover remaining branches in DarwinAdapter."""
 
@@ -224,7 +215,6 @@ class TestDarwinAdapterEdgeCases:
         assert DarwinAdapter().detect_sleep_wake() is False
 
 
-@pytest.mark.req("REQ-02.4")
 class TestLinuxAdapterEdgeCases:
     """Cover remaining branches in LinuxAdapter."""
 
@@ -244,7 +234,6 @@ class TestLinuxAdapterEdgeCases:
         assert LinuxAdapter().detect_sleep_wake() is False
 
 
-@pytest.mark.req("REQ-02.4")
 class TestFallbackAdapterPlatformName:
     """Fallback adapter reports actual platform name."""
 

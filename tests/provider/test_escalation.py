@@ -38,7 +38,6 @@ def _make_chain(count: int = 3) -> tuple[EscalationChain, list[LLMProvider]]:
 # --- EscalationChain tests ---
 
 
-@pytest.mark.req("REQ-17.2")
 class TestEscalationChainBasics:
     """EscalationChain manages provider ordering and escalation."""
 
@@ -94,7 +93,6 @@ class TestEscalationChainBasics:
         assert chain.current is providers[3]
 
 
-@pytest.mark.req("REQ-17.1")
 class TestEscalationChainReset:
     """EscalationChain.reset() returns to the primary provider."""
 
@@ -119,7 +117,6 @@ class TestEscalationChainReset:
         assert chain.current is providers[0]
 
 
-@pytest.mark.req("REQ-17.7")
 class TestEscalationChainConfigurable:
     """EscalationChain is configurable from a list of providers."""
 
@@ -163,7 +160,6 @@ class TestEscalationChainConfigurable:
 # --- EscalatingProvider tests ---
 
 
-@pytest.mark.req("REQ-17.5")
 class TestEscalatingProviderFailure:
     """EscalatingProvider escalates on generation failure."""
 
@@ -206,7 +202,6 @@ class TestEscalatingProviderFailure:
         assert chain.current_index == 0
 
 
-@pytest.mark.req("REQ-17.5")
 class TestEscalatingProviderStuck:
     """EscalatingProvider.notify_stuck() triggers model escalation."""
 
@@ -243,7 +238,6 @@ class TestEscalatingProviderStuck:
         providers[1].generate.assert_awaited_once()
 
 
-@pytest.mark.req("REQ-17.8")
 class TestMalformedOutputRecovery:
     """EscalatingProvider handles malformed output with retry then escalation."""
 
@@ -287,7 +281,6 @@ class TestMalformedOutputRecovery:
             await escalating.escalate_and_retry(messages)
 
 
-@pytest.mark.req("REQ-17.2")
 class TestEscalatingProviderHealthCheck:
     """EscalatingProvider.health_check delegates to current provider."""
 
@@ -315,7 +308,6 @@ class TestEscalatingProviderHealthCheck:
         providers[1].health_check.assert_awaited_once()
 
 
-@pytest.mark.req("REQ-17.5")
 class TestEscalatingProviderModelProperty:
     """EscalatingProvider exposes the current model name."""
 
@@ -329,7 +321,6 @@ class TestEscalatingProviderModelProperty:
         assert escalating.model == "model-1"
 
 
-@pytest.mark.req("REQ-17.5")
 class TestEscalationLogging:
     """Escalation chain logs model switches and raises on exhaustion."""
 
@@ -359,7 +350,6 @@ class TestEscalationLogging:
 # --- REQ-17.3 / REQ-17.4: Cheap models and capability tagging ---
 
 
-@pytest.mark.req("REQ-17.3")
 class TestSelectCheapModel:
     """Select cheapest model capable of handling the task type."""
 
@@ -389,7 +379,6 @@ class TestSelectCheapModel:
         assert "complex_tasks" in cap.tags
 
 
-@pytest.mark.req("REQ-17.4")
 class TestModelCapabilityTagging:
     """Model capability metadata tagging."""
 
@@ -411,7 +400,6 @@ class TestModelCapabilityTagging:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-17.5")
 @pytest.mark.unit
 class TestProviderEscalationEdges:
     """Cover provider/escalation.py uncovered branches."""

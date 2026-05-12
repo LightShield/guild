@@ -13,7 +13,6 @@ from guild.cli.toml_utils import load_toml, parse_value, set_config_value, toml_
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-01.3")
 class TestParseValue:
     """parse_value infers Python types from string values."""
 
@@ -53,7 +52,6 @@ class TestParseValue:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-01.3")
 class TestTomlValue:
     """toml_value formats Python values as TOML literals."""
 
@@ -79,7 +77,6 @@ class TestTomlValue:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-01.3")
 class TestWriteAndLoadToml:
     """write_toml and load_toml round-trip data correctly."""
 
@@ -117,7 +114,6 @@ class TestWriteAndLoadToml:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-01.3")
 class TestSetConfigValue:
     """set_config_value handles dotted key=value pairs and edge cases."""
 

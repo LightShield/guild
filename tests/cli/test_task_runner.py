@@ -19,7 +19,6 @@ from guild.cli.task_runner import (
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-06.7")
 class TestComputeMaxTurns:
     """compute_max_turns converts timeout seconds to a turn count."""
 
@@ -54,7 +53,6 @@ class TestComputeMaxTurns:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-01.1")
 class TestCreateProviderForBackend:
     """create_provider_for_backend dispatches to the correct backend."""
 
@@ -74,7 +72,6 @@ class TestCreateProviderForBackend:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-09.4")
 class TestBuildSystemPromptWithLearnings:
     """build_system_prompt_with_learnings injects learnings into the system prompt."""
 
@@ -107,7 +104,6 @@ class TestBuildSystemPromptWithLearnings:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-06.4")
 class TestCreateResilientProvider:
     """create_resilient_provider builds providers with escalation and retry."""
 
@@ -201,7 +197,6 @@ class TestCreateResilientProvider:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-06.8")
 class TestRunTask:
     """run_task validates inputs and orchestrates the agent loop."""
 
@@ -225,7 +220,6 @@ class TestRunTask:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-06.6")
 class TestPersistTaskResult:
     """persist_task_result saves task data and skips empty messages."""
 
@@ -269,7 +263,6 @@ class TestPersistTaskResult:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.1")
 class TestRunTeamTask:
     """run_team_task loads blocks and delegates to TeamRunner."""
 

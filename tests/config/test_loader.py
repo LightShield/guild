@@ -14,7 +14,6 @@ from guild.config.models import GuildConfig
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-01.3")
 class TestFindGuildDir:
     """Tests for find_guild_dir."""
 
@@ -43,7 +42,6 @@ class TestFindGuildDir:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-01.3")
 class TestLoadConfig:
     """Tests for load_config."""
 
@@ -159,7 +157,6 @@ class TestLoadConfig:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-14.4")
 class TestEnvVarOverrides:
     """Tests that environment variables override config file values."""
 
@@ -185,7 +182,6 @@ class TestEnvVarOverrides:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-14.6")
 class TestConfigWatcher:
     """Tests for ConfigWatcher hot-reload detection."""
 
@@ -250,7 +246,6 @@ class TestConfigWatcher:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-01.3")
 class TestConfigLoaderEdgeCases:
     """Cover config loader edge cases."""
 
@@ -319,7 +314,6 @@ class TestConfigLoaderEdgeCases:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-01.3")
 class TestConfigLoaderInternals:
     """Cover config loader internal functions."""
 
@@ -398,7 +392,6 @@ class TestConfigLoaderInternals:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-14.5")
 @pytest.mark.unit
 class TestConfigLoaderGlobalFallback:
     """Cover the branch at line 65 where only global config exists."""
@@ -432,7 +425,6 @@ class TestConfigLoaderGlobalFallback:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-14.5")
 @pytest.mark.unit
 class TestConfigLoaderTempFileCleanup:
     """Cover the temp file cleanup branch at lines 155-158."""
@@ -466,7 +458,6 @@ class TestConfigLoaderTempFileCleanup:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-14.5")
 @pytest.mark.unit
 class TestConfigLoaderCorruptToml:
     """Cover the exception branch in _load_toml_file."""

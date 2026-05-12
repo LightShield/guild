@@ -36,7 +36,6 @@ async def _init_test_repo(tmp_path: Path) -> Path:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.12")
 class TestCreateWorktree:
     """Test worktree creation for task isolation."""
 
@@ -81,7 +80,6 @@ class TestCreateWorktree:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.12")
 class TestWorktreeBranchNaming:
     """Branch naming convention for worktrees."""
 
@@ -101,7 +99,6 @@ class TestWorktreeBranchNaming:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.12")
 class TestRemoveWorktree:
     """Test worktree cleanup after task completion."""
 
@@ -122,7 +119,6 @@ class TestRemoveWorktree:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.12")
 class TestListActiveWorktrees:
     """Test listing active Guild worktrees."""
 
@@ -164,7 +160,6 @@ class TestListActiveWorktrees:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.14")
 class TestMergeToStaging:
     """Test merging task branches to staging area."""
 
@@ -214,7 +209,6 @@ class TestMergeToStaging:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.12")
 class TestCreateWorktreeExistingBranch:
     """Test _create_worktree when the branch already exists (line 182)."""
 
@@ -244,7 +238,6 @@ class TestCreateWorktreeExistingBranch:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.12")
 class TestCreateWorktreeFailure:
     """Test _create_worktree raises RuntimeError on git failure (line 188)."""
 
@@ -270,7 +263,6 @@ class TestCreateWorktreeFailure:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.12")
 class TestWorktreeParseList:
     """Cover worktree list parsing edge cases."""
 
@@ -328,7 +320,6 @@ class TestWorktreeParseList:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.12")
 class TestWorktreeOperations:
     """Test worktree operations with mocked git."""
 

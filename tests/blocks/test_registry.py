@@ -15,7 +15,6 @@ from guild.blocks import (
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.23")
 def test_registry_has_builtin_blocks() -> None:
     """Registry should contain 6 built-in blocks on creation."""
     registry = BlockRegistry()
@@ -31,7 +30,6 @@ def test_registry_has_builtin_blocks() -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.23")
 def test_register_custom_block() -> None:
     """Users can register custom blocks."""
     registry = BlockRegistry()
@@ -47,7 +45,6 @@ def test_register_custom_block() -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.23")
 def test_load_blocks_from_toml_directory(tmp_path: object) -> None:
     """Registry can load block definitions from a directory of TOML files."""
     from pathlib import Path
@@ -88,7 +85,6 @@ type = "text"
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.21")
 def test_team_composition_validates() -> None:
     """A valid team composition passes validation."""
     registry = BlockRegistry()
@@ -120,7 +116,6 @@ def test_team_composition_validates() -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.21")
 def test_team_with_incompatible_ports_fails() -> None:
     """A team with type-mismatched ports fails validation."""
     registry = BlockRegistry()
@@ -146,7 +141,6 @@ def test_team_with_incompatible_ports_fails() -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.24")
 def test_team_from_toml_file(tmp_path: object) -> None:
     """Teams can be loaded from TOML config files."""
     from pathlib import Path
@@ -186,7 +180,6 @@ target_port = "changes"
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.25")
 def test_nested_composite_blocks() -> None:
     """Composite blocks can reference other composite blocks (nesting)."""
     registry = BlockRegistry()
@@ -240,7 +233,6 @@ def test_nested_composite_blocks() -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-14.2")
 def test_team_composition_loaded_as_named_config(tmp_path: object) -> None:
     """Team compositions are loadable as named configs from TOML (REQ-14.2)."""
     from pathlib import Path
@@ -310,7 +302,6 @@ target_port = "changes"
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.26")
 def test_block_versioning() -> None:
     """Blocks carry version info that can be compared."""
     registry = BlockRegistry()
@@ -332,7 +323,6 @@ def test_block_versioning() -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.27")
 def test_loop_definition_valid() -> None:
     """Loop definitions specify generator and evaluator blocks."""
     loop = LoopDef(
@@ -346,7 +336,6 @@ def test_loop_definition_valid() -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.27")
 def test_validate_team_with_loops() -> None:
     """Teams with valid loops pass validation."""
     registry = BlockRegistry()
@@ -401,7 +390,6 @@ def test_validate_team_with_loops() -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.21")
 class TestRegistryValidationEdgeCases:
     """Cover remaining validation edge cases in BlockRegistry."""
 
@@ -612,7 +600,6 @@ class TestRegistryValidationEdgeCases:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.27")
 class TestRegistryLoopValidation:
     """Validate loop blocks must be in the team."""
 

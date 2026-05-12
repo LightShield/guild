@@ -6,7 +6,6 @@ from guild.git.policy import BranchPolicy, MergeApproval
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.13")
 class TestProtectedBranches:
     """Test that protected branches block auto-merge."""
 
@@ -26,7 +25,6 @@ class TestProtectedBranches:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.13")
 class TestStagingProtection:
     """Staging branch protection defaults."""
 
@@ -46,7 +44,6 @@ class TestStagingProtection:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.15")
 class TestPolicyConfigurable:
     """Test that merge policy is configurable per project."""
 

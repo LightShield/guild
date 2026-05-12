@@ -33,7 +33,6 @@ def _make_fake_process(responses: list[dict]) -> MagicMock:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.6")
 class TestMCPClientConnect:
     """Tests for MCPClient.connect() — subprocess startup."""
 
@@ -58,7 +57,6 @@ class TestMCPClientConnect:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.6")
 class TestMCPClientDisconnect:
     """Tests for MCPClient.disconnect() — subprocess termination."""
 
@@ -78,7 +76,6 @@ class TestMCPClientDisconnect:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.6")
 class TestMCPClientListTools:
     """Tests for MCPClient.list_tools() — fetching tool definitions."""
 
@@ -130,7 +127,6 @@ class TestMCPClientListTools:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.6")
 class TestMCPClientCallTool:
     """Tests for MCPClient.call_tool() — invoking tools on the server."""
 
@@ -226,7 +222,6 @@ class TestMCPClientCallTool:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.3")
 class TestMCPClientAsyncContextManager:
     """Tests for MCPClient.__aenter__/__aexit__ — async context manager."""
 
@@ -258,7 +253,6 @@ class TestMCPClientAsyncContextManager:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.3")
 class TestMCPClientEdgeCases:
     """Cover MCP client edge cases."""
 
@@ -289,7 +283,6 @@ class TestMCPClientEdgeCases:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.3")
 class TestMCPClientProtocol:
     """Test MCP client protocol edge cases."""
 

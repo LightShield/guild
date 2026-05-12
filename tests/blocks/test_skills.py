@@ -10,7 +10,6 @@ from guild.blocks.skills import SkillDef, SkillRegistry
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.8")
 def test_skill_from_markdown_file(tmp_path: Path) -> None:
     """Skills can be loaded from a markdown file."""
     skill_file = tmp_path / "debugging.md"
@@ -34,7 +33,6 @@ def test_skill_from_markdown_file(tmp_path: Path) -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.8")
 def test_skill_registry_load_from_dir(tmp_path: Path) -> None:
     """SkillRegistry loads all skills from a directory."""
     skills_dir = tmp_path / "skills"
@@ -61,7 +59,6 @@ def test_skill_registry_load_from_dir(tmp_path: Path) -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.8")
 def test_format_skills_for_prompt() -> None:
     """Skills can be formatted for injection into system prompts."""
     registry = SkillRegistry()
@@ -87,7 +84,6 @@ def test_format_skills_for_prompt() -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.8")
 def test_skill_with_tools() -> None:
     """Skills can provide additional tools."""
     skill = SkillDef(
@@ -111,7 +107,6 @@ def test_skill_with_tools() -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-04.8")
 class TestSkillsEdgeCases:
     """Cover skills system edge-case branches."""
 
@@ -175,7 +170,6 @@ class TestSkillsEdgeCases:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-04.8")
 @pytest.mark.unit
 class TestSkillsFrontmatterToolsLastLine:
     """Cover the branch where tools: is NOT the last line in frontmatter."""

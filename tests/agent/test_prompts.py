@@ -8,7 +8,6 @@ from guild.agent.prompts import GUILD_MASTER_PROMPT
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-06.8")
 class TestGuildMasterPrompt:
     """GUILD_MASTER_PROMPT is well-formed and usable as a system prompt."""
 

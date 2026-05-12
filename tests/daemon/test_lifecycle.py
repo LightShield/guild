@@ -42,7 +42,6 @@ def _write_sock_file(run_dir: Path, name: str) -> Path:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-25.1")
 class TestKillTask:
     """Kill sends SIGTERM, waits, escalates to SIGKILL."""
 
@@ -114,7 +113,6 @@ class TestKillTask:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-25.2")
 class TestPauseTask:
     """Pause writes status to DB."""
 
@@ -160,7 +158,6 @@ class TestPauseTask:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-25.3")
 class TestResumeTask:
     """Resume changes status from paused to running."""
 
@@ -205,7 +202,6 @@ class TestResumeTask:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-25.5")
 class TestOrphanDetection:
     """Detect PID files for processes no longer alive."""
 
@@ -255,7 +251,6 @@ class TestOrphanDetection:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-25.7")
 class TestStaleLockCleanup:
     """Dead socket files are cleaned up automatically."""
 
@@ -326,7 +321,6 @@ class TestStaleLockCleanup:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-25.8")
 class TestKillAll:
     """Kill all running tasks."""
 
@@ -370,7 +364,6 @@ class TestKillAll:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-25.9")
 class TestExitCodes:
     """Verify exit code enum values."""
 
@@ -397,7 +390,6 @@ class TestExitCodes:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-23.7")
 class TestTaskQueue:
     """TaskQueue manages concurrent background task execution."""
 
@@ -472,7 +464,6 @@ class TestTaskQueue:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-25")
 class TestLifecycleEdgeCases:
     """Cover lifecycle manager edge cases."""
 
@@ -551,7 +542,6 @@ class TestLifecycleEdgeCases:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-08.1")
 @pytest.mark.unit
 class TestLifecycleKillAllFailBranch:
     """Cover the branch where kill_task returns False in kill_all loop."""

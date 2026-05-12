@@ -15,7 +15,7 @@ import aiosqlite
 import pytest
 
 
-@pytest.mark.unit
+@pytest.mark.learning
 class TestWalModeCanBeSet:
     """Verify PRAGMA journal_mode=WAL works — used in Storage.connect()."""
 
@@ -37,7 +37,7 @@ class TestWalModeCanBeSet:
             assert row[0] == "wal"
 
 
-@pytest.mark.unit
+@pytest.mark.learning
 class TestRowFactoryMakesDictRows:
     """Verify aiosqlite.Row lets us call dict(row) — used everywhere in Storage."""
 
@@ -72,7 +72,7 @@ class TestRowFactoryMakesDictRows:
             assert row["val"] == "hello"
 
 
-@pytest.mark.unit
+@pytest.mark.learning
 class TestExecutescriptCreatesTables:
     """Verify executescript works for multi-statement DDL — used in Storage.connect()."""
 
@@ -109,7 +109,7 @@ class TestExecutescriptCreatesTables:
             await db.commit()
 
 
-@pytest.mark.unit
+@pytest.mark.learning
 class TestConcurrentReadsWorkInWalMode:
     """Verify concurrent reads work in WAL mode — core assumption for Guild."""
 

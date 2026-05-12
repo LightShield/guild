@@ -38,7 +38,6 @@ def _sample_checkpoint() -> Checkpoint:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-07.2")
 class TestCheckpointSerialization:
     """Checkpoint JSON round-trip."""
 
@@ -85,7 +84,6 @@ class TestCheckpointSerialization:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-07.2")
 class TestCheckpointPersistence:
     """Checkpoint save/load with SQLite storage."""
 
@@ -156,7 +154,6 @@ class TestCheckpointPersistence:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-11.4")
 class TestRecoverFromCheckpoint:
     """Error recovery — restart crashed agents from last checkpoint."""
 
@@ -218,7 +215,6 @@ class TestRecoverFromCheckpoint:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-07.2")
 class TestCheckpointTokenPreservation:
     """Checkpoint preserves token counts across save/load cycles."""
 

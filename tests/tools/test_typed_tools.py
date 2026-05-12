@@ -14,7 +14,6 @@ from guild.tools.file_ops import execute_file_read, execute_file_write
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-08.2")
 class TestDedicatedToolsExist:
     """Verify file_read and file_write exist as independent, typed tools."""
 
@@ -52,7 +51,6 @@ class TestDedicatedToolsExist:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-08.2")
 class TestFileReadValidation:
     """file_read has built-in validation — not raw shell behavior."""
 
@@ -103,7 +101,6 @@ class TestFileReadValidation:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-08.2")
 class TestFileWriteValidation:
     """file_write has built-in validation — not raw shell behavior."""
 
@@ -128,7 +125,6 @@ class TestFileWriteValidation:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-08.2")
 class TestStructuredOutput:
     """Typed tools produce structured ToolResult, not raw shell output."""
 

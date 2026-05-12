@@ -10,7 +10,6 @@ from guild.templates.manager import Template, TemplateManager
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-19.1")
 def test_save_template_to_disk(tmp_path: object) -> None:
     """Saving a template creates a JSON file on disk."""
     mgr = TemplateManager(tmp_path)  # type: ignore[arg-type]
@@ -36,7 +35,6 @@ def test_save_template_to_disk(tmp_path: object) -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-19.2")
 def test_render_template_with_params(tmp_path: object) -> None:
     """Rendering substitutes all provided parameters."""
     mgr = TemplateManager(tmp_path)  # type: ignore[arg-type]
@@ -51,7 +49,6 @@ def test_render_template_with_params(tmp_path: object) -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-19.2")
 def test_render_missing_param_left_as_placeholder(tmp_path: object) -> None:
     """Missing parameters remain as {placeholder} in rendered output."""
     mgr = TemplateManager(tmp_path)  # type: ignore[arg-type]
@@ -66,7 +63,6 @@ def test_render_missing_param_left_as_placeholder(tmp_path: object) -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-19.3")
 def test_export_template(tmp_path: object) -> None:
     """Exporting a template copies its JSON to the output path."""
     mgr = TemplateManager(tmp_path / "templates")  # type: ignore[arg-type]
@@ -82,7 +78,6 @@ def test_export_template(tmp_path: object) -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-19.3")
 def test_import_template(tmp_path: object) -> None:
     """Importing a template from a file adds it to the manager."""
     # Create a source template file
@@ -112,7 +107,6 @@ def test_import_template(tmp_path: object) -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-19.1")
 class TestTemplateList:
     """Tests for TemplateManager.list()."""
 
@@ -138,7 +132,6 @@ class TestTemplateList:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-19.1")
 class TestTemplateGet:
     """Tests for TemplateManager.get()."""
 
@@ -159,7 +152,6 @@ class TestTemplateGet:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-19.3")
 class TestTemplateExport:
     """Tests for TemplateManager.export()."""
 
@@ -183,7 +175,6 @@ class TestTemplateExport:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-19.3")
 class TestTemplateImport:
     """Tests for TemplateManager.import_template()."""
 
@@ -223,7 +214,6 @@ class TestTemplateImport:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-19.1")
 class TestLoadFileCorrupted:
     """Tests for TemplateManager._load_file with corrupted data."""
 

@@ -28,7 +28,6 @@ def a2a_app(tmp_path: Path) -> Any:
     return create_app(guild_dir=guild_dir)
 
 
-@pytest.mark.req("REQ-04.7a")
 class TestAgentCardDiscovery:
     """A2A agent card at /.well-known/agent.json."""
 
@@ -64,7 +63,6 @@ class TestAgentCardDiscovery:
         assert "version" in card
 
 
-@pytest.mark.req("REQ-04.7a")
 class TestA2ATaskSend:
     """A2A tasks/send — create a task via JSON-RPC."""
 
@@ -110,7 +108,6 @@ class TestA2ATaskSend:
         assert result["error"]["code"] == -32602  # Invalid params
 
 
-@pytest.mark.req("REQ-04.7a")
 class TestA2ATaskGet:
     """A2A tasks/get — retrieve task status."""
 
@@ -166,7 +163,6 @@ class TestA2ATaskGet:
         assert result["error"]["code"] == -32001  # Task not found
 
 
-@pytest.mark.req("REQ-04.7a")
 class TestA2ATaskCancel:
     """A2A tasks/cancel — cancel a running task."""
 
@@ -220,7 +216,6 @@ class TestA2ATaskCancel:
         assert "error" in result
 
 
-@pytest.mark.req("REQ-04.7a")
 class TestA2AProtocolErrors:
     """A2A JSON-RPC protocol error handling."""
 

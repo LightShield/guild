@@ -10,7 +10,6 @@ from guild.permissions.checker import PermissionTier
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-01.3")
 class TestGuildConfigDefaults:
     """Tests for GuildConfig default values."""
 
@@ -41,7 +40,6 @@ class TestGuildConfigDefaults:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-01.3")
 class TestGuildConfigCustomValues:
     """Tests for GuildConfig with custom values."""
 

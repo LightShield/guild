@@ -12,7 +12,6 @@ from guild.observability.tracing import Tracer
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-11.1")
 class TestTraceRecording:
     """Tests for trace event recording."""
 
@@ -122,7 +121,6 @@ class TestTraceRecording:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-11.3")
 class TestStructuredLogging:
     """Tests for structured JSON logging output."""
 
@@ -199,7 +197,6 @@ class TestStructuredLogging:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-11.5")
 class TestLogExport:
     """Tests for JSON and JSONL export of trace events."""
 

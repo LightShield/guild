@@ -15,7 +15,6 @@ from guild.tools.search import (
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-08.3")
 class TestSearch:
     """Tests for execute_search."""
 
@@ -105,7 +104,6 @@ class TestSearch:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-08.3")
 class TestGlob:
     """Tests for execute_glob."""
 
@@ -171,7 +169,6 @@ class TestGlob:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-08.3")
 class TestSearchToolEdgeCases:
     """Cover search/glob tool edge cases."""
 

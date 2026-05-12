@@ -15,7 +15,6 @@ from guild.storage.sqlite import Storage
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-11.2")
 class TestSessionReplay:
     """Tests for session replay from stored messages."""
 
@@ -132,7 +131,6 @@ class TestSessionReplay:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-11.2")
 class TestReplayEdgeCases:
     """Cover session replay edge cases."""
 
@@ -190,7 +188,6 @@ class TestReplayEdgeCases:
 # ======================================================================
 
 
-@pytest.mark.req("REQ-11.2")
 @pytest.mark.unit
 class TestReplayExtractToolNamesBranches:
     """Cover the branch exits in _extract_tool_names."""

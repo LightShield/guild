@@ -8,7 +8,6 @@ from guild.tools.registry import build_tool_executors
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-08.1")
 class TestBuildToolExecutors:
     """build_tool_executors returns the standard tool executor mapping."""
 
@@ -66,7 +65,6 @@ class TestBuildToolExecutors:
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-08.1")
 class TestBuildToolExecutorsIsolation:
     """Each call returns an independent dict."""
 

@@ -8,7 +8,6 @@ from guild.agent.cost import COST_TABLE, estimate_cost, format_cost_summary
 
 
 @pytest.mark.unit
-@pytest.mark.req("REQ-10.5")
 class TestCostEstimation:
     """Tests for cost estimation logic."""
 
