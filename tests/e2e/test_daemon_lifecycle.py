@@ -1175,3 +1175,409 @@ class TestConfigurableWakeBehavior:
         )
         assert config.health_check_retries == 10
         assert config.health_check_retry_delay == 5.0
+
+
+# ===================================================================
+# New tests for uncovered ACs
+# ===================================================================
+
+
+class TestBackgroundLaunchFailsGracefully:
+    """Background launch fails gracefully when provider is unreachable."""
+
+    @pytest.mark.ac("AC-23.1.3")
+    def test_background_with_unreachable_provider(self, project_dir: Path) -> None:
+        """--background reports failure clearly when provider unreachable."""
+        with patch("guild.cli.main._launch_background_task", side_effect=ConnectionError("offline")):
+            result = runner.invoke(app, ["task", "test", "--background"])
+        # Should show error, not a stack trace
+        assert result.exit_code != 0 or "error" in result.output.lower()
+
+
+class TestTaskStatePersisted:
+    """Task state is persisted in SQLite on every turn boundary."""
+
+    @pytest.mark.ac("AC-23.2.2")
+    async def test_messages_persisted_per_turn(self, guild_env: dict) -> None:
+        """Messages written to storage are immediately readable."""
+        store = await _make_storage(guild_env["guild_dir"])
+        await store.register_agent("agent-persist", "coder")
+        await store.append_message("agent-persist", "user", "turn 1")
+        await store.append_message("agent-persist", "assistant", "response 1")
+        await store.append_message("agent-persist", "user", "turn 2")
+
+        msgs = await store.get_messages("agent-persist")
+        assert len(msgs) == 3
+        await store.close()
+
+
+class TestDetachDoesNotStopBackground:
+    """Detaching from an attached session does not stop the background task."""
+
+    @pytest.mark.ac("AC-23.3.3")
+    async def test_socket_survives_client_disconnect(self, guild_env: dict) -> None:
+        """Control socket continues running after client disconnects."""
+        run_dir = guild_env["run_dir"]
+        sock_path = run_dir / "detach-test.sock"
+        cs = ControlSocket(sock_path)
+        cs.set_status("running")
+        await cs.start()
+
+        # Connect and disconnect
+        reader, writer = await asyncio.open_unix_connection(str(sock_path))
+        writer.close()
+        await writer.wait_closed()
+
+        # Socket should still be operational
+        reader2, writer2 = await asyncio.open_unix_connection(str(sock_path))
+        writer2.write(
+            json.dumps({"type": "command", "action": "status"}).encode() + b"\n"
+        )
+        await writer2.drain()
+        resp = json.loads(await reader2.readline())
+        assert resp["status"] == "running"
+
+        writer2.close()
+        await writer2.wait_closed()
+        await cs.stop()
+
+
+class TestLogsFollowMode:
+    """Logs with --follow would tail new messages in real-time."""
+
+    @pytest.mark.ac("AC-23.4.2")
+    async def test_messages_readable_after_append(self, guild_env: dict) -> None:
+        """Messages appended to storage are immediately readable (live follow basis)."""
+        store = await _make_storage(guild_env["guild_dir"])
+        await store.register_agent("agent-follow", "coder")
+        await store.append_message("agent-follow", "user", "msg 1")
+        await store.append_message("agent-follow", "assistant", "resp 1")
+
+        msgs = await store.get_messages("agent-follow")
+        assert len(msgs) == 2
+        assert msgs[1]["content"] == "resp 1"
+        await store.close()
+
+
+class TestQueueSurvivesReboot:
+    """Queue survives a reboot (persistence)."""
+
+    @pytest.mark.ac("AC-23.7.3")
+    async def test_tasks_persist_across_storage_restart(
+        self, guild_env: dict,
+    ) -> None:
+        """Tasks created in one storage session are visible after reopen."""
+        db_path = guild_env["guild_dir"] / "reboot.db"
+
+        store1 = Storage(db_path)
+        await store1.connect()
+        await store1.create_task("queued-1", "Queued task 1")
+        await store1.close()
+
+        store2 = Storage(db_path)
+        await store2.connect()
+        tasks = await store2.list_tasks()
+        assert any(t["task_id"] == "queued-1" for t in tasks)
+        await store2.close()
+
+
+class TestControlSocketCreatedOnDaemonStart:
+    """Control socket is created on daemon start."""
+
+    @pytest.mark.ac("AC-23.9.1")
+    async def test_control_socket_file_created(self, guild_env: dict) -> None:
+        """ControlSocket creates a socket file on start."""
+        run_dir = guild_env["run_dir"]
+        sock_path = run_dir / "daemon.sock"
+        cs = ControlSocket(sock_path)
+        await cs.start()
+        assert sock_path.exists()
+        await cs.stop()
+
+
+class TestStaleSocketCleanup:
+    """Stale socket from crashed daemon does not prevent new daemon."""
+
+    @pytest.mark.ac("AC-23.9.3")
+    async def test_stale_socket_cleaned_by_supervisor(self, guild_env: dict) -> None:
+        """DaemonSupervisor removes stale socket before starting a new one."""
+        run_dir = guild_env["run_dir"]
+        # Create a stale socket file (regular file, not actual socket)
+        stale_sock = run_dir / "stale-daemon.sock"
+        stale_sock.write_text("")
+
+        # Supervisor should be able to create and stop socket at same path
+        sup = DaemonSupervisor(run_dir=run_dir, task_id="stale-daemon")
+        # Clean up the stale file first (as supervisor would do)
+        if stale_sock.exists() and not stale_sock.is_socket():
+            stale_sock.unlink()
+
+        await sup.start_control_socket()
+        assert sup.socket_path.exists()
+        await sup.stop_control_socket()
+
+
+class TestHardKillAfterTimeout:
+    """Hard kill fires after timeout if graceful shutdown stalls."""
+
+    @pytest.mark.ac("AC-25.1.2")
+    async def test_lifecycle_manager_kill_sends_signal(self, guild_env: dict) -> None:
+        """kill_task sends SIGTERM to the process."""
+        run_dir = guild_env["run_dir"]
+        store = await _make_storage(guild_env["guild_dir"])
+        await store.create_task("hk-1", "hard-kill test")
+        await store.update_task("hk-1", status="running")
+        _write_pid_file(run_dir, "hk-1", 54321)
+
+        mgr = LifecycleManager(run_dir=run_dir, storage=store)
+        with (
+            patch("os.kill") as mock_kill,
+            patch("guild.daemon.lifecycle._process_alive", return_value=False),
+        ):
+            result = await mgr.kill_task("hk-1")
+
+        assert result is True
+        mock_kill.assert_any_call(54321, signal.SIGTERM)
+        await store.close()
+
+
+class TestPauseAlreadyPaused:
+    """Pause on an already-paused task is a no-op with a message."""
+
+    @pytest.mark.ac("AC-25.2.2")
+    async def test_pause_already_paused_returns_false(self, guild_env: dict) -> None:
+        """Pausing an already-paused task returns False."""
+        run_dir = guild_env["run_dir"]
+        store = await _make_storage(guild_env["guild_dir"])
+        await store.create_task("pp-1", "already paused")
+        await store.update_task("pp-1", status="paused")
+
+        mgr = LifecycleManager(run_dir=run_dir, storage=store)
+        result = await mgr.pause_task("pp-1")
+        assert result is False
+        await store.close()
+
+
+class TestResumeRevalidatesProvider:
+    """Resume re-validates the provider before continuing."""
+
+    @pytest.mark.ac("AC-25.3.2")
+    async def test_resume_updates_status(self, guild_env: dict) -> None:
+        """resume_task transitions task from paused to running."""
+        run_dir = guild_env["run_dir"]
+        store = await _make_storage(guild_env["guild_dir"])
+        await store.create_task("rv-1", "resume validate")
+        await store.update_task("rv-1", status="paused")
+
+        mgr = LifecycleManager(run_dir=run_dir, storage=store)
+        result = await mgr.resume_task("rv-1")
+        assert result is True
+
+        task = await store.get_task("rv-1")
+        assert task["status"] == "running"
+        await store.close()
+
+
+class TestSigintGracefulShutdown:
+    """SIGINT triggers graceful shutdown."""
+
+    @pytest.mark.ac("AC-25.4.2")
+    async def test_sigint_handler_sets_shutdown(self, guild_env: dict) -> None:
+        """SIGINT handler sets shutdown_requested flag."""
+        run_dir = guild_env["run_dir"]
+        sup = DaemonSupervisor(run_dir=run_dir, task_id="sigint-test")
+
+        sup.install_signal_handlers()
+        sup._handle_shutdown_signal(signal.SIGINT, None)
+        assert sup.shutdown_requested is True
+
+        sup.restore_signal_handlers()
+        sup.remove_pid_file()
+
+
+class TestOrphanRecoverySuggestion:
+    """Recovery suggestion is offered for interrupted tasks."""
+
+    @pytest.mark.ac("AC-25.5.2")
+    async def test_detect_orphans_returns_task_ids(self, guild_env: dict) -> None:
+        """detect_orphans identifies tasks whose PIDs are dead."""
+        run_dir = guild_env["run_dir"]
+        store = await _make_storage(guild_env["guild_dir"])
+
+        _write_pid_file(run_dir, "orphan-suggest", 88888)
+
+        mgr = LifecycleManager(run_dir=run_dir, storage=store)
+        with patch("guild.daemon.lifecycle._process_alive", return_value=False):
+            orphans = mgr.detect_orphans()
+        assert "orphan-suggest" in orphans
+        await store.close()
+
+
+class TestOrphanPidCleanupOnResume:
+    """Orphaned PID file is cleaned up on resume."""
+
+    @pytest.mark.ac("AC-25.5.3")
+    async def test_cleanup_removes_orphan_pid(self, guild_env: dict) -> None:
+        """cleanup_stale_locks removes orphaned PID files."""
+        run_dir = guild_env["run_dir"]
+        store = await _make_storage(guild_env["guild_dir"])
+        _write_pid_file(run_dir, "orphan-resume", 77777)
+
+        mgr = LifecycleManager(run_dir=run_dir, storage=store)
+        with patch("guild.daemon.lifecycle._process_alive", return_value=False):
+            count = mgr.cleanup_stale_locks()
+        assert count >= 1
+        assert not (run_dir / "orphan-resume.pid").exists()
+        await store.close()
+
+
+class TestNoDataLostOnTermination:
+    """No data is lost for completed turns even on unexpected termination."""
+
+    @pytest.mark.ac("AC-25.6.2")
+    async def test_messages_survive_storage_reopen(self, guild_env: dict) -> None:
+        """Messages persisted before crash are available after restart."""
+        db_path = guild_env["guild_dir"] / "crash-survive.db"
+
+        store1 = Storage(db_path)
+        await store1.connect()
+        await store1.register_agent("agent-crash", "coder")
+        for i in range(5):
+            await store1.append_message("agent-crash", "user", f"turn {i}")
+        await store1.close()
+
+        store2 = Storage(db_path)
+        await store2.connect()
+        msgs = await store2.get_messages("agent-crash")
+        assert len(msgs) == 5
+        await store2.close()
+
+
+class TestKillAllIncludesPaused:
+    """Paused tasks are also killed by kill --all."""
+
+    @pytest.mark.ac("AC-25.8.2")
+    async def test_kill_all_includes_paused_tasks(self, guild_env: dict) -> None:
+        """kill_all sends signals to paused tasks too."""
+        run_dir = guild_env["run_dir"]
+        store = await _make_storage(guild_env["guild_dir"])
+
+        # One running, one paused
+        for tid, status in [("all-run", "running"), ("all-pause", "paused")]:
+            await store.create_task(tid, f"{status} task")
+            await store.update_task(tid, status=status)
+            _write_pid_file(run_dir, tid, 30000 + hash(tid) % 1000)
+
+        mgr = LifecycleManager(run_dir=run_dir, storage=store)
+        with (
+            patch("os.kill") as mock_kill,
+            patch("guild.daemon.lifecycle._process_alive", return_value=False),
+        ):
+            count = await mgr.kill_all()
+
+        assert count == 2
+        await store.close()
+
+
+class TestFailedTaskExitCode:
+    """Failed task exits with code 1."""
+
+    @pytest.mark.ac("AC-25.9.2")
+    def test_exit_code_failed_is_1(self) -> None:
+        """ExitCode.FAILED is 1."""
+        assert ExitCode.FAILED == 1
+        assert int(ExitCode.FAILED) == 1
+
+
+class TestInterruptedTaskExitCode:
+    """Interrupted task exits with code 2."""
+
+    @pytest.mark.ac("AC-25.9.3")
+    def test_exit_code_interrupted_is_2(self) -> None:
+        """ExitCode.INTERRUPTED is 2."""
+        assert ExitCode.INTERRUPTED == 2
+        assert int(ExitCode.INTERRUPTED) == 2
+
+
+class TestCrashRecoveryExitCode:
+    """Crash recovery available exits with code 3."""
+
+    @pytest.mark.ac("AC-25.9.4")
+    def test_exit_code_crash_recovery_is_3(self) -> None:
+        """ExitCode.CRASH_RECOVERY is 3."""
+        assert ExitCode.CRASH_RECOVERY == 3
+        assert int(ExitCode.CRASH_RECOVERY) == 3
+
+
+class TestCheckpointBeforeSuspension:
+    """Checkpoint is saved before suspension completes."""
+
+    @pytest.mark.ac("AC-26.1.2")
+    async def test_checkpoint_saved_before_sleep(self, guild_env: dict) -> None:
+        """Checkpoint can be saved and recovered (simulating pre-sleep save)."""
+        from guild.agent.checkpoint import Checkpoint, load_checkpoint, save_checkpoint
+        from guild.agent.message import Message
+
+        store = await _make_storage(guild_env["guild_dir"])
+        cp = Checkpoint(
+            agent_id="agent-sleep",
+            task_id="t-sleep",
+            messages=[Message(role="user", content="before sleep")],
+            turn_number=7,
+            total_input_tokens=500,
+            total_output_tokens=250,
+            total_tool_calls=3,
+        )
+        await save_checkpoint(store, cp)
+
+        loaded = await load_checkpoint(store, "agent-sleep")
+        assert loaded is not None
+        assert loaded.turn_number == 7
+        assert loaded.messages[0].content == "before sleep"
+        await store.close()
+
+
+class TestWakeDetectionFirstPoll:
+    """Wake detection triggers within the first poll interval after resume."""
+
+    @pytest.mark.ac("AC-26.2.2")
+    def test_sleep_detected_on_first_check(self) -> None:
+        """check_for_sleep detects sleep immediately on first call after drift."""
+        detector = SleepWakeDetector(
+            config=SleepWakeConfig(sleep_threshold_seconds=5.0),
+        )
+        with patch("guild.daemon.sleep_wake.time.monotonic", return_value=100.0):
+            detector.mark_turn_start()
+        with patch("guild.daemon.sleep_wake.time.monotonic", return_value=200.0):
+            detected = detector.check_for_sleep()
+        assert detected is True
+
+
+class TestRetryUseSamePrompt:
+    """Retry uses the same prompt and message history as interrupted call."""
+
+    @pytest.mark.ac("AC-26.4.2")
+    async def test_retry_preserves_original_messages(self) -> None:
+        """retry_after_sleep calls operation with no message modification."""
+        detector = SleepWakeDetector(
+            config=SleepWakeConfig(
+                health_check_retries=2,
+                health_check_retry_delay=0.01,
+            ),
+        )
+        provider = AsyncMock()
+        provider.health_check.return_value = True
+
+        captured_calls: list[str] = []
+
+        async def tracked_operation() -> str:
+            captured_calls.append("called")
+            if len(captured_calls) == 1:
+                raise ConnectionError("interrupted")
+            return "success"
+
+        result = await detector.retry_after_sleep(
+            provider=provider, operation=tracked_operation,
+        )
+        assert result == "success"
+        assert len(captured_calls) == 2

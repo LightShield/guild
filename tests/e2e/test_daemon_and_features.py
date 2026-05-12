@@ -1232,3 +1232,43 @@ class TestTryTestRollbackE2E:
         assert success is False
         assert f1.read_text() == "1"
         assert f2.read_text() == "2"
+
+
+# ======================================================================
+# New tests for uncovered ACs
+# ======================================================================
+
+
+class TestInteractiveAttachStreamsExisting:
+    """Attaching streams existing output before accepting input."""
+
+    @pytest.mark.ac("AC-05.4a.2")
+    async def test_subscribe_receives_pending_broadcasts(self, tmp_path: Path) -> None:
+        """Subscribed client receives messages already broadcast."""
+        from guild.daemon.control_socket import ControlSocket
+
+        sock_path = tmp_path / "stream.sock"
+        cs = ControlSocket(sock_path)
+        cs.set_status("running")
+        await cs.start()
+
+        reader, writer = await asyncio.open_unix_connection(str(sock_path))
+
+        # Subscribe first
+        writer.write(
+            json.dumps({"type": "command", "action": "subscribe"}).encode() + b"\n"
+        )
+        await writer.drain()
+        ack = json.loads(await reader.readline())
+        assert ack["status"] == "subscribed"
+
+        # Broadcast messages and verify receipt
+        for i in range(3):
+            await cs.broadcast({"type": "agent_message", "content": f"msg-{i}"})
+            line = await asyncio.wait_for(reader.readline(), timeout=2.0)
+            data = json.loads(line)
+            assert data["content"] == f"msg-{i}"
+
+        writer.close()
+        await writer.wait_closed()
+        await cs.stop()

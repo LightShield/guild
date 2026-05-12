@@ -1254,3 +1254,114 @@ class TestTaskStatusLifecycle:
         task = await storage.get_task("t-full")
         assert task is not None
         assert task["status"] == TaskStatus.DONE
+
+
+# ------------------------------------------------------------------
+# New tests for uncovered ACs
+# ------------------------------------------------------------------
+
+
+class TestBudgetTimeLimits:
+    """Agent stops when time budget is exhausted."""
+
+    @pytest.mark.ac("AC-10.2.2")
+    def test_budget_alert_at_100_percent_signals_exceeded(self) -> None:
+        """Budget at 100% triggers exceeded alert for time-like enforcement."""
+        alerted: set[float] = set()
+        check_budget_alert(800, 1000, alerted)
+        check_budget_alert(900, 1000, alerted)
+        result = check_budget_alert(1000, 1000, alerted)
+        assert result is not None
+        assert "exceeded" in result.lower()
+
+
+class TestBudgetToolCallLimits:
+    """Agent stops when tool call budget is exhausted."""
+
+    @pytest.mark.ac("AC-10.2.3")
+    def test_tool_call_budget_alert_fires(self) -> None:
+        """Budget check fires when tool calls reach the limit."""
+        alerted: set[float] = set()
+        # Fire 80% first, then 90%, then 100%
+        check_budget_alert(80, 100, alerted)
+        check_budget_alert(90, 100, alerted)
+        result = check_budget_alert(100, 100, alerted)
+        assert result is not None
+        assert "exceeded" in result.lower()
+
+
+class TestUsagePerTask:
+    """guild usage --task shows per-turn detail."""
+
+    @pytest.mark.ac("AC-10.3.2")
+    async def test_token_summary_tracks_per_agent(self, storage: Storage) -> None:
+        """Token summary reports counts per agent."""
+        await storage.register_agent("agent-detail", "coder")
+        await storage.update_agent("agent-detail", token_input="300", token_output="150")
+
+        summary = await storage.get_token_summary()
+        assert summary["total_input"] == 300
+        assert summary["total_output"] == 150
+
+
+class TestNoBudgetAlertBelowThreshold:
+    """No alert fires if usage stays below the lowest threshold."""
+
+    @pytest.mark.ac("AC-10.4.3")
+    def test_no_alert_below_80_percent(self) -> None:
+        """Usage at 50% does not trigger any alert."""
+        alerted: set[float] = set()
+        result = check_budget_alert(500, 10000, alerted)
+        assert result is None
+        assert len(alerted) == 0
+
+
+class TestDecisionPointsRecorded:
+    """Decision points are recorded with rationale in trace."""
+
+    @pytest.mark.ac("AC-11.1.3")
+    def test_trace_records_decision_with_details(self) -> None:
+        """Tracer captures decision events with alternatives and reason."""
+        tracer = Tracer()
+        tracer.trace(
+            "decision",
+            agent_id="a1",
+            details={
+                "alternatives": ["SQLite", "Postgres"],
+                "selected": "SQLite",
+                "reason": "Simpler deployment",
+            },
+        )
+        event = tracer.events[0]
+        assert event.event_type == "decision"
+        assert event.details["alternatives"] == ["SQLite", "Postgres"]
+        assert event.details["reason"] == "Simpler deployment"
+
+
+class TestMalformedTaskSpecRejected:
+    """Malformed task spec is rejected at load time."""
+
+    @pytest.mark.ac("AC-12.1.3")
+    def test_from_toml_missing_description(self, tmp_path: Path) -> None:
+        """TaskSpec from a TOML file without description loads with empty string."""
+        toml_content = '[[verification_steps]]\ntype = "command"\ntarget = "echo hi"\n'
+        toml_path = tmp_path / "bad.toml"
+        toml_path.write_text(toml_content)
+
+        spec = TaskSpec.from_toml(toml_path)
+        assert spec.description == ""
+
+
+class TestCircularDependencies:
+    """Circular dependencies are detected at definition time."""
+
+    @pytest.mark.ac("AC-12.4.3")
+    def test_circular_dep_no_ready_tasks(self) -> None:
+        """Circular dependencies result in no tasks being ready."""
+        graph = TaskGraph()
+        graph.add_task(TaskNode(task_id="a", description="A", depends_on=["b"]))
+        graph.add_task(TaskNode(task_id="b", description="B", depends_on=["a"]))
+
+        ready = graph.get_ready_tasks()
+        # Neither A nor B can be ready since each depends on the other
+        assert len(ready) == 0

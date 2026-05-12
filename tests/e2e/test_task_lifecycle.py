@@ -171,3 +171,46 @@ class TestDecisions:
         """Decisions command returns success on a fresh project."""
         result = runner.invoke(app, ["decisions"])
         assert result.exit_code == 0
+
+
+# ======================================================================
+# New tests for uncovered ACs
+# ======================================================================
+
+
+class TestTimeoutZero:
+    """Verify timeout of zero means no time limit."""
+
+    @pytest.mark.ac("AC-06.7.2")
+    def test_task_with_zero_timeout_runs_normally(self, project_dir: Path) -> None:
+        """Timeout of 0 means no time limit; task runs to completion."""
+        with patch(
+            "guild.cli.task_runner.create_resilient_provider",
+            return_value=_mock_provider(),
+        ):
+            result = runner.invoke(app, ["task", "Task no timeout", "--timeout", "0"])
+        assert result.exit_code == 0
+        assert "Done" in result.output
+
+
+class TestDecisionLogEntries:
+    """Verify decision log entries contain alternatives and rationale."""
+
+    @pytest.mark.ac("AC-06.12.2")
+    async def test_decision_log_stores_rationale(self, project_dir: Path) -> None:
+        """Decision log entry includes the rationale field."""
+        from guild.storage.sqlite import Storage
+
+        db_path = project_dir / ".guild" / "guild.db"
+        store = Storage(db_path)
+        await store.connect()
+        await store.log_decision(
+            task_id="t-dec",
+            agent_id="a-dec",
+            decision="Use SQLite",
+            rationale="Simpler than Postgres, no external deps",
+        )
+        decisions = await store.list_decisions(limit=5)
+        assert len(decisions) >= 1
+        assert any("SQLite" in d.get("decision", "") for d in decisions)
+        await store.close()

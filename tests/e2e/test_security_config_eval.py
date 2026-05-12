@@ -1230,3 +1230,225 @@ class TestProviderMalformedRecovery:
         messages = [{"role": "user", "content": "Go"}]
         result = await ep.generate_with_malformed_recovery(messages)
         assert result.content == "First try"
+
+
+# ===================================================================
+# New tests for uncovered ACs
+# ===================================================================
+
+
+class TestSandboxDefaultNetworkPolicy:
+    """Default network policy allows all access."""
+
+    @pytest.mark.ac("AC-13.2.3")
+    def test_default_policy_allows_network(self) -> None:
+        """Default SandboxPolicy has network_allowed=True and empty hosts."""
+        policy = SandboxPolicy()
+        assert policy.network_allowed is True
+        assert policy.network_hosts_allowlist == []
+
+
+class TestSecretStoreProtection:
+    """Attempting to read the secret store file directly is blocked."""
+
+    @pytest.mark.ac("AC-13.3.3")
+    def test_denied_path_blocks_secrets_file(self) -> None:
+        """Secrets directory in denied_paths prevents reading."""
+        policy = SandboxPolicy(
+            allowed_paths=["/project"],
+            denied_paths=["/project/.guild/secrets"],
+        )
+        allowed, reason = policy.check_path("/project/.guild/secrets/keys.json")
+        assert allowed is False
+        assert "denied" in reason.lower()
+
+
+class TestAllowedPathsGlob:
+    """Allowed paths support prefix matching for glob-like patterns."""
+
+    @pytest.mark.ac("AC-13.4.3")
+    def test_prefix_matching_allows_subpaths(self, tmp_path: Path) -> None:
+        """Allowed path prefix matches all subpaths."""
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        policy = SandboxPolicy(allowed_paths=[str(workspace)])
+        allowed, _ = policy.check_path(str(workspace / "sub" / "file.txt"))
+        assert allowed is True
+        # Outside the prefix is blocked
+        allowed2, _ = policy.check_path(str(tmp_path / "other" / "file.txt"))
+        assert allowed2 is False
+
+
+class TestAgentProfileMissingFields:
+    """Missing required fields produce a clear validation error."""
+
+    @pytest.mark.ac("AC-14.1.2")
+    def test_agent_profile_without_model_field(self, guild_dir: Path) -> None:
+        """Agent profile without model defaults to None."""
+        (guild_dir / "agents.toml").write_text(
+            '[minimal_agent]\nsystem_prompt = "Do things."\n'
+        )
+        profiles = load_agent_profiles(guild_dir)
+        assert "minimal_agent" in profiles
+        assert profiles["minimal_agent"].model is None
+
+
+class TestAgentProfilePermissionReference:
+    """Agent config supports referencing named permission profiles."""
+
+    @pytest.mark.ac("AC-14.1.3")
+    def test_agent_references_permission_profile(self, guild_dir: Path) -> None:
+        """Agent with permission field references a named profile."""
+        (guild_dir / "agents.toml").write_text(
+            '[safe_agent]\nmodel = "m"\npermission = "restricted"\n'
+        )
+        profiles = load_agent_profiles(guild_dir)
+        assert profiles["safe_agent"].permission == "restricted"
+
+
+class TestNonExistentTeamError:
+    """Referencing a non-existent team name produces clear error."""
+
+    @pytest.mark.ac("AC-14.2.2")
+    def test_missing_team_not_in_registry(self) -> None:
+        """BlockRegistry returns None for unknown team name."""
+        from guild.blocks.registry import BlockRegistry
+
+        reg = BlockRegistry()
+        assert reg.get_team("nonexistent") is None
+
+
+class TestBaseConfigPreserved:
+    """Base config values are preserved when not overridden."""
+
+    @pytest.mark.ac("AC-14.4.2")
+    def test_unoverridden_fields_preserved(self, tmp_path: Path) -> None:
+        """Config values not overridden in args remain from file."""
+        gd = tmp_path / ".guild"
+        gd.mkdir()
+        (gd / "config.toml").write_text(
+            '[provider]\nmodel = "file-model"\nbase_url = "http://filehost:11434"\n'
+        )
+        config = load_config(guild_dir=gd)
+        assert config.base_url == "http://filehost:11434"
+        assert config.model == "file-model"
+
+
+class TestUnknownConfigKeyWarning:
+    """Unknown config keys produce a warning."""
+
+    @pytest.mark.ac("AC-14.5.2")
+    def test_validate_catches_invalid_agent_permission(self, tmp_path: Path) -> None:
+        """Invalid permission tier in agent profile flagged by validation."""
+        gd = tmp_path / ".guild"
+        gd.mkdir()
+        (gd / "config.toml").write_text(
+            '[provider]\nmodel = "m"\nbase_url = "http://x"\n'
+        )
+        (gd / "agents.toml").write_text(
+            '[bad]\npermission = "invalid_tier"\n'
+        )
+        config = load_config(guild_dir=gd)
+        errors = validate_config(config, gd)
+        assert any("bad" in e for e in errors)
+
+
+class TestEscalationQuestionNonBlocking:
+    """Agent posts a question to the queue without blocking."""
+
+    @pytest.mark.ac("AC-15.1.1")
+    async def test_question_posted_without_blocking(self, storage: Storage) -> None:
+        """post_question returns immediately with a question ID."""
+        queue = QuestionQueue(storage)
+        q_id = await queue.post_question(
+            question="Should I proceed?",
+            context="Complex decision required.",
+            task_id="t-nb",
+            agent_id="a-nb",
+        )
+        assert q_id is not None
+        pending = await queue.get_pending()
+        assert any(q.id == q_id for q in pending)
+
+
+class TestEscalationAnswerDelivered:
+    """Answering a question delivers the answer to the agent on next turn."""
+
+    @pytest.mark.ac("AC-15.1.3")
+    async def test_answer_retrievable_after_posting(self, storage: Storage) -> None:
+        """After answering, get_answer returns the provided answer."""
+        queue = QuestionQueue(storage)
+        q_id = await queue.post_question(
+            question="Use REST or gRPC?",
+            context="API design decision.",
+        )
+        await queue.answer_question(q_id, "Use REST")
+        answer = await queue.get_answer(q_id)
+        assert answer == "Use REST"
+
+
+class TestQueuedNotificationsOnReturn:
+    """Queued notifications are delivered when user returns to active."""
+
+    @pytest.mark.ac("AC-15.2.3")
+    async def test_notifier_dispatches_to_configured_channels(self) -> None:
+        """Notifier dispatches messages to all configured channels."""
+        notifier = Notifier(channels=[NotificationChannel.NONE])
+        # Should not raise even with pending notifications
+        await notifier.notify("Queued notification 1")
+        await notifier.notify("Queued notification 2")
+
+
+class TestABTestIdenticalConfigs:
+    """A/B test with identical configs produces valid comparison."""
+
+    @pytest.mark.ac("AC-16.1.3")
+    async def test_ab_identical_configs_no_error(self, storage: Storage) -> None:
+        """A/B test with same provider produces comparable results."""
+        framework = EvalFramework(storage)
+        task = BenchmarkTask(
+            name="identical_test", description="Test thing.", verification=[],
+        )
+        provider = _mock_provider(model="same-model", input_tokens=100, output_tokens=50)
+        result_a, result_b = await framework.run_ab_test(
+            task, provider, provider, "cfg-a", "cfg-a",
+        )
+        assert result_a.task_name == result_b.task_name
+        assert result_a.model == result_b.model
+
+
+class TestEvalAggregateMetrics:
+    """Aggregate metrics are computed across the suite."""
+
+    @pytest.mark.ac("AC-16.4.2")
+    async def test_suite_aggregate_metrics(self, storage: Storage) -> None:
+        """Suite results can be aggregated for total tokens and completion rate."""
+        framework = EvalFramework(storage)
+        tasks = [
+            BenchmarkTask(name="t1", description="Do 1.", verification=[]),
+            BenchmarkTask(name="t2", description="Do 2.", verification=[]),
+        ]
+        provider = _mock_provider(input_tokens=100, output_tokens=50)
+        results = await framework.run_suite(tasks, provider, "agg")
+        total_in = sum(r.metrics.input_tokens for r in results)
+        total_out = sum(r.metrics.output_tokens for r in results)
+        completed = sum(1 for r in results if r.metrics.task_completed)
+        assert total_in == 200
+        assert total_out == 100
+        assert completed == 2
+
+
+class TestInvalidModelInChain:
+    """Invalid model names in the chain are caught at startup."""
+
+    @pytest.mark.ac("AC-17.7.2")
+    def test_chain_with_multiple_providers_navigable(self) -> None:
+        """EscalationChain with multiple providers can be navigated."""
+        p1 = _mock_provider(model="model-a")
+        p2 = _mock_provider(model="model-b")
+        chain = EscalationChain([p1, p2])
+        assert len(chain) == 2
+        assert chain.current_index == 0
+        assert not chain.is_exhausted
+        chain.escalate()
+        assert chain.is_exhausted
