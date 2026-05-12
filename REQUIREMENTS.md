@@ -102,6 +102,10 @@ These emerged from design review and govern all implementation decisions:
   - verify: Call `generate()` with `stream=True` -> receive an async iterator of partial tokens that concatenate to the full response
 - AC-01.2.3: Ollama-specific parameters (e.g., `num_ctx`, `num_gpu`) are forwarded correctly
   - verify: Set `num_ctx=4096` in config -> Ollama `/api/chat` request body includes `"num_ctx": 4096`
+- AC-01.2.4: Ollama provider handles model-not-found errors with a descriptive message
+  - verify: Call generate() with model="nonexistent-model-xyz" -> raises or returns error containing "model not found" rather than a raw 404 or unhandled exception
+- AC-01.2.5: Ollama provider reports the actual model name used in the response (not just the configured name)
+  - verify: Configure model="gemma4:4b", call generate() -> LLMResponse.model matches what Ollama actually loaded (e.g., handles aliases)
 
 **REQ-01.3 — Provider configuration via config files (not hardcoded)**
 
@@ -113,6 +117,8 @@ These emerged from design review and govern all implementation decisions:
   - verify: Set `provider.temperature = 0.2` in config -> API call includes `"temperature": 0.2`
 - AC-01.3.4: Invalid config values are rejected at startup with a clear error
   - verify: Set `provider.temperature = "banana"` -> startup fails with validation error naming the field and expected type
+- AC-01.3.5: Configuration changes via `guild config --set` persist to the TOML file and are loaded on next startup
+  - verify: Run `guild config --set provider.model=gemma4:1b`, restart Guild, run `guild config --get provider.model` -> returns "gemma4:1b"
 
 **REQ-01.4 — Provider-specific prompt formatting handled transparently**
 
@@ -133,6 +139,8 @@ These emerged from design review and govern all implementation decisions:
   - verify: Simulate one transient 503 followed by success -> `generate()` returns the successful response without the caller needing retry logic
 - AC-01.5.4: A clear, human-readable message is logged when the provider is down
   - verify: Start Guild with Ollama stopped -> log output includes a message like "Cannot reach Ollama at http://localhost:11434 - is it running?"
+- AC-01.5.5: Health check has a configurable timeout (not hardcoded)
+  - verify: Set `provider.health_check_timeout_seconds = 2` in config -> health_check() times out after 2s on an unresponsive host (not the default 5s)
 
 ### REQ-02: Cross-Platform Support (Windows, macOS, Linux)
 
@@ -167,6 +175,8 @@ These emerged from design review and govern all implementation decisions:
   - verify: Grep src/guild/ for `os.path.join` -> zero matches
 - AC-02.3.2: Process spawning uses `asyncio.create_subprocess_exec`, not `os.system` or shell=True
   - verify: Grep src/guild/ for `os.system` and `shell=True` -> zero matches outside test fixtures
+- AC-02.3.3: Paths with spaces and special characters work correctly on all platforms
+  - verify: Create a working directory with spaces (e.g., "/tmp/my project/guild test") -> `guild init` and `guild task` operate correctly in that directory without path errors
 
 **REQ-02.4 — Platform-specific behavior behind a PlatformAdapter interface**
 
@@ -176,6 +186,8 @@ These emerged from design review and govern all implementation decisions:
   - verify: Import `DarwinAdapter`, `LinuxAdapter`, `WindowsAdapter` -> all three classes resolve without error
 - AC-02.4.3: The correct adapter is auto-selected based on the running OS
   - verify: Call `PlatformAdapter.create()` on macOS -> returns a `DarwinAdapter` instance
+- AC-02.4.4: FallbackAdapter is used on unsupported platforms and logs a warning about limited functionality
+  - verify: Run on Windows (where no WindowsAdapter exists) -> FallbackAdapter is selected, and startup log contains "Platform 'win32': using fallback adapter (limited idle/sleep detection)"
 
 ### REQ-03: Tiered Permission System
 
@@ -200,6 +212,8 @@ These emerged from design review and govern all implementation decisions:
   - verify: Set permission tier to 0 and run a task that would normally use tools -> agent produces text-only responses with zero tool invocations
 - AC-03.1.2: At Tier 0, tool call attempts from the model are silently dropped
   - verify: Force a model response containing a tool call at Tier 0 -> harness filters it out and continues without executing the tool
+- AC-03.1.3: Dropped tool calls at Tier 0 are logged in the audit trail with reason "tier_0_blocked"
+  - verify: Set tier to 0, model attempts a tool call -> audit log contains entry with action="tool_blocked", details containing tool name and reason="Tier 0: no tool use"
 
 **REQ-03.2 — Tier 1 "Ask": Agent requests tool use, human approves per-tool**
 
@@ -209,6 +223,8 @@ These emerged from design review and govern all implementation decisions:
   - verify: Approve a tool with "always" at Tier 1 -> subsequent calls to that tool in the same session execute without prompting
 - AC-03.2.3: A denied tool call is reported back to the agent as a refusal
   - verify: Deny a tool call at Tier 1 -> agent receives a tool result indicating "Permission denied by user" and can adjust its approach
+- AC-03.2.4: "per-call" approval mode prompts on every invocation even for previously-approved tools
+  - verify: Set approval_granularity="per-call" at Tier 1, approve file_read once -> next file_read call still prompts for approval (not auto-approved)
 
 **REQ-03.3 — Tier 2 "Scoped": Agent can use all tools within a defined scope**
 
@@ -218,6 +234,8 @@ These emerged from design review and govern all implementation decisions:
   - verify: Set tier to 2 with scope `/project/src/` -> file_write to `/etc/passwd` is rejected with "Outside permitted scope"
 - AC-03.3.3: Scope supports directory trees, tool-name sets, and resource patterns
   - verify: Configure scope as `tools: [file_read, search]` -> file_read executes without prompt; shell_exec is blocked
+- AC-03.3.4: Scope violation is reported back to the agent with the specific boundary that was exceeded
+  - verify: Set scope to /project/src/, attempt file_write to /project/docs/readme.md -> agent receives tool result "Permission denied: /project/docs/readme.md is outside scope [/project/src/]" (not just generic "blocked")
 
 **REQ-03.4 — Tier 3 "Autopilot": All tools allowed, no approval needed**
 
@@ -232,6 +250,8 @@ These emerged from design review and govern all implementation decisions:
   - verify: Start a task at Tier 3, switch to Tier 1 via `guild config --set permissions.tier=1` mid-task -> next tool call prompts for approval
 - AC-03.5.2: The current tier is queryable at any time
   - verify: Run `guild config --get permissions.tier` -> prints the current tier value
+- AC-03.5.3: Switching tiers clears session-level approvals from the previous tier
+  - verify: At Tier 1, approve file_read (cached), switch to Tier 2 with scope excluding file_read, switch back to Tier 1 -> file_read requires re-approval (session cache was cleared)
 
 **REQ-03.6 — Audit log of all permission decisions**
 
@@ -239,6 +259,10 @@ These emerged from design review and govern all implementation decisions:
   - verify: Run a task at Tier 1, approve one tool, deny another -> `guild audit` shows both decisions with timestamps, tool name, and user action
 - AC-03.6.2: Audit log entries include the permission tier active at the time of the decision
   - verify: Switch tiers mid-task -> audit log entries reflect the correct tier for each decision
+- AC-03.6.3: Auto-permitted actions (Tier 3 autopilot, Tier 2 in-scope) are logged, not just human decisions
+  - verify: Run a task at Tier 3 with 5 tool calls -> `guild audit` shows 5 entries with status="auto_permitted" (not just when human approves/denies)
+- AC-03.6.4: Hardcoded-never blocks are recorded in the audit log with the matched pattern
+  - verify: Attempt `git push --force` at any tier -> audit log entry includes action="hardcoded_never_blocked", details containing the matched denylist pattern and reason
 
 **REQ-03.7 — Hardcoded-never layer blocks destructive actions regardless of tier**
 
@@ -248,6 +272,8 @@ These emerged from design review and govern all implementation decisions:
   - verify: Attempt `git push --force` with `--allow-destructive` flag -> action proceeds (with audit log entry)
 - AC-03.7.3: The hardcoded-never list includes rm -rf, git push --force, and history rewrite commands
   - verify: Inspect the denylist -> contains at minimum `rm -rf /`, `git push --force`, `git rebase` on protected branches
+- AC-03.7.4: Hardcoded-never patterns cannot be weakened via config file -- only the per-action flag overrides them
+  - verify: Add `hardcoded_never.disable = ["git push --force"]` to config.toml -> the pattern is STILL blocked (config cannot weaken the hardcoded layer, only the explicit runtime flag can)
 
 **REQ-03.8 — Reversibility principle governs all permission decisions**
 
@@ -255,6 +281,8 @@ These emerged from design review and govern all implementation decisions:
   - verify: At Tier 2 with default scope, file_read executes without prompt while file_write to the same path requires scope validation
 - AC-03.8.2: Irreversible actions require higher authorization than reversible ones
   - verify: Deleting a file (irreversible) requires explicit approval even at Tier 2; creating a new file (reversible) does not
+- AC-03.8.3: Tools are tagged with a reversibility level (read-only, reversible-write, irreversible) that the permission system uses for tier decisions
+  - verify: Inspect tool metadata -> file_read has reversibility="read-only", file_write has "reversible", shell has "variable"; at Tier 2, the scope checker uses these tags to apply different thresholds
 
 ### REQ-05: CLI Interface
 
@@ -335,6 +363,8 @@ These emerged from design review and govern all implementation decisions:
   - verify: Run a coding task with test suite -> agent runs tests after implementation; task status is `done` only if tests pass
 - AC-06.2.2: A task that fails verification is marked as failed, not done
   - verify: Agent implements code that fails its test suite -> task status is `failed` with verification failure details
+- AC-06.2.3: Verification failure details are included in the task's final status
+  - verify: Agent implementation fails tests -> `guild status <task_id>` shows not just "failed" but also includes the specific verification failure message (e.g., "3 tests failed: test_parse, test_validate, test_export")
 
 **REQ-06.3 — Stuck detection: recognize when no progress is being made**
 
@@ -349,6 +379,8 @@ These emerged from design review and govern all implementation decisions:
   - verify: Agent gets stuck on approach A -> agent logs "Trying alternative approach" and attempts approach B before involving the user
 - AC-06.4.2: The number of alternative attempts is bounded
   - verify: Agent fails approaches A, B, and C -> escalates to human after exhausting configured max retries (default 3)
+- AC-06.4.3: The recovery strategy is logged so the user can see what alternative was tried
+  - verify: Agent gets stuck and attempts recovery -> `guild logs <task_id>` includes an entry like "Stuck detected (Repeated identical error 3 times), attempting recovery" with the recovery prompt used
 
 **REQ-06.5 — Human escalation only as last resort, with full context**
 
@@ -370,6 +402,8 @@ These emerged from design review and govern all implementation decisions:
   - verify: Set `autonomy.timeout_hours = 1` -> agent pauses after 1 hour with a summary of what was accomplished
 - AC-06.7.2: Timeout of zero means no time limit
   - verify: Set `autonomy.timeout_hours = 0` -> agent runs indefinitely until task completion or budget exhaustion
+- AC-06.7.3: The progress report generated at timeout includes what was accomplished
+  - verify: Set `autonomy.timeout_hours = 1`, agent times out -> the pause message includes a summary like "Timeout reached. Completed: [list of actions]. In progress: [current step]."
 
 **REQ-06.8 — Simple core loop**
 
@@ -384,6 +418,8 @@ These emerged from design review and govern all implementation decisions:
   - verify: Call `run()` with "do step 1", then call `run()` again with "now do step 2" -> second run sees the full history from step 1
 - AC-06.9.2: Message history is available to `guild chat` across re-entries
   - verify: Start `guild chat`, send 3 messages, exit, re-enter `guild chat` for the same task -> history of all 3 prior messages is preserved
+- AC-06.9.3: The `send()` method preserves all prior context including tool results
+  - verify: Call `run("do step 1")` which produces tool calls and results, then call `send("now do step 2")` -> the messages sent to the LLM for step 2 include the tool call results from step 1, not just the assistant text
 
 **REQ-06.10 — Adversarial self-review after tests pass**
 
@@ -391,6 +427,8 @@ These emerged from design review and govern all implementation decisions:
   - verify: Agent completes implementation and tests pass -> agent generates at least one adversarial probe before declaring done
 - AC-06.10.2: Self-review findings are logged as decision entries
   - verify: Agent finds an issue during self-review -> `guild decisions <task_id>` shows the finding with "self-review" tag
+- AC-06.10.3: Self-review can be disabled per-task or globally via configuration
+  - verify: Set `agent.self_review = false` in config -> agent completes task without injecting the self-review prompt. Set `agent.self_review = true` -> self-review runs.
 
 **REQ-06.11 — Try-test-rollback for impactful decisions**
 
@@ -864,6 +902,15 @@ These emerged from design review and govern all implementation decisions:
 - AC-07.2.3: Resume from checkpoint skips already-completed work
   - verify: Checkpoint at turn 10, crash at turn 12, resume -> agent resumes from turn 10 (not turn 0 or turn 12)
 
+**REQ-07.3 — Shared knowledge base between team agents**
+
+- AC-07.3.1: Data written to SharedContext by one agent is readable by another agent
+  - verify: Agent A calls `shared.put("style", {"indent": 4})`, Agent B calls `shared.get("style")` -> returns `{"indent": 4}`
+- AC-07.3.2: Learnings stored by one agent's task are available to other agents
+  - verify: Agent A's task produces learning "always validate inputs" with confidence 0.7 -> Agent B queries learnings with `min_confidence=0.5` -> the learning is included
+- AC-07.3.3: SharedContext tracks which agent contributed each entry
+  - verify: Agent A writes key "k1", Agent B writes key "k2" -> `list_keys()` returns both; metadata identifies the contributing agent
+
 **REQ-07.4 — Multi-tier context compression**
 
 - AC-07.4.1: MicroCompact trims context without any API calls
@@ -872,6 +919,8 @@ These emerged from design review and govern all implementation decisions:
   - verify: Context still too large after MicroCompact -> AutoCompact calls the LLM to produce a condensed summary of older turns
 - AC-07.4.3: Critical state survives all compression tiers
   - verify: Run full compact on a 100-turn conversation -> the original task description and the last 5 turns remain intact in the compressed context
+- AC-07.4.4: The task description (user's original request) survives all compression tiers
+  - verify: Run a 100-turn conversation, trigger full compact -> the user's original task description from turn 1 remains intact in the compressed context (not just the system prompt)
 
 **REQ-07.5 — Skeptical memory: agent verifies memories against actual state before acting**
 
@@ -886,6 +935,17 @@ These emerged from design review and govern all implementation decisions:
   - verify: Inspect the loaded memory index after 50 tasks -> index is fewer than 200 lines of text
 - AC-07.6.2: Detailed notes are fetched only when the agent requests them
   - verify: Agent receives the index, asks for details on entry X -> detailed note for X is loaded from storage on demand
+
+**REQ-07.7 — Memory consolidation during idle time**
+
+- AC-07.7.1: Consolidation removes entries unverified for longer than the configured retention period
+  - verify: Memory entry created 35 days ago with no verification -> `consolidate()` removes it; a fresh entry remains
+- AC-07.7.2: Consolidation merges duplicate memory entries (same summary)
+  - verify: Two memory entries with identical summaries exist -> after `consolidate()`, only one remains
+- AC-07.7.3: Consolidation runs automatically during idle periods
+  - verify: Agent is idle for the configured consolidation interval -> consolidation runs without manual invocation; `guild learnings` reflects the cleaned state
+- AC-07.7.4: Consolidation returns a count of changes made
+  - verify: 2 stale entries removed and 1 duplicate merged -> `consolidate()` returns >= 3
 
 **REQ-07.8 — Context resets with structured handoff for very long tasks**
 
@@ -972,6 +1032,15 @@ These emerged from design review and govern all implementation decisions:
 - AC-09.6.2: Irrelevant learnings are not injected into unrelated tasks
   - verify: Learning scoped to "database" module -> task in "CLI" module does not receive it
 
+**REQ-09.7 — Block-level learning: learnings scoped to specific blocks**
+
+- AC-09.7.1: A learning can be stored with a `scope` tied to a specific block name
+  - verify: Add a learning with `scope="coder"` -> stored learning has `scope` field set to `"coder"`
+- AC-09.7.2: `list_learnings(scope="coder")` returns only learnings scoped to that block
+  - verify: Store learnings with scopes "coder", "reviewer", and None -> filtering by "coder" returns only the coder-scoped learning
+- AC-09.7.3: Unscoped learnings are available to all blocks
+  - verify: Store a learning with `scope=None` -> it is returned by `list_learnings()` regardless of scope filter
+
 **REQ-09.8 — Learning decay: old unvalidated learnings lose confidence**
 
 - AC-09.8.1: Unvalidated learnings lose confidence over time
@@ -1021,6 +1090,10 @@ These emerged from design review and govern all implementation decisions:
   - verify: Set `budget.max_tool_calls = 3` -> agent stops after exactly 3 tool calls with status `budget_exceeded`
 - AC-10.2.4: Budget can be set per-agent and per-task independently
   - verify: Set agent-level budget of 1000 tokens and task-level budget of 500 tokens -> task-level limit triggers first
+- AC-10.2.5: Before each LLM call, the agent loop checks remaining token budget; if exhausted, the loop exits immediately
+  - verify: Set `budget.max_tokens = 100`, run a task that would use 500 tokens -> agent exits after the first LLM call that pushes total above 100, not after the second
+- AC-10.2.6: A budget-exceeded task's status is persisted in storage as `budget_exceeded` and survives restart
+  - verify: Task stops due to budget -> restart Guild -> `guild status <task_id>` shows `budget_exceeded`
 
 **REQ-10.3 — Resource summary in CLI**
 
@@ -1046,6 +1119,8 @@ These emerged from design review and govern all implementation decisions:
   - verify: Use Ollama with no cost config -> `guild usage` shows `$0.00` for cost
 - AC-10.5.3: Cost estimation handles multiple providers in the same session
   - verify: Task uses local model then escalates to cloud model -> cost reflects only the cloud model's token usage at cloud pricing
+- AC-10.5.4: Custom per-token pricing can be set via config and overrides the built-in cost table
+  - verify: Set `provider.cost_per_1k_input = 0.05` in config -> `guild usage` uses the custom rate, not the built-in default
 
 ### REQ-11: Observability & Debugging
 
@@ -1069,6 +1144,8 @@ These emerged from design review and govern all implementation decisions:
   - verify: Run a task that calls 2 tools -> trace entries include tool name, input arguments, output result, and duration for each call
 - AC-11.1.3: Decision points are recorded with rationale
   - verify: Run a task where the agent chooses between approaches -> trace contains a decision entry with alternatives considered and reason for selection
+- AC-11.1.4: Trace events are persisted to SQLite on every turn boundary, not just held in memory
+  - verify: Kill the agent process after 5 turns -> query SQLite trace table -> all 5 turns' trace events are present
 
 **REQ-11.2 — Session replay from logs**
 
@@ -1078,6 +1155,8 @@ These emerged from design review and govern all implementation decisions:
   - verify: Replay a session that used file_read -> replay output shows the file path requested and the content returned
 - AC-11.2.3: Replay of a non-existent session produces a clear error
   - verify: Run `guild replay nonexistent-id` -> error message says "No session found with ID nonexistent-id"
+- AC-11.2.4: Each replayed message includes its timestamp in the display output
+  - verify: Replay a session -> each line includes an ISO timestamp before the role marker
 
 **REQ-11.3 — Structured logging with configurable levels**
 
@@ -1094,6 +1173,8 @@ These emerged from design review and govern all implementation decisions:
   - verify: Kill the agent process mid-task -> run `guild resume <task_id>` -> agent continues from the last completed turn, not from the beginning
 - AC-11.4.2: Resume detects and reports the crash reason if available
   - verify: Kill agent with SIGKILL -> `guild resume <task_id>` outputs "Recovering from interrupted state" with the last known turn number
+- AC-11.4.3: When `daemon.auto_recovery = true`, a crashed agent loop is automatically restarted from the last checkpoint
+  - verify: Enable auto_recovery, kill the agent loop (not the daemon) -> daemon detects the crash and resumes the agent automatically within one supervisor poll interval
 
 **REQ-11.5 — Log export in standard formats (JSON, OpenTelemetry)**
 
@@ -1126,6 +1207,8 @@ These emerged from design review and govern all implementation decisions:
   - verify: Create a task spec with description only (no acceptance_criteria) -> task runs with a warning "No acceptance criteria defined; self-verification skipped"
 - AC-12.1.3: Malformed task spec is rejected at load time
   - verify: Create a YAML file with invalid structure (missing `description`) -> `guild task --spec bad.yaml` fails with a validation error naming the missing field
+- AC-12.1.4: When a task has no acceptance_criteria, a log warning "No acceptance criteria defined; self-verification skipped" is emitted before the agent begins work
+  - verify: Create a task spec with description only (no acceptance_criteria) -> task runs with a warning "No acceptance criteria defined; self-verification skipped" in the log output
 
 **REQ-12.2 — Verification step execution -- run tests, check files, validate output**
 
@@ -1543,6 +1626,42 @@ These emerged from design review and govern all implementation decisions:
 | REQ-08.10 | Tool behavioral properties: `isConcurrencySafe`, `isReadOnly` | Enables optimization |
 | REQ-08.11 | Tool result caching (optional, per-tool) | Avoid redundant expensive calls |
 
+#### Acceptance Criteria (REQ-08.8 through REQ-08.11)
+
+**REQ-08.8 — MCP-native tool interface**
+
+- AC-08.8.1: `ToolPlugin.to_mcp_schema()` returns a dict with `name`, `description`, and `inputSchema` fields matching the MCP tool schema specification
+  - verify: Create a ToolPlugin and call `to_mcp_schema()` -> returned dict has exactly `name`, `description`, `inputSchema` keys, and `inputSchema.type` is `"object"`
+- AC-08.8.2: External MCP servers can be connected and their tools listed
+  - verify: Configure an MCP server, connect via `MCPClient` -> `list_tools()` returns `MCPTool` instances with name, description, and input_schema populated from the server response
+- AC-08.8.3: MCP tool calls are forwarded to the server and results returned
+  - verify: Call `MCPClient.call_tool("tool_name", {"arg": "val"})` -> returns the result dict from the MCP server's JSON-RPC response
+
+**REQ-08.9 — Plugin-based tool loading: file-per-tool or directory-per-tool**
+
+- AC-08.9.1: Plugin `.toml` files in configured directories are auto-discovered on startup
+  - verify: Place two `.toml` plugin files in the plugin directory -> `PluginLoader.discover()` returns both plugins with correct names and descriptions
+- AC-08.9.2: Each plugin file defines a single tool with name, description, and parameters
+  - verify: Load a `.toml` plugin -> resulting `ToolPlugin` has non-empty `name`, `description`, and `parameters` fields parsed from the file
+- AC-08.9.3: Malformed or missing plugin files are skipped with a warning, not a crash
+  - verify: Place an invalid `.toml` file alongside valid ones -> `discover()` returns only valid plugins; a warning is logged for the invalid file
+
+**REQ-08.10 — Tool behavioral properties: `isConcurrencySafe`, `isReadOnly`**
+
+- AC-08.10.1: Each tool plugin declares `is_read_only` and `is_concurrency_safe` behavioral properties
+  - verify: Load a plugin with `is_read_only = true` -> `ToolProperties.is_read_only` is `True`. Default for `is_concurrency_safe` is `True`
+- AC-08.10.2: Behavioral properties are preserved through plugin loading
+  - verify: Create a `.toml` plugin with `is_read_only = true` and `is_concurrency_safe = false` -> loaded `ToolPlugin.properties` reflects both settings accurately
+
+**REQ-08.11 — Tool result caching (optional, per-tool)**
+
+- AC-08.11.1: A tool marked `cacheable = true` has its results cached after the first call
+  - verify: Call a cacheable tool with the same args twice -> second call returns the cached result without re-executing
+- AC-08.11.2: Cached results expire after the configured TTL
+  - verify: Set `cache_ttl_seconds = 1`, call the tool, wait 1.1 seconds, call again -> second call re-executes (cache miss)
+- AC-08.11.3: Cache respects max size and evicts the oldest entries
+  - verify: Set `max_size = 3`, cache 5 results -> only the 3 most recent are retrievable; the oldest 2 return cache miss
+
 ### REQ-20: Rate Limiting & Backpressure
 
 **Goal:** Prevent resource exhaustion when running many agents.
@@ -1634,6 +1753,8 @@ These emerged from design review and govern all implementation decisions:
   - verify: Configure a worker that spawns a sub-worker for a subtask -> sub-worker executes and returns results to the spawning worker
 - AC-04.3.2: Spawning an orchestrator as a sub-agent does not deadlock
   - verify: Entry agent spawns a sub-orchestrator which spawns its own workers -> all agents complete without hanging
+- AC-04.3.3: Spawn depth is bounded to prevent infinite recursion (agent spawns agent spawns agent...)
+  - verify: Set `guild.max_spawn_depth = 3` -> agent at depth 3 attempts to spawn -> spawn is rejected with "Maximum spawn depth (3) exceeded" rather than recursing indefinitely
 
 **REQ-04.4 — Agent spawning is just another tool call**
 
@@ -1648,6 +1769,10 @@ These emerged from design review and govern all implementation decisions:
   - verify: Load the "coder" block -> it has file_write and shell tools and role "coder"
 - AC-04.5.2: A worker block runs independently within a team
   - verify: Run a single-worker team -> worker produces output matching the task description
+- AC-04.5.3: Worker block rejects tasks outside its role scope
+  - verify: Send a "write documentation" task to a coder block with no writer tools -> worker returns an error or refuses gracefully rather than producing garbage output
+- AC-04.5.4: Worker block output conforms to its declared output port type
+  - verify: Run a coder block -> output is tagged as "code-changes" type and passes validate_port_data for that type
 
 **REQ-04.6 — MCP for agent-to-tool communication**
 
@@ -1655,6 +1780,12 @@ These emerged from design review and govern all implementation decisions:
   - verify: Create MCPClient with a server config -> config attributes (name, command) are preserved
 - AC-04.6.2: Calling a tool on an unconnected MCP client raises MCPError
   - verify: Call call_tool on an unconnected MCPClient -> raises MCPError with "Not connected"
+- AC-04.6.3: MCPClient can list tools from a connected server
+  - verify: Connect MCPClient to a running MCP server -> list_tools() returns a non-empty list of MCPTool objects with name, description, and input_schema
+- AC-04.6.4: MCPClient handles server crash during tool call
+  - verify: Kill the MCP server subprocess mid-call -> call_tool() raises MCPError (not a generic exception or hang)
+- AC-04.6.5: MCP tool results are integrated into the agent loop as standard ToolResults
+  - verify: Agent calls an MCP-provided tool -> the result appears in the agent message history in the same format as built-in tool results
 
 **REQ-04.7 — Simple internal message bus for agent-to-agent communication**
 
@@ -1664,6 +1795,12 @@ These emerged from design review and govern all implementation decisions:
   - verify: Send to `agent_id="nonexistent"` -> returns an error "Agent not found" without crashing
 - AC-04.7.3: Message data is JSON-serializable
   - verify: Send a message containing a dict with nested structures -> received message is identical after serialization round-trip
+- AC-04.7.4: Bus supports broadcast to all agents
+  - verify: Agent A broadcasts on port "status" -> all other registered agents (B, C) receive the message; Agent A does not receive its own broadcast
+- AC-04.7.5: Message ordering is preserved per-agent queue (FIFO)
+  - verify: Send messages M1, M2, M3 to Agent B -> receive() returns M1 first, then M2, then M3
+- AC-04.7.6: Bus message log captures all messages for audit/replay
+  - verify: Send 5 messages through the bus -> get_log() returns all 5 messages with source, target, port, data, and timestamp
 
 **REQ-04.7a — A2A as optional external gateway**
 
@@ -1673,6 +1810,10 @@ These emerged from design review and govern all implementation decisions:
   - verify: POST `/a2a` with tasks/send, tasks/get, tasks/cancel -> each returns correct JSON-RPC result
 - AC-04.7a.3: Unknown A2A methods return JSON-RPC method-not-found error
   - verify: POST `/a2a` with method "invalid/method" -> response contains error code -32601
+- AC-04.7a.4: A2A endpoint returns proper JSON-RPC error for missing params
+  - verify: POST /a2a with method "tasks/send" but no "message" param -> response contains error code -32602 with "Invalid params" message
+- AC-04.7a.5: A2A gateway is optional and does not block startup when fastapi is not installed
+  - verify: Uninstall fastapi, start Guild -> Guild starts normally; only `guild serve` reports that fastapi is required
 
 **REQ-04.8 — Skills support: agents can have pluggable skill definitions**
 
@@ -1684,6 +1825,10 @@ These emerged from design review and govern all implementation decisions:
   - verify: Place 2 .md files in a directory -> SkillRegistry.load_from_dir returns count of 2
 - AC-04.8.4: format_for_prompt injects selected skill content into the prompt
   - verify: Register 2 skills and call format_for_prompt with both -> returned string contains both skill contents
+- AC-04.8.5: Skill with invalid frontmatter is skipped with a warning, not crash
+  - verify: Place a .md file with malformed YAML frontmatter in skills dir -> SkillRegistry.load_from_dir skips it, logs a debug message, and loads remaining valid skills
+- AC-04.8.6: Duplicate skill names in different files result in last-loaded winning
+  - verify: Place two .md files defining skill "deploy" -> SkillRegistry contains exactly one "deploy" skill (the one loaded last alphabetically)
 
 **REQ-04.9 — Agent lifecycle management: spawn, monitor, pause, resume, kill**
 
@@ -1691,6 +1836,12 @@ These emerged from design review and govern all implementation decisions:
   - verify: Spawn an agent, pause it, resume it, then kill it -> each operation succeeds with correct state transitions
 - AC-04.9.2: Killing a parent agent also stops its child agents
   - verify: Kill an orchestrator with 2 running workers -> both workers are stopped within the graceful shutdown timeout
+- AC-04.9.3: Agent status transitions follow valid state machine (SPAWNED -> RUNNING -> COMPLETED/FAILED/KILLED)
+  - verify: Spawn an agent -> status transitions are SPAWNED then RUNNING then COMPLETED; no invalid transitions like COMPLETED -> RUNNING
+- AC-04.9.4: Pausing and resuming an agent preserves its message history
+  - verify: Agent is at turn 5, pause it -> status is PAUSED; resume it -> agent continues from turn 5 with all prior messages intact
+- AC-04.9.5: Monitoring returns current status for all agents in a team
+  - verify: Run a team with 3 blocks -> agent_statuses property returns all 3 with their current AgentStatus values
 
 **REQ-04.10 — Shared context/workspace between team members**
 
@@ -1700,6 +1851,10 @@ These emerged from design review and govern all implementation decisions:
   - verify: Store 2 keys -> list_keys returns both keys
 - AC-04.10.3: Accessing a non-existent key returns None
   - verify: SharedContext.get on a missing key -> returns None
+- AC-04.10.4: Concurrent writes to the same key use last-writer-wins semantics
+  - verify: Agent A writes key "plan" with value X, then Agent B writes key "plan" with value Y -> SharedContext.get("plan") returns Y
+- AC-04.10.5: Shared context data survives for the duration of the team run
+  - verify: Agent A stores data in turn 1 of team execution -> Agent C (executing in a later topological step) retrieves the same data
 
 **REQ-04.11 — Dynamic worker spawning**
 
@@ -1707,6 +1862,10 @@ These emerged from design review and govern all implementation decisions:
   - verify: Spawn 5 agents from one spawner -> all 5 are tracked in active_agents
 - AC-04.11.2: Auto-generated agent IDs are unique across spawns
   - verify: Spawn 2 agents without explicit IDs -> active_agents contains 2 distinct IDs
+- AC-04.11.3: Spawned agent respects max_turns limit
+  - verify: Spawn a sub-agent with SUB_AGENT_MAX_TURNS=30 and give it a task requiring many turns -> agent stops at turn 30 and returns partial result
+- AC-04.11.4: Spawning with an explicit agent_id uses that ID
+  - verify: Call spawn(task="...", agent_id="custom-worker") -> active_agents contains "custom-worker" (not an auto-generated UUID)
 
 **REQ-04.12 — Git worktrees as isolation model**
 
@@ -1716,6 +1875,12 @@ These emerged from design review and govern all implementation decisions:
   - verify: Worker finishes and merges -> the worktree directory is removed via `git worktree remove`
 - AC-04.12.3: Parallel workers can modify the same file without conflicts during work
   - verify: Two workers edit the same file in their respective worktrees -> no file lock errors during parallel execution
+- AC-04.12.4: Worktree creation fails gracefully when not in a git repository
+  - verify: Run WorktreeManager.create() in a non-git directory -> raises RuntimeError with a clear message, not a cryptic git error
+- AC-04.12.5: Worktree branch naming follows guild/<task_id> convention
+  - verify: Create worktree for task "abc-123" -> branch name is "guild/abc-123" and worktree path is .guild/worktrees/abc-123/
+- AC-04.12.6: list_active() returns only Guild-managed worktrees, not user worktrees
+  - verify: User has pre-existing worktrees on branches "feature/foo" -> list_active() does not include them; only guild/* branches appear
 
 **REQ-04.14 — Staging area: shared branch agents can merge to without user approval**
 
@@ -1723,6 +1888,10 @@ These emerged from design review and govern all implementation decisions:
   - verify: Worker completes a subtask -> auto-merges to staging branch without prompting the user
 - AC-04.14.2: Merge to main/release requires explicit user approval
   - verify: Attempt to merge staging into main -> Guild prompts "Approve merge to protected branch main? [yes/no]"
+- AC-04.14.3: Merge conflict to staging is detected and reported cleanly
+  - verify: Two workers modify the same file differently, both try to merge to staging -> second merge fails with "Merge conflict" message; staging branch is not left in a dirty state (merge is aborted)
+- AC-04.14.4: Staging branch is auto-created if it does not exist
+  - verify: Fresh repository with no guild/staging branch -> first merge_to_staging() call creates the branch and its worktree automatically
 
 **REQ-04.13 — Branching strategy: agents merge freely to staging; main is gated**
 
@@ -1732,6 +1901,10 @@ These emerged from design review and govern all implementation decisions:
   - verify: BranchPolicy.can_auto_merge("guild/staging") -> returns True
 - AC-04.13.3: Auto-merge to main is blocked
   - verify: BranchPolicy.can_auto_merge("main") -> returns False
+- AC-04.13.4: Custom protected branches are respected
+  - verify: BranchPolicy(protected_branches=["main", "release", "production"]) -> is_protected("production") returns True
+- AC-04.13.5: Non-protected, non-staging branches follow auto_merge_on_tests_pass setting
+  - verify: BranchPolicy(auto_merge_on_tests_pass=False) -> can_auto_merge("feature/x") returns False; with auto_merge_on_tests_pass=True -> returns True
 
 **REQ-04.15 — Merge policy configurable per project**
 
@@ -1741,6 +1914,10 @@ These emerged from design review and govern all implementation decisions:
   - verify: BranchPolicy(merge_approval=MergeApproval.REVIEW) -> merge_approval is REVIEW
 - AC-04.15.3: Protected branches are configurable
   - verify: BranchPolicy(protected_branches=["main", "release"]) -> is_protected("release") is True, is_protected("master") is False
+- AC-04.15.4: Default merge policy is STAGING mode
+  - verify: BranchPolicy() with no arguments -> merge_approval is MergeApproval.STAGING
+- AC-04.15.5: delete_branch_after_merge setting controls post-merge cleanup
+  - verify: BranchPolicy(delete_branch_after_merge=True) -> after successful merge, task branch is deleted; with False -> branch is retained
 
 **REQ-04.20 — Atomic blocks: single-agent building blocks with defined inputs/outputs/role**
 
@@ -1748,6 +1925,10 @@ These emerged from design review and govern all implementation decisions:
   - verify: Load the "coder" block -> it has `spec: plan` input port, `changes: code-changes` output port, and role "coder"
 - AC-04.20.2: An atomic block rejects input that does not match its port type
   - verify: Send `text`-typed data to the "coder" block's `spec` port (which expects `plan`) -> type mismatch error
+- AC-04.20.3: All 6+ built-in atomic blocks (planner, coder, reviewer, tester, evaluator, researcher) conform to the spec in 4C
+  - verify: Each built-in block's input/output port names and type tags match the table in section 4C of REQUIREMENTS.md
+- AC-04.20.4: Atomic block has a configurable max_retries with default 1
+  - verify: BlockDef() with no max_retries -> max_retries is 1; BlockDef(max_retries=3) -> max_retries is 3
 
 **REQ-04.21 — Composite blocks: groups of connected blocks saved as a reusable unit**
 
@@ -1755,6 +1936,10 @@ These emerged from design review and govern all implementation decisions:
   - verify: Load "verified-coder" composite -> it runs coder then evaluator internally and returns a single result
 - AC-04.21.2: Composite block definition is saveable and reloadable
   - verify: Create a composite block from coder + reviewer, save it -> reload and execute with identical behavior
+- AC-04.21.3: Composite block validates that all internal connections are valid before execution
+  - verify: Create a composite block with a connection to a nonexistent port -> validate_team returns error listing the bad port
+- AC-04.21.4: Composite block exposes unconnected inner ports as its external interface
+  - verify: Create a coder->evaluator composite where coder.spec is unconnected -> get_composite_ports returns spec as an exposed input
 
 **REQ-04.22 — Block connectors: defined input/output ports**
 
@@ -1762,6 +1947,10 @@ These emerged from design review and govern all implementation decisions:
   - verify: Create a Connection -> source_block, source_port, target_block, target_port are all accessible
 - AC-04.22.2: Validation catches connections to nonexistent ports
   - verify: validate_team with a connection referencing "nonexistent" port -> errors list contains the port name
+- AC-04.22.3: Connection between blocks in different teams is rejected
+  - verify: Create a connection referencing a source_block not in the team -> validate_team returns "not in team" error
+- AC-04.22.4: A block can have multiple input ports and multiple output ports
+  - verify: Define a block with 2 inputs and 2 outputs -> all 4 ports are accessible and can be independently connected
 
 **REQ-04.23 — Block library: local catalog of available blocks**
 
@@ -1769,6 +1958,10 @@ These emerged from design review and govern all implementation decisions:
   - verify: BlockRegistry().list_blocks() -> names include all 6 built-in blocks
 - AC-04.23.2: Users can register custom blocks
   - verify: Register a custom BlockDef -> get_block returns it
+- AC-04.23.3: list_blocks() returns blocks sorted or consistently ordered
+  - verify: Register 3 custom blocks + 6 built-ins -> list_blocks() returns a stable list (not random order across calls)
+- AC-04.23.4: Registering a block with the same name as a built-in overwrites it
+  - verify: Register a custom "coder" block with different tools -> get_block("coder") returns the custom definition, not the built-in
 
 **REQ-04.24 — CLI team composer: text-based composition via config files**
 
@@ -1776,11 +1969,19 @@ These emerged from design review and govern all implementation decisions:
   - verify: Write a team TOML file -> BlockRegistry.load_from_dir loads it and get_team returns the team
 - AC-04.24.2: BlockRegistry loads custom blocks from TOML files
   - verify: Write a block TOML file -> BlockRegistry.load_from_dir loads it and get_block returns the block with correct attributes
+- AC-04.24.3: Invalid TOML team file is skipped with a log message, not a crash
+  - verify: Place a syntactically invalid TOML file in the blocks dir -> load_from_dir logs a debug message and returns count excluding the bad file
+- AC-04.24.4: Team TOML file supports loop definitions
+  - verify: Write a TOML file with [team.loops] containing generator_block and evaluator_block -> loaded team has loops list with correct entries
 
 **REQ-04.25 — Nesting: composite blocks can contain other composites**
 
 - AC-04.25.1: A team can reference blocks that are themselves composite team names
   - verify: Register an inner composite, create an outer team referencing it -> validate_team returns no errors
+- AC-04.25.2: Deeply nested composite (3+ levels) validates without errors
+  - verify: Register inner composite "code-review", register middle composite "verified-code" containing it, register outer team containing "verified-code" -> validate_team returns no errors
+- AC-04.25.3: Nested composite block execution runs all inner blocks
+  - verify: Execute a team containing a composite that itself contains 2 blocks -> all inner blocks produce output and the composite returns a final result
 
 **REQ-04.26 — Block versioning**
 
@@ -1797,6 +1998,10 @@ These emerged from design review and govern all implementation decisions:
   - verify: Create a TeamDef with a LoopDef -> team.loops has 1 entry with correct max_iterations
 - AC-04.27.2: Validation does not reject teams with loops
   - verify: validate_team on a team with LoopDef -> errors list is empty
+- AC-04.27.3: Loop edges are excluded from topological sort to prevent cycle detection failure
+  - verify: Create a team with a coder->evaluator->coder loop -> _execution_order() returns a valid order without raising a cycle error
+- AC-04.27.4: A team can have multiple independent loops
+  - verify: Define a team with two LoopDef entries (loop A: coder->evaluator, loop B: writer->reviewer) -> validate_team returns no errors and both loops are in team.loops
 
 **REQ-04.30 — Every port has a type tag and optional JSON schema**
 
@@ -1804,6 +2009,10 @@ These emerged from design review and govern all implementation decisions:
   - verify: PORT_TYPES contains all 6 expected type tags
 - AC-04.30.2: A port type can have an associated JSON schema
   - verify: register_port_type with json_schema -> PORT_TYPE_REGISTRY entry has the schema
+- AC-04.30.3: Built-in PORT_TYPES includes "files" type tag (used by coder block context port)
+  - verify: PORT_TYPES set -> contains "files" in addition to plan, code-changes, review, test-results, text, any
+- AC-04.30.4: Port with no schema accepts any JSON-serializable data
+  - verify: register_port_type("custom-type") with no json_schema -> validate_port_data with any dict returns (True, "")
 
 **REQ-04.31 — Port compatibility checked at composition time**
 
@@ -2015,6 +2224,39 @@ These emerged from design review and govern all implementation decisions:
 - AC-05.4.2: POST /api/tasks creates a task and GET /api/tasks lists tasks
   - verify: POST /api/tasks with description -> 200; GET /api/tasks -> list contains at least 1 task
 
+#### Acceptance Criteria (REQ-05.5 through REQ-05.7)
+
+**REQ-05.5 — GUI: web-based localhost real-time monitoring and interaction**
+
+- AC-05.5.1: `guild serve` starts a web server on localhost serving the dashboard
+  - verify: Run `guild serve` -> HTTP server starts on localhost; GET / returns the dashboard HTML page
+- AC-05.5.2: Dashboard displays a task list with current status
+  - verify: Create 2 tasks, load the dashboard -> task list shows both tasks with their status (running, done, etc.)
+- AC-05.5.3: Real-time updates arrive via WebSocket
+  - verify: Connect a WebSocket client to /ws -> status updates are pushed to the client within 2 seconds of a state change
+
+**REQ-05.6 — Visual team composer: drag-and-drop block editor**
+
+- AC-05.6.1: Blocks are draggable onto a canvas
+  - verify: Open the team composer page -> drag a "coder" block from the library onto the canvas -> block appears at the drop position
+- AC-05.6.2: Connections can be drawn between block ports
+  - verify: Place coder and reviewer blocks on canvas -> drag from coder's output port to reviewer's input port -> connection line appears
+- AC-05.6.3: Saving the composition produces a valid TOML team file
+  - verify: Compose a team of planner->coder->reviewer, click Save -> .guild/teams/<name>.toml is created and passes validate_team
+
+**REQ-05.7 — GUI shows agent communication graph / message flow**
+
+- AC-05.7.1: The messages page renders an interactive graph canvas showing agent nodes and communication edges
+  - verify: Navigate to `/messages` in the GUI -> a flow canvas is visible with controls and minimap
+- AC-05.7.2: Agent nodes appear dynamically as agents communicate
+  - verify: Two agents exchange a message -> both agents appear as nodes on the graph within 2 seconds
+- AC-05.7.3: Edges between agents show message count and animate on new messages
+  - verify: Agent A sends 3 messages to Agent B -> edge label shows "3 msgs" and animates briefly on each new message
+- AC-05.7.4: Clicking an edge displays message details in a side panel
+  - verify: Click the edge between Agent A and Agent B -> a side panel opens showing the messages exchanged between them with timestamps and content
+- AC-05.7.5: The graph displays a placeholder when no agents are communicating
+  - verify: Load the messages page with no active agents -> a "Waiting for agent messages..." placeholder is displayed
+
 ### REQ-18: Artifact Management
 
 | ID | Requirement | Notes |
@@ -2209,6 +2451,17 @@ These emerged from design review and govern all implementation decisions:
 | ID | Requirement | Notes |
 |----|-------------|-------|
 | REQ-04.24a | Drag-and-drop blocks, connect them, save as team config | Node-RED / Unreal Blueprints style |
+
+#### Acceptance Criteria (REQ-04.24a)
+
+**REQ-04.24a — Visual Team Composer: drag-and-drop blocks, connect them, save as team config**
+
+- AC-04.24a.1: Visual composer saves team configuration via POST /api/teams
+  - verify: POST /api/teams with name, blocks, and connections -> returns 200 with status "ok"; team TOML file is written to .guild/teams/<name>.toml
+- AC-04.24a.2: Saved team composition is loadable by the CLI team runner
+  - verify: Save a team via the GUI API -> `guild task --team <name>` loads the team and validates it without errors
+- AC-04.24a.3: POST /api/teams with missing name returns 400 error
+  - verify: POST /api/teams with empty name -> returns 400 with detail "Team name is required"
 
 ---
 
