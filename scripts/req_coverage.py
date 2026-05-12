@@ -37,6 +37,7 @@ TESTS_DIR = PROJECT_ROOT / "tests"
 
 REQ_ID_PATTERN = re.compile(r"\bREQ-(\d+\.\d+[a-z]?)\b")
 TIER_HEADING_PATTERN = re.compile(r"^##\s+P(\d)\s")
+AC_ID_PATTERN = re.compile(r"^- (AC-(\d+\.\d+[a-z]?)\.(\d+)):")
 
 
 # ---------------------------------------------------------------------------
@@ -77,6 +78,25 @@ def parse_requirements(path: Path) -> dict[str, dict[str, str]]:
                         break
 
     return dict(tiers)
+
+
+def parse_acceptance_criteria(path: Path) -> dict[str, list[str]]:
+    """Parse REQUIREMENTS.md and return {req_id: [ac_ids]}.
+
+    Each AC ID like AC-01.2.3 maps to its parent requirement REQ-01.2.
+    """
+    ac_by_req: dict[str, list[str]] = defaultdict(list)
+
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            match = AC_ID_PATTERN.match(line.strip())
+            if match:
+                ac_id = match.group(1)       # e.g. "AC-01.2.3"
+                req_suffix = match.group(2)  # e.g. "01.2"
+                req_id = f"REQ-{req_suffix}"
+                ac_by_req[req_id].append(ac_id)
+
+    return dict(ac_by_req)
 
 
 # ---------------------------------------------------------------------------
@@ -315,8 +335,12 @@ def generate_report(
     tiers: dict[str, dict[str, str]],
     e2e_coverage: dict[str, list[str]],
     unit_coverage: dict[str, list[str]],
+    ac_by_req: dict[str, list[str]] | None = None,
 ) -> str:
     """Generate the full RTM report as a string."""
+    if ac_by_req is None:
+        ac_by_req = {}
+
     lines: list[str] = []
     lines.append("=== Requirements Traceability Matrix ===")
     lines.append("")
@@ -341,6 +365,14 @@ def generate_report(
     lines.append(
         f"Unit Coverage: {unit_covered_total}/{total_reqs} requirements "
         f"(supplementary -- informational only)"
+    )
+
+    # --- AC completeness summary ---
+    total_acs = sum(len(acs) for acs in ac_by_req.values())
+    reqs_with_acs = len(ac_by_req)
+    lines.append(
+        f"AC Completeness: {total_acs} ACs defined across "
+        f"{reqs_with_acs} requirements"
     )
     lines.append("")
 
@@ -427,6 +459,51 @@ def generate_report(
                     lines.append(f"  {test}")
             lines.append("")
 
+    # --- AC-level report (informational) ---
+    if ac_by_req:
+        lines.append("--- Acceptance Criteria Summary (informational) ---")
+        lines.append(
+            f"Total ACs: {total_acs} across {reqs_with_acs} requirements"
+        )
+
+        # Count ACs whose parent requirement has at least one E2E test
+        acs_with_e2e = sum(
+            len(acs) for req_id, acs in ac_by_req.items()
+            if req_id in e2e_coverage and len(e2e_coverage[req_id]) > 0
+        )
+        lines.append(
+            f"ACs under E2E-covered requirements: {acs_with_e2e}/{total_acs} "
+            f"(parent requirement has >= 1 E2E test)"
+        )
+
+        # Flag requirements that have ACs but no E2E test at all
+        reqs_with_acs_no_e2e = sorted(
+            [
+                (req_id, ac_by_req[req_id])
+                for req_id in ac_by_req
+                if req_id not in e2e_coverage or len(e2e_coverage.get(req_id, [])) == 0
+            ],
+            key=lambda x: _sort_req_id(x[0]),
+        )
+        if reqs_with_acs_no_e2e:
+            lines.append(
+                f"Requirements with ACs but NO E2E test: "
+                f"{len(reqs_with_acs_no_e2e)}"
+            )
+            for req_id, acs in reqs_with_acs_no_e2e:
+                lines.append(f"  {req_id} ({len(acs)} ACs)")
+        else:
+            lines.append(
+                "All requirements with ACs have at least one E2E test."
+            )
+
+        lines.append("")
+        lines.append(
+            "Note: AC-to-test-assertion mapping is not yet automated. "
+            "The above tracks requirement-level coverage only."
+        )
+        lines.append("")
+
     return "\n".join(lines)
 
 
@@ -446,9 +523,10 @@ def main() -> int:
         return 1
 
     tiers = parse_requirements(REQUIREMENTS_FILE)
+    ac_by_req = parse_acceptance_criteria(REQUIREMENTS_FILE)
     e2e_coverage, unit_coverage = scan_all_tests(TESTS_DIR)
 
-    report = generate_report(tiers, e2e_coverage, unit_coverage)
+    report = generate_report(tiers, e2e_coverage, unit_coverage, ac_by_req)
     print(report)
 
     # Check P0 E2E coverage for exit code
