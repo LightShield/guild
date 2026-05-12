@@ -405,10 +405,44 @@ class TeamRunner:
         return EvaluatorResult(passed=passed, score=score, feedback=output)
 
     async def _invoke_agent(self, block_def: BlockDef, input_data: str) -> str:
-        """Invoke an AgentLoop for a block definition."""
+        """Invoke an agent for a block, using full task infrastructure."""
+        import uuid
+
+        from guild.agent.learning import format_learnings_for_injection
+        from guild.config.constants import MIN_INJECTION_CONFIDENCE
         from guild.tools.registry import build_tool_executors
 
         tool_executors = build_tool_executors() if block_def.tools else {}
+
+        # Create a task record for this block execution
+        task_id = str(uuid.uuid4())
+        agent_id = f"{block_def.name}-{task_id[:8]}"
+
+        if self._storage:
+            await self._storage.create_task(
+                task_id, f"[{block_def.name}] {input_data[:100]}"
+            )
+            await self._storage.register_agent(agent_id, block_def.name)
+            await self._storage.update_task(
+                task_id, assigned_agent=agent_id, status="running"
+            )
+            await self._storage.log_audit(
+                "task_created",
+                agent_id=agent_id,
+                details=f"block={block_def.name}",
+            )
+
+        # Build system prompt with learnings (like run_task does)
+        system_prompt = block_def.system_prompt
+        if self._storage:
+            learnings = await self._storage.list_learnings(
+                min_confidence=MIN_INJECTION_CONFIDENCE
+            )
+            injection = format_learnings_for_injection(learnings)
+            if injection:
+                system_prompt = f"{system_prompt}\n\n{injection}"
+
+        # Run the agent loop
         loop = AgentLoop(
             provider=self._provider,
             tool_executors=tool_executors,
@@ -416,8 +450,25 @@ class TeamRunner:
             max_turns=SUB_AGENT_MAX_TURNS,
         )
         result = await loop.run(
-            system_prompt=block_def.system_prompt,
+            system_prompt=system_prompt,
             user_input=input_data,
             self_review=block_def.role == "reviewer",
         )
+
+        # Persist results (like run_task does)
+        if self._storage:
+            for msg in loop.messages:
+                if msg.role in ("user", "assistant"):
+                    await self._storage.append_message(
+                        agent_id, msg.role, msg.content
+                    )
+            await self._storage.update_task(
+                task_id, status="completed", result=result[:500]
+            )
+            await self._storage.log_audit(
+                "task_completed",
+                agent_id=agent_id,
+                details=f"block={block_def.name}",
+            )
+
         return result

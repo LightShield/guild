@@ -228,3 +228,87 @@ class TestAgentLoopWithRealStorage:
         assert "task_created" in actions
         assert "agent_assigned" in actions
         assert "task_completed" in actions
+
+
+@pytest.mark.req("REQ-04.9")
+@pytest.mark.req("REQ-06.6")
+class TestTeamExecutionPersistsToStorage:
+    """Team execution creates proper tasks, agents, messages in storage."""
+
+    async def test_team_run_creates_subtasks_in_storage(
+        self, store: Storage, working_dir: str
+    ) -> None:
+        """Each block in a team run creates a task record in storage."""
+        from guild.blocks.definition import BlockDef, Connection, TeamDef
+        from guild.blocks.registry import BlockRegistry
+        from guild.orchestration.team_runner import TeamRunner
+        from guild.provider.base import LLMResponse
+
+        # Create a simple 2-block team
+        planner_block = BlockDef(
+            name="planner",
+            role="planner",
+            system_prompt="You are a planner. Output a plan.",
+            tools=[],
+        )
+        coder_block = BlockDef(
+            name="coder",
+            role="coder",
+            system_prompt="You are a coder. Implement the plan.",
+            tools=["file_write", "shell"],
+        )
+
+        registry = BlockRegistry()
+        registry._blocks = {"planner": planner_block, "coder": coder_block}
+        registry._teams = {
+            "dev": TeamDef(
+                name="dev",
+                blocks={"plan": "planner", "code": "coder"},
+                connections=[
+                    Connection(
+                        source_block="plan",
+                        source_port="output",
+                        target_block="code",
+                        target_port="input",
+                    ),
+                ],
+                entry_block="plan",
+            )
+        }
+
+        provider = AsyncMock()
+        provider.generate = AsyncMock(
+            return_value=LLMResponse(
+                content="Done with this step.",
+                tool_calls=None,
+                input_tokens=50,
+                output_tokens=20,
+                model="mock",
+            ),
+        )
+
+        runner = TeamRunner(
+            team=registry.get_team("dev"),
+            registry=registry,
+            provider=provider,
+            storage=store,
+            working_dir=working_dir,
+        )
+        await runner.run("Build a hello world app")
+
+        # Verify tasks were created in storage
+        tasks = await store.list_tasks()
+        assert len(tasks) >= 2  # At least one per block
+
+        # Verify agents were registered
+        agents = await store.list_agents()
+        assert len(agents) >= 2
+
+        # Verify messages were stored
+        for agent in agents:
+            messages = await store.get_messages(agent["agent_id"])
+            assert len(messages) > 0  # Each agent should have messages
+
+        # Verify audit trail
+        audit = await store.list_audit()
+        assert any("task_created" in a["action"] for a in audit)
