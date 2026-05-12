@@ -129,7 +129,7 @@ def format_learnings_for_injection(
         category = item.get("category", "unknown")
         content = item.get("content", "")
         confidence = item.get("confidence", 0)
-        lines.append(f"- [{category}] (confidence: {confidence:.1f}) {content}")
+        lines.append(f"- [hint, confidence: {confidence:.1f}] [{category}] {content}")
 
     return "\n".join(lines)
 

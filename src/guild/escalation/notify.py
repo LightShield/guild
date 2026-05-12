@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import sys
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
@@ -51,12 +52,22 @@ class Notifier:
         self,
         message: str,
         priority: QuestionPriority = QuestionPriority.NORMAL,
+        task_id: str | None = None,
+        question: str | None = None,
     ) -> None:
         """Send notification through configured channels."""
         for channel in self._channels:
-            await self._dispatch_channel(channel, message)
+            await self._dispatch_channel(
+                channel, message, task_id=task_id, question=question,
+            )
 
-    async def _dispatch_channel(self, channel: NotificationChannel, message: str) -> None:
+    async def _dispatch_channel(
+        self,
+        channel: NotificationChannel,
+        message: str,
+        task_id: str | None = None,
+        question: str | None = None,
+    ) -> None:
         """Dispatch a notification to a single channel."""
         if channel == NotificationChannel.NONE:
             return
@@ -67,7 +78,7 @@ class Notifier:
             await self._desktop(message)
             return
         if channel == NotificationChannel.WEBHOOK:  # pragma: no branch
-            await self._webhook(message)
+            await self._webhook(message, task_id=task_id, question=question)
 
     def _bell(self) -> None:
         """Terminal bell character."""
@@ -79,13 +90,24 @@ class Notifier:
         adapter = get_platform_adapter()
         adapter.send_desktop_notification(NOTIFICATION_TITLE, message)
 
-    async def _webhook(self, message: str) -> None:
+    async def _webhook(
+        self,
+        message: str,
+        task_id: str | None = None,
+        question: str | None = None,
+    ) -> None:
         """Send to configured webhook URL via HTTP POST."""
         if not self._webhook_url:
             logger.warning("Webhook URL not configured for notification: %s", message[:80])
             return
 
-        await _post_json(self._webhook_url, {"text": message})
+        payload: dict[str, Any] = {
+            "text": message,
+            "task_id": task_id,
+            "question": question,
+            "timestamp": datetime.now(UTC).isoformat(),
+        }
+        await _post_json(self._webhook_url, payload)
 
 
 async def _post_json(url: str, payload: dict[str, Any]) -> None:

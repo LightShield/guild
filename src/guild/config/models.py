@@ -105,6 +105,23 @@ class GuildConfig(ConfigsLoader):  # type: ignore[misc]
         default=2, section="guild", description="WebSocket status broadcast interval in seconds"
     )
 
+    # Health check (provider section)
+    health_check_timeout_seconds: int = Field(
+        default=5,
+        section="provider",
+        description="Health check timeout in seconds",
+    )
+
+    # Spawn depth limit (guild section)
+    max_spawn_depth: int = Field(
+        default=5, section="guild", description="Max nested sub-agent spawn depth"
+    )
+
+    # Auto-recovery (daemon section)
+    auto_recovery: bool = Field(
+        default=False, section="daemon", description="Automatically restart crashed agents"
+    )
+
     # Resource section
     resource_mode: SchedulingMode = Field(
         default=SchedulingMode.POLITE,

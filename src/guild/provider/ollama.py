@@ -44,7 +44,15 @@ class OllamaProvider(LLMProvider):
         if tools:
             kwargs["tools"] = tools
 
-        response = await self._client.chat(**kwargs)
+        try:
+            response = await self._client.chat(**kwargs)
+        except ResponseError as exc:
+            # Surface model-not-found as a clear error message
+            err_str = str(exc).lower()
+            if "not found" in err_str or "does not exist" in err_str:
+                msg = f"Ollama model not found: '{self.model}'"
+                raise ResponseError(msg) from exc
+            raise
         return self._map_response(response)
 
     def _map_response(self, response: Any) -> LLMResponse:

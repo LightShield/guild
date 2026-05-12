@@ -644,9 +644,12 @@ class TestEscalationChannels:
         )
         with patch("guild.escalation.notify._post_json", new_callable=AsyncMock) as mock_post:
             await notifier.notify("Webhook test")
-        mock_post.assert_awaited_once_with(
-            "http://hooks.example.com/notify", {"text": "Webhook test"},
-        )
+        mock_post.assert_awaited_once()
+        call_args = mock_post.call_args
+        assert call_args[0][0] == "http://hooks.example.com/notify"
+        payload = call_args[0][1]
+        assert payload["text"] == "Webhook test"
+        assert "timestamp" in payload
 
     @pytest.mark.ac("AC-15.5.4")
     async def test_webhook_without_url_logs_warning(self) -> None:
@@ -1532,9 +1535,17 @@ class TestUnknownConfigKeysWarning:
     """Unknown config keys that do not match GuildConfig fields produce a log warning."""
 
     @pytest.mark.ac("AC-14.5.4")
-    @pytest.mark.skip(reason="Not yet implemented: unknown config key detection and warning at startup")
-    def test_unknown_config_key_warning(self) -> None:
+    def test_unknown_config_key_warning(self, tmp_path: Path) -> None:
         """Add provider.typo_field -> startup logs warning about unknown key."""
+        from guild.config.loader import validate_config_keys
+
+        guild_dir = tmp_path / ".guild"
+        guild_dir.mkdir()
+        config_file = guild_dir / "config.toml"
+        config_file.write_text('[provider]\ntypo_field = "oops"\n')
+
+        warnings = validate_config_keys(guild_dir)
+        assert any("typo_field" in w for w in warnings)
 
 
 # ===================================================================
@@ -1597,9 +1608,33 @@ class TestWebhookPayloadStructured:
     """Webhook payload contains structured fields (task_id, question, timestamp)."""
 
     @pytest.mark.ac("AC-15.5.5")
-    @pytest.mark.skip(reason="Not yet implemented: webhook payload with structured task_id/question/timestamp fields")
     async def test_webhook_payload_has_structured_fields(self) -> None:
         """POST body contains JSON with task_id, question, and timestamp fields."""
+        import json
+        from unittest.mock import AsyncMock, patch
+
+        from guild.escalation.notify import NotificationChannel, Notifier
+
+        captured: list[dict[str, Any]] = []
+
+        async def mock_post(url: str, payload: dict[str, Any]) -> None:
+            captured.append(payload)
+
+        notifier = Notifier(
+            channels=[NotificationChannel.WEBHOOK], webhook_url="http://example.com/hook",
+        )
+        with patch("guild.escalation.notify._post_json", side_effect=mock_post):
+            await notifier.notify(
+                "Need approval", task_id="task-42", question="Delete file?",
+            )
+
+        assert len(captured) == 1
+        payload = captured[0]
+        assert "task_id" in payload
+        assert payload["task_id"] == "task-42"
+        assert "question" in payload
+        assert payload["question"] == "Delete file?"
+        assert "timestamp" in payload
 
 
 # ===================================================================

@@ -41,6 +41,8 @@ TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
     "file_read": {
         "name": "file_read",
         "description": "Read the contents of a file at the given path.",
+        "is_read_only": True,
+        "reversibility": "read-only",
         "parameters": {
             "type": "object",
             "properties": {
@@ -55,6 +57,8 @@ TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
     "file_write": {
         "name": "file_write",
         "description": "Write content to a file, creating parent directories as needed.",
+        "is_read_only": False,
+        "reversibility": "reversible",
         "parameters": {
             "type": "object",
             "properties": {
@@ -79,6 +83,8 @@ TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "denied will return an error. Commands are subject to a timeout (default "
             "60s). Output is truncated at 20000 characters."
         ),
+        "is_read_only": False,
+        "reversibility": "irreversible",
         "parameters": {
             "type": "object",
             "properties": {
@@ -101,6 +107,8 @@ TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "Skips .git, __pycache__, and node_modules directories. "
             "Results limited to 200 matches."
         ),
+        "is_read_only": True,
+        "reversibility": "read-only",
         "parameters": {
             "type": "object",
             "properties": {
@@ -126,6 +134,8 @@ TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "Find files matching a glob pattern. Skips .git, __pycache__, "
             "and node_modules directories. Results limited to 500 files."
         ),
+        "is_read_only": True,
+        "reversibility": "read-only",
         "parameters": {
             "type": "object",
             "properties": {
@@ -147,6 +157,8 @@ TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "Spawn a sub-agent to work on a subtask. The sub-agent runs "
             "independently and returns its result."
         ),
+        "is_read_only": False,
+        "reversibility": "irreversible",
         "parameters": {
             "type": "object",
             "properties": {

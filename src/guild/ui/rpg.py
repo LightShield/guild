@@ -82,3 +82,16 @@ class RPGMode:
     def notification(self, event: str) -> str:
         """RPG-style notification message."""
         return _NOTIFICATIONS.get(event, event)
+
+    def level_up(self, new_level: int) -> str:
+        """Generate a Level Up! milestone notification.
+
+        Args:
+            new_level: The new level reached.
+
+        Returns:
+            A themed notification string.
+        """
+        if self.enabled:
+            return f"Level Up! You have reached Level {new_level}! Glory awaits!"
+        return f"Milestone reached: level {new_level}"

@@ -24,14 +24,20 @@ def estimate_cost(
     input_tokens: int,
     output_tokens: int,
     provider: str = "ollama",
+    input_cost_per_million: float | None = None,
+    output_cost_per_million: float | None = None,
 ) -> float:
     """Estimate cost in USD for token usage.
 
-    Returns 0.0 for unknown providers (assumes local/free).
+    When custom per-million pricing is provided via *input_cost_per_million*
+    and/or *output_cost_per_million*, those values override the built-in
+    COST_TABLE lookup. Returns 0.0 for unknown providers (assumes local/free).
     """
     rates = COST_TABLE.get(provider, {"input": 0.0, "output": 0.0})
-    input_cost = (input_tokens / 1_000_000) * rates["input"]
-    output_cost = (output_tokens / 1_000_000) * rates["output"]
+    in_rate = input_cost_per_million if input_cost_per_million is not None else rates["input"]
+    out_rate = output_cost_per_million if output_cost_per_million is not None else rates["output"]
+    input_cost = (input_tokens / 1_000_000) * in_rate
+    output_cost = (output_tokens / 1_000_000) * out_rate
     return input_cost + output_cost
 
 

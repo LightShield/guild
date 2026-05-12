@@ -40,11 +40,14 @@ class AgentSpawner:
         storage: Storage | None,
         bus: MessageBus,
         working_dir: str | None = None,
+        max_depth: int = 5,
     ) -> None:
         self._provider = provider
         self._storage = storage
         self._bus = bus
         self._working_dir = working_dir
+        self._max_depth = max_depth
+        self._current_depth = 0
         self._agents: dict[str, AgentLoop] = {}
 
     async def spawn(
@@ -64,7 +67,17 @@ class AgentSpawner:
 
         Returns:
             The final text result from the sub-agent.
+
+        Raises:
+            RuntimeError: If spawn depth exceeds the configured max_depth.
         """
+        if self._current_depth >= self._max_depth:
+            msg = (
+                f"Spawn depth {self._current_depth} exceeds max_depth "
+                f"{self._max_depth}"
+            )
+            raise RuntimeError(msg)
+
         agent_id = agent_id or f"agent-{uuid.uuid4().hex[:8]}"
         prompt = system_prompt or _DEFAULT_SYSTEM_PROMPT
 

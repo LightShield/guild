@@ -1694,7 +1694,6 @@ class TestAcceptArtifactAppliesContent:
     """Accepting an artifact applies its content to the project working tree."""
 
     @pytest.mark.ac("AC-18.3.4")
-    @pytest.mark.skip(reason="Not yet implemented: accept() does not yet copy artifact content to project working tree")
     async def test_accept_artifact_writes_to_project(self, tmp_path: Path) -> None:
         """guild accept writes artifact content to project directory."""
         from guild.artifacts.manager import ArtifactManager
@@ -1703,8 +1702,13 @@ class TestAcceptArtifactAppliesContent:
         mgr = ArtifactManager(artifacts_dir)
 
         mgr.save("task-accept-1", "output.py", "print('hello world')\n")
-        # Currently accept() only changes status; it does not write to project_dir
-        # This test should be unskipped when accept() copies content to working tree
+        # accept() with project_dir copies content to working tree
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        mgr.accept("task-accept-1", "output.py", project_dir=project_dir)
+        target = project_dir / "output.py"
+        assert target.exists()
+        assert target.read_text() == "print('hello world')\n"
 
 
 # ======================================================================
@@ -1716,9 +1720,14 @@ class TestRPGLevelUpNotification:
     """'Level Up!' notification fires at task milestones."""
 
     @pytest.mark.ac("AC-22.3.3")
-    @pytest.mark.skip(reason="Not yet implemented: Level Up! milestone notification in RPG mode")
     async def test_level_up_on_milestone(self) -> None:
         """Agent completes milestone in RPG mode -> Level Up! notification."""
+        from guild.ui.rpg import RPGMode
+
+        rpg = RPGMode(enabled=True)
+        msg = rpg.level_up(5)
+        assert "Level Up!" in msg
+        assert "5" in msg
 
 
 # ======================================================================
@@ -1840,9 +1849,15 @@ class TestLearningsLabeledAsHints:
     """Learnings are explicitly labeled with 'hint' marker."""
 
     @pytest.mark.ac("AC-27.4.4")
-    @pytest.mark.skip(reason="Not yet implemented: learning injection with '[hint, confidence: X.X]' prefix marker")
     async def test_learning_injection_hint_prefix(self) -> None:
         """Injected learning text contains '[hint, confidence: X.X]' prefix."""
+        from guild.agent.learning import format_learnings_for_injection
+
+        learnings = [
+            {"category": "pattern", "content": "Use type hints everywhere", "confidence": 0.8},
+        ]
+        text = format_learnings_for_injection(learnings)
+        assert "[hint, confidence: 0.8]" in text
 
 
 # ======================================================================

@@ -12,13 +12,23 @@ blocking destructive/irreversible actions regardless of the active tier.
 
 from __future__ import annotations
 
+import logging
 import re
 from collections.abc import Callable
+from dataclasses import dataclass
 from enum import Enum
 from pathlib import PurePosixPath
 from typing import Any
 
-__all__ = ["HARDCODED_NEVER", "PermissionChecker", "PermissionTier", "PromptFn"]
+__all__ = [
+    "AuditEntry",
+    "HARDCODED_NEVER",
+    "PermissionChecker",
+    "PermissionTier",
+    "PromptFn",
+]
+
+logger = logging.getLogger(__name__)
 
 PromptFn = Callable[[str, str, dict[str, Any]], bool]
 
@@ -70,6 +80,17 @@ class PermissionTier(str, Enum):
     AUTOPILOT = "autopilot"
 
 
+@dataclass
+class AuditEntry:
+    """In-memory audit record of a permission check decision."""
+
+    action: str
+    tool: str
+    agent_id: str
+    status: str
+    reason: str = ""
+
+
 class PermissionChecker:
     """Gate tool execution based on the active permission tier.
 
@@ -86,12 +107,16 @@ class PermissionChecker:
         allowed_paths: list[str] | None = None,
         allowed_tools: list[str] | None = None,
         prompt_fn: PromptFn | None = None,
+        per_call: bool = False,
     ) -> None:
         self._tier = tier
         self._allowed_paths = allowed_paths or []
         self._allowed_tools = allowed_tools or []
         self._prompt_fn = prompt_fn
+        self._per_call = per_call
         self._session_approvals: set[str] = set()
+        self.audit_entries: list[AuditEntry] = []
+        self.last_denial_reason: str = ""
 
     def check(self, tool_name: str, agent_id: str, args: dict[str, Any]) -> bool:
         """Return True if the tool call is permitted under the current tier.
@@ -101,14 +126,20 @@ class PermissionChecker:
         ``allow_hardcoded_never``.
         """
         # REQ-03.7: hardcoded-never sits above all tiers
-        allowed, _reason = self.check_hardcoded_never(tool_name, args)
+        allowed, reason = self.check_hardcoded_never(tool_name, args)
         if not allowed:
+            self._record_audit("tool_blocked", tool_name, agent_id, "hardcoded_never", reason)
+            self.last_denial_reason = reason
             return False
 
         if self._tier == PermissionTier.NOTHING:
+            reason = "Tier 0 (NOTHING): all tool calls blocked"
+            self._record_audit("tool_blocked", tool_name, agent_id, "tier_0_blocked", reason)
+            self.last_denial_reason = reason
             return False
 
         if self._tier == PermissionTier.AUTOPILOT:
+            self._record_audit("tool_call", tool_name, agent_id, "auto_permitted")
             return True
 
         if self._tier == PermissionTier.ASK:
@@ -116,6 +147,22 @@ class PermissionChecker:
 
         # SCOPED
         return self._check_scoped(tool_name, args)
+
+    def _record_audit(
+        self,
+        action: str,
+        tool: str,
+        agent_id: str,
+        status: str,
+        reason: str = "",
+    ) -> None:
+        """Record an audit entry for a permission decision."""
+        entry = AuditEntry(
+            action=action, tool=tool, agent_id=agent_id,
+            status=status, reason=reason,
+        )
+        self.audit_entries.append(entry)
+        logger.debug("Permission audit: %s %s %s -> %s", action, tool, agent_id, status)
 
     def check_hardcoded_never(
         self, tool_name: str, args: dict[str, Any], *, allow_hardcoded_never: bool = False
@@ -169,8 +216,12 @@ class PermissionChecker:
             self._prompt_fn = prompt_fn
 
     def _check_ask(self, tool_name: str, agent_id: str, args: dict[str, Any]) -> bool:
-        """ASK tier: prompt once per tool name, cache approval."""
-        if tool_name in self._session_approvals:
+        """ASK tier: prompt once per tool name, cache approval.
+
+        When per_call mode is enabled, the session cache is bypassed
+        and every invocation triggers the prompt callback.
+        """
+        if not self._per_call and tool_name in self._session_approvals:
             return True
 
         if self._prompt_fn is None:
@@ -184,6 +235,9 @@ class PermissionChecker:
     def _check_scoped(self, tool_name: str, args: dict[str, Any]) -> bool:
         """SCOPED tier: tool must be in allowlist; paths must be in bounds."""
         if tool_name not in self._allowed_tools:
+            self.last_denial_reason = (
+                f"Tool '{tool_name}' not in allowed tools: {self._allowed_tools}"
+            )
             return False
 
         # Extract any path arguments from args
@@ -194,7 +248,13 @@ class PermissionChecker:
             return True
 
         # All paths must be within at least one allowed path prefix
-        return all(self._path_in_bounds(p) for p in paths)
+        for p in paths:
+            if not self._path_in_bounds(p):
+                self.last_denial_reason = (
+                    f"Path '{p}' is outside allowed boundaries: {self._allowed_paths}"
+                )
+                return False
+        return True
 
     def _extract_paths(self, args: dict[str, Any]) -> list[str]:
         """Pull filesystem paths from tool arguments."""

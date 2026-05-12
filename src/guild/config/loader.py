@@ -28,6 +28,7 @@ __all__ = [
     "find_guild_dir",
     "load_config",
     "toml_literal",
+    "validate_config_keys",
     "write_toml_bytes",
 ]
 _TEMP_FILE_PREFIX = "guild_config_"
@@ -148,6 +149,39 @@ def toml_literal(value: Any) -> str:
 # Backward-compatible aliases for tests/internal usage
 _write_toml_bytes = write_toml_bytes
 _toml_literal = toml_literal
+
+
+def validate_config_keys(guild_dir: Path | None) -> list[str]:
+    """Check for unknown config keys in the TOML file.
+
+    Returns a list of warning strings for unknown keys.
+    """
+    if guild_dir is None:
+        return []
+
+    config_path = guild_dir / CONFIG_FILENAME
+    raw = _load_toml_file(config_path)
+    if not raw:
+        return []
+
+    # Build the set of known field names grouped by section
+    known: dict[str, set[str]] = {}
+    for field_name, field_obj in GuildConfig._fields.items():
+        section = getattr(field_obj, "section", "") or ""
+        if section:
+            known.setdefault(section, set()).add(field_name)
+
+    warnings: list[str] = []
+    for section, values in raw.items():
+        if not isinstance(values, dict):
+            continue
+        section_known = known.get(section, set())
+        for key in values:
+            if key not in section_known:
+                msg = f"Unknown config key '{section}.{key}'"
+                warnings.append(msg)
+                logger.warning(msg)
+    return warnings
 
 
 def load_config(

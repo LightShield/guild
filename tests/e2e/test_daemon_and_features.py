@@ -1243,7 +1243,6 @@ class TestTier0BlockedToolsAudited:
     """Dropped tool calls at Tier 0 are logged in the audit trail."""
 
     @pytest.mark.ac("AC-03.1.3")
-    @pytest.mark.skip(reason="Not yet implemented: audit trail entry for tier_0_blocked not yet emitted")
     def test_tier0_blocked_tool_logged(self, project_dir: Path) -> None:
         """Tier 0 blocked tool call creates audit entry with reason."""
         from guild.permissions.checker import PermissionChecker, PermissionTier
@@ -1251,14 +1250,17 @@ class TestTier0BlockedToolsAudited:
         checker = PermissionChecker(tier=PermissionTier.NOTHING)
         result = checker.check("file_read", "agent-e2e", {"path": "/tmp"})
         assert result is False
-        # Future: audit log should contain action="tool_blocked"
+        # Audit log should contain action="tool_blocked"
+        assert len(checker.audit_entries) >= 1
+        entry = checker.audit_entries[-1]
+        assert entry.action == "tool_blocked"
+        assert entry.status == "tier_0_blocked"
 
 
 class TestAskTierPerCallMode:
     """per-call approval mode prompts on every invocation."""
 
     @pytest.mark.ac("AC-03.2.4")
-    @pytest.mark.skip(reason="Not yet implemented: per-call approval granularity not yet supported")
     def test_per_call_always_prompts(self, project_dir: Path) -> None:
         """With per-call mode, even previously approved tools re-prompt."""
         from guild.permissions.checker import PermissionChecker, PermissionTier
@@ -1270,7 +1272,9 @@ class TestAskTierPerCallMode:
             call_count += 1
             return True
 
-        checker = PermissionChecker(tier=PermissionTier.ASK, prompt_fn=counting_prompt)
+        checker = PermissionChecker(
+            tier=PermissionTier.ASK, prompt_fn=counting_prompt, per_call=True,
+        )
         checker.check("file_read", "agent-e2e", {"path": "/a"})
         checker.check("file_read", "agent-e2e", {"path": "/b"})
         # In per-call mode, both should prompt (call_count == 2)
@@ -1281,7 +1285,6 @@ class TestScopedViolationReportsSpecificBoundary:
     """Scope violation is reported back with the specific boundary exceeded."""
 
     @pytest.mark.ac("AC-03.3.4")
-    @pytest.mark.skip(reason="Not yet implemented: scope violation does not report specific boundary in error message")
     def test_scoped_violation_includes_boundary(self, project_dir: Path) -> None:
         """Scope violation error includes the specific scope boundary."""
         from guild.permissions.checker import PermissionChecker, PermissionTier
@@ -1297,6 +1300,8 @@ class TestScopedViolationReportsSpecificBoundary:
             {"path": str(project_dir / "docs" / "readme.md"), "content": "x"},
         )
         assert result is False
+        assert "outside allowed boundaries" in checker.last_denial_reason
+        assert str(project_dir / "src") in checker.last_denial_reason
 
 
 class TestSwitchTiersClearsSessionApprovals:
@@ -1328,7 +1333,6 @@ class TestAutoPermittedActionsLogged:
     """Auto-permitted actions (Tier 3, Tier 2 in-scope) are logged."""
 
     @pytest.mark.ac("AC-03.6.3")
-    @pytest.mark.skip(reason="Not yet implemented: auto_permitted audit entries not yet emitted for Tier 3 actions")
     def test_autopilot_tool_calls_logged(self, project_dir: Path) -> None:
         """Tier 3 tool calls create audit entries with status=auto_permitted."""
         from guild.permissions.checker import PermissionChecker, PermissionTier
@@ -1336,7 +1340,10 @@ class TestAutoPermittedActionsLogged:
         checker = PermissionChecker(tier=PermissionTier.AUTOPILOT)
         result = checker.check("file_read", "agent-e2e", {"path": "/tmp"})
         assert result is True
-        # Future: audit log should contain entry with status="auto_permitted"
+        # Audit log should contain entry with status="auto_permitted"
+        assert len(checker.audit_entries) >= 1
+        entry = checker.audit_entries[-1]
+        assert entry.status == "auto_permitted"
 
 
 class TestHardcodedNeverBlocksRecordedInAudit:
@@ -1378,7 +1385,6 @@ class TestToolsTaggedWithReversibility:
     """Tools are tagged with a reversibility level."""
 
     @pytest.mark.ac("AC-03.8.3")
-    @pytest.mark.skip(reason="Not yet implemented: tool reversibility tags (read-only, reversible, irreversible) not yet in tool metadata")
     def test_tools_have_reversibility_metadata(self) -> None:
         """Built-in tools have reversibility metadata."""
         from guild.tools.base import TOOL_SCHEMAS

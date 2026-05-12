@@ -686,18 +686,27 @@ class TestOllamaModelNotFound:
     """Ollama provider handles model-not-found errors with a descriptive message."""
 
     @pytest.mark.ac("AC-01.2.4")
-    @pytest.mark.skip(reason="Not yet implemented: OllamaProvider does not yet catch model-not-found errors distinctly")
+    @pytest.mark.integration
     async def test_nonexistent_model_descriptive_error(self) -> None:
         """generate() with model='nonexistent-model-xyz' raises descriptive error."""
+        from unittest.mock import AsyncMock, patch
+
+        from ollama import ResponseError
+
         from guild.provider.ollama import OllamaProvider
 
         provider = OllamaProvider(base_url="http://localhost:11434", model="nonexistent-model-xyz")
-        # Should raise or return error containing "model not found"
-        try:
-            await provider.generate([{"role": "user", "content": "hi"}])
-            pytest.fail("Expected an error for nonexistent model")
-        except Exception as e:
-            assert "model" in str(e).lower() and "not found" in str(e).lower()
+
+        mock_client = AsyncMock()
+        mock_client.chat = AsyncMock(
+            side_effect=ResponseError("model 'nonexistent-model-xyz' not found"),
+        )
+        with patch.object(provider, "_client", mock_client):
+            try:
+                await provider.generate([{"role": "user", "content": "hi"}])
+                pytest.fail("Expected an error for nonexistent model")
+            except Exception as e:
+                assert "model" in str(e).lower() and "not found" in str(e).lower()
 
 
 class TestOllamaReportsActualModel:
@@ -741,7 +750,6 @@ class TestHealthCheckConfigurableTimeout:
     """Health check has a configurable timeout (not hardcoded)."""
 
     @pytest.mark.ac("AC-01.5.5")
-    @pytest.mark.skip(reason="Not yet implemented: health_check_timeout_seconds config not yet supported")
     def test_health_check_timeout_configurable(self, project_dir: Path) -> None:
         """provider.health_check_timeout_seconds can be set in config."""
         result = runner.invoke(

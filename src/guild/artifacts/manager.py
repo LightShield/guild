@@ -154,14 +154,27 @@ class ArtifactManager:
     # Review gate: accept / reject / edit (REQ-18.3)
     # ------------------------------------------------------------------
 
-    def accept(self, task_id: str, name: str) -> None:
-        """Accept a pending artifact, marking it as final."""
+    def accept(self, task_id: str, name: str, project_dir: Path | None = None) -> None:
+        """Accept a pending artifact, marking it as final.
+
+        When *project_dir* is provided, the latest version of the artifact
+        is also copied into the project working tree at ``project_dir/name``.
+        """
         status = self._load_status(task_id)
         if name not in status:
             msg = f"Artifact '{name}' not found for task '{task_id}'"
             raise KeyError(msg)
         status[name] = "accepted"
         self._save_status(task_id, status)
+
+        if project_dir is not None:
+            content = self.get(task_id, name)
+            if content is not None:
+                target = project_dir / name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(content, encoding="utf-8")
+                logger.debug("Copied artifact %s/%s to %s", task_id, name, target)
+
         logger.debug("Accepted artifact %s/%s", task_id, name)
 
     def reject(self, task_id: str, name: str) -> None:

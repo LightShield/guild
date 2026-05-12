@@ -1436,11 +1436,20 @@ class TestCustomPerTokenPricing:
     """Custom per-token pricing can be set via config and overrides built-in."""
 
     @pytest.mark.ac("AC-10.5.4")
-    @pytest.mark.skip(reason="Not yet implemented: estimate_cost does not accept custom per-token pricing parameters")
     def test_custom_pricing_overrides_default(self) -> None:
         """estimate_cost uses custom rates when provided via config."""
-        # estimate_cost currently only accepts a provider string lookup
-        # into COST_TABLE. Custom per-1k pricing params are not yet supported.
+        from guild.agent.cost import estimate_cost
+
+        # Default pricing for ollama is 0.0
+        default_cost = estimate_cost(1000, 500, provider="ollama")
+        assert default_cost == 0.0
+
+        # Custom per-million pricing overrides the default
+        custom_cost = estimate_cost(
+            1_000_000, 500_000, provider="ollama",
+            input_cost_per_million=10.0, output_cost_per_million=20.0,
+        )
+        assert custom_cost == pytest.approx(10.0 + 10.0)  # 10 + 0.5M * 20
 
 
 # ------------------------------------------------------------------
