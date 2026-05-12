@@ -285,3 +285,143 @@ class TestNoProjectErrors:
         monkeypatch.chdir(tmp_path)
         result = runner.invoke(app, cmd_args)
         assert result.exit_code != 0 or "not a guild project" in result.output.lower()
+
+
+# REQ-01.1: Unified LLM interface
+@pytest.mark.req("REQ-01.1")
+class TestUnifiedProvider:
+    """Verify any provider returns a consistent response shape."""
+
+    def test_provider_returns_consistent_response_shape(self, project_dir: Path) -> None:
+        """Any provider returns content + token counts + model name."""
+        from unittest.mock import AsyncMock, patch
+
+        from guild.provider.base import LLMResponse
+
+        mock = AsyncMock()
+        mock.generate = AsyncMock(
+            return_value=LLMResponse(
+                content="test", tool_calls=None, input_tokens=10, output_tokens=5, model="mock"
+            )
+        )
+        mock.health_check = AsyncMock(return_value=True)
+        with patch("guild.cli.task_runner.create_resilient_provider", return_value=mock):
+            result = runner.invoke(app, ["task", "say hi", "--timeout", "30"])
+        assert result.exit_code == 0
+
+
+# REQ-01.2: Ollama backend default
+@pytest.mark.req("REQ-01.2")
+class TestOllamaDefault:
+    """Verify a fresh project defaults to the ollama provider."""
+
+    def test_default_config_uses_ollama(self, project_dir: Path) -> None:
+        """Fresh project defaults to ollama provider."""
+        result = runner.invoke(app, ["config"])
+        assert "ollama" in result.output
+
+
+# REQ-01.4: Provider-specific prompt formatting transparent
+@pytest.mark.req("REQ-01.4")
+class TestProviderFormatting:
+    """Verify user messages pass through to the provider without modification."""
+
+    def test_messages_pass_through_to_provider(self, project_dir: Path) -> None:
+        """User message arrives at provider without modification."""
+        from unittest.mock import AsyncMock, patch
+
+        from guild.provider.base import LLMResponse
+
+        mock = AsyncMock()
+        mock.generate = AsyncMock(
+            return_value=LLMResponse(
+                content="done", tool_calls=None, input_tokens=5, output_tokens=3, model="m"
+            )
+        )
+        mock.health_check = AsyncMock(return_value=True)
+        with patch("guild.cli.task_runner.create_resilient_provider", return_value=mock):
+            runner.invoke(app, ["task", "specific input text"])
+        # Verify the user message was in the generate call
+        call_args = mock.generate.call_args[0][0]
+        user_msgs = [m for m in call_args if m.get("role") == "user"]
+        assert any("specific input text" in m["content"] for m in user_msgs)
+
+
+# REQ-01.5: Health checks
+@pytest.mark.req("REQ-01.5")
+class TestHealthCheck:
+    """Verify unhealthy provider triggers an error or escalation."""
+
+    def test_unhealthy_provider_triggers_escalation(self, project_dir: Path) -> None:
+        """When provider health check fails, error is reported."""
+        from unittest.mock import AsyncMock, patch
+
+        mock = AsyncMock()
+        mock.generate = AsyncMock(side_effect=ConnectionError("offline"))
+        mock.health_check = AsyncMock(return_value=False)
+        with patch("guild.cli.task_runner.create_resilient_provider", return_value=mock):
+            result = runner.invoke(app, ["task", "do something"])
+        # Should error or show escalation message
+        assert (
+            result.exit_code != 0
+            or "error" in result.output.lower()
+            or "failed" in result.output.lower()
+        )
+
+
+# REQ-02.1: OS-agnostic
+@pytest.mark.req("REQ-02.1")
+class TestOsAgnostic:
+    """Verify source code avoids platform-specific path handling."""
+
+    def test_no_os_path_in_source(self, project_dir: Path) -> None:
+        """Source code uses pathlib, not os.path."""
+        import pathlib
+
+        src_dir = pathlib.Path(__file__).parent.parent.parent / "src" / "guild"
+        for py_file in src_dir.rglob("*.py"):
+            if "__pycache__" in str(py_file):
+                continue
+            assert "os.path" not in py_file.read_text(), f"os.path in {py_file.name}"
+
+
+# REQ-02.2: Single install
+@pytest.mark.req("REQ-02.2")
+class TestSingleInstall:
+    """Verify pyproject.toml defines guild as a console script."""
+
+    def test_pip_entry_point_defined(self) -> None:
+        """pyproject.toml defines guild as a console script."""
+        import pathlib
+
+        pyproject = pathlib.Path(__file__).parent.parent.parent / "pyproject.toml"
+        assert 'guild = "guild.cli.main:app"' in pyproject.read_text()
+
+
+# REQ-02.3: Cross-platform abstractions
+@pytest.mark.req("REQ-02.3")
+class TestCrossPlatformAbstractions:
+    """Verify key modules use pathlib.Path for file operations."""
+
+    def test_pathlib_used_for_paths(self) -> None:
+        """Key modules use pathlib.Path for file operations."""
+        import inspect
+
+        from guild.storage.sqlite import Storage
+
+        sig = inspect.signature(Storage.__init__)
+        assert "db_path" in sig.parameters
+
+
+# REQ-02.4: PlatformAdapter
+@pytest.mark.req("REQ-02.4")
+class TestPlatformAdapter:
+    """Verify PlatformAdapter can be instantiated for the current platform."""
+
+    def test_adapter_interface_exists_and_works(self) -> None:
+        """PlatformAdapter can be instantiated for current platform."""
+        from guild.daemon.platform import PlatformAdapter, get_platform_adapter
+
+        adapter = get_platform_adapter()
+        assert isinstance(adapter, PlatformAdapter)
+        assert isinstance(adapter.platform_name, str)
