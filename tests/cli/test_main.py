@@ -914,6 +914,8 @@ class TestNoGuildDirErrors:
             ["serve"],
             ["attach", "some-id"],
             ["team", "build something"],
+            ["approve", "--all"],
+            ["eval", "confidence"],
         ],
     )
     def test_command_fails_without_guild_dir(
@@ -1173,6 +1175,123 @@ class TestTeamCommand:
 
         assert result.exit_code == 0
         assert "team done" in result.output.lower()
+
+
+@pytest.mark.unit
+class TestApproveCommand:
+    """Tests for `guild approve` (REQ-15.4)."""
+
+    def test_approve_all_questions(self, guild_app, guild_project: Path) -> None:
+        """Verify approve --all approves all pending questions."""
+        from guild.escalation.queue import QuestionQueue
+        from guild.storage.sqlite import Storage
+
+        db_path = guild_project / ".guild" / "guild.db"
+
+        async def _setup():
+            store = Storage(db_path)
+            await store.connect()
+            queue = QuestionQueue(store)
+            await queue.post_question(
+                question="Q1?", context="ctx1", agent_id="a1"
+            )
+            await queue.post_question(
+                question="Q2?", context="ctx2", agent_id="a2"
+            )
+            await store.close()
+
+        asyncio.run(_setup())
+
+        result = runner.invoke(guild_app, ["approve", "--all"])
+
+        assert result.exit_code == 0
+        assert "Approved" in result.output
+        assert "2" in result.output
+
+    def test_approve_specific_questions(self, guild_app, guild_project: Path) -> None:
+        """Verify approve with specific question IDs."""
+        from guild.escalation.queue import QuestionQueue
+        from guild.storage.sqlite import Storage
+
+        db_path = guild_project / ".guild" / "guild.db"
+
+        async def _setup():
+            store = Storage(db_path)
+            await store.connect()
+            queue = QuestionQueue(store)
+            qid = await queue.post_question(
+                question="Proceed?", context="ctx", agent_id="a1"
+            )
+            await store.close()
+            return qid
+
+        qid = asyncio.run(_setup())
+
+        result = runner.invoke(guild_app, ["approve", qid])
+
+        assert result.exit_code == 0
+        assert "Approved" in result.output
+
+    def test_approve_no_args_no_all_shows_error(self, guild_app, guild_project: Path) -> None:
+        """Approve without IDs or --all shows error."""
+        result = runner.invoke(guild_app, ["approve"])
+
+        assert result.exit_code != 0
+        assert "provide" in result.output.lower() or "error" in result.output.lower()
+
+
+@pytest.mark.unit
+class TestEvalConfidenceCommand:
+    """Tests for `guild eval confidence` (REQ-16.6)."""
+
+    def test_eval_confidence_shows_categories(self, guild_app, guild_project: Path) -> None:
+        """Verify eval confidence displays category table."""
+        result = runner.invoke(guild_app, ["eval", "confidence"])
+
+        assert result.exit_code == 0
+        assert "Confidence" in result.output or "Category" in result.output
+
+    def test_eval_confidence_fails_without_guild_dir(
+        self, guild_app, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """eval confidence fails gracefully without .guild/."""
+        monkeypatch.chdir(tmp_path)
+        result = runner.invoke(guild_app, ["eval", "confidence"])
+        assert result.exit_code != 0 or "not a guild project" in result.output.lower()
+
+
+@pytest.mark.unit
+class TestHistoryTreeCommand:
+    """Tests for `guild history --tree` (REQ-12.3)."""
+
+    def test_history_tree_shows_task_tree(self, guild_app, guild_project: Path) -> None:
+        """Verify history --tree --task shows the task in tree format."""
+        from guild.storage.sqlite import Storage
+
+        db_path = guild_project / ".guild" / "guild.db"
+
+        async def _setup():
+            store = Storage(db_path)
+            await store.connect()
+            await store.create_task("parent-1", "Parent task")
+            await store.close()
+
+        asyncio.run(_setup())
+
+        result = runner.invoke(guild_app, ["history", "--task", "parent-1", "--tree"])
+
+        assert result.exit_code == 0
+        assert "parent-1" in result.output
+        assert "Task Tree" in result.output
+
+    def test_history_tree_task_not_found(self, guild_app, guild_project: Path) -> None:
+        """Verify history --tree with invalid task ID shows error."""
+        result = runner.invoke(
+            guild_app, ["history", "--task", "nonexistent-id", "--tree"]
+        )
+
+        assert result.exit_code != 0
+        assert "not found" in result.output.lower()
 
 
 @pytest.mark.unit

@@ -226,3 +226,32 @@ class TestSupervisorEdgeCases:
         sup = DaemonSupervisor(run_dir=tmp_path, task_id="t3")
         # PID file doesn't exist
         sup.remove_pid_file()  # Should not raise
+
+
+@pytest.mark.unit
+class TestAutoRecoveryMaxCrashes:
+    """Cover the max-crashes escalation branch (lines 188-193)."""
+
+    async def test_auto_recovery_escalates_after_max_crashes(self, tmp_path: Path) -> None:
+        """When auto_recovery is on and crashes exceed max, status is crashed_escalated."""
+        run_dir = tmp_path / "run"
+        supervisor = DaemonSupervisor(
+            run_dir=run_dir,
+            task_id="task-recovery",
+            auto_recovery=True,
+        )
+        # Set max crashes to 1 so first crash exhausts it
+        supervisor._max_crashes = 1
+
+        crash_count = 0
+
+        async def crashing_agent() -> str:
+            nonlocal crash_count
+            crash_count += 1
+            raise RuntimeError("agent crashed")
+
+        with pytest.raises(RuntimeError, match="agent crashed"):
+            await supervisor.run(crashing_agent(), coro_factory=crashing_agent)
+
+        assert supervisor._status == "crashed_escalated"
+        assert supervisor._crash_count == 1

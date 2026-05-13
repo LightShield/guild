@@ -6,6 +6,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from ollama import ResponseError
+
 from guild.provider.base import LLMResponse
 from guild.provider.ollama import OllamaProvider, create_provider
 
@@ -258,6 +260,58 @@ class TestProviderPromptFormatting:
         # (no client-side template formatting — Ollama does it server-side)
         assert result.content == "formatted response"
         mock_client.chat.assert_awaited_once()
+
+
+class TestModelNotFound:
+    """ResponseError with 'not found' gives a clear error message."""
+
+    async def test_generate_raises_clear_error_on_model_not_found(self) -> None:
+        """ResponseError containing 'not found' is re-raised with model name."""
+        provider = OllamaProvider(
+            base_url="http://localhost:11434",
+            model="nonexistent-model",
+        )
+        mock_client = AsyncMock()
+        mock_client.chat = AsyncMock(
+            side_effect=ResponseError("model 'nonexistent-model' not found")
+        )
+        provider._client = mock_client
+
+        messages = [{"role": "user", "content": "Hi"}]
+        with pytest.raises(ResponseError, match="Ollama model not found"):
+            await provider.generate(messages)
+
+    async def test_generate_raises_clear_error_on_model_does_not_exist(self) -> None:
+        """ResponseError containing 'does not exist' is re-raised with model name."""
+        provider = OllamaProvider(
+            base_url="http://localhost:11434",
+            model="missing-model",
+        )
+        mock_client = AsyncMock()
+        mock_client.chat = AsyncMock(
+            side_effect=ResponseError("model 'missing-model' does not exist")
+        )
+        provider._client = mock_client
+
+        messages = [{"role": "user", "content": "Hi"}]
+        with pytest.raises(ResponseError, match="Ollama model not found"):
+            await provider.generate(messages)
+
+    async def test_generate_reraises_other_response_errors(self) -> None:
+        """ResponseError without 'not found' is re-raised unmodified."""
+        provider = OllamaProvider(
+            base_url="http://localhost:11434",
+            model="test-model",
+        )
+        mock_client = AsyncMock()
+        mock_client.chat = AsyncMock(
+            side_effect=ResponseError("internal server error")
+        )
+        provider._client = mock_client
+
+        messages = [{"role": "user", "content": "Hi"}]
+        with pytest.raises(ResponseError, match="internal server error"):
+            await provider.generate(messages)
 
 
 class TestCreateProvider:

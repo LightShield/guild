@@ -524,3 +524,50 @@ class TestTaskSpecEdges:
             passed, msg = await _verify_command(step, str(tmp_path))
         assert passed is False
         assert "error" in msg.lower()
+
+    async def test_verify_command_timeout(self, tmp_path: Path) -> None:
+        """_verify_command returns FAIL on timeout (lines 256-259)."""
+        from unittest.mock import AsyncMock
+        from unittest.mock import patch as _patch
+
+        from guild.task.spec import VerificationStep, _verify_command
+
+        step = VerificationStep(
+            type="command",
+            target="sleep 100",
+            expected=None,
+        )
+
+        mock_proc = AsyncMock()
+        mock_proc.communicate = AsyncMock(side_effect=TimeoutError("timed out"))
+        mock_proc.kill = AsyncMock()
+        mock_proc.wait = AsyncMock()
+
+        with _patch(
+            "guild.task.spec.asyncio.create_subprocess_shell",
+            return_value=mock_proc,
+        ):
+            passed, msg = await _verify_command(step, str(tmp_path))
+        assert passed is False
+        assert "timed out" in msg.lower()
+
+
+@pytest.mark.unit
+class TestFormatVerificationResults:
+    """Tests for format_verification_results."""
+
+    def test_empty_results_returns_no_results_message(self) -> None:
+        """Empty results list returns 'No verification results.'."""
+        from guild.task.spec import format_verification_results
+
+        result = format_verification_results([])
+        assert result == "No verification results."
+
+    def test_non_empty_results_formats_steps(self) -> None:
+        """Non-empty results are formatted as numbered steps."""
+        from guild.task.spec import format_verification_results
+
+        results = ["PASS: file exists", "FAIL: command exited 1"]
+        result = format_verification_results(results)
+        assert "Step 1: PASS" in result
+        assert "Step 2: FAIL" in result

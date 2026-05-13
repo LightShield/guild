@@ -258,3 +258,32 @@ class TestShellEdgeCases:
         )
         # stderr should be present in output
         assert "[stderr]" in result.output
+
+
+@pytest.mark.unit
+class TestShouldUseSandbox:
+    """Tests for _should_use_sandbox function."""
+
+    def test_none_mode_returns_false(self) -> None:
+        """In 'none' mode, _should_use_sandbox returns False immediately."""
+        from guild.tools.shell import _should_use_sandbox
+
+        assert _should_use_sandbox("none") is False
+
+    def test_docker_mode_returns_true(self) -> None:
+        """In 'docker' mode, _should_use_sandbox returns True."""
+        from guild.tools.shell import _should_use_sandbox
+
+        assert _should_use_sandbox("docker") is True
+
+    def test_auto_mode_calls_is_docker_available(self) -> None:
+        """In 'auto' mode, _should_use_sandbox delegates to is_docker_available."""
+        from unittest.mock import patch
+
+        from guild.tools.shell import _should_use_sandbox
+
+        with patch("guild.tools.shell.is_docker_available", return_value=True):
+            assert _should_use_sandbox("auto") is True
+
+        with patch("guild.tools.shell.is_docker_available", return_value=False):
+            assert _should_use_sandbox("auto") is False

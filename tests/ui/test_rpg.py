@@ -98,3 +98,12 @@ def test_notification_unknown_event() -> None:
     mode = RPGMode(enabled=True)
     msg = mode.notification("something_new")
     assert msg == "something_new"
+
+
+@pytest.mark.unit
+def test_level_up_disabled() -> None:
+    """Level up when disabled gives plain message."""
+    mode = RPGMode(enabled=False)
+    msg = mode.level_up(5)
+    assert msg == "Milestone reached: level 5"
+    assert "Glory" not in msg

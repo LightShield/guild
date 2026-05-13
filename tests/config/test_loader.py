@@ -471,3 +471,105 @@ class TestConfigLoaderCorruptToml:
 
         result = _load_toml_file(corrupt_file)
         assert result == {}
+
+
+# ======================================================================
+# validate_config_keys coverage
+# ======================================================================
+
+
+@pytest.mark.unit
+class TestValidateConfigKeys:
+    """Cover all branches in validate_config_keys."""
+
+    def test_returns_empty_for_none_guild_dir(self) -> None:
+        """validate_config_keys returns [] when guild_dir is None."""
+        from guild.config.loader import validate_config_keys
+
+        result = validate_config_keys(None)
+        assert result == []
+
+    def test_returns_empty_for_missing_config(self, tmp_path: Path) -> None:
+        """validate_config_keys returns [] when config file is missing."""
+        from guild.config.loader import validate_config_keys
+
+        guild_dir = tmp_path / ".guild"
+        guild_dir.mkdir()
+        # No config.toml file
+        result = validate_config_keys(guild_dir)
+        assert result == []
+
+    def test_warns_on_unknown_keys(self, tmp_path: Path) -> None:
+        """validate_config_keys returns warnings for unknown keys."""
+        from guild.config.loader import validate_config_keys
+
+        guild_dir = tmp_path / ".guild"
+        guild_dir.mkdir()
+        config = guild_dir / "config.toml"
+        config.write_text('[provider]\nunknown_key = "bad"\n')
+
+        result = validate_config_keys(guild_dir)
+        assert len(result) >= 1
+        assert "unknown_key" in result[0].lower()
+
+    def test_no_warnings_for_known_keys(self, tmp_path: Path) -> None:
+        """validate_config_keys returns [] for all known keys."""
+        from guild.config.loader import validate_config_keys
+
+        guild_dir = tmp_path / ".guild"
+        guild_dir.mkdir()
+        config = guild_dir / "config.toml"
+        config.write_text('[provider]\nmodel = "test"\n')
+
+        result = validate_config_keys(guild_dir)
+        assert result == []
+
+    def test_skips_top_level_scalars(self, tmp_path: Path) -> None:
+        """validate_config_keys skips top-level scalar values (not dicts)."""
+        from guild.config.loader import validate_config_keys
+
+        guild_dir = tmp_path / ".guild"
+        guild_dir.mkdir()
+        config = guild_dir / "config.toml"
+        config.write_text('top_level_scalar = "value"\n[provider]\nmodel = "test"\n')
+
+        result = validate_config_keys(guild_dir)
+        # Should not crash and should not warn on the scalar
+        assert all("top_level_scalar" not in w for w in result)
+
+
+# ======================================================================
+# ConfigWatcher non-reloadable changes (from coverage gaps)
+# ======================================================================
+
+
+@pytest.mark.unit
+class TestConfigWatcherNonReloadable:
+    """Cover the non-reloadable change detection in ConfigWatcher."""
+
+    def test_detects_non_reloadable_field_change(self, tmp_path: Path) -> None:
+        """ConfigWatcher warns about non-reloadable field changes."""
+        import time
+
+        config_file = tmp_path / "config.toml"
+        config_file.write_text('[provider]\nmodel = "original"\n')
+
+        called = []
+        watcher = ConfigWatcher(config_file, callback=lambda: called.append(1))
+
+        # First check — loads initial config
+        assert watcher.check_for_changes() is False
+
+        # Trigger first reload to set _last_config
+        time.sleep(0.05)
+        config_file.write_text('[provider]\nmodel = "still-original"\n')
+        watcher.check_for_changes()
+
+        # Now change a non-reloadable field
+        time.sleep(0.05)
+        config_file.write_text('[provider]\nmodel = "changed-model"\n')
+        watcher.check_for_changes()
+
+        # Should have a warning about model needing restart
+        warnings = watcher.non_reloadable_warnings
+        assert any("model" in w for w in warnings)

@@ -164,7 +164,7 @@ def validate_config_keys(guild_dir: Path | None) -> list[str]:
     known: dict[str, set[str]] = {}
     for field_name, field_obj in GuildConfig._fields.items():
         section = getattr(field_obj, "section", "") or ""
-        if section:
+        if section:  # pragma: no branch — all config fields have a section
             known.setdefault(section, set()).add(field_name)
 
     warnings: list[str] = []

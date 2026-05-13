@@ -1192,3 +1192,51 @@ class TestSmartRecoveryPromptSelection:
         )
         prompt = loop._select_recovery_prompt("No progress for 10 consecutive turns")
         assert prompt == STUCK_RECOVERY_PROMPT
+
+
+@pytest.mark.unit
+class TestGenerateTimeoutReport:
+    """Tests for AgentLoop.generate_timeout_report branch coverage."""
+
+    def test_timeout_report_no_messages(self) -> None:
+        """Timeout report with no messages reports no tools and no last progress."""
+        loop = AgentLoop(
+            provider=MagicMock(),
+            tool_executors={},
+        )
+        # No messages, no tools used
+        report = loop.generate_timeout_report()
+        assert "0 turn(s)" in report
+        assert "Tools used: none" in report
+        assert "Last progress" not in report
+
+    def test_timeout_report_with_user_messages_only(self) -> None:
+        """Timeout report with only user messages shows no last progress."""
+        from guild.agent.message import Message
+
+        loop = AgentLoop(
+            provider=MagicMock(),
+            tool_executors={},
+        )
+        loop.messages = [
+            Message(role="user", content="Do something"),
+        ]
+        report = loop.generate_timeout_report()
+        assert "0 turn(s)" in report
+        assert "Last progress" not in report
+
+    def test_timeout_report_with_assistant_no_content(self) -> None:
+        """Timeout report with assistant messages that have no content."""
+        from guild.agent.message import Message
+
+        loop = AgentLoop(
+            provider=MagicMock(),
+            tool_executors={},
+        )
+        loop.messages = [
+            Message(role="user", content="Do something"),
+            Message(role="assistant", content=""),
+        ]
+        report = loop.generate_timeout_report()
+        assert "1 turn(s)" in report
+        assert "Last progress" not in report

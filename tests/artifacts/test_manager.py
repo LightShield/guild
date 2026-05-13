@@ -234,3 +234,34 @@ class TestArtifactReviewGate:
         mgr = ArtifactManager(tmp_path / "artifacts")
         with pytest.raises(KeyError):
             mgr.edit("task-1", "ghost.py", "content")
+
+    def test_accept_with_project_dir_copies_file(self, tmp_path: Path) -> None:
+        """Accept with project_dir copies artifact content to project tree."""
+        mgr = ArtifactManager(tmp_path / "artifacts")
+        mgr.save("task-1", "output.py", "print('hello')")
+
+        project_dir = tmp_path / "project"
+        mgr.accept("task-1", "output.py", project_dir=project_dir)
+
+        target = project_dir / "output.py"
+        assert target.exists()
+        assert target.read_text() == "print('hello')"
+
+    def test_accept_with_project_dir_content_gone(self, tmp_path: Path) -> None:
+        """Accept with project_dir when content file is missing does not crash."""
+        mgr = ArtifactManager(tmp_path / "artifacts")
+        mgr.save("task-1", "output.py", "print('hello')")
+
+        # Remove the version file so get() returns None
+        task_dir = tmp_path / "artifacts" / "task-1"
+        for f in task_dir.iterdir():
+            if f.name != ".status.json":
+                f.unlink()
+
+        project_dir = tmp_path / "project"
+        # Should not crash even though content is None
+        mgr.accept("task-1", "output.py", project_dir=project_dir)
+
+        # File should NOT have been created
+        target = project_dir / "output.py"
+        assert not target.exists()

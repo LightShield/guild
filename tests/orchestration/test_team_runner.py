@@ -1196,3 +1196,53 @@ class TestInvokeAgentToolExecutors:
         # Verify run was called with self_review=False
         call_kwargs = mock_loop.run.call_args[1]
         assert call_kwargs["self_review"] is False
+
+
+@pytest.mark.unit
+class TestInvokeAgentLearningInjection:
+    """_invoke_agent injects high-confidence learnings into system prompt."""
+
+    async def test_invoke_agent_injects_learnings(self) -> None:
+        """When storage has high-confidence learnings, they are injected."""
+        from guild.blocks.registry import BlockRegistry
+
+        team = _make_team_with_entry()
+        registry = BlockRegistry()
+
+        mock_storage = AsyncMock()
+        mock_storage.list_learnings = AsyncMock(return_value=[
+            {
+                "category": "pattern",
+                "content": "Always validate inputs",
+                "confidence": 0.9,
+            }
+        ])
+        mock_storage.create_task = AsyncMock()
+        mock_storage.register_agent = AsyncMock()
+        mock_storage.update_task = AsyncMock()
+        mock_storage.log_audit = AsyncMock()
+
+        provider = _make_provider(
+            LLMResponse(content="done", tool_calls=None, input_tokens=5, output_tokens=3, model="m")
+        )
+        runner = TeamRunner(
+            team=team,
+            registry=registry,
+            provider=provider,
+            storage=mock_storage,
+            working_dir="/tmp",
+        )
+
+        coder_def = registry.get_block("coder")
+        assert coder_def is not None
+
+        with patch("guild.orchestration.team_runner.AgentLoop") as mock_loop_cls:
+            mock_loop = AsyncMock()
+            mock_loop.run = AsyncMock(return_value="result with learnings")
+            mock_loop_cls.return_value = mock_loop
+
+            await runner._invoke_agent(coder_def, "do work")
+
+        # Verify the system_prompt passed to AgentLoop.run includes learnings
+        call_kwargs = mock_loop.run.call_args[1]
+        assert "validate inputs" in call_kwargs["system_prompt"]

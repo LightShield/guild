@@ -374,3 +374,25 @@ class TestWorktreeOperations:
         with patch.object(mgr, "_ensure_staging_branch", new_callable=AsyncMock) as mock_ensure:
             await mgr._staging_worktree_path("guild/staging")
             mock_ensure.assert_called_once()
+
+
+@pytest.mark.unit
+class TestRunGitTimeout:
+    """Cover the timeout branch in _run_git (lines 207-210)."""
+
+    async def test_run_git_returns_error_on_timeout(self, tmp_path: Path) -> None:
+        """_run_git returns (1, 'timed out') when git command exceeds timeout."""
+        from unittest.mock import AsyncMock, patch
+
+        mgr = WorktreeManager(repo_root=tmp_path)
+
+        mock_proc = AsyncMock()
+        mock_proc.communicate = AsyncMock(side_effect=TimeoutError("timed out"))
+        mock_proc.kill = AsyncMock()
+        mock_proc.wait = AsyncMock()
+
+        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
+            code, output = await mgr._run_git("status")
+
+        assert code == 1
+        assert "timed out" in output

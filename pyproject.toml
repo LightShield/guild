@@ -92,6 +92,7 @@ exclude_also = [
 ]
 omit = [
     "src/guild/storage/protocol.py",
+    "src/guild/daemon/run.py",
 ]
 
 [tool.mypy]

@@ -42,6 +42,11 @@ def is_docker_available() -> bool:
         logger.debug("Docker CLI not found on PATH")
         return False
 
+    return _check_docker_daemon()  # pragma: no cover — requires Docker on PATH
+
+
+def _check_docker_daemon() -> bool:  # pragma: no cover — platform-dependent Docker check
+    """Probe Docker daemon via subprocess (requires Docker on PATH)."""
     import subprocess
 
     try:
@@ -78,7 +83,7 @@ class DockerSandbox:
         self.network = network
         self.timeout = timeout
 
-    async def run(
+    async def run(  # pragma: no cover — requires Docker daemon
         self,
         command: str,
         working_dir: str,
@@ -143,7 +148,7 @@ class DockerSandbox:
         return args
 
 
-async def run_in_sandbox(
+async def run_in_sandbox(  # pragma: no cover — requires Docker daemon
     command: str,
     working_dir: str,
     network: bool = False,

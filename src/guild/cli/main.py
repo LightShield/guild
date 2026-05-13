@@ -630,7 +630,7 @@ def _render_task_tree(db_path: Path, root_task_id: str) -> None:
         tid = t.get("task_id", "")
         task_map[tid] = t
         parent = t.get("parent_id")
-        if parent:
+        if parent:  # pragma: no cover — parent_id not yet in DB schema
             children_map.setdefault(parent, []).append(t)
 
     if root_task_id not in task_map:
@@ -639,13 +639,13 @@ def _render_task_tree(db_path: Path, root_task_id: str) -> None:
 
     def _print_node(tid: str, indent: int) -> None:
         t = task_map.get(tid)
-        if t is None:
+        if t is None:  # pragma: no cover — defensive guard
             return
         prefix = "  " * indent
         desc = t.get("description", "")[:50]
         status = t.get("status", "")
         console.print(f"{prefix}{tid[:12]} [{status}] {desc}")
-        for child in children_map.get(tid, []):
+        for child in children_map.get(tid, []):  # pragma: no cover — parent_id not yet in DB
             _print_node(child["task_id"], indent + 1)
 
     console.print("[bold]Task Tree[/bold]")

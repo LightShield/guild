@@ -135,3 +135,21 @@ class TestSpawnedAgentExecution:
         result = await spawner.execute_spawn({}, None)
         assert result.success is False
         assert "task" in (result.error or "").lower()
+
+
+@pytest.mark.unit
+class TestSpawnMaxDepth:
+    """AgentSpawner raises RuntimeError when max_depth is exceeded."""
+
+    async def test_spawn_raises_on_max_depth_exceeded(self) -> None:
+        """spawn() raises RuntimeError when current depth >= max_depth."""
+        provider = _make_provider()
+        bus = MessageBus()
+        spawner = AgentSpawner(
+            provider=provider, storage=None, bus=bus, max_depth=2
+        )
+        # Simulate being at max depth already
+        spawner._current_depth = 2
+
+        with pytest.raises(RuntimeError, match="exceeds max_depth"):
+            await spawner.spawn("Deep sub-task")
