@@ -129,10 +129,20 @@ Requirements-Based Testing (RBT) with auto-generated RTM:
 5. **Three separate layers** — harness / behaviors / orchestration evolve independently
 6. **Fix, log, and learn** — every mistake feeds the confidence-scored learning loop
 
+## Autonomous Work Policy
+
+When given autonomous work (user says "go", "continue", "don't stop"):
+- **NEVER stop to report progress.** Keep working until truly finished.
+- **Before claiming "done":** verify: are there pending subagents? unreviewed guidelines? unfixed violations? unrun tests? If YES → keep working.
+- **After fixing violations:** re-run the review that found them to confirm they're actually fixed.
+- **After implementing features:** run tests, check coverage, verify lint/types.
+- **Commit and push frequently** — don't accumulate large uncommitted diffs.
+- **If blocked** (needs user input, external service down): state the blocker clearly and stop. Otherwise keep going.
+
 ## Remote Ollama Setup
 
 Development uses a remote Ollama instance on the LAN:
 ```bash
-./scripts/remote-ollama-setup.sh --client 192.168.0.110
-guild config --set provider.base_url=http://192.168.0.110:11434
+./scripts/remote-ollama-setup.sh --client 192.168.0.113
+guild config --set provider.base_url=http://192.168.0.113:11434
 ```
