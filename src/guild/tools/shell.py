@@ -8,6 +8,7 @@ import re
 from typing import Any
 
 from guild.config.constants import MAX_SHELL_OUTPUT_CHARS, SHELL_TIMEOUT_SECONDS
+from guild.security.docker_sandbox import is_docker_available, run_in_sandbox
 from guild.tools.base import ToolResult
 
 __all__ = [
@@ -46,12 +47,19 @@ def _check_denylist(command: str) -> str | None:
     return None
 
 
-async def execute_shell(args: dict[str, Any], working_dir: str | None = None) -> ToolResult:
+async def execute_shell(
+    args: dict[str, Any],
+    working_dir: str | None = None,
+    sandbox_mode: str = "auto",
+    sandbox_network: bool = False,
+) -> ToolResult:
     """Execute a shell command with denylist check and timeout.
 
     Args:
         args: Must contain "command". Optional "timeout" (seconds).
         working_dir: Directory in which to execute the command.
+        sandbox_mode: "auto" (docker if available), "docker" (require), "none" (disable).
+        sandbox_network: Whether sandboxed commands get network access.
 
     Returns:
         ToolResult with stdout/stderr on success, error on failure.
@@ -70,7 +78,38 @@ async def execute_shell(args: dict[str, Any], working_dir: str | None = None) ->
     if not isinstance(timeout, (int, float)):
         timeout = SHELL_TIMEOUT_SECONDS
 
+    # Route through Docker sandbox if enabled and available
+    use_sandbox = _should_use_sandbox(sandbox_mode)
+    if use_sandbox and working_dir:
+        return await _run_sandboxed(command, working_dir, timeout, sandbox_network)
+
     return await _run_command(command, working_dir, timeout)
+
+
+def _should_use_sandbox(sandbox_mode: str) -> bool:
+    """Determine whether to use Docker sandbox based on mode and availability."""
+    if sandbox_mode == "none":
+        return False
+    if sandbox_mode == "docker":
+        return True
+    # "auto" mode: use Docker if available
+    return is_docker_available()
+
+
+async def _run_sandboxed(
+    command: str,
+    working_dir: str,
+    timeout: float,
+    network: bool,
+) -> ToolResult:
+    """Run command inside Docker sandbox and format result."""
+    exit_code, stdout, stderr = await run_in_sandbox(
+        command=command,
+        working_dir=working_dir,
+        network=network,
+        timeout=timeout,
+    )
+    return _format_result(stdout, stderr, exit_code)
 
 
 async def _run_command(command: str, working_dir: str | None, timeout: float) -> ToolResult:

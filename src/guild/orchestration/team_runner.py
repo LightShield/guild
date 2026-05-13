@@ -163,11 +163,42 @@ class TeamRunner:
         self._outputs: dict[str, str] = {}
         self._agent_statuses: dict[str, AgentStatus] = {}
         self._caller_decisions: dict[str, str] = {}
+        self._preserved_messages: dict[str, list[dict[str, Any]]] = {}
 
     @property
     def agent_statuses(self) -> dict[str, AgentStatus]:
         """Current lifecycle state of each agent (REQ-04.9)."""
         return dict(self._agent_statuses)
+
+    @property
+    def preserved_messages(self) -> dict[str, list[dict[str, Any]]]:
+        """Message histories preserved for paused agents (REQ-04.9)."""
+        return dict(self._preserved_messages)
+
+    def pause_agent(self, block_name: str, messages: list[dict[str, Any]]) -> None:
+        """Pause an agent, preserving its message history for resume (REQ-04.9).
+
+        Args:
+            block_name: The block instance name to pause.
+            messages: The full message history to preserve.
+        """
+        self._agent_statuses[block_name] = AgentStatus.PAUSED
+        self._preserved_messages[block_name] = list(messages)
+        logger.info("Agent '%s' paused with %d messages preserved", block_name, len(messages))
+
+    def resume_agent(self, block_name: str) -> list[dict[str, Any]]:
+        """Resume a paused agent, returning its preserved message history.
+
+        Args:
+            block_name: The block instance name to resume.
+
+        Returns:
+            The preserved message history.
+        """
+        self._agent_statuses[block_name] = AgentStatus.RUNNING
+        messages = self._preserved_messages.pop(block_name, [])
+        logger.info("Agent '%s' resumed with %d messages", block_name, len(messages))
+        return messages
 
     def set_caller_decision(self, block_name: str, decision: str) -> None:
         """Pre-set a caller decision for handling block failure (REQ-04.52).

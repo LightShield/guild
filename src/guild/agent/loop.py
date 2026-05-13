@@ -321,3 +321,31 @@ class AgentLoop:
             if name in TOOL_SCHEMAS:
                 schemas.append({"type": "function", "function": TOOL_SCHEMAS[name]})
         return schemas
+
+    def generate_timeout_report(self) -> str:
+        """Generate a progress report summarizing accomplishments before timeout.
+
+        Returns a structured summary including:
+        - Tools used and their outcomes
+        - Number of turns completed
+        - Last assistant message content
+        """
+        tools_used = list(dict.fromkeys(self._attempted_tools))  # preserve order, dedup
+        turns_completed = len(
+            [m for m in self.messages if m.role == "assistant"]
+        )
+        last_assistant = ""
+        for msg in reversed(self.messages):
+            if msg.role == "assistant" and msg.content:
+                last_assistant = msg.content[:200]
+                break
+
+        parts: list[str] = [
+            f"Timeout reached after {turns_completed} turn(s).",
+            f"Tools used: {', '.join(tools_used) if tools_used else 'none'}.",
+            f"Total tool calls: {self.total_tool_calls}.",
+        ]
+        if last_assistant:
+            parts.append(f"Last progress: {last_assistant}")
+
+        return " ".join(parts)

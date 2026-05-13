@@ -17,7 +17,9 @@ if TYPE_CHECKING:
 
 __all__ = [
     "answer_pending_question",
+    "approve_all_questions",
     "approve_learning",
+    "approve_selected_questions",
     "decay_learnings",
     "fetch_audit",
     "fetch_decisions",
@@ -171,3 +173,32 @@ async def answer_pending_question(db_path: Path, question_id: str, response: str
     async with Storage(db_path) as store:
         queue = QuestionQueue(store)
         await queue.answer_question(question_id, response)
+
+
+async def approve_all_questions(db_path: Path) -> int:
+    """Approve all pending questions with a default 'approved' answer.
+
+    Returns the number of questions approved.
+    """
+    from guild.escalation.queue import QuestionQueue
+    from guild.storage.sqlite import Storage
+
+    async with Storage(db_path) as store:
+        queue = QuestionQueue(store)
+        pending = await queue.get_pending()
+        answers = {q.id: "approved" for q in pending}
+        return await queue.batch_answer(answers)
+
+
+async def approve_selected_questions(db_path: Path, question_ids: list[str]) -> int:
+    """Approve specific questions by ID with a default 'approved' answer.
+
+    Returns the number of questions approved.
+    """
+    from guild.escalation.queue import QuestionQueue
+    from guild.storage.sqlite import Storage
+
+    async with Storage(db_path) as store:
+        queue = QuestionQueue(store)
+        answers = dict.fromkeys(question_ids, "approved")
+        return await queue.batch_answer(answers)

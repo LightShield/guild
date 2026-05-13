@@ -1823,10 +1823,35 @@ class TestAgentPauseResumePreservesHistory:
     """Pausing and resuming preserves message history."""
 
     @pytest.mark.ac("AC-04.9.4")
-    @pytest.mark.skip(reason="Not yet implemented: agent pause/resume with message preservation not yet supported at TeamRunner level")
     async def test_pause_resume_preserves(self) -> None:
         """Agent paused at turn 5 retains all messages on resume."""
-        pass
+        reg = BlockRegistry()
+        team = TeamDef(
+            name="test",
+            entry_block="worker",
+            blocks={"worker": "coder"},
+            connections=[],
+        )
+        provider = _mock_provider("result")
+        tr = TeamRunner(team, reg, provider)
+
+        # Simulate pausing with preserved messages
+        messages = [
+            {"role": "system", "content": "You are a coder"},
+            {"role": "user", "content": "Fix bug"},
+            {"role": "assistant", "content": "Looking at the code..."},
+            {"role": "user", "content": "Continue"},
+            {"role": "assistant", "content": "Found the issue"},
+        ]
+        tr.pause_agent("worker", messages)
+        assert tr.agent_statuses["worker"] == AgentStatus.PAUSED
+        assert len(tr.preserved_messages["worker"]) == 5
+
+        # Resume and verify messages preserved
+        restored = tr.resume_agent("worker")
+        assert len(restored) == 5
+        assert restored[0]["content"] == "You are a coder"
+        assert tr.agent_statuses["worker"] == AgentStatus.RUNNING
 
 
 class TestAgentMonitoringReturnsAllStatuses:
@@ -1976,20 +2001,81 @@ class TestMergeConflictDetection:
     """Merge conflict to staging detected and reported."""
 
     @pytest.mark.ac("AC-04.14.3")
-    @pytest.mark.skip(reason="Not yet implemented: merge conflict detection for staging not yet tested e2e")
     async def test_merge_conflict_reported(self, tmp_path: Path) -> None:
         """Second merge with conflicting changes is detected."""
-        pass
+        # Initialize git repo with a commit
+        proc = await asyncio.create_subprocess_exec(
+            "git", "init", str(tmp_path),
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        )
+        await proc.communicate()
+        (tmp_path / "file.txt").write_text("original")
+        await _git(tmp_path, "add", ".")
+        await _git(tmp_path, "commit", "-m", "init")
+
+        mgr = WorktreeManager(tmp_path)
+
+        # Create first task branch and make changes
+        info1 = await mgr.create("task-a", base_branch="main")
+        (info1.path / "file.txt").write_text("change from task-a")
+        await _git(info1.path, "add", ".")
+        await _git(info1.path, "commit", "-m", "task-a change")
+
+        # Create second task branch with conflicting changes
+        info2 = await mgr.create("task-b", base_branch="main")
+        (info2.path / "file.txt").write_text("change from task-b")
+        await _git(info2.path, "add", ".")
+        await _git(info2.path, "commit", "-m", "task-b change")
+
+        # Merge first (should succeed)
+        success1, _msg1 = await mgr.merge_to_staging("task-a")
+        assert success1 is True
+
+        # Merge second (should detect conflict)
+        success2, msg2 = await mgr.merge_to_staging("task-b")
+        assert success2 is False
+        assert "conflict" in msg2.lower() or "Merge conflict" in msg2
+
+        # Cleanup
+        await mgr.remove("task-a")
+        await mgr.remove("task-b")
 
 
 class TestStagingBranchAutoCreated:
     """Staging branch auto-created if it does not exist."""
 
     @pytest.mark.ac("AC-04.14.4")
-    @pytest.mark.skip(reason="Not yet implemented: staging branch auto-creation not yet tested e2e")
     async def test_staging_auto_created(self, tmp_path: Path) -> None:
         """First merge_to_staging() auto-creates the branch."""
-        pass
+        # Initialize git repo with a commit
+        proc = await asyncio.create_subprocess_exec(
+            "git", "init", str(tmp_path),
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        )
+        await proc.communicate()
+        (tmp_path / "file.txt").write_text("initial")
+        await _git(tmp_path, "add", ".")
+        await _git(tmp_path, "commit", "-m", "init")
+
+        mgr = WorktreeManager(tmp_path)
+
+        # Create a task branch
+        info = await mgr.create("task-auto", base_branch="main")
+        (info.path / "new_file.txt").write_text("new content")
+        await _git(info.path, "add", ".")
+        await _git(info.path, "commit", "-m", "add new file")
+
+        # First merge should auto-create staging branch
+        success, msg = await mgr.merge_to_staging("task-auto")
+        assert success is True
+        assert "staging" in msg.lower() or "Successfully merged" in msg
+
+        # Verify staging branch was created
+        staging_exists = await mgr._branch_exists("guild/staging")
+        assert staging_exists is True
+
+        # Cleanup
+        await mgr.remove("task-auto")
 
 
 class TestDefaultMergePolicyStaging:

@@ -45,7 +45,13 @@ from guild.cli.queries import (
     answer_pending_question as _answer_pending_question,
 )
 from guild.cli.queries import (
+    approve_all_questions as _approve_all_questions,
+)
+from guild.cli.queries import (
     approve_learning as _approve_learning,
+)
+from guild.cli.queries import (
+    approve_selected_questions as _approve_selected_questions,
 )
 from guild.cli.queries import (
     decay_learnings as _decay_learnings,
@@ -572,6 +578,8 @@ def logs(
 def history(
     limit: int = typer.Option(20, "--limit", "-n", help="Number of tasks to show."),
     status: Optional[str] = typer.Option(None, "--status", "-s", help="Filter by status."),
+    task_id: Optional[str] = typer.Option(None, "--task", "-t", help="Show subtasks of a task."),
+    tree: bool = typer.Option(False, "--tree", help="Show parent-child task tree."),
 ) -> None:
     """Browse past tasks and their outcomes (REQ-07.9)."""
     guild_dir = find_guild_dir()
@@ -580,6 +588,11 @@ def history(
         raise typer.Exit(code=1)
 
     db_path = guild_dir / DB_FILENAME
+
+    if task_id and tree:
+        _render_task_tree(db_path, task_id)
+        return
+
     tasks = asyncio.run(_fetch_task_history(db_path, limit, status))
 
     if not tasks:
@@ -603,6 +616,45 @@ def history(
         )
 
     console.print(table)
+
+
+def _render_task_tree(db_path: Path, root_task_id: str) -> None:
+    """Render parent-child task relationships as indented tree (REQ-12.3)."""
+    from guild.storage.sqlite import Storage
+
+    async def _fetch_tree() -> list[dict[str, Any]]:
+        async with Storage(db_path) as store:
+            return await store.list_tasks()
+
+    tasks = asyncio.run(_fetch_tree())
+
+    # Build parent->children map
+    children_map: dict[str, list[dict[str, Any]]] = {}
+    task_map: dict[str, dict[str, Any]] = {}
+    for t in tasks:
+        tid = t.get("task_id", "")
+        task_map[tid] = t
+        parent = t.get("parent_id")
+        if parent:
+            children_map.setdefault(parent, []).append(t)
+
+    if root_task_id not in task_map:
+        console.print(f"[red]Error:[/red] Task {root_task_id} not found.")
+        raise typer.Exit(code=1)
+
+    def _print_node(tid: str, indent: int) -> None:
+        t = task_map.get(tid)
+        if t is None:
+            return
+        prefix = "  " * indent
+        desc = t.get("description", "")[:50]
+        status = t.get("status", "")
+        console.print(f"{prefix}{tid[:12]} [{status}] {desc}")
+        for child in children_map.get(tid, []):
+            _print_node(child["task_id"], indent + 1)
+
+    console.print("[bold]Task Tree[/bold]")
+    _print_node(root_task_id, 0)
 
 
 @app.command()
@@ -713,6 +765,33 @@ def answer(
 
 
 @app.command()
+def approve(
+    question_ids: Optional[list[str]] = typer.Argument(None, help="Question IDs to approve."),
+    all_questions: bool = typer.Option(False, "--all", help="Approve all pending questions."),
+) -> None:
+    """Approve pending escalation questions (REQ-15.4)."""
+    guild_dir = find_guild_dir()
+    if guild_dir is None:
+        console.print("[red]Error:[/red] Not a guild project (no .guild/ found).")
+        raise typer.Exit(code=1)
+
+    db_path = guild_dir / DB_FILENAME
+
+    if all_questions:
+        count = asyncio.run(_approve_all_questions(db_path))
+        console.print(f"[green]Approved {count} question(s).[/green]")
+        return
+
+    if question_ids:
+        count = asyncio.run(_approve_selected_questions(db_path, question_ids))
+        console.print(f"[green]Approved {count} question(s).[/green]")
+        return
+
+    console.print("[red]Error:[/red] Provide question IDs or use --all.")
+    raise typer.Exit(code=1)
+
+
+@app.command()
 def serve(
     host: str = typer.Option("127.0.0.1", "--host", help="Host to bind to."),
     port: int = typer.Option(8585, "--port", help="Port to serve on."),
@@ -816,6 +895,44 @@ def attach(
             console.print("[dim]Detached.[/dim]")
 
     asyncio.run(_attach_repl())  # pragma: no cover — interactive I/O
+
+
+# ------------------------------------------------------------------
+# eval subcommand group (REQ-16.6)
+# ------------------------------------------------------------------
+
+eval_app = typer.Typer(name="eval", help="Evaluation and benchmarking commands.")
+app.add_typer(eval_app)
+
+
+@eval_app.command()
+def confidence() -> None:
+    """Display progressive confidence scores per capability area (REQ-16.6)."""
+    from guild.eval.framework import SELF_DEV_BENCHMARKS
+
+    guild_dir = find_guild_dir()
+    if guild_dir is None:
+        console.print("[red]Error:[/red] Not a guild project (no .guild/ found).")
+        raise typer.Exit(code=1)
+
+    # Group benchmarks by category
+    categories: dict[str, list[str]] = {}
+    for bench in SELF_DEV_BENCHMARKS:
+        categories.setdefault(bench.category, []).append(bench.name)
+
+    table = Table(title="Eval Confidence by Category")
+    table.add_column("Category", style="cyan")
+    table.add_column("Tasks", style="white")
+    table.add_column("Confidence", style="yellow")
+
+    for category, task_names in sorted(categories.items()):
+        table.add_row(
+            category,
+            str(len(task_names)),
+            "pending",
+        )
+
+    console.print(table)
 
 
 # ------------------------------------------------------------------

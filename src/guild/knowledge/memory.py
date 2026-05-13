@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from guild.storage.sqlite import Storage
 
-__all__ = ["MemoryEntry", "MemoryIndex"]
+__all__ = ["IdleConsolidationScheduler", "MemoryEntry", "MemoryIndex"]
 
 logger = logging.getLogger(__name__)
 
@@ -98,3 +98,43 @@ class MemoryIndex:
         header = "## Agent Memory Index\n"
         lines = [f"- {entry}" for entry in index[:_MAX_INDEX_LINES]]
         return header + "\n".join(lines)
+
+
+class IdleConsolidationScheduler:
+    """Triggers memory consolidation automatically during idle periods (REQ-07.7).
+
+    When the agent is idle (between tasks), this scheduler runs
+    consolidation to clean up stale/duplicate memories.
+    """
+
+    def __init__(self, memory_index: MemoryIndex) -> None:
+        self._memory_index = memory_index
+        self._last_consolidation: str | None = None
+        self._consolidation_count: int = 0
+
+    @property
+    def last_consolidation(self) -> str | None:
+        """ISO timestamp of the last consolidation run."""
+        return self._last_consolidation
+
+    @property
+    def consolidation_count(self) -> int:
+        """Number of consolidation runs performed."""
+        return self._consolidation_count
+
+    async def on_idle(self) -> int:
+        """Called when agent becomes idle. Triggers consolidation.
+
+        Returns the number of changes made during consolidation.
+        """
+        from datetime import UTC, datetime
+
+        changes = await self._memory_index.consolidate()
+        self._last_consolidation = datetime.now(UTC).isoformat()
+        self._consolidation_count += 1
+        logger.info(
+            "Idle consolidation complete: %d changes (run #%d)",
+            changes,
+            self._consolidation_count,
+        )
+        return changes

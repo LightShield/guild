@@ -23,6 +23,7 @@ __all__ = [
     "TaskNode",
     "TaskSpec",
     "VerificationStep",
+    "format_verification_results",
     "run_verification",
     "transition_task",
 ]
@@ -287,6 +288,19 @@ def _verify_file_contains(
     if step.expected and step.expected in content:
         return True, f"PASS: file '{step.target}' contains expected text"
     return False, f"FAIL: file '{step.target}' missing expected text"
+
+
+def format_verification_results(results: list[str]) -> str:
+    """Format verification step results for display in guild status (REQ-06.2).
+
+    Returns a multi-line string showing each step's PASS/FAIL outcome.
+    """
+    if not results:
+        return "No verification results."
+    lines: list[str] = []
+    for i, result in enumerate(results, 1):
+        lines.append(f"  Step {i}: {result}")
+    return "\n".join(lines)
 
 
 async def transition_task(

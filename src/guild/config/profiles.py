@@ -95,7 +95,11 @@ def load_permission_profiles(guild_dir: Path) -> dict[str, PermissionProfile]:
     return profiles
 
 
-def validate_config(config: GuildConfig, guild_dir: Path) -> list[str]:
+def validate_config(
+    config: GuildConfig,
+    guild_dir: Path,
+    known_models: list[str] | None = None,
+) -> list[str]:
     """Validate config on startup. Returns list of errors (empty = valid).
 
     Checks:
@@ -104,6 +108,7 @@ def validate_config(config: GuildConfig, guild_dir: Path) -> list[str]:
     - base_url is non-empty
     - max_concurrent_agents > 0
     - agent profile references valid permissions
+    - escalation chain model names are known (if known_models provided)
     """
     errors: list[str] = []
 
@@ -131,6 +136,15 @@ def validate_config(config: GuildConfig, guild_dir: Path) -> list[str]:
             errors.append(
                 f"Agent profile '{name}' has invalid permission: " f"'{profile.permission}'"
             )
+
+    # Validate escalation chain model names (REQ-17.7)
+    if config.escalation_chain and known_models is not None:
+        chain_models = [m.strip() for m in config.escalation_chain.split(",") if m.strip()]
+        for model_name in chain_models:
+            if model_name not in known_models:
+                warning = f"Unknown model in escalation chain: '{model_name}'"
+                errors.append(warning)
+                logger.warning(warning)
 
     return errors
 

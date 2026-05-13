@@ -1436,9 +1436,23 @@ class TestConsolidationRunsDuringIdle:
     """Consolidation runs automatically during idle periods."""
 
     @pytest.mark.ac("AC-07.7.3")
-    @pytest.mark.skip(reason="Not yet implemented: automatic idle-triggered consolidation scheduling")
     async def test_consolidation_runs_when_idle(self, storage: Storage) -> None:
         """Consolidation runs without manual invocation during idle."""
+        from guild.knowledge.memory import IdleConsolidationScheduler, MemoryIndex
+
+        memory_index = MemoryIndex(storage)
+        scheduler = IdleConsolidationScheduler(memory_index)
+
+        # Add some memories for consolidation
+        await storage.add_memory("Pattern A", "detail A", "pattern")
+        await storage.add_memory("Pattern A", "detail A duplicate", "pattern")
+
+        # Trigger idle consolidation
+        changes = await scheduler.on_idle()
+        assert isinstance(changes, int)
+        assert changes >= 0
+        assert scheduler.consolidation_count == 1
+        assert scheduler.last_consolidation is not None
 
 
 # ------------------------------------------------------------------

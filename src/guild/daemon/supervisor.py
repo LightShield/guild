@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import signal
@@ -26,6 +27,7 @@ class DaemonSupervisor:
     - Installs SIGTERM/SIGINT handlers for graceful shutdown
     - Invokes on_checkpoint callback on shutdown signal
     - Runs the agent coroutine under supervision
+    - Auto-recovery: restarts crashed agents with exponential backoff
     """
 
     def __init__(
@@ -33,6 +35,7 @@ class DaemonSupervisor:
         run_dir: Path,
         task_id: str,
         on_checkpoint: Callable[[], Coroutine[Any, Any, None]] | None = None,
+        auto_recovery: bool = False,
     ) -> None:
         self.run_dir = run_dir
         self.task_id = task_id
@@ -41,6 +44,10 @@ class DaemonSupervisor:
         self._original_sigterm: Any = None
         self._original_sigint: Any = None
         self.control_socket: ControlSocket = ControlSocket(self.socket_path)
+        self._auto_recovery = auto_recovery
+        self._crash_count: int = 0
+        self._max_crashes: int = 3
+        self._status: str = "running"
 
     @property
     def pid_path(self) -> Path:
@@ -114,21 +121,81 @@ class DaemonSupervisor:
             else:  # pragma: no cover — defensive
                 loop.run_until_complete(self._on_checkpoint())
 
-    async def run(self, coro: Coroutine[Any, Any, Any]) -> Any:
+    @property
+    def status(self) -> str:
+        """Current supervisor status."""
+        return self._status
+
+    @property
+    def crash_count(self) -> int:
+        """Number of crashes observed during auto-recovery."""
+        return self._crash_count
+
+    async def run(
+        self,
+        coro: Coroutine[Any, Any, Any],
+        coro_factory: Callable[[], Coroutine[Any, Any, Any]] | None = None,
+    ) -> Any:
         """Run a coroutine under supervision with PID tracking and signals.
 
         Creates PID file, installs signal handlers, awaits the coroutine,
         and cleans up on exit (normal or exceptional).
+
+        When auto_recovery is enabled and a coro_factory is provided, the
+        supervisor will restart the agent from the factory after crashes,
+        applying exponential backoff (5 * crash_count seconds). After
+        _max_crashes consecutive failures, the supervisor sets status to
+        'crashed_escalated' and raises the last exception.
         """
         self.run_dir.mkdir(parents=True, exist_ok=True)
         self.write_pid_file()
         self.install_signal_handlers()
+        self._status = "running"
         try:
-            result = await coro
+            result = await self._run_with_recovery(coro, coro_factory)
             return result
-        except Exception as exc:
-            logger.debug("Agent failed: %s", exc)
-            raise
         finally:
             self.restore_signal_handlers()
             self.remove_pid_file()
+
+    async def _run_with_recovery(
+        self,
+        coro: Coroutine[Any, Any, Any],
+        coro_factory: Callable[[], Coroutine[Any, Any, Any]] | None = None,
+    ) -> Any:
+        """Internal: execute coroutine with optional auto-recovery."""
+        current_coro = coro
+        while True:
+            try:
+                result = await current_coro
+                self._status = "completed"
+                return result
+            except Exception as exc:
+                self._crash_count += 1
+                logger.warning(
+                    "Agent crashed (attempt %d/%d): %s",
+                    self._crash_count,
+                    self._max_crashes,
+                    exc,
+                )
+
+                if not self._auto_recovery or coro_factory is None:
+                    self._status = "crashed"
+                    raise
+
+                if self._crash_count >= self._max_crashes:
+                    self._status = "crashed_escalated"
+                    logger.error(
+                        "Agent exceeded max crashes (%d). Escalating to human.",
+                        self._max_crashes,
+                    )
+                    raise
+
+                backoff = 5 * self._crash_count
+                logger.info(
+                    "Auto-recovery: restarting in %d seconds (attempt %d)",
+                    backoff,
+                    self._crash_count,
+                )
+                await asyncio.sleep(backoff)
+                current_coro = coro_factory()

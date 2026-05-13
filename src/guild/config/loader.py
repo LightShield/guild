@@ -25,6 +25,8 @@ __all__ = [
     "ConfigWatcher",
     "DB_FILENAME",
     "GUILD_DIR_NAME",
+    "NON_RELOADABLE_FIELDS",
+    "RELOADABLE_FIELDS",
     "find_guild_dir",
     "load_config",
     "toml_literal",
@@ -217,6 +219,30 @@ def load_config(
     return config  # type: ignore[no-any-return]
 
 
+# Fields that can be hot-reloaded without restart
+RELOADABLE_FIELDS: set[str] = {
+    "default_permission",
+    "autonomy_timeout_minutes",
+    "stuck_max_repeated_errors",
+    "stuck_max_no_progress_turns",
+    "stuck_max_repeated_calls",
+    "shell_timeout_seconds",
+    "shell_max_output_chars",
+    "resource_mode",
+}
+
+# Fields that require a restart to take effect
+NON_RELOADABLE_FIELDS: set[str] = {
+    "provider_name",
+    "base_url",
+    "model",
+    "temperature",
+    "max_tokens",
+    "escalation_chain",
+    "escalation_cli_providers",
+}
+
+
 class ConfigWatcher:
     """Watch config file for changes and reload on mtime change (REQ-14.6).
 
@@ -228,6 +254,13 @@ class ConfigWatcher:
         self._config_path = config_path
         self._callback = callback
         self._last_mtime: float | None = self._get_mtime()
+        self._last_config: GuildConfig | None = None
+        self._non_reloadable_warnings: list[str] = []
+
+    @property
+    def non_reloadable_warnings(self) -> list[str]:
+        """Warnings about non-reloadable config changes since last check."""
+        return list(self._non_reloadable_warnings)
 
     def _get_mtime(self) -> float | None:
         """Return file modification time, or None if file missing."""
@@ -247,6 +280,25 @@ class ConfigWatcher:
             return False
 
         self._last_mtime = current_mtime
+        self._non_reloadable_warnings = []
+
+        # Detect non-reloadable changes
+        guild_dir = self._config_path.parent
+        new_config = load_config(guild_dir)
+        if self._last_config is not None:
+            self._detect_non_reloadable_changes(new_config)
+        self._last_config = new_config
+
         self._callback()
         logger.info("Config reloaded from %s", self._config_path)
         return True
+
+    def _detect_non_reloadable_changes(self, new_config: GuildConfig) -> None:
+        """Detect changes to non-reloadable fields and emit warnings."""
+        for field_name in NON_RELOADABLE_FIELDS:
+            old_val = getattr(self._last_config, field_name, None)
+            new_val = getattr(new_config, field_name, None)
+            if old_val != new_val:
+                msg = f"restart required for {field_name} to take effect"
+                self._non_reloadable_warnings.append(msg)
+                logger.warning(msg)

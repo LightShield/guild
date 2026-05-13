@@ -122,6 +122,33 @@ class GuildConfig(ConfigsLoader):  # type: ignore[misc]
         default=False, section="daemon", description="Automatically restart crashed agents"
     )
 
+    # Presence-aware notifications (daemon section)
+    presence_aware_notifications: bool = Field(
+        default=False,
+        section="daemon",
+        description="Check user presence before dispatching notifications",
+    )
+
+    # Security section
+    sandbox_mode: str = Field(
+        default="auto",
+        section="security",
+        description="Sandbox mode: auto/docker/none",
+    )
+    sandbox_network: bool = Field(
+        default=False,
+        section="security",
+        description="Whether sandboxed commands get network access",
+    )
+
+    # Routing section (REQ-17.3)
+    permission_model: str = Field(
+        default="",
+        section="routing",
+        env="GUILD_PERMISSION_MODEL",
+        description="Lightweight model for permission decisions (empty = use main model)",
+    )
+
     # Resource section
     resource_mode: SchedulingMode = Field(
         default=SchedulingMode.POLITE,

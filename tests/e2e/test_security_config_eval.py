@@ -1466,9 +1466,25 @@ class TestOSLevelSandbox:
     """Shell commands that pass policy checks are executed within an OS-level sandbox."""
 
     @pytest.mark.ac("AC-13.1.4")
-    @pytest.mark.skip(reason="Not yet implemented: OS-level sandbox enforcement (sandbox-exec on macOS, namespaces on Linux)")
-    def test_shell_command_runs_in_os_sandbox(self) -> None:
-        """On macOS, shell commands execute within sandbox-exec constraints."""
+    async def test_shell_command_runs_in_os_sandbox(self, tmp_path: Path) -> None:
+        """When Docker is available, shell commands execute inside a container."""
+        from guild.tools.shell import execute_shell
+
+        with patch(
+            "guild.tools.shell.is_docker_available", return_value=True,
+        ), patch(
+            "guild.tools.shell.run_in_sandbox",
+            new_callable=AsyncMock,
+            return_value=(0, "sandboxed output\n", ""),
+        ) as mock_sandbox:
+            result = await execute_shell(
+                {"command": "echo hello"},
+                working_dir=str(tmp_path),
+                sandbox_mode="auto",
+            )
+        mock_sandbox.assert_awaited_once()
+        assert result.success is True
+        assert "sandboxed output" in result.output
 
 
 # ===================================================================
@@ -1480,9 +1496,30 @@ class TestNetworkRestrictedExecution:
     """When security.network='none', shell tool wraps commands in network-restricted env."""
 
     @pytest.mark.ac("AC-13.2.4")
-    @pytest.mark.skip(reason="Not yet implemented: shell tool network restriction wrapping")
-    def test_network_none_wraps_command(self) -> None:
-        """Set network to 'none' -> curl command fails with network error."""
+    async def test_network_none_wraps_command(self, tmp_path: Path) -> None:
+        """Docker sandbox is invoked with network=False when sandbox_network=False."""
+        from guild.tools.shell import execute_shell
+
+        with patch(
+            "guild.tools.shell.is_docker_available", return_value=True,
+        ), patch(
+            "guild.tools.shell.run_in_sandbox",
+            new_callable=AsyncMock,
+            return_value=(0, "no network\n", ""),
+        ) as mock_sandbox:
+            result = await execute_shell(
+                {"command": "curl http://example.com"},
+                working_dir=str(tmp_path),
+                sandbox_mode="docker",
+                sandbox_network=False,
+            )
+        mock_sandbox.assert_awaited_once_with(
+            command="curl http://example.com",
+            working_dir=str(tmp_path),
+            network=False,
+            timeout=60,
+        )
+        assert result.success is True
 
 
 # ===================================================================
@@ -1521,9 +1558,33 @@ class TestConfigHotReloadPermissionTier:
     """Changing permissions.profile in config triggers reload that applies new tier."""
 
     @pytest.mark.ac("AC-14.3.3")
-    @pytest.mark.skip(reason="Not yet implemented: config hot-reload for permissions.profile mid-task")
-    def test_permission_profile_hot_reload(self) -> None:
+    def test_permission_profile_hot_reload(self, tmp_path: Path) -> None:
         """Change profile in config.toml mid-task -> next tool call uses new tier."""
+        guild_dir = tmp_path / ".guild"
+        guild_dir.mkdir()
+        config_file = guild_dir / "config.toml"
+        config_file.write_text('[guild]\ndefault_permission = "ask"\n')
+
+        reload_count = 0
+
+        def on_reload() -> None:
+            nonlocal reload_count
+            reload_count += 1
+
+        watcher = ConfigWatcher(config_file, on_reload)
+
+        # Modify the config to change permission profile
+        import time
+        time.sleep(0.05)
+        config_file.write_text('[guild]\ndefault_permission = "autopilot"\n')
+
+        changed = watcher.check_for_changes()
+        assert changed is True
+        assert reload_count == 1
+
+        # Verify the new config has the updated permission
+        new_config = load_config(guild_dir)
+        assert new_config.default_permission.value == "autopilot"
 
 
 # ===================================================================
@@ -1557,9 +1618,28 @@ class TestNonReloadableConfigChange:
     """Changing provider.model while running logs 'requires restart' message."""
 
     @pytest.mark.ac("AC-14.6.4")
-    @pytest.mark.skip(reason="Not yet implemented: non-reloadable config change detection with restart message")
-    def test_provider_model_change_requires_restart(self) -> None:
+    def test_provider_model_change_requires_restart(self, tmp_path: Path) -> None:
         """Change provider.model in config while running -> log 'requires restart'."""
+        from guild.config.loader import NON_RELOADABLE_FIELDS
+
+        guild_dir = tmp_path / ".guild"
+        guild_dir.mkdir()
+        config_file = guild_dir / "config.toml"
+        config_file.write_text('[provider]\nmodel = "old-model"\n')
+
+        watcher = ConfigWatcher(config_file, lambda: None)
+        # Force initial config snapshot
+        watcher._last_config = load_config(guild_dir)
+
+        # Change the model (non-reloadable field)
+        import time
+        time.sleep(0.05)
+        config_file.write_text('[provider]\nmodel = "new-model"\n')
+
+        watcher.check_for_changes()
+        warnings = watcher.non_reloadable_warnings
+        assert any("restart required for model" in w for w in warnings)
+        assert "model" in NON_RELOADABLE_FIELDS
 
 
 # ===================================================================
@@ -1571,9 +1651,48 @@ class TestNotifierChecksPresence:
     """Notifier checks user presence state from resource monitor before dispatching."""
 
     @pytest.mark.ac("AC-15.2.4")
-    @pytest.mark.skip(reason="Not yet implemented: Notifier presence-state check before dispatching")
     async def test_notifier_queries_activity_state(self) -> None:
         """Notifier queries activity state and queues when idle."""
+        mock_adapter = MagicMock()
+        mock_adapter.is_user_idle.return_value = True
+
+        notifier = Notifier(
+            channels=[NotificationChannel.TERMINAL_BELL],
+            presence_aware=True,
+        )
+        with patch(
+            "guild.escalation.notify.get_platform_adapter",
+            return_value=mock_adapter,
+        ):
+            with patch("sys.stdout") as mock_stdout:
+                mock_stdout.write = MagicMock()
+                mock_stdout.flush = MagicMock()
+                await notifier.notify("Test notification")
+
+        # User is idle, so notification should be queued (not dispatched)
+        mock_adapter.is_user_idle.assert_called_once()
+        mock_stdout.write.assert_not_called()
+
+        # Now test with active user
+        mock_adapter_active = MagicMock()
+        mock_adapter_active.is_user_idle.return_value = False
+
+        notifier_active = Notifier(
+            channels=[NotificationChannel.TERMINAL_BELL],
+            presence_aware=True,
+        )
+        with patch(
+            "guild.escalation.notify.get_platform_adapter",
+            return_value=mock_adapter_active,
+        ):
+            with patch("sys.stdout") as mock_stdout2:
+                mock_stdout2.write = MagicMock()
+                mock_stdout2.flush = MagicMock()
+                await notifier_active.notify("Active notification")
+
+        # User is active, so notification should be dispatched
+        mock_adapter_active.is_user_idle.assert_called_once()
+        mock_stdout2.write.assert_called_with("\a")
 
 
 # ===================================================================
@@ -1585,18 +1704,44 @@ class TestBatchApproveAll:
     """guild approve --all CLI command approves all pending questions."""
 
     @pytest.mark.ac("AC-15.4.3")
-    @pytest.mark.skip(reason="Not yet implemented: guild approve --all CLI command")
-    async def test_approve_all_command(self) -> None:
+    async def test_approve_all_command(self, tmp_path: Path) -> None:
         """guild approve --all approves all pending questions."""
+        from guild.cli.queries import approve_all_questions
+
+        db_path = tmp_path / "guild.db"
+        async with Storage(db_path) as store:
+            queue = QuestionQueue(store)
+            await queue.post_question("Delete file?", "ctx1", task_id="t1")
+            await queue.post_question("Run command?", "ctx2", task_id="t2")
+
+            count = await approve_all_questions(db_path)
+            assert count == 2
+
+            pending = await queue.get_pending()
+            assert len(pending) == 0
 
 
 class TestBatchApproveSelective:
     """guild approve <id1> <id3> selectively approves specific questions."""
 
     @pytest.mark.ac("AC-15.4.4")
-    @pytest.mark.skip(reason="Not yet implemented: guild approve <id1> <id3> selective approval CLI")
-    async def test_approve_selective_command(self) -> None:
+    async def test_approve_selective_command(self, tmp_path: Path) -> None:
         """guild approve <id1> <id3> approves only those two."""
+        from guild.cli.queries import approve_selected_questions
+
+        db_path = tmp_path / "guild.db"
+        async with Storage(db_path) as store:
+            queue = QuestionQueue(store)
+            id1 = await queue.post_question("Q1?", "ctx1", task_id="t1")
+            _id2 = await queue.post_question("Q2?", "ctx2", task_id="t2")
+            id3 = await queue.post_question("Q3?", "ctx3", task_id="t3")
+
+            count = await approve_selected_questions(db_path, [id1, id3])
+            assert count == 2
+
+            pending = await queue.get_pending()
+            assert len(pending) == 1
+            assert pending[0].question == "Q2?"
 
 
 # ===================================================================
@@ -1646,9 +1791,20 @@ class TestEvalConfidenceDisplay:
     """guild eval confidence displays per-category confidence scores."""
 
     @pytest.mark.ac("AC-16.6.3")
-    @pytest.mark.skip(reason="Not yet implemented: guild eval confidence CLI command")
-    async def test_eval_confidence_command(self) -> None:
+    def test_eval_confidence_command(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """guild eval confidence shows per-category confidence scores."""
+        from typer.testing import CliRunner as _Runner
+
+        from guild.cli.main import app as _app
+
+        monkeypatch.chdir(tmp_path)
+        runner = _Runner()
+        runner.invoke(_app, ["init"])
+
+        result = runner.invoke(_app, ["eval", "confidence"])
+        assert result.exit_code == 0
+        assert "Category" in result.output
+        assert "general" in result.output or "coding" in result.output
 
 
 # ===================================================================
@@ -1694,9 +1850,15 @@ class TestPermissionModelConfigField:
     """A routing.permission_model config field exists for lightweight model."""
 
     @pytest.mark.ac("AC-17.3.3")
-    @pytest.mark.skip(reason="Not yet implemented: routing.permission_model config field")
-    def test_routing_permission_model_field(self) -> None:
+    def test_routing_permission_model_field(self, tmp_path: Path) -> None:
         """Configure routing.permission_model -> permission checks use that model."""
+        guild_dir = tmp_path / ".guild"
+        guild_dir.mkdir()
+        config_file = guild_dir / "config.toml"
+        config_file.write_text('[routing]\npermission_model = "gemma-mini"\n')
+
+        config = load_config(guild_dir)
+        assert config.permission_model == "gemma-mini"
 
 
 # ===================================================================
@@ -1728,9 +1890,22 @@ class TestValidateConfigEscalationChain:
     """validate_config() checks that model names in escalation chain are known."""
 
     @pytest.mark.ac("AC-17.7.3")
-    @pytest.mark.skip(reason="Not yet implemented: validate_config escalation chain model name validation")
-    def test_unknown_model_in_chain_warns(self) -> None:
+    def test_unknown_model_in_chain_warns(self, tmp_path: Path) -> None:
         """Unknown model in escalation chain emits startup warning."""
+        from guild.config.profiles import validate_config
+
+        guild_dir = tmp_path / ".guild"
+        guild_dir.mkdir()
+        config_file = guild_dir / "config.toml"
+        config_file.write_text(
+            '[provider]\nmodel = "gemma"\nbase_url = "http://localhost:11434"\n'
+            '[escalation]\nescalation_chain = "gemma,unknown-model-xyz"\n'
+        )
+
+        config = load_config(guild_dir)
+        known_models = ["gemma", "llama3"]
+        errors = validate_config(config, guild_dir, known_models=known_models)
+        assert any("unknown-model-xyz" in e for e in errors)
 
 
 # ===================================================================

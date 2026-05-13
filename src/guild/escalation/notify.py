@@ -38,15 +38,21 @@ class Notifier:
     Sends notifications through configured channels. High-priority
     questions always trigger immediate notification regardless of
     presence state.
+
+    When presence_aware is True, the notifier checks the platform
+    adapter's is_user_idle() before dispatching. If the user is idle,
+    notifications are queued silently (logged) rather than dispatched.
     """
 
     def __init__(
         self,
         channels: list[NotificationChannel] | None = None,
         webhook_url: str | None = None,
+        presence_aware: bool = False,
     ) -> None:
         self._channels = channels or [NotificationChannel.TERMINAL_BELL]
         self._webhook_url = webhook_url
+        self._presence_aware = presence_aware
 
     async def notify(
         self,
@@ -55,7 +61,21 @@ class Notifier:
         task_id: str | None = None,
         question: str | None = None,
     ) -> None:
-        """Send notification through configured channels."""
+        """Send notification through configured channels.
+
+        When presence_aware is enabled, checks user idle state first.
+        Active users receive immediate notifications. Idle users have
+        notifications queued silently. High-priority (BLOCKING) messages
+        always dispatch immediately regardless of presence state.
+        """
+        if self._presence_aware and priority != QuestionPriority.BLOCKING:
+            adapter = get_platform_adapter()
+            if adapter.is_user_idle():
+                logger.info(
+                    "User idle — queuing notification: %s", message[:80],
+                )
+                return
+
         for channel in self._channels:
             await self._dispatch_channel(
                 channel, message, task_id=task_id, question=question,

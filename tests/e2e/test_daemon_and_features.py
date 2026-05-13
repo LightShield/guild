@@ -1440,9 +1440,29 @@ class TestVerificationFailureDetails:
     """Verification failure details are included in task final status."""
 
     @pytest.mark.ac("AC-06.2.3")
-    @pytest.mark.skip(reason="Not yet implemented: verification failure details not surfaced in guild status output")
     async def test_verification_failure_details_in_status(self, project_dir: Path) -> None:
         """Task status shows specific verification failure message, not just 'failed'."""
+        from guild.task.spec import (
+            TaskSpec,
+            VerificationStep,
+            format_verification_results,
+            run_verification,
+        )
+
+        spec = TaskSpec(
+            description="Test task",
+            verification_steps=[
+                VerificationStep(type="file_exists", target="nonexistent.py"),
+                VerificationStep(type="command", target="false"),
+            ],
+        )
+        passed, results = await run_verification(spec, str(project_dir))
+        assert passed is False
+        formatted = format_verification_results(results)
+        assert "FAIL" in formatted
+        assert "nonexistent.py" in formatted
+        assert "Step 1" in formatted
+        assert "Step 2" in formatted
 
 
 # ===================================================================
@@ -1471,9 +1491,46 @@ class TestTimeoutProgressReport:
     """The progress report generated at timeout includes what was accomplished."""
 
     @pytest.mark.ac("AC-06.7.3")
-    @pytest.mark.skip(reason="Not yet implemented: timeout progress report with accomplishment summary")
     async def test_timeout_progress_report_includes_summary(self) -> None:
         """Timeout pause message includes summary of completed actions and current step."""
+        from guild.agent.loop import AgentLoop
+        from guild.tools.base import ToolResult
+
+        call_counter = 0
+
+        async def mock_generate(
+            messages: list[dict[str, Any]], tools: list[dict[str, Any]] | None = None
+        ) -> LLMResponse:
+            nonlocal call_counter
+            call_counter += 1
+            if call_counter <= 2:
+                return LLMResponse(
+                    content="",
+                    tool_calls=[{"function": {"name": "file_read", "arguments": {"path": "/x"}}}],
+                    input_tokens=10, output_tokens=5, model="mock",
+                )
+            return LLMResponse(
+                content="Done with task.", tool_calls=None,
+                input_tokens=10, output_tokens=5, model="mock",
+            )
+
+        async def mock_file_read(args: dict[str, Any], _cid: str | None = None) -> ToolResult:
+            return ToolResult(success=True, output="contents")
+
+        provider = AsyncMock()
+        provider.generate = mock_generate
+
+        loop = AgentLoop(
+            provider=provider,
+            tool_executors={"file_read": mock_file_read},
+            max_turns=5,
+        )
+        await loop.run("system", "do something")
+
+        report = loop.generate_timeout_report()
+        assert "turn(s)" in report
+        assert "file_read" in report
+        assert "Tool calls" in report or "tool calls" in report.lower()
 
 
 # ===================================================================
