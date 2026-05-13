@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from guild.config.constants import REPLAY_CONTENT_MAX_CHARS
+
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from guild.storage.sqlite import Storage
 
@@ -15,8 +17,6 @@ __all__ = [
     "REPLAY_CONTENT_MAX_CHARS",
     "SessionReplay",
 ]
-
-REPLAY_CONTENT_MAX_CHARS = 500
 
 
 class SessionReplay:

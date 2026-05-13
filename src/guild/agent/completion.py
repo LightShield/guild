@@ -8,6 +8,8 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from guild.tools.base import ToolResult
 
+from guild.config.constants import SIMPLE_ACTION_THRESHOLD
+
 __all__ = [
     "COMPLETION_NUDGE",
     "DEDUP_MESSAGE",
@@ -30,9 +32,6 @@ DEDUP_MESSAGE: str = (
 )
 
 _CLOSURE_HINT: str = "\n\nIf this completes your task, provide your final response."
-
-# Maximum number of successful results to consider "simple"
-_SIMPLE_ACTION_THRESHOLD: int = 2
 
 
 def is_duplicate_call(call: dict[str, Any], recent_calls: list[dict[str, Any]]) -> bool:
@@ -61,7 +60,7 @@ def should_nudge_completion(tool_results: list[ToolResult]) -> bool:
     if not tool_results:
         return False
 
-    if len(tool_results) >= _SIMPLE_ACTION_THRESHOLD:
+    if len(tool_results) >= SIMPLE_ACTION_THRESHOLD:
         return False
 
     return all(r.success for r in tool_results)

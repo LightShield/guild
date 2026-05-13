@@ -12,14 +12,12 @@ if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from collections.abc import Callable, Coroutine
     from pathlib import Path
 
+from guild.config.constants import MAX_RECOVERY_CRASHES, RECOVERY_BACKOFF_BASE_SECONDS
 from guild.daemon.control_socket import ControlSocket
 
 __all__ = ["DaemonSupervisor"]
 
 logger = logging.getLogger(__name__)
-
-_MAX_RECOVERY_CRASHES = 3
-_RECOVERY_BACKOFF_BASE_SECONDS = 5
 
 
 class DaemonSupervisor:
@@ -49,7 +47,7 @@ class DaemonSupervisor:
         self.control_socket: ControlSocket = ControlSocket(self.socket_path)
         self._auto_recovery = auto_recovery
         self._crash_count: int = 0
-        self._max_crashes: int = _MAX_RECOVERY_CRASHES
+        self._max_crashes: int = MAX_RECOVERY_CRASHES
         self._status: str = "running"
 
     @property
@@ -194,7 +192,7 @@ class DaemonSupervisor:
                     )
                     raise
 
-                backoff = _RECOVERY_BACKOFF_BASE_SECONDS * self._crash_count
+                backoff = RECOVERY_BACKOFF_BASE_SECONDS * self._crash_count
                 logger.debug(
                     "Auto-recovery: restarting in %d seconds (attempt %d)",
                     backoff,

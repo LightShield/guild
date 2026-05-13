@@ -20,6 +20,12 @@ if TYPE_CHECKING:
 
 from guild.agent.loop import DEFAULT_MAX_TURNS
 from guild.agent.prompts import GUILD_MASTER_PROMPT
+from guild.config.constants import (
+    AGENT_ID_PREFIX_LEN,
+    MAX_TURNS_CAP,
+    MIN_TURNS,
+    SECONDS_PER_TURN_ESTIMATE,
+)
 from guild.config.loader import DB_FILENAME
 from guild.task.spec import TaskStatus
 
@@ -41,6 +47,8 @@ __all__ = [
 
 logger = logging.getLogger(__name__)
 
+OLLAMA_PROVIDER_NAME = "ollama"
+
 
 def _parse_escalation_config(config: GuildConfig) -> tuple[list[str], list[str]]:
     """Extract escalation chain models and CLI tool names from config."""
@@ -56,13 +64,6 @@ def create_provider_for_backend(provider_name: str, base_url: str, model: str) -
 
         return create_provider(base_url, model)
     raise ValueError(f"Unknown provider: {provider_name}")
-
-
-_SECONDS_PER_TURN_ESTIMATE = 10
-_MIN_TURNS = 5
-_MAX_TURNS_CAP = 200
-AGENT_ID_PREFIX_LEN = 8
-OLLAMA_PROVIDER_NAME = "ollama"
 
 
 def create_chat_loop(config: GuildConfig, working_dir: str, permission: str) -> AgentLoop:
@@ -123,7 +124,7 @@ def compute_max_turns(timeout: int) -> int:
     """Convert a timeout in seconds to a max turn count."""
     if timeout <= 0:
         return DEFAULT_MAX_TURNS
-    return min(max(timeout // _SECONDS_PER_TURN_ESTIMATE, _MIN_TURNS), _MAX_TURNS_CAP)
+    return min(max(timeout // SECONDS_PER_TURN_ESTIMATE, MIN_TURNS), MAX_TURNS_CAP)
 
 
 def create_task_agent_loop(config: GuildConfig, working_dir: str, timeout: int) -> AgentLoop:

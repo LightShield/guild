@@ -9,6 +9,7 @@ import re
 from pathlib import Path
 from typing import Any
 
+from guild.config.constants import MAX_GLOB_RESULTS, MAX_SEARCH_RESULTS
 from guild.tools.base import ToolResult, resolve_path
 
 __all__ = [
@@ -19,9 +20,6 @@ __all__ = [
 ]
 
 logger = logging.getLogger(__name__)
-
-MAX_SEARCH_RESULTS: int = 200
-MAX_GLOB_RESULTS: int = 500
 
 # Directories to always skip during traversal.
 _SKIP_DIRS: set[str] = {".git", "__pycache__", "node_modules", ".venv", "venv"}

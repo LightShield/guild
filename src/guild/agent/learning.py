@@ -10,7 +10,11 @@ import json
 import logging
 from typing import TYPE_CHECKING, Any
 
-from guild.config.constants import LEARNING_CONTENT_MAX_CHARS, MIN_INJECTION_CONFIDENCE
+from guild.config.constants import (
+    DEFAULT_CONFIDENCE,
+    LEARNING_CONTENT_MAX_CHARS,
+    MIN_INJECTION_CONFIDENCE,
+)
 
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from guild.provider.base import LLMProvider
@@ -37,7 +41,6 @@ LEARNER_PROMPT = (
 
 _VALID_CATEGORIES = {"pattern", "anti_pattern", "tool_tip", "domain_knowledge"}
 
-_DEFAULT_CONFIDENCE = 0.3
 
 
 async def extract_learnings(
@@ -86,7 +89,7 @@ async def extract_learnings(
         learning_id = await storage.add_learning(
             category=parsed["category"],
             content=parsed["content"],
-            confidence=_DEFAULT_CONFIDENCE,
+            confidence=DEFAULT_CONFIDENCE,
             source_task_id=task_id,
         )
         stored.append(
@@ -94,7 +97,7 @@ async def extract_learnings(
                 "id": learning_id,
                 "category": parsed["category"],
                 "content": parsed["content"],
-                "confidence": _DEFAULT_CONFIDENCE,
+                "confidence": DEFAULT_CONFIDENCE,
             }
         )
 

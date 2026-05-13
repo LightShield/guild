@@ -5,13 +5,12 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from guild.config.constants import MAX_FILE_READ_CHARS
 from guild.tools.base import ToolResult, resolve_path
 
 __all__ = ["MAX_FILE_READ_CHARS", "execute_file_read", "execute_file_write"]
 
 logger = logging.getLogger(__name__)
-
-MAX_FILE_READ_CHARS: int = 50_000
 
 
 async def execute_file_read(args: dict[str, Any], working_dir: str | None = None) -> ToolResult:

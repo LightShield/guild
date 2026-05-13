@@ -16,11 +16,16 @@ __all__ = [
     "DEFAULT_CONTEXT_MAX_TOKENS",
     "DEFAULT_COMPACT_THRESHOLD",
     "DEFAULT_PRESERVE_RECENT",
+    "CHARS_PER_TOKEN",
+    "TRUNCATION_MARKER",
+    "MIN_CONTENT_LEN",
+    "ACTION_SUMMARY_MAX_CHARS",
     # API
     "WEBSOCKET_POLL_SECONDS",
     # Learning
     "MIN_INJECTION_CONFIDENCE",
     "LEARNING_CONTENT_MAX_CHARS",
+    "DEFAULT_CONFIDENCE",
     # Memory/confidence
     "CONFIDENCE_VALIDATE_INCREMENT",
     "CONFIDENCE_INVALIDATE_DECREMENT",
@@ -33,6 +38,56 @@ __all__ = [
     "AGENTS_FILENAME",
     "PERMISSIONS_FILENAME",
     "SECURITY_FILENAME",
+    # File operations
+    "MAX_FILE_READ_CHARS",
+    # Search
+    "MAX_SEARCH_RESULTS",
+    "MAX_GLOB_RESULTS",
+    # Plugin cache
+    "DEFAULT_CACHE_TTL_SECONDS",
+    "DEFAULT_CACHE_MAX_SIZE",
+    # Docker sandbox
+    "DOCKER_INFO_TIMEOUT",
+    "DOCKER_MEMORY_LIMIT",
+    "DOCKER_CPU_LIMIT",
+    "DOCKER_DEFAULT_IMAGE",
+    "DOCKER_TIMEOUT_BUFFER",
+    # Completion heuristics
+    "SIMPLE_ACTION_THRESHOLD",
+    # Budget
+    "BUDGET_ALERT_THRESHOLDS",
+    # Daemon supervisor
+    "MAX_RECOVERY_CRASHES",
+    "RECOVERY_BACKOFF_BASE_SECONDS",
+    # Daemon resource
+    "DEFAULT_CPU_THRESHOLD",
+    # Knowledge/memory
+    "STALE_DAYS",
+    "MAX_INDEX_LINES",
+    # Orchestration
+    "DEFAULT_MAX_RETRIES",
+    "DEFAULT_LOOP_MAX_ITERATIONS",
+    "HEURISTIC_PASS_SCORE",
+    "HEURISTIC_FAIL_SCORE",
+    "SUB_AGENT_MAX_TURNS",
+    # CLI task runner
+    "SECONDS_PER_TURN_ESTIMATE",
+    "MIN_TURNS",
+    "MAX_TURNS_CAP",
+    "AGENT_ID_PREFIX_LEN",
+    # Observability
+    "REPLAY_CONTENT_MAX_CHARS",
+    # Eval framework
+    "DURATION_REGRESSION_FACTOR",
+    "TOKEN_REGRESSION_FACTOR",
+    "TOOL_CALL_REGRESSION_FACTOR",
+    "EVAL_MAX_TURNS",
+    # Git worktree
+    "BRANCH_PREFIX",
+    "STAGING_BRANCH_SUFFIX",
+    "STAGING_DIR_NAME",
+    # Escalation
+    "NOTIFICATION_TITLE",
 ]
 
 # ---------------------------------------------------------------------------
@@ -57,6 +112,10 @@ DEFAULT_MAX_TURNS: int = 50
 DEFAULT_CONTEXT_MAX_TOKENS: int = 8000
 DEFAULT_COMPACT_THRESHOLD: float = 0.7
 DEFAULT_PRESERVE_RECENT: int = 4
+CHARS_PER_TOKEN: int = 4
+TRUNCATION_MARKER: str = "\n...[truncated]..."
+MIN_CONTENT_LEN: int = 50
+ACTION_SUMMARY_MAX_CHARS: int = 100
 
 # ---------------------------------------------------------------------------
 # API
@@ -68,6 +127,7 @@ WEBSOCKET_POLL_SECONDS: int = 2
 # ---------------------------------------------------------------------------
 MIN_INJECTION_CONFIDENCE: float = 0.5
 LEARNING_CONTENT_MAX_CHARS: int = 500
+DEFAULT_CONFIDENCE: float = 0.3
 
 # ---------------------------------------------------------------------------
 # Memory/confidence
@@ -86,3 +146,98 @@ DB_FILENAME: str = "guild.db"
 AGENTS_FILENAME: str = "agents.toml"
 PERMISSIONS_FILENAME: str = "permissions.toml"
 SECURITY_FILENAME: str = "security.toml"
+
+# ---------------------------------------------------------------------------
+# File operations
+# ---------------------------------------------------------------------------
+MAX_FILE_READ_CHARS: int = 50_000
+
+# ---------------------------------------------------------------------------
+# Search
+# ---------------------------------------------------------------------------
+MAX_SEARCH_RESULTS: int = 200
+MAX_GLOB_RESULTS: int = 500
+
+# ---------------------------------------------------------------------------
+# Plugin cache
+# ---------------------------------------------------------------------------
+DEFAULT_CACHE_TTL_SECONDS: int = 300
+DEFAULT_CACHE_MAX_SIZE: int = 100
+
+# ---------------------------------------------------------------------------
+# Docker sandbox
+# ---------------------------------------------------------------------------
+DOCKER_INFO_TIMEOUT: int = 10
+DOCKER_MEMORY_LIMIT: str = "512m"
+DOCKER_CPU_LIMIT: str = "1.0"
+DOCKER_DEFAULT_IMAGE: str = "python:3.11-slim"
+DOCKER_TIMEOUT_BUFFER: int = 5
+
+# ---------------------------------------------------------------------------
+# Completion heuristics
+# ---------------------------------------------------------------------------
+SIMPLE_ACTION_THRESHOLD: int = 2
+
+# ---------------------------------------------------------------------------
+# Budget
+# ---------------------------------------------------------------------------
+BUDGET_ALERT_THRESHOLDS: list[float] = [0.8, 0.9, 1.0]
+
+# ---------------------------------------------------------------------------
+# Daemon supervisor
+# ---------------------------------------------------------------------------
+MAX_RECOVERY_CRASHES: int = 3
+RECOVERY_BACKOFF_BASE_SECONDS: int = 5
+
+# ---------------------------------------------------------------------------
+# Daemon resource
+# ---------------------------------------------------------------------------
+DEFAULT_CPU_THRESHOLD: float = 80.0
+
+# ---------------------------------------------------------------------------
+# Knowledge/memory
+# ---------------------------------------------------------------------------
+STALE_DAYS: int = 30
+MAX_INDEX_LINES: int = 200
+
+# ---------------------------------------------------------------------------
+# Orchestration
+# ---------------------------------------------------------------------------
+DEFAULT_MAX_RETRIES: int = 1
+DEFAULT_LOOP_MAX_ITERATIONS: int = 5
+HEURISTIC_PASS_SCORE: int = 80
+HEURISTIC_FAIL_SCORE: int = 30
+SUB_AGENT_MAX_TURNS: int = 30
+
+# ---------------------------------------------------------------------------
+# CLI task runner
+# ---------------------------------------------------------------------------
+SECONDS_PER_TURN_ESTIMATE: int = 10
+MIN_TURNS: int = 5
+MAX_TURNS_CAP: int = 200
+AGENT_ID_PREFIX_LEN: int = 8
+
+# ---------------------------------------------------------------------------
+# Observability
+# ---------------------------------------------------------------------------
+REPLAY_CONTENT_MAX_CHARS: int = 500
+
+# ---------------------------------------------------------------------------
+# Eval framework
+# ---------------------------------------------------------------------------
+DURATION_REGRESSION_FACTOR: float = 2.0
+TOKEN_REGRESSION_FACTOR: float = 2.0
+TOOL_CALL_REGRESSION_FACTOR: float = 2.0
+EVAL_MAX_TURNS: int = 20
+
+# ---------------------------------------------------------------------------
+# Git worktree
+# ---------------------------------------------------------------------------
+BRANCH_PREFIX: str = "guild/"
+STAGING_BRANCH_SUFFIX: str = "staging"
+STAGING_DIR_NAME: str = "_staging"
+
+# ---------------------------------------------------------------------------
+# Escalation
+# ---------------------------------------------------------------------------
+NOTIFICATION_TITLE: str = "Guild"

@@ -13,14 +13,13 @@ from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
+from guild.config.constants import NOTIFICATION_TITLE
 from guild.daemon.platform import get_platform_adapter
 from guild.escalation.queue import QuestionPriority
 
 __all__ = ["NOTIFICATION_TITLE", "NotificationChannel", "Notifier"]
 
 logger = logging.getLogger(__name__)
-
-NOTIFICATION_TITLE = "Guild"
 
 
 class NotificationChannel(str, Enum):

@@ -20,6 +20,8 @@ if TYPE_CHECKING:  # pragma: no cover — type-checking only
 
     from guild.tools.base import ToolResult
 
+from guild.config.constants import DEFAULT_CACHE_MAX_SIZE, DEFAULT_CACHE_TTL_SECONDS
+
 __all__ = [
     "DEFAULT_CACHE_MAX_SIZE",
     "DEFAULT_CACHE_TTL_SECONDS",
@@ -30,10 +32,6 @@ __all__ = [
 ]
 
 logger = logging.getLogger(__name__)
-
-# Named constants for cache configuration
-DEFAULT_CACHE_TTL_SECONDS: int = 300
-DEFAULT_CACHE_MAX_SIZE: int = 100
 
 
 @dataclass

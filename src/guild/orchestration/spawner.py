@@ -7,6 +7,7 @@ import uuid
 from typing import TYPE_CHECKING, Any
 
 from guild.agent.loop import AgentLoop
+from guild.config.constants import SUB_AGENT_MAX_TURNS
 from guild.tools.base import ToolResult
 
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
@@ -15,8 +16,6 @@ if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from guild.storage.sqlite import Storage
 
 __all__ = ["AgentSpawner", "SUB_AGENT_MAX_TURNS"]
-
-SUB_AGENT_MAX_TURNS = 30
 
 logger = logging.getLogger(__name__)
 

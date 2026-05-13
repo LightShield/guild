@@ -6,9 +6,13 @@ import copy
 from typing import TYPE_CHECKING
 
 from guild.config.constants import (
+    ACTION_SUMMARY_MAX_CHARS,
+    CHARS_PER_TOKEN,
     DEFAULT_COMPACT_THRESHOLD,
     DEFAULT_CONTEXT_MAX_TOKENS,
     DEFAULT_PRESERVE_RECENT,
+    MIN_CONTENT_LEN,
+    TRUNCATION_MARKER,
 )
 
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
@@ -24,11 +28,6 @@ __all__ = [
     "MIN_CONTENT_LEN",
     "TRUNCATION_MARKER",
 ]
-
-CHARS_PER_TOKEN = 4
-TRUNCATION_MARKER = "\n...[truncated]..."
-MIN_CONTENT_LEN = 50
-ACTION_SUMMARY_MAX_CHARS = 100
 
 
 class ContextManager:

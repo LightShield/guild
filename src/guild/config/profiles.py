@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from pathlib import Path  # noqa: TC003 - used at runtime in function bodies
 from typing import TYPE_CHECKING, Any
 
-from guild.agent.loop import DEFAULT_MAX_TURNS
+from guild.config.constants import AGENTS_FILENAME, DEFAULT_MAX_TURNS, PERMISSIONS_FILENAME
 from guild.permissions.checker import PermissionTier
 
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
@@ -29,9 +29,6 @@ __all__ = [
 ]
 
 logger = logging.getLogger(__name__)
-
-AGENTS_FILENAME = "agents.toml"
-PERMISSIONS_FILENAME = "permissions.toml"
 
 
 @dataclass

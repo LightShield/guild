@@ -15,6 +15,12 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from guild.agent.message import Message
+from guild.config.constants import (
+    DURATION_REGRESSION_FACTOR,
+    EVAL_MAX_TURNS,
+    TOKEN_REGRESSION_FACTOR,
+    TOOL_CALL_REGRESSION_FACTOR,
+)
 
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from guild.provider.base import LLMProvider, LLMResponse
@@ -29,12 +35,6 @@ __all__ = [
 ]
 
 logger = logging.getLogger(__name__)
-
-# Regression thresholds
-_DURATION_REGRESSION_FACTOR = 2.0  # 2x slower = regression
-_TOKEN_REGRESSION_FACTOR = 2.0  # 2x more tokens = regression
-_TOOL_CALL_REGRESSION_FACTOR = 2.0  # 2x more tool calls = regression
-_EVAL_MAX_TURNS = 20
 
 
 @dataclass
@@ -122,7 +122,7 @@ class EvalFramework:
         ]
 
         try:
-            for _ in range(_EVAL_MAX_TURNS):  # pragma: no branch
+            for _ in range(EVAL_MAX_TURNS):  # pragma: no branch
                 turns += 1
                 raw_messages = [m.to_dict() for m in messages]
                 response: LLMResponse = await provider.generate(raw_messages)
@@ -214,7 +214,7 @@ class EvalFramework:
         if (
             baseline.metrics.duration_seconds > 0
             and current.metrics.duration_seconds
-            > baseline.metrics.duration_seconds * _DURATION_REGRESSION_FACTOR
+            > baseline.metrics.duration_seconds * DURATION_REGRESSION_FACTOR
         ):
             reasons.append(
                 f"duration {current.metrics.duration_seconds:.1f}s"
@@ -223,13 +223,13 @@ class EvalFramework:
 
         baseline_tokens = baseline.metrics.input_tokens + baseline.metrics.output_tokens
         current_tokens = current.metrics.input_tokens + current.metrics.output_tokens
-        if baseline_tokens > 0 and current_tokens > baseline_tokens * _TOKEN_REGRESSION_FACTOR:
+        if baseline_tokens > 0 and current_tokens > baseline_tokens * TOKEN_REGRESSION_FACTOR:
             reasons.append(f"tokens {current_tokens} vs baseline {baseline_tokens}")
 
         if (
             baseline.metrics.tool_calls > 0
             and current.metrics.tool_calls
-            > baseline.metrics.tool_calls * _TOOL_CALL_REGRESSION_FACTOR
+            > baseline.metrics.tool_calls * TOOL_CALL_REGRESSION_FACTOR
         ):
             reasons.append(
                 f"tool_calls {current.metrics.tool_calls}"

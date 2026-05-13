@@ -11,15 +11,14 @@ import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from guild.config.constants import MAX_INDEX_LINES, STALE_DAYS
+
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from guild.storage.sqlite import Storage
 
 __all__ = ["IdleConsolidationScheduler", "MemoryEntry", "MemoryIndex"]
 
 logger = logging.getLogger(__name__)
-
-_STALE_DAYS = 30
-_MAX_INDEX_LINES = 200
 
 
 @dataclass
@@ -51,7 +50,7 @@ class MemoryIndex:
 
         Returns a list of summary strings, one per memory entry.
         """
-        rows = await self._storage.list_memory_summaries(limit=_MAX_INDEX_LINES)
+        rows = await self._storage.list_memory_summaries(limit=MAX_INDEX_LINES)
         results: list[str] = []
         for row in rows:
             prefix = "" if row["verified"] else "[unverified] "
@@ -87,7 +86,7 @@ class MemoryIndex:
         - Remove entries not verified in 30+ days
         - Merge entries with identical summaries (keep most recent)
         """
-        changes = await self._storage.consolidate_memories(stale_days=_STALE_DAYS)
+        changes = await self._storage.consolidate_memories(stale_days=STALE_DAYS)
         logger.info("Memory consolidation: %d changes", changes)
         return changes
 
@@ -96,7 +95,7 @@ class MemoryIndex:
         if not index:
             return ""
         header = "## Agent Memory Index\n"
-        lines = [f"- {entry}" for entry in index[:_MAX_INDEX_LINES]]
+        lines = [f"- {entry}" for entry in index[:MAX_INDEX_LINES]]
         return header + "\n".join(lines)
 
 

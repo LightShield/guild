@@ -17,6 +17,8 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from collections.abc import Callable
 
+from guild.config.constants import DEFAULT_CPU_THRESHOLD
+
 __all__ = [
     "ActivityState",
     "ResourceMonitor",
@@ -26,8 +28,6 @@ __all__ = [
 ]
 
 logger = logging.getLogger(__name__)
-
-_DEFAULT_CPU_THRESHOLD = 80.0
 
 
 class SchedulingMode(str, Enum):
@@ -80,7 +80,7 @@ def _default_activity_detector() -> (
         import psutil  # type: ignore[import-untyped]
 
         cpu: float = psutil.cpu_percent(interval=0.1)
-        if cpu > _DEFAULT_CPU_THRESHOLD:
+        if cpu > DEFAULT_CPU_THRESHOLD:
             return ActivityState.ACTIVE
     except ImportError:
         pass

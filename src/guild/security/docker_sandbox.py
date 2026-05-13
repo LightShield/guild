@@ -13,7 +13,14 @@ import asyncio
 import logging
 import shutil
 
-from guild.config.constants import SHELL_TIMEOUT_SECONDS
+from guild.config.constants import (
+    DOCKER_CPU_LIMIT,
+    DOCKER_DEFAULT_IMAGE,
+    DOCKER_INFO_TIMEOUT,
+    DOCKER_MEMORY_LIMIT,
+    DOCKER_TIMEOUT_BUFFER,
+    SHELL_TIMEOUT_SECONDS,
+)
 
 __all__ = [
     "DOCKER_DEFAULT_IMAGE",
@@ -23,13 +30,6 @@ __all__ = [
 ]
 
 logger = logging.getLogger(__name__)
-
-_DOCKER_INFO_TIMEOUT: int = 10
-_DOCKER_MEMORY_LIMIT = "512m"
-_DOCKER_CPU_LIMIT = "1.0"
-
-DOCKER_DEFAULT_IMAGE: str = "python:3.11-slim"
-_DOCKER_TIMEOUT_BUFFER: int = 5
 
 
 def is_docker_available() -> bool:
@@ -48,7 +48,7 @@ def is_docker_available() -> bool:
         result = subprocess.run(
             ["docker", "info"],
             capture_output=True,
-            timeout=_DOCKER_INFO_TIMEOUT,
+            timeout=DOCKER_INFO_TIMEOUT,
         )
         available = result.returncode == 0
         if not available:
@@ -106,7 +106,7 @@ class DockerSandbox:
         except OSError as e:
             return (1, "", f"Failed to start Docker: {e}")
 
-        total_timeout = self.timeout + _DOCKER_TIMEOUT_BUFFER
+        total_timeout = self.timeout + DOCKER_TIMEOUT_BUFFER
         try:
             stdout_bytes, stderr_bytes = await asyncio.wait_for(
                 proc.communicate(), timeout=total_timeout,
@@ -134,8 +134,8 @@ class DockerSandbox:
         if not self.network:
             args.append("--network=none")
 
-        args.extend(["--memory", _DOCKER_MEMORY_LIMIT])
-        args.extend(["--cpus", _DOCKER_CPU_LIMIT])
+        args.extend(["--memory", DOCKER_MEMORY_LIMIT])
+        args.extend(["--cpus", DOCKER_CPU_LIMIT])
 
         args.append("--security-opt=no-new-privileges")
 

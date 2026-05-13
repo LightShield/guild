@@ -13,7 +13,12 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any
 
 from guild.agent.loop import AgentLoop
-from guild.orchestration.spawner import SUB_AGENT_MAX_TURNS
+from guild.config.constants import (
+    DEFAULT_LOOP_MAX_ITERATIONS,
+    HEURISTIC_FAIL_SCORE,
+    HEURISTIC_PASS_SCORE,
+    SUB_AGENT_MAX_TURNS,
+)
 
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from guild.blocks.definition import BlockDef, LoopDef, TeamDef
@@ -32,11 +37,6 @@ __all__ = [
 ]
 
 logger = logging.getLogger(__name__)
-
-_DEFAULT_MAX_RETRIES = 1
-_DEFAULT_LOOP_MAX_ITERATIONS = 5
-_HEURISTIC_PASS_SCORE = 80
-_HEURISTIC_FAIL_SCORE = 30
 
 DECISION_SKIP = "skip"
 DECISION_ESCALATE = "escalate"
@@ -343,7 +343,7 @@ class TeamRunner:
 
         Continues until evaluator passes or max_iterations reached.
         """
-        max_iter = loop.max_iterations or _DEFAULT_LOOP_MAX_ITERATIONS
+        max_iter = loop.max_iterations or DEFAULT_LOOP_MAX_ITERATIONS
         current_input = initial_input
 
         for iteration in range(max_iter):
@@ -429,7 +429,7 @@ class TeamRunner:
         """Fallback heuristic parsing for evaluator output."""
         lower = output.lower()
         passed = "pass" in lower and "fail" not in lower
-        score = _HEURISTIC_PASS_SCORE if passed else _HEURISTIC_FAIL_SCORE
+        score = HEURISTIC_PASS_SCORE if passed else HEURISTIC_FAIL_SCORE
         return EvaluatorResult(passed=passed, score=score, feedback=output)
 
     async def _invoke_agent(self, block_def: BlockDef, input_data: str) -> str:

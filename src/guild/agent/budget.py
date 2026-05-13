@@ -7,14 +7,14 @@ from __future__ import annotations
 
 import logging
 
+from guild.config.constants import BUDGET_ALERT_THRESHOLDS
+
 __all__ = [
     "BUDGET_ALERT_THRESHOLDS",
     "check_budget_alert",
 ]
 
 logger = logging.getLogger(__name__)
-
-BUDGET_ALERT_THRESHOLDS = [0.8, 0.9, 1.0]
 
 
 def check_budget_alert(
