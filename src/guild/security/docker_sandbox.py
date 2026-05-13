@@ -24,8 +24,12 @@ __all__ = [
 
 logger = logging.getLogger(__name__)
 
+_DOCKER_INFO_TIMEOUT: int = 10
+_DOCKER_MEMORY_LIMIT = "512m"
+_DOCKER_CPU_LIMIT = "1.0"
+
 DOCKER_DEFAULT_IMAGE: str = "python:3.11-slim"
-_DOCKER_TIMEOUT_BUFFER: int = 5  # Extra seconds for container overhead
+_DOCKER_TIMEOUT_BUFFER: int = 5
 
 
 def is_docker_available() -> bool:
@@ -44,7 +48,7 @@ def is_docker_available() -> bool:
         result = subprocess.run(
             ["docker", "info"],
             capture_output=True,
-            timeout=10,
+            timeout=_DOCKER_INFO_TIMEOUT,
         )
         available = result.returncode == 0
         if not available:
@@ -131,8 +135,8 @@ class DockerSandbox:
             args.append("--network=none")
 
         # Set resource limits for safety
-        args.extend(["--memory", "512m"])
-        args.extend(["--cpus", "1.0"])
+        args.extend(["--memory", _DOCKER_MEMORY_LIMIT])
+        args.extend(["--cpus", _DOCKER_CPU_LIMIT])
 
         # Prevent privilege escalation
         args.append("--security-opt=no-new-privileges")

@@ -35,6 +35,8 @@ logger = logging.getLogger(__name__)
 
 _DEFAULT_MAX_RETRIES = 1
 _DEFAULT_LOOP_MAX_ITERATIONS = 5
+_HEURISTIC_PASS_SCORE = 80
+_HEURISTIC_FAIL_SCORE = 30
 
 DECISION_SKIP = "skip"
 DECISION_ESCALATE = "escalate"
@@ -432,7 +434,7 @@ class TeamRunner:
         """Fallback heuristic parsing for evaluator output."""
         lower = output.lower()
         passed = "pass" in lower and "fail" not in lower
-        score = 80 if passed else 30
+        score = _HEURISTIC_PASS_SCORE if passed else _HEURISTIC_FAIL_SCORE
         return EvaluatorResult(passed=passed, score=score, feedback=output)
 
     async def _invoke_agent(self, block_def: BlockDef, input_data: str) -> str:

@@ -18,6 +18,9 @@ __all__ = ["DaemonSupervisor"]
 
 logger = logging.getLogger(__name__)
 
+_MAX_RECOVERY_CRASHES = 3
+_RECOVERY_BACKOFF_BASE_SECONDS = 5
+
 
 class DaemonSupervisor:
     """Minimal supervisor that runs an AgentLoop and manages its lifecycle.
@@ -46,7 +49,7 @@ class DaemonSupervisor:
         self.control_socket: ControlSocket = ControlSocket(self.socket_path)
         self._auto_recovery = auto_recovery
         self._crash_count: int = 0
-        self._max_crashes: int = 3
+        self._max_crashes: int = _MAX_RECOVERY_CRASHES
         self._status: str = "running"
 
     @property
@@ -191,7 +194,7 @@ class DaemonSupervisor:
                     )
                     raise
 
-                backoff = 5 * self._crash_count
+                backoff = _RECOVERY_BACKOFF_BASE_SECONDS * self._crash_count
                 logger.info(
                     "Auto-recovery: restarting in %d seconds (attempt %d)",
                     backoff,
