@@ -39,7 +39,7 @@ async def _run_task(
     async with Storage(db_path) as store:
         task = await store.get_task(task_id)
         if task is None:
-            logger.warning("Task %s not found in storage", task_id)
+            logger.info("Task %s not found in storage", task_id)
             return
 
         description = task["description"]
@@ -69,14 +69,14 @@ async def _run_task(
                 details=f"task={task_id}",
             )
         except (OSError, RuntimeError) as exc:
-            logger.error("Task %s failed: %s", task_id, exc)
+            logger.warning("Task %s failed: %s", task_id, exc)
             await store.update_task(task_id, status=TaskStatus.FAILED, result=str(exc))
 
 
 def main() -> None:  # pragma: no cover — CLI entry point boilerplate
     """CLI entry point for the daemon runner."""
     if len(sys.argv) < 3:
-        logger.warning("Usage: python -m guild.daemon.run <task_id> <guild_dir>")
+        logger.error("Usage: python -m guild.daemon.run <task_id> <guild_dir>")
         sys.exit(1)
 
     task_id = sys.argv[1]

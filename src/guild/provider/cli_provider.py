@@ -113,7 +113,7 @@ class CLIToolProvider(LLMProvider):
         except TimeoutError as exc:
             process.kill()
             await process.wait()
-            logger.error("CLI provider %s timed out after %ds", self.command, self._timeout)
+            logger.warning("CLI provider %s timed out after %ds", self.command, self._timeout)
             raise TimeoutError(
                 f"CLI provider '{self.command}' timed out after {self._timeout}s"
             ) from exc
@@ -122,7 +122,7 @@ class CLIToolProvider(LLMProvider):
 
         if process.returncode != 0:
             stderr_text = stderr_bytes.decode("utf-8", errors="replace").strip()
-            logger.error(
+            logger.warning(
                 "CLI provider %s exited with code %d: %s",
                 self.command,
                 process.returncode,

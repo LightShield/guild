@@ -76,7 +76,7 @@ class MCPClient:
             stderr=asyncio.subprocess.PIPE,
             env=env,
         )
-        logger.info("Connected to MCP server %r (pid=%s)", self._config.name, self._process.pid)
+        logger.debug("Connected to MCP server %r (pid=%s)", self._config.name, self._process.pid)
 
     async def disconnect(self) -> None:
         """Terminate the server subprocess."""
@@ -84,7 +84,7 @@ class MCPClient:
             return
         self._process.terminate()
         await self._process.wait()
-        logger.info("Disconnected from MCP server %r", self._config.name)
+        logger.debug("Disconnected from MCP server %r", self._config.name)
         self._process = None
 
     async def list_tools(self) -> list[MCPTool]:

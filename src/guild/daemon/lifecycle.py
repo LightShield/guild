@@ -62,7 +62,7 @@ class LifecycleManager:
         """
         pid_file = self.run_dir / f"{task_id}.pid"
         if not pid_file.exists():
-            logger.warning("No PID file for task %s", task_id)
+            logger.info("No PID file for task %s", task_id)
             return False
 
         pid = int(pid_file.read_text().strip())

@@ -35,7 +35,7 @@ class MCPToolRegistry:
         for tool in tools:
             self._tools[tool.name] = tool
 
-        logger.info(
+        logger.debug(
             "Registered %d tools from MCP server %r",
             len(tools),
             config.name,
@@ -52,7 +52,7 @@ class MCPToolRegistry:
 
         # Remove tools belonging to this server
         self._tools = {k: v for k, v in self._tools.items() if v.server_name != name}
-        logger.info("Removed MCP server %r", name)
+        logger.debug("Removed MCP server %r", name)
 
     def get_tool(self, name: str) -> MCPTool | None:
         """Get a registered MCP tool by name."""
@@ -97,4 +97,4 @@ class MCPToolRegistry:
         server_count = len(self._clients)
         self._clients.clear()
         self._tools.clear()
-        logger.info("Disconnected from all MCP servers (count=%d)", server_count)
+        logger.debug("Disconnected from all MCP servers (count=%d)", server_count)

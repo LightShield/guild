@@ -186,7 +186,7 @@ class TeamRunner:
         """
         self._agent_statuses[block_name] = AgentStatus.PAUSED
         self._preserved_messages[block_name] = list(messages)
-        logger.info("Agent '%s' paused with %d messages preserved", block_name, len(messages))
+        logger.debug("Agent '%s' paused with %d messages preserved", block_name, len(messages))
 
     def resume_agent(self, block_name: str) -> list[dict[str, Any]]:
         """Resume a paused agent, returning its preserved message history.
@@ -199,7 +199,7 @@ class TeamRunner:
         """
         self._agent_statuses[block_name] = AgentStatus.RUNNING
         messages = self._preserved_messages.pop(block_name, [])
-        logger.info("Agent '%s' resumed with %d messages", block_name, len(messages))
+        logger.debug("Agent '%s' resumed with %d messages", block_name, len(messages))
         return messages
 
     def set_caller_decision(self, block_name: str, decision: str) -> None:
@@ -299,6 +299,7 @@ class TeamRunner:
         self._agent_statuses[instance_name] = AgentStatus.SPAWNED
 
         last_error: str = ""
+        last_exc: Exception | None = None
         for attempt in range(max_retries + 1):
             try:
                 self._agent_statuses[instance_name] = AgentStatus.RUNNING
@@ -306,6 +307,7 @@ class TeamRunner:
                 self._agent_statuses[instance_name] = AgentStatus.COMPLETED
                 return result
             except Exception as exc:
+                last_exc = exc
                 last_error = str(exc)
                 logger.warning(
                     "Block '%s' attempt %d/%d failed: %s",
@@ -316,7 +318,7 @@ class TeamRunner:
                 )
 
         self._agent_statuses[instance_name] = AgentStatus.FAILED
-        raise BlockError(instance_name, last_error)
+        raise BlockError(instance_name, last_error) from last_exc
 
     async def _run_block_with_escalation(self, instance_name: str, input_data: str) -> str:
         """Run a block, handling failure escalation (REQ-04.51-04.53)."""

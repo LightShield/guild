@@ -6,6 +6,7 @@ Includes WebSocket endpoint for real-time status updates.
 """
 
 import asyncio
+import json
 import logging
 from collections.abc import AsyncGenerator, Callable
 from contextlib import asynccontextmanager
@@ -351,7 +352,7 @@ def _register_a2a_routes(app: Any) -> None:
         """JSON-RPC 2.0 dispatcher for A2A protocol."""
         try:
             body = await request.json()
-        except Exception:
+        except (ValueError, json.JSONDecodeError):
             return _jsonrpc_error(None, -32700, "Parse error")
 
         method = body.get("method")
@@ -437,11 +438,11 @@ def create_app(
         try:
             app.state.storage = store
             app.state.guild_dir = _guild_dir
-            logger.info("API storage connected: %s", _db_path)
+            logger.debug("API storage connected: %s", _db_path)
             yield
         finally:
             await store.close()
-            logger.info("API storage closed for %s", _db_path)
+            logger.debug("API storage closed for %s", _db_path)
 
     app = FastAPI(title="Guild", version=__version__, lifespan=lifespan)
 

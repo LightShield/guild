@@ -290,7 +290,7 @@ class ConfigWatcher:
         self._last_config = new_config
 
         self._callback()
-        logger.info("Config reloaded from %s", self._config_path)
+        logger.debug("Config reloaded from %s", self._config_path)
         return True
 
     def _detect_non_reloadable_changes(self, new_config: GuildConfig) -> None:

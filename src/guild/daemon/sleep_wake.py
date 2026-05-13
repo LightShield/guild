@@ -105,7 +105,7 @@ class SleepWakeDetector:
         retries = max_retries or self.config.health_check_retries
         for attempt in range(retries):
             if await provider.health_check():
-                logger.info("Provider recovered after %d attempt(s)", attempt + 1)
+                logger.debug("Provider recovered after %d attempt(s)", attempt + 1)
                 return True
             logger.debug(
                 "Health check attempt %d/%d failed, retrying...",

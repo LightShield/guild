@@ -35,7 +35,7 @@ async def execute_file_read(args: dict[str, Any], working_dir: str | None = None
     try:
         content = path.read_text(encoding="utf-8", errors="replace")
     except OSError as e:
-        logger.warning("Failed to read file %s: %s", path, e)
+        logger.debug("Failed to read file %s: %s", path, e)
         return ToolResult(success=False, output="", error=f"Cannot read file: {e}")
 
     if len(content) > MAX_FILE_READ_CHARS:
@@ -60,7 +60,7 @@ async def execute_file_write(args: dict[str, Any], working_dir: str | None = Non
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
     except OSError as e:
-        logger.warning("Failed to write file %s: %s", path, e)
+        logger.debug("Failed to write file %s: %s", path, e)
         return ToolResult(success=False, output="", error=f"Cannot write file: {e}")
 
     chars_written = len(content)

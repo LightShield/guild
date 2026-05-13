@@ -113,7 +113,7 @@ class DaemonSupervisor:
     def _handle_shutdown_signal(self, signum: int, frame: Any) -> None:  # noqa: ARG002
         """Handle SIGTERM/SIGINT by setting shutdown flag and checkpointing."""
         sig_name = signal.Signals(signum).name
-        logger.info("Received %s — requesting graceful shutdown", sig_name)
+        logger.debug("Received %s — requesting graceful shutdown", sig_name)
         self._shutdown_requested = True
         if self._on_checkpoint is not None:
             import asyncio
@@ -195,7 +195,7 @@ class DaemonSupervisor:
                     raise
 
                 backoff = _RECOVERY_BACKOFF_BASE_SECONDS * self._crash_count
-                logger.info(
+                logger.debug(
                     "Auto-recovery: restarting in %d seconds (attempt %d)",
                     backoff,
                     self._crash_count,

@@ -54,7 +54,7 @@ async def extract_learnings(
     """
     task = await storage.get_task(task_id)
     if task is None:
-        logger.warning("extract_learnings: task %s not found", task_id)
+        logger.debug("extract_learnings: task %s not found", task_id)
         return []
 
     agent_id = task.get("assigned_agent")
