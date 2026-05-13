@@ -46,6 +46,8 @@ def create_task_in_storage(guild_dir: Path, description: str) -> str:
 
 def launch_background_task(guild_dir: Path, task_id: str) -> None:
     """Fork a background daemon process to run the task."""
+    # Intentionally fire-and-forget: the daemon runs in its own session and
+    # manages its own lifecycle (PID file, signal handling). No cleanup needed.
     subprocess.Popen(
         [sys.executable, "-m", "guild.daemon.run", task_id, str(guild_dir)],
         start_new_session=True,

@@ -86,7 +86,6 @@ def select_model_for_task(
     if not candidates:
         raise ValueError(f"No available model supports task type '{task_type}'")
 
-    # Sort by cost (cheapest first), then by name for determinism
     candidates.sort(key=lambda x: (x[0], x[1]))
     return candidates[0][1]
 

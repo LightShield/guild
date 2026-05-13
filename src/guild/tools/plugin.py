@@ -88,20 +88,17 @@ class ToolCache:
         if time.time() > entry.expires_at:
             del self._store[key]
             return None
-        # Move to end for LRU tracking
         self._store.move_to_end(key)
         return entry.result
 
     def put(self, key: str, result: ToolResult, ttl: int = DEFAULT_CACHE_TTL_SECONDS) -> None:
         """Store a result with a TTL in seconds."""
         expires_at = time.time() + ttl
-        # If key exists, update it
         if key in self._store:
             self._store[key] = _CacheEntry(result=result, expires_at=expires_at)
             self._store.move_to_end(key)
         else:
             self._store[key] = _CacheEntry(result=result, expires_at=expires_at)
-        # Evict oldest entries if over capacity
         while len(self._store) > self._max_size:
             self._store.popitem(last=False)
 
@@ -152,10 +149,8 @@ class PluginLoader:
             logger.warning("Plugin file missing tool.name: %s", path)
             return None
 
-        # Parse parameters
         parameters = self._parse_parameters(tool_section.get("parameters", {}))
 
-        # Parse properties
         properties = ToolProperties(
             is_read_only=tool_section.get("is_read_only", False),
             is_concurrency_safe=tool_section.get("is_concurrency_safe", True),
@@ -186,12 +181,10 @@ class PluginLoader:
         result: dict[str, Any] = {}
         result["type"] = params.get("type", "object")
 
-        # Handle properties (nested tables in TOML)
         raw_properties = params.get("properties", {})
         if raw_properties:
             result["properties"] = raw_properties
 
-        # Handle required — TOML can express as a sub-table with a list key
         raw_required = params.get("required", {})
         if isinstance(raw_required, dict) and "list" in raw_required:
             result["required"] = raw_required["list"]

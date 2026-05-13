@@ -49,12 +49,10 @@ class RollbackContext:
         rolled_back: list[str] = []
         for path, snapshot in self._snapshots.items():
             if snapshot.content is None:
-                # File didn't exist before — delete it if it now exists
                 if snapshot.path.exists():
                     snapshot.path.unlink()
                     logger.debug("Rolled back (deleted): %s", path)
             else:
-                # Restore original content
                 snapshot.path.parent.mkdir(parents=True, exist_ok=True)
                 snapshot.path.write_text(snapshot.content)
                 logger.debug("Rolled back (restored): %s", path)

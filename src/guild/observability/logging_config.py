@@ -41,7 +41,6 @@ def configure_logging(
     root_logger = logging.getLogger("guild")
     root_logger.setLevel(getattr(logging, level.upper(), logging.INFO))
 
-    # Remove existing handlers to avoid duplicates on re-configuration
     root_logger.handlers.clear()
 
     handler = logging.StreamHandler()

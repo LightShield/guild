@@ -183,7 +183,6 @@ class AgentLoop:
             if escalation is not None:
                 return escalation
 
-            # Fix B: Inject completion nudge if appropriate
             if should_nudge_completion(turn_results):
                 self.messages.append(Message(role="user", content=COMPLETION_NUDGE))
 
@@ -268,7 +267,6 @@ class AgentLoop:
             tool_name = fn_info.get("name", "")
             tool_args = fn_info.get("arguments", {})
 
-            # Fix C: Deduplication guard
             if is_duplicate_call(call, self.recent_tool_calls):
                 logger.debug("Skipping duplicate call: %s", tool_name)
                 self.messages.append(Message(role="tool", content=DEDUP_MESSAGE))
@@ -281,7 +279,6 @@ class AgentLoop:
             if result.success:
                 self.recent_tool_calls.append(call)
 
-            # Fix A: Format and append result
             formatted = format_tool_result(tool_name, result)
             self.messages.append(Message(role="tool", content=formatted))
 

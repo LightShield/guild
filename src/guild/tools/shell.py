@@ -68,7 +68,6 @@ async def execute_shell(
     if not command:
         return ToolResult(success=False, output="", error="Missing required argument: command")
 
-    # Check denylist before execution
     denial = _check_denylist(command)
     if denial:
         logger.info("Shell command denied: %s (reason: %s)", command, denial)
@@ -78,7 +77,6 @@ async def execute_shell(
     if not isinstance(timeout, (int, float)):
         timeout = SHELL_TIMEOUT_SECONDS
 
-    # Route through Docker sandbox if enabled and available
     use_sandbox = _should_use_sandbox(sandbox_mode)
     if use_sandbox and working_dir:
         return await _run_sandboxed(command, working_dir, timeout, sandbox_network)
@@ -152,7 +150,6 @@ def _format_result(stdout: str, stderr: str, exit_code: int) -> ToolResult:
 
     output = "\n".join(parts)
 
-    # Truncate if too long
     if len(output) > MAX_SHELL_OUTPUT_CHARS:
         output = output[:MAX_SHELL_OUTPUT_CHARS] + "\n\n[Truncated — output exceeds limit]"
 

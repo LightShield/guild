@@ -245,7 +245,6 @@ async def extract_post_task_learnings(
         from guild.agent.learning import extract_learnings
 
         provider = create_resilient_provider(config)
-        # Use the first task ID from storage — extract_learnings uses it for context
         tasks = await store.list_tasks()
         if tasks:
             task_id = tasks[-1].get("task_id", "")

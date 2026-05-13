@@ -52,7 +52,6 @@ async def execute_search(args: dict[str, Any], working_dir: str | None = None) -
     if not search_path.exists():
         return ToolResult(success=False, output="", error=f"Path not found: {search_path}")
 
-    # Validate regex
     try:
         compiled = re.compile(pattern_str)
     except re.error as e:
@@ -87,7 +86,6 @@ def _collect_search_matches(
         return matches
 
     for dirpath, dirnames, filenames in os.walk(search_path):
-        # Skip hidden/unwanted dirs in-place
         dirnames[:] = [d for d in dirnames if not _should_skip_dir(d)]
 
         for filename in filenames:
@@ -173,7 +171,6 @@ def _collect_glob_matches(search_path: Path, pattern: str) -> list[str]:
     all_matches: list[str] = []
 
     for match in search_path.glob(pattern):
-        # Skip anything inside _SKIP_DIRS
         parts = match.relative_to(search_path).parts
         if any(_should_skip_dir(part) for part in parts):
             continue

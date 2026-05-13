@@ -76,7 +76,6 @@ class ArtifactManager:
         path = self._version_path(task_id, name, 1)
         path.write_text(content, encoding="utf-8")
         now = datetime.now(UTC).isoformat()
-        # Mark artifact as pending in status file
         status = self._load_status(task_id)
         status[name] = "pending"
         self._save_status(task_id, status)
@@ -185,7 +184,6 @@ class ArtifactManager:
             raise KeyError(msg)
         del status[name]
         self._save_status(task_id, status)
-        # Remove all version files for this artifact
         task_dir = self._task_dir(task_id)
         if task_dir.exists():  # pragma: no branch — task_dir exists if status loaded
             prefix = f"{name}.v"

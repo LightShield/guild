@@ -134,11 +134,9 @@ class DockerSandbox:
         if not self.network:
             args.append("--network=none")
 
-        # Set resource limits for safety
         args.extend(["--memory", _DOCKER_MEMORY_LIMIT])
         args.extend(["--cpus", _DOCKER_CPU_LIMIT])
 
-        # Prevent privilege escalation
         args.append("--security-opt=no-new-privileges")
 
         args.append(self.image)

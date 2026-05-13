@@ -75,16 +75,13 @@ def _merge_toml_files(guild_dir: Path | None) -> Path | None:
     if not global_data and not project_data:
         return None
 
-    # If only one source exists, return it directly
     if not global_data and project_path and project_path.is_file():
         return project_path
     if not project_data and global_path.is_file():
         return global_path
 
-    # Merge: project overrides global
     merged = _deep_merge(global_data, project_data)
 
-    # Write to a temp file in the guild dir (or /tmp)
     import tempfile
 
     with tempfile.NamedTemporaryFile(
@@ -166,7 +163,6 @@ def validate_config_keys(guild_dir: Path | None) -> list[str]:
     if not raw:
         return []
 
-    # Build the set of known field names grouped by section
     known: dict[str, set[str]] = {}
     for field_name, field_obj in GuildConfig._fields.items():
         section = getattr(field_obj, "section", "") or ""
@@ -209,7 +205,6 @@ def load_config(
         file=merged_file,
     )
 
-    # Clean up temp file if we created one
     if merged_file and _TEMP_FILE_PREFIX in str(merged_file):
         import contextlib
 

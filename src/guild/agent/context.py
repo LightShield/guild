@@ -78,7 +78,6 @@ class ContextManager:
 
         protected = self._protected_indices(result)
 
-        # Truncate old tool outputs, oldest first, most aggressively
         trimmable = [i for i, msg in enumerate(result) if i not in protected and msg.role == "tool"]
 
         for idx in trimmable:
@@ -158,10 +157,8 @@ class ContextManager:
     def _protected_indices(self, messages: list[Message]) -> set[int]:
         """Return indices that must not be truncated."""
         protected: set[int] = set()
-        # Always protect system prompt (first message if role=system)
         if messages and messages[0].role == "system":
             protected.add(0)
-        # Protect recent N messages
         total = len(messages)
         start = max(0, total - self.preserve_recent)
         for i in range(start, total):

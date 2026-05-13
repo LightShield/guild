@@ -88,7 +88,6 @@ def validate_port_data(data: dict[str, Any], type_tag: str) -> tuple[bool, str]:
     if schema_entry is None or schema_entry.json_schema is None:
         return True, ""
 
-    # Basic schema validation (type check at top level)
     schema = schema_entry.json_schema
     if not _basic_schema_check(data, schema):
         return False, f"Data does not match schema for type '{type_tag}'"

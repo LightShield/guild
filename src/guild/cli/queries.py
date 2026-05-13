@@ -67,7 +67,6 @@ async def fetch_task_history(db_path: Path, limit: int, status: str | None) -> l
 
     async with Storage(db_path) as store:
         tasks = await store.list_tasks(status=status)
-    # Return most recent first, capped at limit
     tasks.sort(key=lambda t: t.get("created_at", ""), reverse=True)
     return tasks[:limit]
 

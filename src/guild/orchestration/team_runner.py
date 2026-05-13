@@ -222,7 +222,6 @@ class TeamRunner:
 
         last_output = initial_input
         for instance_name in order:
-            # Skip blocks handled inside a loop (evaluators)
             if instance_name in loop_handled:
                 continue
 
@@ -259,7 +258,6 @@ class TeamRunner:
 
         order = _topological_sort(list(self._team.blocks.keys()), edges)
 
-        # Ensure entry_block is first
         if self._team.entry_block in order and order[0] != self._team.entry_block:
             order.remove(self._team.entry_block)
             order.insert(0, self._team.entry_block)
@@ -338,7 +336,6 @@ class TeamRunner:
             raise EscalationError(
                 f"Block '{instance_name}' failed and requires human intervention: {err}"
             )
-        # Default: escalate
         raise EscalationError(f"Block '{instance_name}' failed: {err}")
 
     async def _run_loop(self, loop: LoopDef, initial_input: str) -> str:
@@ -365,7 +362,6 @@ class TeamRunner:
                 initial_input, iteration, gen_output, result.feedback
             )
 
-        # Max iterations reached -- return last generator output
         self._outputs[loop.generator_block] = gen_output
         return gen_output
 
@@ -389,12 +385,10 @@ class TeamRunner:
 
         Tries JSON parsing first, then keyword heuristics.
         """
-        # Try JSON parsing
         json_result = self._try_parse_json(output)
         if json_result is not None:
             return json_result
 
-        # Keyword heuristics fallback
         return self._parse_heuristic(output)
 
     def _try_parse_json(self, output: str) -> EvaluatorResult | None:
@@ -403,7 +397,6 @@ class TeamRunner:
         if not isinstance(data, dict):
             return None
 
-        # Normalize field names
         passed = data.get(_EVAL_PASS_KEY, data.get(_EVAL_PASSED_KEY, False))
         score = int(data.get(_EVAL_SCORE_KEY, 0))
         feedback = str(data.get(_EVAL_FEEDBACK_KEY, ""))
@@ -449,7 +442,6 @@ class TeamRunner:
 
         tool_executors = build_tool_executors() if block_def.tools else {}
 
-        # Create a task record for this block execution
         task_id = str(uuid.uuid4())
         agent_id = f"{block_def.name}-{task_id[:8]}"
 
@@ -467,7 +459,6 @@ class TeamRunner:
                 details=f"block={block_def.name}",
             )
 
-        # Build system prompt with learnings (like run_task does)
         system_prompt = block_def.system_prompt
         if self._storage:
             learnings = await self._storage.list_learnings(
@@ -477,7 +468,6 @@ class TeamRunner:
             if injection:
                 system_prompt = f"{system_prompt}\n\n{injection}"
 
-        # Run the agent loop
         loop = AgentLoop(
             provider=self._provider,
             tool_executors=tool_executors,
@@ -490,7 +480,6 @@ class TeamRunner:
             self_review=block_def.role == "reviewer",
         )
 
-        # Persist results (like run_task does)
         if self._storage:
             for msg in loop.messages:
                 if msg.role in ("user", "assistant"):

@@ -53,13 +53,11 @@ class SandboxPolicy:
         """
         resolved = self._resolve_path(path)
 
-        # Check denied paths first (higher precedence)
         for denied in self.denied_paths:
             denied_resolved = self._resolve_path(denied)
             if self._is_subpath(resolved, denied_resolved):
                 return (False, f"Path '{path}' is within denied path '{denied}'")
 
-        # If no allowed_paths configured, all paths are allowed
         if not self.allowed_paths:
             return (True, "")
 
@@ -77,12 +75,10 @@ class SandboxPolicy:
         """
         cmd_name = self._extract_command_name(command)
 
-        # Check denied commands first (higher precedence)
         for denied in self.denied_commands:
             if self._command_matches(command, cmd_name, denied):
                 return (False, f"Command '{cmd_name}' is in denylist")
 
-        # If allowlist is configured, command must be in it
         if self.allowed_commands:
             for allowed in self.allowed_commands:
                 if self._command_matches(command, cmd_name, allowed):
@@ -122,7 +118,6 @@ class SandboxPolicy:
         p = Path(path)
         if not p.is_absolute():
             p = Path.cwd() / p
-        # Use resolve() to normalize .. and symlinks
         try:
             return p.resolve()
         except (OSError, ValueError):
@@ -141,11 +136,9 @@ class SandboxPolicy:
     def _extract_command_name(self, command: str) -> str:
         """Extract the base command name from a full command string."""
         stripped = command.strip()
-        # Handle env vars, sudo, etc.
         parts = stripped.split()
         if not parts:
             return ""
-        # Skip common prefixes
         idx = 0
         while idx < len(parts) and parts[idx] in ("sudo", "env"):
             idx += 1
@@ -155,7 +148,6 @@ class SandboxPolicy:
 
     def _command_matches(self, full_cmd: str, cmd_name: str, pattern: str) -> bool:
         """Check if a command matches a pattern (name or regex)."""
-        # Direct name match or word boundary match in full command
         if cmd_name == pattern:
             return True
         return bool(re.search(rf"\b{re.escape(pattern)}\b", full_cmd))

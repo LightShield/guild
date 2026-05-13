@@ -251,7 +251,12 @@ async def _verify_command(
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        stdout, stderr = await proc.communicate()
+        try:
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
+        except TimeoutError:
+            proc.kill()
+            await proc.wait()
+            return False, f"FAIL: command '{step.target}' timed out after 30s"
         passed = proc.returncode == 0
 
         if passed:

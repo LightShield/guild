@@ -145,7 +145,6 @@ class PermissionChecker:
         if self._tier == PermissionTier.ASK:
             return self._check_ask(tool_name, agent_id, args)
 
-        # SCOPED
         return self._check_scoped(tool_name, args)
 
     def _record_audit(
@@ -184,7 +183,6 @@ class PermissionChecker:
         for rule in HARDCODED_NEVER:
             if rule["tool"] != tool_name:
                 continue
-            # Extract the command string from args
             command = args.get("command") or args.get("cmd") or ""
             if not command:
                 continue
@@ -240,14 +238,11 @@ class PermissionChecker:
             )
             return False
 
-        # Extract any path arguments from args
         paths = self._extract_paths(args)
 
-        # If no paths in args, allow (tool is in allowlist)
         if not paths:
             return True
 
-        # All paths must be within at least one allowed path prefix
         for p in paths:
             if not self._path_in_bounds(p):
                 self.last_denial_reason = (

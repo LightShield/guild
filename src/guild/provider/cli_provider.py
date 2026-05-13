@@ -69,13 +69,11 @@ class CLIToolProvider(LLMProvider):
         Uses the last user message. Falls back to concatenating all
         messages if no user message is found.
         """
-        # Find last user message
         for msg in reversed(messages):
             if msg.get("role") == "user":
                 content: str = msg.get("content", "")
                 return content
 
-        # Fallback: concatenate all content
         parts: list[str] = []
         for msg in messages:
             text: str = msg.get("content", "")

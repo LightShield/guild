@@ -128,7 +128,6 @@ def validate_config(
     if config.max_tokens < 1:
         errors.append("max_tokens must be >= 1")
 
-    # Validate agent profiles reference valid permission tiers
     agent_profiles = load_agent_profiles(guild_dir)
     valid_tiers = {tier.value for tier in PermissionTier}
     for name, profile in agent_profiles.items():
@@ -137,7 +136,6 @@ def validate_config(
                 f"Agent profile '{name}' has invalid permission: " f"'{profile.permission}'"
             )
 
-    # Validate escalation chain model names (REQ-17.7)
     if config.escalation_chain and known_models is not None:
         chain_models = [m.strip() for m in config.escalation_chain.split(",") if m.strip()]
         for model_name in chain_models:

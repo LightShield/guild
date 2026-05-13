@@ -48,10 +48,8 @@ def set_config_value(config_path: Path, key_value: str) -> None:
     key, value = key_value.split("=", 1)
     parts = key.strip().split(".")
 
-    # Load existing TOML data
     existing = load_toml(config_path)
 
-    # Navigate to the right nested level
     current = existing
     for part in parts[:-1]:
         if part not in current:
@@ -60,7 +58,6 @@ def set_config_value(config_path: Path, key_value: str) -> None:
 
     current[parts[-1]] = parse_value(value.strip())
 
-    # Write back as TOML
     write_toml(config_path, existing)
 
 

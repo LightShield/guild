@@ -291,7 +291,6 @@ def _register_static_files(app: Any) -> None:
     from fastapi.staticfiles import StaticFiles
 
     if _UI_DIST.is_dir():
-        # Serve static assets (JS, CSS, images)
         app.mount(
             "/_app",
             StaticFiles(directory=str(_UI_DIST / "_app")),
@@ -418,7 +417,6 @@ def create_app(
     from guild.config.loader import find_guild_dir
     from guild.storage.sqlite import Storage
 
-    # Resolve guild directory
     _guild_dir = guild_dir or find_guild_dir() or Path.cwd() / GUILD_DIR_NAME
     _db_path = _guild_dir / DB_FILENAME
 
@@ -450,7 +448,6 @@ def create_app(
         """Retrieve Storage from app state."""
         return app.state.storage  # type: ignore[no-any-return]
 
-    # Register route groups
     _register_a2a_routes(app)
     _register_task_routes(app, _get_storage)
     _register_agent_routes(app, _get_storage)

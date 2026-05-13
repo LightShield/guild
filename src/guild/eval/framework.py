@@ -208,7 +208,6 @@ class EvalFramework:
         """
         reasons: list[str] = []
 
-        # Task failure is always a regression
         if baseline.metrics.task_completed and not current.metrics.task_completed:
             reasons.append("task no longer completes")
 
@@ -263,7 +262,6 @@ class EvalFramework:
         score_a = 0
         score_b = 0
 
-        # Completion is most important
         if result_a.metrics.task_completed and not result_b.metrics.task_completed:
             return "a"
         if result_b.metrics.task_completed and not result_a.metrics.task_completed:

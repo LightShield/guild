@@ -88,7 +88,6 @@ class WorktreeManager:
         if exit_code != 0:
             raise RuntimeError(f"Failed to remove worktree for task {task_id}: {output}")
 
-        # Delete the task branch after removing the worktree
         await self._run_git("branch", "-D", branch)
         logger.info("Removed worktree and branch for task %s", task_id)
 
@@ -106,10 +105,8 @@ class WorktreeManager:
         """Merge task branch to staging. Returns (success, message)."""
         branch = f"{BRANCH_PREFIX}{task_id}"
 
-        # Ensure staging branch exists
         await self._ensure_staging_branch(staging_branch)
 
-        # Attempt the merge
         exit_code, output = await self._run_git(
             "merge",
             branch,
@@ -120,7 +117,6 @@ class WorktreeManager:
         )
 
         if exit_code != 0:
-            # Abort the failed merge
             await self._run_git(
                 "merge",
                 "--abort",
@@ -205,5 +201,10 @@ class WorktreeManager:
             stderr=asyncio.subprocess.STDOUT,
             cwd=str(cwd or self._repo_root),
         )
-        stdout, _ = await proc.communicate()
+        try:
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=30)
+        except TimeoutError:
+            proc.kill()
+            await proc.wait()
+            return 1, "git command timed out after 30s"
         return proc.returncode or 0, stdout.decode().strip()

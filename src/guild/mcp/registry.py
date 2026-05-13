@@ -50,7 +50,6 @@ class MCPToolRegistry:
 
         await client.disconnect()
 
-        # Remove tools belonging to this server
         self._tools = {k: v for k, v in self._tools.items() if v.server_name != name}
         logger.debug("Removed MCP server %r", name)
 

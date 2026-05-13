@@ -61,7 +61,6 @@ class DarwinAdapter:
                 text=True,
                 timeout=5,
             )
-            # Parse HIDIdleTime from output (in nanoseconds)
             for line in result.stdout.splitlines():
                 if "HIDIdleTime" in line:
                     parts = line.split("=")

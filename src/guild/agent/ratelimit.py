@@ -75,7 +75,6 @@ class RateLimiter:
             if len(self._calls) < self._max:
                 self._calls.append(time.monotonic())
                 return
-            # Calculate wait time until the oldest call exits the window
             oldest = self._calls[0]
             wait = self._window - (time.monotonic() - oldest)
             if wait > 0:  # pragma: no branch — defensive: prune() evicts expired

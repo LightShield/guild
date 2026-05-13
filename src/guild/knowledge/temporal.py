@@ -133,13 +133,11 @@ class TemporalKnowledge:
         """
         sections: list[str] = []
 
-        # Recent decisions
         decisions = await self.get_decision_history(limit=5)
         if decisions:
             formatted = self._format_decisions(decisions)
             sections.append(f"### Recent Decisions\n{formatted}")
 
-        # Relevant learnings (high confidence only)
         learnings = await self._storage.list_learnings(min_confidence=0.5)
         if learnings:
             formatted = self._format_learnings(learnings)
@@ -171,6 +169,8 @@ class TemporalKnowledge:
             if proc.returncode == 0:
                 return stdout.decode().strip()
         except TimeoutError:
+            proc.kill()
+            await proc.wait()
             logger.debug("Command timed out: %s", cmd)
         except OSError:
             logger.debug("Command failed: %s", cmd)

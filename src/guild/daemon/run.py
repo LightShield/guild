@@ -35,7 +35,6 @@ async def _run_task(
     working_dir = str(guild_dir.parent)
     db_path = guild_dir / DB_FILENAME
 
-    # Load task from storage
     async with Storage(db_path) as store:
         task = await store.get_task(task_id)
         if task is None:
@@ -45,7 +44,6 @@ async def _run_task(
         description = task["description"]
         await store.update_task(task_id, status=TaskStatus.RUNNING)
 
-        # Create provider and tools
         provider = create_provider_for_backend(config.provider_name, config.base_url, config.model)
         tool_executors = build_tool_executors()
 
@@ -56,7 +54,6 @@ async def _run_task(
             max_turns=DEFAULT_MAX_TURNS,
         )
 
-        # Run under supervisor
         run_dir = guild_dir / "run"
         supervisor = DaemonSupervisor(run_dir=run_dir, task_id=task_id)
 

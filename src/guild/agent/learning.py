@@ -175,7 +175,6 @@ def _format_session_log(messages: list[dict[str, Any]]) -> str:
     for msg in messages:
         role = msg.get("role", "unknown")
         content = msg.get("content", "")
-        # Truncate very long messages to keep prompt manageable
         if len(content) > LEARNING_CONTENT_MAX_CHARS:
             content = content[:LEARNING_CONTENT_MAX_CHARS] + "..."
         lines.append(f"[{role}] {content}")

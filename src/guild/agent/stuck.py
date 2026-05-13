@@ -42,7 +42,6 @@ class StuckDetector:
             self._no_progress_count = 0
             return
 
-        # Failure turn
         self._no_progress_count += 1
 
         if error is not None and error == self._last_error:

@@ -74,11 +74,16 @@ class OfflineManager:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            stdout, _ = await proc.communicate()
+            try:
+                stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=30)
+            except TimeoutError:
+                proc.kill()
+                await proc.wait()
+                logger.warning("ollama list timed out")
+                return []
             if proc.returncode != 0:
                 return []
             lines = stdout.decode().strip().splitlines()
-            # Skip header line, extract model names (first column)
             models: list[str] = []
             for line in lines[1:]:
                 parts = line.split()
@@ -104,7 +109,13 @@ class OfflineManager:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            _, _ = await proc.communicate()
+            try:
+                _, _ = await asyncio.wait_for(proc.communicate(), timeout=300)
+            except TimeoutError:
+                proc.kill()
+                await proc.wait()
+                logger.warning("ollama pull %r timed out after 300s", model_name)
+                return False
             return proc.returncode == 0
         except (FileNotFoundError, OSError):
             logger.warning("ollama CLI not found, cannot pull model %r", model_name)

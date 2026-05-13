@@ -164,11 +164,9 @@ def init(
 
     guild_dir.mkdir(parents=True)
 
-    # Write default config
     config_path = guild_dir / CONFIG_FILENAME
     config_path.write_text(_DEFAULT_CONFIG_TOML)
 
-    # Create the database
     db_path = guild_dir / DB_FILENAME
     _init_database(db_path)
 
@@ -186,7 +184,6 @@ def status() -> None:
     project_path = guild_dir.parent
     config = load_config(guild_dir)
 
-    # Get counts from the database
     db_path = guild_dir / DB_FILENAME
     task_count, agent_count = _get_task_and_agent_counts(db_path)
 
@@ -313,7 +310,6 @@ def config_cmd(
         console.print(f"[green]Updated:[/green] {set_value}")
         return
 
-    # Show current config
     config = load_config(guild_dir)
     table = Table(title="Guild Configuration")
     table.add_column("Key", style="cyan")
@@ -628,7 +624,6 @@ def _render_task_tree(db_path: Path, root_task_id: str) -> None:
 
     tasks = asyncio.run(_fetch_tree())
 
-    # Build parent->children map
     children_map: dict[str, list[dict[str, Any]]] = {}
     task_map: dict[str, dict[str, Any]] = {}
     for t in tasks:
@@ -836,10 +831,8 @@ def attach(
         )
         raise typer.Exit(code=1)
 
-    # Connect and enter interactive REPL
     async def _attach_repl() -> None:  # pragma: no cover — interactive I/O
         reader, writer = await asyncio.open_unix_connection(str(sock_path))
-        # Subscribe to agent output
         writer.write(
             json.dumps({"type": "command", "action": "subscribe"}).encode() + b"\n"
         )
@@ -915,7 +908,6 @@ def confidence() -> None:
         console.print("[red]Error:[/red] Not a guild project (no .guild/ found).")
         raise typer.Exit(code=1)
 
-    # Group benchmarks by category
     categories: dict[str, list[str]] = {}
     for bench in SELF_DEV_BENCHMARKS:
         categories.setdefault(bench.category, []).append(bench.name)
