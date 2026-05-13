@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 import tomllib
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from guild.config.constants import CONFIG_FILENAME, DB_FILENAME, GUILD_DIR_NAME
 from guild.config.models import GuildConfig
@@ -17,8 +17,6 @@ from guild.config.models import GuildConfig
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from collections.abc import Callable
     from typing import IO
-
-from typing import Any
 
 __all__ = [
     "CONFIG_FILENAME",
