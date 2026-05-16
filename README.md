@@ -1,6 +1,15 @@
 # Guild
 
-A free, locally-focused agent harness that runs an autonomous coding agent against local models (Ollama). The core value: **an agent that works while you're away and backs off when you're present.**
+**The problem:** Existing AI coding agents (Copilot, Cursor, Claude Code) require paid cloud APIs, constant attention, and hog system resources. You want an agent that works autonomously on tasks while you're away — without racking up API costs.
+
+**Guild** is a free, locally-focused agent harness that runs autonomous coding agents against local models (Ollama).
+
+What makes it different:
+
+- **Zero cost** — runs entirely on local Ollama models, no cloud API fees ever.
+- **"Good neighbor"** — automatically throttles when you're using the machine, runs at full speed when idle.
+- **Truly autonomous** — runs to completion without babysitting, survives reboots and sleep/wake cycles.
+- **Self-improving** — extracts learnings from completed tasks and gets smarter over time.
 
 ## Quick Start
 
