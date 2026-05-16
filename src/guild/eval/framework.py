@@ -8,12 +8,11 @@ and self-development benchmarks (REQ-16.7).
 
 from __future__ import annotations
 
+from logger_python import get_logger
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
-
-from logger_python import get_logger
 
 from guild.agent.message import Message
 from guild.config.constants import (
@@ -28,6 +27,7 @@ if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from guild.storage import Storage
 
 __all__ = [
+    "ABTestConfig",
     "BenchmarkTask",
     "EvalFramework",
     "EvalMetrics",
@@ -70,6 +70,17 @@ class BenchmarkTask:
     description: str
     verification: list[dict[str, Any]]
     category: str = "general"
+
+
+@dataclass
+class ABTestConfig:
+    """Configuration for an A/B test run."""
+
+    task: BenchmarkTask
+    provider_a: LLMProvider
+    provider_b: LLMProvider
+    label_a: str
+    label_b: str
 
 
 class EvalFramework:
@@ -155,15 +166,29 @@ class EvalFramework:
 
     async def run_ab_test(
         self,
-        task: BenchmarkTask,
-        provider_a: LLMProvider,
-        provider_b: LLMProvider,
-        label_a: str,
-        label_b: str,
+        ab_config_or_task: ABTestConfig | BenchmarkTask,
+        provider_a: LLMProvider | None = None,
+        provider_b: LLMProvider | None = None,
+        label_a: str = "",
+        label_b: str = "",
     ) -> tuple[EvalResult, EvalResult]:
         """Run A/B test: same task on two providers (REQ-16.1)."""
-        result_a = await self.run_eval(task, provider_a, label_a)
-        result_b = await self.run_eval(task, provider_b, label_b)
+        if isinstance(ab_config_or_task, ABTestConfig):
+            ab_config = ab_config_or_task
+        else:
+            ab_config = ABTestConfig(
+                task=ab_config_or_task,
+                provider_a=provider_a,  # type: ignore[arg-type]
+                provider_b=provider_b,  # type: ignore[arg-type]
+                label_a=label_a,
+                label_b=label_b,
+            )
+        result_a = await self.run_eval(
+            ab_config.task, ab_config.provider_a, ab_config.label_a,
+        )
+        result_b = await self.run_eval(
+            ab_config.task, ab_config.provider_b, ab_config.label_b,
+        )
         return result_a, result_b
 
     async def run_suite(

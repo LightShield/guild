@@ -8,11 +8,12 @@ single SQLite file.
 from __future__ import annotations
 
 import json
+from logger_python import get_logger
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 import aiosqlite
-from logger_python import get_logger
 
 from guild.config.constants import (
     CONFIDENCE_DECAY_DECREMENT,
@@ -28,9 +29,48 @@ __all__ = [
     "CONFIDENCE_DECAY_DECREMENT",
     "CONFIDENCE_INVALIDATE_DECREMENT",
     "CONFIDENCE_VALIDATE_INCREMENT",
+    "DecisionRecord",
+    "LearningRecord",
     "MEMORY_SUMMARY_MAX_CHARS",
+    "QuestionRecord",
     "Storage",
 ]
+
+
+@dataclass
+class DecisionRecord:
+    """Record of a non-trivial decision with rationale."""
+
+    decision: str
+    rationale: str
+    task_id: str | None = None
+    agent_id: str | None = None
+    alternatives: list[str] | None = None
+    reversible: bool = True
+
+
+@dataclass
+class LearningRecord:
+    """Record for a new learning entry."""
+
+    category: str
+    content: str
+    confidence: float = 0.3
+    scope: str | None = None
+    source_task_id: str | None = None
+
+
+@dataclass
+class QuestionRecord:
+    """Record for an escalation question."""
+
+    question_id: str
+    question: str
+    context: str
+    created_at: str
+    task_id: str | None = None
+    agent_id: str | None = None
+    priority: str = "normal"
 
 logger = get_logger(__name__)
 
@@ -341,10 +381,11 @@ class Storage:
 
     async def log_decision(
         self,
-        task_id: str | None,
-        agent_id: str | None,
-        decision: str,
-        rationale: str,
+        record: DecisionRecord | None = None,
+        task_id: str | None = None,
+        agent_id: str | None = None,
+        decision: str = "",
+        rationale: str = "",
         alternatives: list[str] | None = None,
         *,
         reversible: bool = True,
@@ -352,19 +393,28 @@ class Storage:
         """Record a non-trivial decision with rationale."""
         if self._db is None:
             raise RuntimeError("Storage not connected. Call connect() first.")
-        alts_json = json.dumps(alternatives) if alternatives else None
+        if record is None:
+            record = DecisionRecord(
+                decision=decision,
+                rationale=rationale,
+                task_id=task_id,
+                agent_id=agent_id,
+                alternatives=alternatives,
+                reversible=reversible,
+            )
+        alts_json = json.dumps(record.alternatives) if record.alternatives else None
         await self._db.execute(
             "INSERT INTO decisions"
             " (task_id, agent_id, decision, rationale,"
             "  alternatives, reversible, timestamp)"
             " VALUES (?, ?, ?, ?, ?, ?, ?)",
             (
-                task_id,
-                agent_id,
-                decision,
-                rationale,
+                record.task_id,
+                record.agent_id,
+                record.decision,
+                record.rationale,
                 alts_json,
-                reversible,
+                record.reversible,
                 _now(),
             ),
         )
@@ -397,8 +447,9 @@ class Storage:
 
     async def add_learning(
         self,
-        category: str,
-        content: str,
+        record: LearningRecord | None = None,
+        category: str = "",
+        content: str = "",
         confidence: float = 0.3,
         scope: str | None = None,
         source_task_id: str | None = None,
@@ -406,11 +457,26 @@ class Storage:
         """Insert a new learning and return its ID."""
         if self._db is None:
             raise RuntimeError("Storage not connected. Call connect() first.")
+        if record is None:
+            record = LearningRecord(
+                category=category,
+                content=content,
+                confidence=confidence,
+                scope=scope,
+                source_task_id=source_task_id,
+            )
         cursor = await self._db.execute(
             "INSERT INTO learnings"
             " (category, content, confidence, scope, source_task_id, created_at)"
             " VALUES (?, ?, ?, ?, ?, ?)",
-            (category, content, confidence, scope, source_task_id, _now()),
+            (
+                record.category,
+                record.content,
+                record.confidence,
+                record.scope,
+                record.source_task_id,
+                _now(),
+            ),
         )
         await self._db.commit()
         return cursor.lastrowid or 0
@@ -539,10 +605,11 @@ class Storage:
 
     async def insert_question(
         self,
-        question_id: str,
-        question: str,
-        context: str,
-        created_at: str,
+        record: QuestionRecord | None = None,
+        question_id: str = "",
+        question: str = "",
+        context: str = "",
+        created_at: str = "",
         task_id: str | None = None,
         agent_id: str | None = None,
         priority: str = "normal",
@@ -550,11 +617,29 @@ class Storage:
         """Insert a new question into the escalation queue."""
         if self._db is None:
             raise RuntimeError("Storage not connected. Call connect() first.")
+        if record is None:
+            record = QuestionRecord(
+                question_id=question_id,
+                question=question,
+                context=context,
+                created_at=created_at,
+                task_id=task_id,
+                agent_id=agent_id,
+                priority=priority,
+            )
         await self._db.execute(
             "INSERT INTO questions"
             " (id, task_id, agent_id, question, context, priority, created_at)"
             " VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (question_id, task_id, agent_id, question, context, priority, created_at),
+            (
+                record.question_id,
+                record.task_id,
+                record.agent_id,
+                record.question,
+                record.context,
+                record.priority,
+                record.created_at,
+            ),
         )
         await self._db.commit()
 

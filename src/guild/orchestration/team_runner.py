@@ -7,14 +7,14 @@ and parallel branch failure isolation.
 from __future__ import annotations
 
 import json
+from logger_python import get_logger
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING, Any
 
-from logger_python import get_logger
-
 from guild.agent.loop import AgentLoop
 from guild.config.constants import (
+    AGENT_ID_PREFIX_LEN,
     DEFAULT_LOOP_MAX_ITERATIONS,
     HEURISTIC_FAIL_SCORE,
     HEURISTIC_PASS_SCORE,
@@ -35,6 +35,7 @@ __all__ = [
     "EscalationError",
     "EvaluatorResult",
     "TeamRunner",
+    "TeamRunnerConfig",
 ]
 
 logger = get_logger(__name__)
@@ -139,6 +140,14 @@ def _format_loop_feedback(
     )
 
 
+@dataclass
+class TeamRunnerConfig:
+    """Configuration for the team runner."""
+
+    storage: Storage | None = None
+    working_dir: str | None = None
+
+
 class TeamRunner:
     """Executes a team composition by running blocks in topological order.
 
@@ -155,9 +164,14 @@ class TeamRunner:
         team: TeamDef,
         registry: BlockRegistry,
         provider: LLMProvider,
+        config: TeamRunnerConfig | None = None,
+        *,
         storage: Storage | None = None,
         working_dir: str | None = None,
     ) -> None:
+        if config is not None:
+            storage = config.storage
+            working_dir = config.working_dir
         self._team = team
         self._registry = registry
         self._provider = provider
@@ -305,9 +319,7 @@ class TeamRunner:
                 result = await self._invoke_agent(block_def, input_data)
                 self._agent_statuses[instance_name] = AgentStatus.COMPLETED
                 return result
-            except (RuntimeError, OSError, TimeoutError) as exc:
-                # Agent crash recovery path: these are the exceptions
-                # that can surface from AgentLoop invocation failures.
+            except Exception as exc:
                 last_exc = exc
                 last_error = str(exc)
                 logger.warning(
@@ -437,35 +449,16 @@ class TeamRunner:
 
     async def _invoke_agent(self, block_def: BlockDef, input_data: str) -> str:
         """Invoke an agent for a block, using full task infrastructure."""
+        import uuid
+
+        from guild.agent.learning import format_learnings_for_injection
+        from guild.config.constants import MIN_INJECTION_CONFIDENCE
         from guild.tools.registry import build_tool_executors
 
         tool_executors = build_tool_executors() if block_def.tools else {}
-        task_id, agent_id = await self._create_agent_task(block_def, input_data)
-        system_prompt = await self._build_agent_prompt(block_def)
-
-        loop = AgentLoop(
-            provider=self._provider,
-            tool_executors=tool_executors,
-            working_dir=self._working_dir,
-            max_turns=SUB_AGENT_MAX_TURNS,
-        )
-        result = await loop.run(
-            system_prompt=system_prompt,
-            user_input=input_data,
-            self_review=block_def.role == "reviewer",
-        )
-
-        await self._persist_agent_result(loop, agent_id, task_id, block_def, result)
-        return result
-
-    async def _create_agent_task(
-        self, block_def: "BlockDef", input_data: str
-    ) -> tuple[str, str]:
-        """Create task and register agent in storage. Returns (task_id, agent_id)."""
-        import uuid
 
         task_id = str(uuid.uuid4())
-        agent_id = f"{block_def.name}-{task_id[:8]}"
+        agent_id = f"{block_def.name}-{task_id[:AGENT_ID_PREFIX_LEN]}"
 
         if self._storage:
             await self._storage.create_task(
@@ -481,13 +474,6 @@ class TeamRunner:
                 details=f"block={block_def.name}",
             )
 
-        return task_id, agent_id
-
-    async def _build_agent_prompt(self, block_def: "BlockDef") -> str:
-        """Build system prompt with learning injection if storage available."""
-        from guild.agent.learning import format_learnings_for_injection
-        from guild.config.constants import MIN_INJECTION_CONFIDENCE
-
         system_prompt = block_def.system_prompt
         if self._storage:
             learnings = await self._storage.list_learnings(
@@ -497,30 +483,31 @@ class TeamRunner:
             if injection:
                 system_prompt = f"{system_prompt}\n\n{injection}"
 
-        return system_prompt
-
-    async def _persist_agent_result(
-        self,
-        loop: AgentLoop,
-        agent_id: str,
-        task_id: str,
-        block_def: "BlockDef",
-        result: str,
-    ) -> None:
-        """Store agent messages and mark task completed in storage."""
-        if not self._storage:
-            return
-
-        for msg in loop.messages:
-            if msg.role in ("user", "assistant"):
-                await self._storage.append_message(
-                    agent_id, msg.role, msg.content
-                )
-        await self._storage.update_task(
-            task_id, status="completed", result=result[:500]
+        loop = AgentLoop(
+            provider=self._provider,
+            tool_executors=tool_executors,
+            working_dir=self._working_dir,
+            max_turns=SUB_AGENT_MAX_TURNS,
         )
-        await self._storage.log_audit(
-            "task_completed",
-            agent_id=agent_id,
-            details=f"block={block_def.name}",
+        result = await loop.run(
+            system_prompt=system_prompt,
+            user_input=input_data,
+            self_review=block_def.role == "reviewer",
         )
+
+        if self._storage:
+            for msg in loop.messages:
+                if msg.role in ("user", "assistant"):
+                    await self._storage.append_message(
+                        agent_id, msg.role, msg.content
+                    )
+            await self._storage.update_task(
+                task_id, status="completed", result=result[:500]
+            )
+            await self._storage.log_audit(
+                "task_completed",
+                agent_id=agent_id,
+                details=f"block={block_def.name}",
+            )
+
+        return result

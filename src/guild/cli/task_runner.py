@@ -7,9 +7,9 @@ concerns.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 from logger_python import get_logger
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -34,6 +34,7 @@ __all__ = [
     "AGENT_ID_PREFIX_LEN",
     "GUILD_MASTER_PROMPT",
     "OLLAMA_PROVIDER_NAME",
+    "TaskRunConfig",
     "build_system_prompt_with_learnings",
     "compute_max_turns",
     "create_chat_loop",
@@ -49,6 +50,17 @@ __all__ = [
 logger = get_logger(__name__)
 
 OLLAMA_PROVIDER_NAME = "ollama"
+
+
+@dataclass
+class TaskRunConfig:
+    """Configuration for running a task through the agent loop."""
+
+    config: GuildConfig
+    working_dir: str
+    description: str
+    permission: str
+    timeout: int
 
 
 def _parse_escalation_config(config: GuildConfig) -> tuple[list[str], list[str]]:
@@ -154,28 +166,46 @@ def create_task_agent_loop(config: GuildConfig, working_dir: str, timeout: int) 
 
 
 async def run_task(
-    config: GuildConfig,
-    working_dir: str,
-    description: str,
-    permission: str,
-    timeout: int,
-    guild_dir: Path,
+    task_run_or_config: TaskRunConfig | GuildConfig,
+    guild_dir_or_working_dir: Path | str = "",
+    description: str = "",
+    permission: str = "",
+    timeout: int = 0,
+    guild_dir: Path | None = None,
 ) -> str:
     """Execute a task through the agent loop."""
     from guild.permissions.checker import PermissionTier
     from guild.storage.sqlite import Storage
 
-    if not description or not description.strip():
-        raise ValueError("Task description cannot be empty")
-    PermissionTier(permission)  # raises ValueError if invalid
+    # Support both new dataclass-based and old positional calling conventions
+    if isinstance(task_run_or_config, TaskRunConfig):
+        task_run = task_run_or_config
+        resolved_guild_dir: Path = guild_dir_or_working_dir  # type: ignore[assignment]
+    else:
+        task_run = TaskRunConfig(
+            config=task_run_or_config,
+            working_dir=str(guild_dir_or_working_dir),
+            description=description,
+            permission=permission,
+            timeout=timeout,
+        )
+        resolved_guild_dir = guild_dir  # type: ignore[assignment]
 
-    db_path = guild_dir / DB_FILENAME
+    if not task_run.description or not task_run.description.strip():
+        raise ValueError("Task description cannot be empty")
+    PermissionTier(task_run.permission)  # raises ValueError if invalid
+
+    db_path = resolved_guild_dir / DB_FILENAME
     async with Storage(db_path) as store:
-        loop = create_task_agent_loop(config, working_dir, timeout)
+        loop = create_task_agent_loop(
+            task_run.config, task_run.working_dir, task_run.timeout,
+        )
         system_prompt = await build_system_prompt_with_learnings(store)
-        result = await loop.run(system_prompt, description)
-        await persist_task_result(store, loop, description, result, config)
-        await extract_post_task_learnings(store, loop, config)
+        result = await loop.run(system_prompt, task_run.description)
+        await persist_task_result(
+            store, loop, task_run.description, result, task_run.config,
+        )
+        await extract_post_task_learnings(store, loop, task_run.config)
 
     return result
 

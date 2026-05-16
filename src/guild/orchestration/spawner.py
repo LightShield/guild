@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import uuid
-from typing import TYPE_CHECKING, Any
-
 from logger_python import get_logger
+import uuid
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
 
 from guild.agent.loop import AgentLoop
 from guild.config.constants import (
@@ -21,7 +21,15 @@ if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from guild.provider.base import LLMProvider
     from guild.storage.sqlite import Storage
 
-__all__ = ["AgentSpawner", "SUB_AGENT_MAX_TURNS"]
+__all__ = ["AgentSpawner", "SpawnerConfig", "SUB_AGENT_MAX_TURNS"]
+
+
+@dataclass
+class SpawnerConfig:
+    """Configuration for the agent spawner."""
+
+    working_dir: str | None = None
+    max_depth: int = MAX_SPAWN_DEPTH
 
 logger = get_logger(__name__)
 
@@ -44,9 +52,14 @@ class AgentSpawner:
         provider: LLMProvider,
         storage: Storage | None,
         bus: MessageBus,
+        config: SpawnerConfig | None = None,
+        *,
         working_dir: str | None = None,
         max_depth: int = MAX_SPAWN_DEPTH,
     ) -> None:
+        if config is not None:
+            working_dir = config.working_dir
+            max_depth = config.max_depth
         self._provider = provider
         self._storage = storage
         self._bus = bus

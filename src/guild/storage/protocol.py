@@ -16,7 +16,10 @@ Usage for type annotations::
 
 from __future__ import annotations
 
-from typing import Any, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+
+if TYPE_CHECKING:  # pragma: no cover — type-checking only
+    from guild.storage.sqlite import DecisionRecord, LearningRecord, QuestionRecord
 
 __all__ = ["StorageProtocol"]
 
@@ -86,11 +89,27 @@ class StorageProtocol(Protocol):
         """Retrieve recent audit log entries."""
         ...
 
+    # Decisions
+    async def log_decision(
+        self,
+        record: DecisionRecord | None = None,
+        task_id: str | None = None,
+        agent_id: str | None = None,
+        decision: str = "",
+        rationale: str = "",
+        alternatives: list[str] | None = None,
+        *,
+        reversible: bool = True,
+    ) -> None:
+        """Record a non-trivial decision with rationale."""
+        ...
+
     # Learnings
     async def add_learning(
         self,
-        category: str,
-        content: str,
+        record: LearningRecord | None = None,
+        category: str = "",
+        content: str = "",
         confidence: float = 0.3,
         scope: str | None = None,
         source_task_id: str | None = None,
@@ -111,6 +130,21 @@ class StorageProtocol(Protocol):
     # Token usage
     async def get_token_summary(self) -> dict[str, Any]:
         """Return aggregate token usage statistics."""
+        ...
+
+    # Questions
+    async def insert_question(
+        self,
+        record: QuestionRecord | None = None,
+        question_id: str = "",
+        question: str = "",
+        context: str = "",
+        created_at: str = "",
+        task_id: str | None = None,
+        agent_id: str | None = None,
+        priority: str = "normal",
+    ) -> None:
+        """Insert a new question into the escalation queue."""
         ...
 
     # Checkpoints

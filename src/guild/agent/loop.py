@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
-from typing import TYPE_CHECKING, Any
-
 from logger_python import get_logger
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any
 
 from guild.agent.completion import (
     COMPLETION_NUDGE,
@@ -24,6 +24,7 @@ if TYPE_CHECKING:  # pragma: no cover — type-checking only
 
 __all__ = [
     "AgentLoop",
+    "AgentLoopConfig",
     "DEFAULT_MAX_TURNS",
     "ESCALATION_TEMPLATE",
     "SELF_REVIEW_PROMPT",
@@ -65,6 +66,16 @@ ESCALATION_TEMPLATE = (
 ToolExecutor = Callable[[dict[str, Any], str | None], Awaitable[ToolResult]]
 
 
+@dataclass
+class AgentLoopConfig:
+    """Configuration for the agent loop."""
+
+    working_dir: str | None = None
+    max_turns: int = DEFAULT_MAX_TURNS
+    stuck_detector: StuckDetector | None = field(default=None)
+    token_budget: int = 0
+
+
 class AgentLoop:
     """Core agent loop: call model, execute tools, repeat until done.
 
@@ -78,11 +89,18 @@ class AgentLoop:
         self,
         provider: LLMProvider,
         tool_executors: dict[str, ToolExecutor],
+        config: AgentLoopConfig | None = None,
+        *,
         working_dir: str | None = None,
         max_turns: int = DEFAULT_MAX_TURNS,
         stuck_detector: StuckDetector | None = None,
         token_budget: int = 0,
     ) -> None:
+        if config is not None:
+            working_dir = config.working_dir
+            max_turns = config.max_turns
+            stuck_detector = config.stuck_detector
+            token_budget = config.token_budget
         self.provider = provider
         self.tool_executors = tool_executors
         self.working_dir = working_dir

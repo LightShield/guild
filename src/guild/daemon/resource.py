@@ -9,11 +9,10 @@ Detects user activity and system load to throttle agent work:
 from __future__ import annotations
 
 import asyncio
+from logger_python import get_logger
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING, Any
-
-from logger_python import get_logger
 
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from collections.abc import Callable
@@ -22,6 +21,7 @@ from guild.config.constants import DEFAULT_CPU_THRESHOLD
 
 __all__ = [
     "ActivityState",
+    "ResourceConfig",
     "ResourceMonitor",
     "ResourceStatus",
     "ResourceThresholds",
@@ -99,6 +99,18 @@ def _default_cpu_reader() -> float:  # pragma: no cover — platform dependency 
         return 0.0
 
 
+@dataclass
+class ResourceConfig:
+    """Configuration for the resource monitor."""
+
+    mode: SchedulingMode = SchedulingMode.POLITE
+    thresholds: ResourceThresholds | None = None
+    activity_detector: Callable[[], ActivityState] | None = None
+    cpu_reader: Callable[[], float] | None = None
+    gpu_reader: Callable[[], dict[str, Any]] | None = None
+    thermal_reader: Callable[[], dict[str, Any]] | None = None
+
+
 class ResourceMonitor:
     """Monitors system resources and throttles agent work accordingly.
 
@@ -109,6 +121,8 @@ class ResourceMonitor:
 
     def __init__(
         self,
+        config: ResourceConfig | None = None,
+        *,
         mode: SchedulingMode = SchedulingMode.POLITE,
         thresholds: ResourceThresholds | None = None,
         activity_detector: Callable[[], ActivityState] | None = None,
@@ -116,6 +130,13 @@ class ResourceMonitor:
         gpu_reader: Callable[[], dict[str, Any]] | None = None,
         thermal_reader: Callable[[], dict[str, Any]] | None = None,
     ) -> None:
+        if config is not None:
+            mode = config.mode
+            thresholds = config.thresholds
+            activity_detector = config.activity_detector
+            cpu_reader = config.cpu_reader
+            gpu_reader = config.gpu_reader
+            thermal_reader = config.thermal_reader
         self.mode = mode
         self.thresholds = thresholds or ResourceThresholds()
         self._activity_detector = activity_detector or _default_activity_detector

@@ -12,6 +12,7 @@ blocking destructive/irreversible actions regardless of the active tier.
 
 from __future__ import annotations
 
+from logger_python import get_logger
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -19,12 +20,11 @@ from enum import Enum
 from pathlib import PurePosixPath
 from typing import Any
 
-from logger_python import get_logger
-
 __all__ = [
     "AuditEntry",
     "HARDCODED_NEVER",
     "PermissionChecker",
+    "PermissionConfig",
     "PermissionTier",
     "PromptFn",
 ]
@@ -92,6 +92,17 @@ class AuditEntry:
     reason: str = ""
 
 
+@dataclass
+class PermissionConfig:
+    """Configuration for the permission checker."""
+
+    tier: PermissionTier
+    allowed_paths: list[str] | None = None
+    allowed_tools: list[str] | None = None
+    prompt_fn: PromptFn | None = None
+    per_call: bool = False
+
+
 class PermissionChecker:
     """Gate tool execution based on the active permission tier.
 
@@ -104,12 +115,20 @@ class PermissionChecker:
 
     def __init__(
         self,
-        tier: PermissionTier,
+        config: PermissionConfig | None = None,
+        *,
+        tier: PermissionTier = PermissionTier.NOTHING,
         allowed_paths: list[str] | None = None,
         allowed_tools: list[str] | None = None,
         prompt_fn: PromptFn | None = None,
         per_call: bool = False,
     ) -> None:
+        if config is not None:
+            tier = config.tier
+            allowed_paths = config.allowed_paths
+            allowed_tools = config.allowed_tools
+            prompt_fn = config.prompt_fn
+            per_call = config.per_call
         self._tier = tier
         self._allowed_paths = allowed_paths or []
         self._allowed_tools = allowed_tools or []
@@ -129,18 +148,27 @@ class PermissionChecker:
         # REQ-03.7: hardcoded-never sits above all tiers
         allowed, reason = self.check_hardcoded_never(tool_name, args)
         if not allowed:
-            self._record_audit("tool_blocked", tool_name, agent_id, "hardcoded_never", reason)
+            self._record_audit(AuditEntry(
+                action="tool_blocked", tool=tool_name,
+                agent_id=agent_id, status="hardcoded_never", reason=reason,
+            ))
             self.last_denial_reason = reason
             return False
 
         if self._tier == PermissionTier.NOTHING:
             reason = "Tier 0 (NOTHING): all tool calls blocked"
-            self._record_audit("tool_blocked", tool_name, agent_id, "tier_0_blocked", reason)
+            self._record_audit(AuditEntry(
+                action="tool_blocked", tool=tool_name,
+                agent_id=agent_id, status="tier_0_blocked", reason=reason,
+            ))
             self.last_denial_reason = reason
             return False
 
         if self._tier == PermissionTier.AUTOPILOT:
-            self._record_audit("tool_call", tool_name, agent_id, "auto_permitted")
+            self._record_audit(AuditEntry(
+                action="tool_call", tool=tool_name,
+                agent_id=agent_id, status="auto_permitted",
+            ))
             return True
 
         if self._tier == PermissionTier.ASK:
@@ -148,21 +176,13 @@ class PermissionChecker:
 
         return self._check_scoped(tool_name, args)
 
-    def _record_audit(
-        self,
-        action: str,
-        tool: str,
-        agent_id: str,
-        status: str,
-        reason: str = "",
-    ) -> None:
+    def _record_audit(self, entry: AuditEntry) -> None:
         """Record an audit entry for a permission decision."""
-        entry = AuditEntry(
-            action=action, tool=tool, agent_id=agent_id,
-            status=status, reason=reason,
-        )
         self.audit_entries.append(entry)
-        logger.debug("Permission audit: %s %s %s -> %s", action, tool, agent_id, status)
+        logger.debug(
+            "Permission audit: %s %s %s -> %s",
+            entry.action, entry.tool, entry.agent_id, entry.status,
+        )
 
     def check_hardcoded_never(
         self, tool_name: str, args: dict[str, Any], *, allow_hardcoded_never: bool = False

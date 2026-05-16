@@ -6,16 +6,15 @@ in SQLite and supports priority ordering and batch answers.
 
 from __future__ import annotations
 
+from logger_python import get_logger
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import Enum
 from typing import TYPE_CHECKING, Any
 
-from logger_python import get_logger
-
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
-    from guild.storage.sqlite import Storage
+    from guild.storage.sqlite import QuestionRecord, Storage
 
 __all__ = ["PendingQuestion", "QuestionPriority", "QuestionQueue"]
 
@@ -63,9 +62,11 @@ class QuestionQueue:
         priority: QuestionPriority = QuestionPriority.NORMAL,
     ) -> str:
         """Post a question to the queue. Returns question ID."""
+        from guild.storage.sqlite import QuestionRecord
+
         question_id = str(uuid.uuid4())
         now = datetime.now(UTC).isoformat()
-        await self._storage.insert_question(
+        record = QuestionRecord(
             question_id=question_id,
             task_id=task_id,
             agent_id=agent_id,
@@ -74,6 +75,7 @@ class QuestionQueue:
             priority=priority.value,
             created_at=now,
         )
+        await self._storage.insert_question(record)
         logger.info("Question posted: %s (priority=%s)", question_id, priority.value)
         return question_id
 
