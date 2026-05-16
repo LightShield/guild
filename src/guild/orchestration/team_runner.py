@@ -452,15 +452,13 @@ class TeamRunner:
         score = HEURISTIC_PASS_SCORE if passed else HEURISTIC_FAIL_SCORE
         return EvaluatorResult(passed=passed, score=score, feedback=output)
 
-    async def _invoke_agent(self, block_def: BlockDef, input_data: str) -> str:
-        """Invoke an agent for a block, using full task infrastructure."""
+    async def _create_block_task(self, block_def: BlockDef, input_data: str) -> tuple[str, str]:
+        """Create a task and register the agent in storage.
+
+        Returns:
+            Tuple of (task_id, agent_id).
+        """
         import uuid
-
-        from guild.agent.learning import format_learnings_for_injection
-        from guild.config.constants import MIN_INJECTION_CONFIDENCE
-        from guild.tools.registry import build_tool_executors
-
-        tool_executors = build_tool_executors() if block_def.tools else {}
 
         task_id = str(uuid.uuid4())
         agent_id = f"{block_def.name}-{task_id[:AGENT_ID_PREFIX_LEN]}"
@@ -468,12 +466,21 @@ class TeamRunner:
         if self._storage:
             await self._storage.create_task(task_id, f"[{block_def.name}] {input_data[:100]}")
             await self._storage.register_agent(agent_id, block_def.name)
-            await self._storage.update_task(task_id, assigned_agent=agent_id, status=TaskStatus.RUNNING.value)
+            await self._storage.update_task(
+                task_id, assigned_agent=agent_id, status=TaskStatus.RUNNING.value
+            )
             await self._storage.log_audit(
                 "task_created",
                 agent_id=agent_id,
                 details=f"block={block_def.name}",
             )
+
+        return task_id, agent_id
+
+    async def _build_block_prompt(self, block_def: BlockDef) -> str:
+        """Construct the system prompt, injecting learnings if storage is available."""
+        from guild.agent.learning import format_learnings_for_injection
+        from guild.config.constants import MIN_INJECTION_CONFIDENCE
 
         system_prompt = block_def.system_prompt
         if self._storage:
@@ -481,6 +488,36 @@ class TeamRunner:
             injection = format_learnings_for_injection(learnings)
             if injection:
                 system_prompt = f"{system_prompt}\n\n{injection}"
+
+        return system_prompt
+
+    async def _persist_block_result(
+        self, block_def: BlockDef, loop: AgentLoop, task_id: str, agent_id: str, result: str
+    ) -> None:
+        """Persist messages and mark the task as completed in storage."""
+        if not self._storage:
+            return
+
+        for msg in loop.messages:
+            if msg.role in ("user", "assistant"):
+                await self._storage.append_message(agent_id, msg.role, msg.content)
+        await self._storage.update_task(
+            task_id, status=TaskStatus.COMPLETED.value, result=result[:500]
+        )
+        await self._storage.log_audit(
+            "task_completed",
+            agent_id=agent_id,
+            details=f"block={block_def.name}",
+        )
+
+    async def _invoke_agent(self, block_def: BlockDef, input_data: str) -> str:
+        """Invoke an agent for a block, using full task infrastructure."""
+        from guild.tools.registry import build_tool_executors
+
+        tool_executors = build_tool_executors() if block_def.tools else {}
+
+        task_id, agent_id = await self._create_block_task(block_def, input_data)
+        system_prompt = await self._build_block_prompt(block_def)
 
         loop = AgentLoop(
             provider=self._provider,
@@ -494,15 +531,5 @@ class TeamRunner:
             self_review=block_def.role == "reviewer",
         )
 
-        if self._storage:
-            for msg in loop.messages:
-                if msg.role in ("user", "assistant"):
-                    await self._storage.append_message(agent_id, msg.role, msg.content)
-            await self._storage.update_task(task_id, status=TaskStatus.COMPLETED.value, result=result[:500])
-            await self._storage.log_audit(
-                "task_completed",
-                agent_id=agent_id,
-                details=f"block={block_def.name}",
-            )
-
+        await self._persist_block_result(block_def, loop, task_id, agent_id, result)
         return result
