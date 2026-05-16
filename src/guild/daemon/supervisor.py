@@ -39,6 +39,7 @@ class DaemonSupervisor:
         on_checkpoint: Callable[[], Coroutine[Any, Any, None]] | None = None,
         auto_recovery: bool = False,
     ) -> None:
+        """Initialize DaemonSupervisor."""
         self.run_dir = run_dir
         self.task_id = task_id
         self._on_checkpoint = on_checkpoint

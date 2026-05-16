@@ -50,6 +50,7 @@ class Notifier:
         webhook_url: str | None = None,
         presence_aware: bool = False,
     ) -> None:
+        """Initialize Notifier."""
         self._channels = channels or [NotificationChannel.TERMINAL_BELL]
         self._webhook_url = webhook_url
         self._presence_aware = presence_aware

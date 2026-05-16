@@ -78,6 +78,7 @@ class SkillRegistry:
     """Manages available skills."""
 
     def __init__(self) -> None:
+        """Initialize SkillRegistry."""
         self._skills: dict[str, SkillDef] = {}
 
     def register(self, skill: SkillDef) -> None:

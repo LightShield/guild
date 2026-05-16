@@ -124,6 +124,7 @@ class PermissionChecker:
         prompt_fn: PromptFn | None = None,
         per_call: bool = False,
     ) -> None:
+        """Initialize PermissionChecker."""
         if config is not None:
             tier = config.tier
             allowed_paths = config.allowed_paths

@@ -245,6 +245,7 @@ class ConfigWatcher:
     """
 
     def __init__(self, config_path: Path, callback: Callable[[], None]) -> None:
+        """Initialize ConfigWatcher."""
         self._config_path = config_path
         self._callback = callback
         self._last_mtime: float | None = self._get_mtime()

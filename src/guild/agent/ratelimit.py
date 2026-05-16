@@ -25,6 +25,7 @@ class BackpressureManager:
     """
 
     def __init__(self, max_concurrent: int = 1) -> None:
+        """Initialize BackpressureManager."""
         self._max_concurrent = max_concurrent
         self._semaphore = asyncio.Semaphore(max_concurrent)
         self._active = 0
@@ -64,6 +65,7 @@ class RateLimiter:
         max_calls: int = 30,
         window_seconds: float = 60.0,
     ) -> None:
+        """Initialize RateLimiter."""
         self._max = max_calls
         self._window = window_seconds
         self._calls: list[float] = []
@@ -100,6 +102,7 @@ class ToolQueue:
     """
 
     def __init__(self, max_concurrent: int = 4) -> None:
+        """Initialize ToolQueue."""
         self._semaphore = asyncio.Semaphore(max_concurrent)
         self._max_concurrent = max_concurrent
 

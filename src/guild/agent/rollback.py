@@ -32,6 +32,7 @@ class RollbackContext:
     """Tracks file changes for potential rollback."""
 
     def __init__(self) -> None:
+        """Initialize RollbackContext."""
         self._snapshots: dict[str, FileSnapshot] = {}
 
     def capture(self, path: str) -> None:

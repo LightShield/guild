@@ -23,6 +23,7 @@ class SessionReplay:
     """Replay a past agent session from stored messages."""
 
     def __init__(self, storage: Storage) -> None:
+        """Initialize SessionReplay."""
         self._storage = storage
 
     async def get_session(self, agent_id: str) -> list[dict[str, Any]]:

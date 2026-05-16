@@ -18,6 +18,7 @@ class ToolResult:
     error: str | None = None
 
     def __str__(self) -> str:
+        """Return output on success or error message on failure."""
         if self.success:
             return self.output
         return f"Error: {self.error}"

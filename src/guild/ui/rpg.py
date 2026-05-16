@@ -39,6 +39,7 @@ class RPGMode:
     """RPG theme for CLI output."""
 
     def __init__(self, enabled: bool = False) -> None:
+        """Initialize RPGMode."""
         self.enabled = enabled
 
     def translate(self, text: str) -> str:

@@ -37,6 +37,7 @@ class TemporalKnowledge:
     """
 
     def __init__(self, guild_dir: Path, storage: Storage) -> None:
+        """Initialize TemporalKnowledge."""
         self._guild_dir = guild_dir
         self._storage = storage
 

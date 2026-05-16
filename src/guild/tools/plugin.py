@@ -76,6 +76,7 @@ class ToolCache:
     """LRU cache for cacheable tool results (REQ-08.11)."""
 
     def __init__(self, max_size: int = DEFAULT_CACHE_MAX_SIZE) -> None:
+        """Initialize ToolCache."""
         self._max_size = max_size
         self._store: OrderedDict[str, _CacheEntry] = OrderedDict()
 
@@ -113,6 +114,7 @@ class PluginLoader:
     """Discovers and loads tool plugins from directories (REQ-08.9)."""
 
     def __init__(self, plugin_dirs: list[Path]) -> None:
+        """Initialize PluginLoader."""
         self._plugin_dirs = plugin_dirs
 
     def discover(self) -> list[ToolPlugin]:

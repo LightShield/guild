@@ -18,6 +18,7 @@ class OllamaProvider(LLMProvider):
     """Ollama backend using the official ollama Python SDK (AsyncClient)."""
 
     def __init__(self, base_url: str, model: str) -> None:
+        """Initialize OllamaProvider."""
         self.base_url = base_url
         self.model = model
         self._client = AsyncClient(host=base_url)

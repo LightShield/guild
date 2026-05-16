@@ -52,6 +52,7 @@ class QuestionQueue:
     """Async question queue for human-in-the-loop escalation (REQ-15.1)."""
 
     def __init__(self, storage: Storage) -> None:
+        """Initialize QuestionQueue."""
         self._storage = storage
 
     async def post_question(

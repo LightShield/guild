@@ -49,15 +49,18 @@ class MCPClient:
     """
 
     def __init__(self, server_config: MCPServerConfig) -> None:
+        """Initialize MCPClient."""
         self._config = server_config
         self._process: asyncio.subprocess.Process | None = None
         self._request_id = 0
 
     async def __aenter__(self) -> MCPClient:
+        """Enter async context and connect to the MCP server."""
         await self.connect()
         return self
 
     async def __aexit__(self, *exc_info: object) -> None:
+        """Exit async context and disconnect from the MCP server."""
         await self.disconnect()
 
     @property

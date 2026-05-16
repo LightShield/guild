@@ -131,6 +131,7 @@ class ResourceMonitor:
         gpu_reader: Callable[[], dict[str, Any]] | None = None,
         thermal_reader: Callable[[], dict[str, Any]] | None = None,
     ) -> None:
+        """Initialize ResourceMonitor."""
         if config is not None:
             mode = config.mode
             thresholds = config.thresholds

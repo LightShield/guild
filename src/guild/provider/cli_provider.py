@@ -34,6 +34,7 @@ class CLIToolProvider(LLMProvider):
         model: str | None = None,
         timeout: int = CLI_PROVIDER_TIMEOUT_SECONDS,
     ) -> None:
+        """Initialize CLIToolProvider."""
         self.command = command
         self.model = model or command
         self._timeout = timeout

@@ -59,6 +59,7 @@ class AgentSpawner:
         working_dir: str | None = None,
         max_depth: int = MAX_SPAWN_DEPTH,
     ) -> None:
+        """Initialize AgentSpawner."""
         if config is not None:
             working_dir = config.working_dir
             max_depth = config.max_depth

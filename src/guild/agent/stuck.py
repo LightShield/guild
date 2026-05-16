@@ -24,6 +24,7 @@ class StuckDetector:
         max_no_progress_turns: int = 10,
         max_repeated_calls: int = 3,
     ) -> None:
+        """Initialize StuckDetector."""
         self._max_repeated_errors = max_repeated_errors
         self._max_no_progress_turns = max_no_progress_turns
         self._max_repeated_calls = max_repeated_calls

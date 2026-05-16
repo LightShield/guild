@@ -92,6 +92,7 @@ class EvalFramework:
     """
 
     def __init__(self, storage: Storage) -> None:
+        """Initialize EvalFramework."""
         self._storage = storage
 
     async def run_eval(

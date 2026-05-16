@@ -97,6 +97,7 @@ class AgentLoop:
         stuck_detector: StuckDetector | None = None,
         token_budget: int = 0,
     ) -> None:
+        """Initialize AgentLoop."""
         if config is not None:
             working_dir = config.working_dir
             max_turns = config.max_turns

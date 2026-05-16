@@ -33,6 +33,7 @@ class ArtifactManager:
     """Manages artifact storage, versioning, diffs, and export."""
 
     def __init__(self, artifacts_dir: Path) -> None:
+        """Initialize ArtifactManager."""
         self._dir = artifacts_dir
         self._dir.mkdir(parents=True, exist_ok=True)
 

@@ -24,6 +24,7 @@ class BlockRegistry:
     """Catalog of available blocks (built-in + user-defined)."""
 
     def __init__(self) -> None:
+        """Initialize BlockRegistry."""
         self._blocks: dict[str, BlockDef] = {}
         self._teams: dict[str, TeamDef] = {}
         self._load_builtins()

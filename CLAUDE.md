@@ -94,11 +94,11 @@ src/guild/
 ## Code Conventions
 
 - Python 3.11+, all modules have `__all__` exports
-- `mypy --strict` must pass (zero errors across 92 source files)
+- `mypy --strict` must pass (zero errors across 97 source files)
 - `ruff check` must pass (D-rules enabled with google docstring convention)
 - ConfigsLoader for config, dataclasses for internal data
 - All I/O is async (`aiosqlite`, `asyncio.create_subprocess_exec`)
-- No `print()` — use `logging` in library code, `rich.console` in CLI
+- No `print()` — use `logger_python` in library code, `rich.console` in CLI
 - Line length: 100 (ruff + black)
 - Max function length ~50 lines, max 5 params
 - Early exit / guard clauses
@@ -115,7 +115,7 @@ Requirements-Based Testing (RBT) with auto-generated RTM:
 - `pytest-asyncio` with `asyncio_mode = "auto"`
 - Tests mirror src structure: `tests/agent/`, `tests/provider/`, etc.
 - TDD enforced: tests written first (red), then implementation (green)
-- 1395 tests total (1373 unit + 8 integration + 14 Playwright E2E)
+- 2303 tests total (1403 unit + 808 integration + 62 e2e + 14 Playwright E2E)
 - 100% branch coverage
 - 212/213 requirements covered (99.5%)
 - All 497 req markers verified correct by independent audit

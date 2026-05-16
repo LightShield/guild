@@ -32,6 +32,7 @@ class TemplateManager:
     """Manages template CRUD, rendering, and import/export."""
 
     def __init__(self, templates_dir: Path) -> None:
+        """Initialize TemplateManager."""
         self._dir = templates_dir
         self._dir.mkdir(parents=True, exist_ok=True)
 

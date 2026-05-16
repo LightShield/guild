@@ -95,6 +95,7 @@ class MalformedOutputError(Exception):
     """Raised when model output is unparseable or structurally invalid."""
 
     def __init__(self, message: str = "Malformed model output") -> None:
+        """Initialize MalformedOutputError."""
         super().__init__(message)
 
 
@@ -106,6 +107,7 @@ class EscalationChain:
     """
 
     def __init__(self, providers: list[LLMProvider]) -> None:
+        """Initialize EscalationChain."""
         if not providers:
             raise ValueError("EscalationChain requires at least one provider")
         self._providers = providers
@@ -154,6 +156,7 @@ class EscalationChain:
         self._current_index = 0
 
     def __len__(self) -> int:
+        """Return the number of providers in the chain."""
         return len(self._providers)
 
 
@@ -178,6 +181,7 @@ class EscalatingProvider(LLMProvider):
     """
 
     def __init__(self, chain: EscalationChain) -> None:
+        """Initialize EscalatingProvider."""
         self._chain = chain
 
     @property

@@ -17,6 +17,7 @@ class MCPToolRegistry:
     """Manages connections to multiple MCP servers and their tools."""
 
     def __init__(self) -> None:
+        """Initialize MCPToolRegistry."""
         self._clients: dict[str, MCPClient] = {}
         self._tools: dict[str, MCPTool] = {}
 

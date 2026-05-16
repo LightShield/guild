@@ -45,6 +45,7 @@ class ContextManager:
         preserve_recent: int = DEFAULT_PRESERVE_RECENT,
         compact_threshold: float = DEFAULT_COMPACT_THRESHOLD,
     ) -> None:
+        """Initialize ContextManager."""
         self.max_tokens = max_tokens
         self.preserve_recent = preserve_recent
         self.compact_threshold = compact_threshold

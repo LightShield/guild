@@ -39,6 +39,7 @@ class Tracer:
     """
 
     def __init__(self, logger: logging.Logger | None = None) -> None:
+        """Initialize Tracer."""
         self._logger = logger or get_logger("guild.trace")
         self._events: list[TraceEvent] = []
 

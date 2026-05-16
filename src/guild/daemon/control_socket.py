@@ -24,6 +24,7 @@ class ControlSocket:
     """Unix domain socket server for daemon control and interactive attach."""
 
     def __init__(self, sock_path: Path) -> None:
+        """Initialize ControlSocket."""
         self._sock_path = sock_path
         self._server: asyncio.Server | None = None
         self._status: str = "idle"

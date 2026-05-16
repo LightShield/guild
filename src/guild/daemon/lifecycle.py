@@ -51,6 +51,7 @@ class LifecycleManager:
     """Manages process lifecycle: kill, pause, resume, crash recovery."""
 
     def __init__(self, run_dir: Path, storage: Storage) -> None:
+        """Initialize LifecycleManager."""
         self.run_dir = run_dir
         self.storage = storage
 
@@ -197,6 +198,7 @@ class TaskQueue:
         max_concurrent: int = 1,
         storage: Storage | None = None,
     ) -> None:
+        """Initialize TaskQueue."""
         self._max_concurrent = max_concurrent
         self._storage = storage
         self._queue: list[str] = []

@@ -39,6 +39,7 @@ class RetryProvider(LLMProvider):
         provider: LLMProvider,
         config: RetryConfig | None = None,
     ) -> None:
+        """Initialize RetryProvider."""
         self._provider = provider
         self._config = config or RetryConfig()
 

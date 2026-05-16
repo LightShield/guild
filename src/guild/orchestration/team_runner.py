@@ -79,6 +79,7 @@ class BlockError(Exception):
     """Raised when a block fails after all retries are exhausted."""
 
     def __init__(self, block_name: str, message: str) -> None:
+        """Initialize BlockError."""
         self.block_name = block_name
         super().__init__(f"Block '{block_name}' failed: {message}")
 
@@ -87,6 +88,7 @@ class EscalationError(Exception):
     """Raised when an error must be escalated to a human (REQ-04.53)."""
 
     def __init__(self, message: str) -> None:
+        """Initialize EscalationError."""
         super().__init__(message)
 
 
@@ -171,6 +173,7 @@ class TeamRunner:
         storage: Storage | None = None,
         working_dir: str | None = None,
     ) -> None:
+        """Initialize TeamRunner."""
         if config is not None:
             storage = config.storage
             working_dir = config.working_dir

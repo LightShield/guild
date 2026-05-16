@@ -202,14 +202,17 @@ class Storage:
     """
 
     def __init__(self, db_path: Path) -> None:
+        """Initialize Storage."""
         self._db_path = db_path
         self._db: aiosqlite.Connection | None = None
 
     async def __aenter__(self) -> Storage:
+        """Enter async context and connect to the database."""
         await self.connect()
         return self
 
     async def __aexit__(self, *args: object) -> None:
+        """Exit async context and close the database."""
         await self.close()
 
     async def connect(self) -> None:

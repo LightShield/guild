@@ -30,6 +30,7 @@ class MessageBus:
     """
 
     def __init__(self) -> None:
+        """Initialize MessageBus."""
         self._queues: dict[str, asyncio.Queue[BusMessage]] = defaultdict(asyncio.Queue)
         self._log: list[BusMessage] = []
 
@@ -92,6 +93,7 @@ class SharedContext:
     """
 
     def __init__(self) -> None:
+        """Initialize SharedContext."""
         self._store: dict[str, dict[str, Any]] = {}
 
     def put(self, key: str, data: dict[str, Any], agent_id: str) -> None:

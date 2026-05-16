@@ -56,6 +56,7 @@ class SleepWakeDetector:
     """
 
     def __init__(self, config: SleepWakeConfig | None = None) -> None:
+        """Initialize SleepWakeDetector."""
         self.config = config or SleepWakeConfig()
         self._last_turn_time: float = time.monotonic()
         self._sleep_detected: bool = False

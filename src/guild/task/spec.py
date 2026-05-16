@@ -90,6 +90,7 @@ class TaskGraph:
     """
 
     def __init__(self) -> None:
+        """Initialize TaskGraph."""
         self._nodes: dict[str, TaskNode] = {}
 
     def add_task(self, node: TaskNode) -> None:

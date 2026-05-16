@@ -44,6 +44,7 @@ class MemoryIndex:
     """
 
     def __init__(self, storage: Storage) -> None:
+        """Initialize MemoryIndex."""
         self._storage = storage
 
     async def get_index(self) -> list[str]:
@@ -108,6 +109,7 @@ class IdleConsolidationScheduler:
     """
 
     def __init__(self, memory_index: MemoryIndex) -> None:
+        """Initialize IdleConsolidationScheduler."""
         self._memory_index = memory_index
         self._last_consolidation: str | None = None
         self._consolidation_count: int = 0

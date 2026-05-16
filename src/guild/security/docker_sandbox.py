@@ -80,6 +80,7 @@ class DockerSandbox:
         network: bool = False,
         timeout: float = SHELL_TIMEOUT_SECONDS,
     ) -> None:
+        """Initialize DockerSandbox."""
         self.image = image
         self.network = network
         self.timeout = timeout

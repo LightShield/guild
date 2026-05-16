@@ -43,6 +43,7 @@ class WorktreeManager:
     """
 
     def __init__(self, repo_root: Path) -> None:
+        """Initialize WorktreeManager."""
         self._repo_root = repo_root
 
     @property

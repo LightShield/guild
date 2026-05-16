@@ -52,6 +52,7 @@ class OfflineManager:
     """Manages offline-first operations: connectivity, models, docs."""
 
     def __init__(self, provider: LLMProviderProtocol) -> None:
+        """Initialize OfflineManager."""
         self._provider = provider
         self._is_online: bool | None = None
 
