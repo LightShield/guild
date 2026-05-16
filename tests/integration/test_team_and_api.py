@@ -1,4 +1,4 @@
-"""E2E acceptance tests for team execution, REST API, and A2A gateway.
+"""Integration tests for team execution, REST API, and A2A gateway.
 
 Black-box tests exercising multi-agent teams and the HTTP API.
 """
@@ -14,7 +14,7 @@ from guild.cli.main import app
 from guild.provider.base import LLMResponse
 
 runner = CliRunner()
-pytestmark = pytest.mark.e2e
+pytestmark = pytest.mark.integration
 
 
 def _mock_provider() -> AsyncMock:

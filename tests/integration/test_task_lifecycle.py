@@ -1,4 +1,4 @@
-"""E2E acceptance tests for task lifecycle.
+"""Integration tests for task lifecycle.
 
 Tests the full flow: create task -> agent runs -> results persisted -> visible in history.
 Provider is mocked at the boundary (it's external I/O), but everything else is real.
@@ -16,7 +16,7 @@ from guild.cli.main import app
 from guild.provider.base import LLMResponse
 
 runner = CliRunner()
-pytestmark = pytest.mark.e2e
+pytestmark = pytest.mark.integration
 
 
 def _mock_provider() -> AsyncMock:

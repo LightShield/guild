@@ -1,4 +1,4 @@
-"""E2E acceptance tests for security sandbox, config, escalation, eval, and provider routing.
+"""Integration tests for security sandbox, config, escalation, eval, and provider routing.
 
 Covers REQ-13.x (security sandbox), REQ-14.x (config), REQ-15.x (escalation),
 REQ-16.x (eval framework), and REQ-17.x (provider routing).
@@ -51,7 +51,7 @@ from guild.security.sandbox import SandboxPolicy, load_sandbox_policy
 from guild.storage.sqlite import Storage
 
 runner = CliRunner()
-pytestmark = pytest.mark.e2e
+pytestmark = pytest.mark.integration
 
 
 # ---------------------------------------------------------------------------

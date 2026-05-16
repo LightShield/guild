@@ -1,4 +1,4 @@
-"""E2E acceptance tests for tool system and resource-aware scheduling.
+"""Integration tests for tool system and resource-aware scheduling.
 
 Black-box tests exercising tools against the real filesystem and
 resource scheduling with injected readers/detectors.
@@ -46,7 +46,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 runner = CliRunner()
-pytestmark = pytest.mark.e2e
+pytestmark = pytest.mark.integration
 
 
 @pytest.fixture()

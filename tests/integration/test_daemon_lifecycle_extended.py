@@ -1,4 +1,4 @@
-"""E2E acceptance tests for daemon lifecycle, process management, and sleep/wake.
+"""Integration tests for daemon lifecycle, process management, and sleep/wake.
 
 Black-box tests exercising REQ-23.x (daemon execution), REQ-25.x (process
 lifecycle), and REQ-26.x (sleep/wake survival) from the outside.
@@ -29,7 +29,7 @@ from guild.provider.base import LLMResponse
 from guild.storage.sqlite import Storage
 
 runner = CliRunner()
-pytestmark = pytest.mark.e2e
+pytestmark = pytest.mark.integration
 
 
 # ---------------------------------------------------------------------------

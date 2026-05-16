@@ -1,4 +1,4 @@
-"""E2E acceptance tests for remaining uncovered requirements.
+"""Integration tests for remaining uncovered requirements.
 
 Covers:
   REQ-05.3   Send messages to running agent from CLI
@@ -43,7 +43,7 @@ import pytest
 
 from guild.storage.sqlite import Storage
 
-pytestmark = pytest.mark.e2e
+pytestmark = pytest.mark.integration
 
 
 # ======================================================================

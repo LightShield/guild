@@ -1,4 +1,4 @@
-"""E2E acceptance tests for observability, budgets, and task management.
+"""Integration tests for observability, budgets, and task management.
 
 Exercises the full component stack from Storage through domain logic.
 Only the LLM provider (external I/O) is mocked.
@@ -55,7 +55,7 @@ from guild.task.spec import (
     transition_task,
 )
 
-pytestmark = pytest.mark.e2e
+pytestmark = pytest.mark.integration
 
 
 # ------------------------------------------------------------------

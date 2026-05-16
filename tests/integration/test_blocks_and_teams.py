@@ -1,4 +1,4 @@
-"""E2E acceptance tests for blocks, teams, ports, loops, retry/escalation, spawning, MCP, skills, and git worktrees.
+"""Integration tests for blocks, teams, ports, loops, retry/escalation, spawning, MCP, skills, and git worktrees.
 
 Covers REQ-04.2 through REQ-04.54 (38 requirements).
 Black-box tests: real components, mock only the LLM provider (external I/O).
@@ -41,7 +41,7 @@ from guild.orchestration.team_runner import (
 )
 from guild.provider.base import LLMResponse
 
-pytestmark = pytest.mark.e2e
+pytestmark = pytest.mark.integration
 
 
 # ---------------------------------------------------------------------------

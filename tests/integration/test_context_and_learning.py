@@ -1,4 +1,4 @@
-"""E2E acceptance tests for context management and learning loop.
+"""Integration tests for context management and learning loop.
 
 Exercises the full component stack from Storage through domain logic.
 Only the LLM provider (external I/O) is mocked.
@@ -55,7 +55,7 @@ from guild.orchestration.bus import SharedContext
 from guild.provider.base import LLMResponse
 from guild.storage.sqlite import Storage
 
-pytestmark = pytest.mark.e2e
+pytestmark = pytest.mark.integration
 
 
 # ------------------------------------------------------------------
