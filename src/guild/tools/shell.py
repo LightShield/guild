@@ -108,6 +108,13 @@ async def _run_sandboxed(
         network=network,
         timeout=timeout,
     )
+    # Detect timeout from sandbox stderr message
+    if exit_code != 0 and "timeout" in stderr.lower():
+        return ToolResult(
+            success=False,
+            output="",
+            error=f"Timeout: command exceeded {timeout}s limit",
+        )
     return _format_result(stdout, stderr, exit_code)
 
 

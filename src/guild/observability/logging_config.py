@@ -1,8 +1,7 @@
 """Structured logging configuration for Guild (REQ-11.3).
 
-Delegates to logger_python for consistent structured logging across all
-lightshield projects.  The configure_logging() function remains the single
-entry point used by CLI and daemon bootstrap code.
+Provides configure_logging() as the single entry point used by CLI and
+daemon bootstrap code for setting up structured or plain logging.
 """
 
 from __future__ import annotations
@@ -10,8 +9,6 @@ from __future__ import annotations
 import json
 import logging
 from datetime import UTC, datetime
-
-from logger_python import configure
 
 __all__ = [
     "StructuredFormatter",
@@ -22,8 +19,8 @@ __all__ = [
 class StructuredFormatter(logging.Formatter):
     """JSON-structured log formatter.
 
-    Retained for backward compatibility with code that references this class
-    directly.  New code should rely on logger_python's built-in formatting.
+    Produces JSON objects with timestamp, level, logger, message, and
+    optionally exception fields.
     """
 
     def format(self, record: logging.LogRecord) -> str:
@@ -43,10 +40,30 @@ def configure_logging(
     level: str = "INFO",
     structured: bool = True,
 ) -> None:
-    """Configure Guild's logging via logger_python.
+    """Configure Guild's logging subsystem.
 
     Args:
         level: Log level name (DEBUG, INFO, WARNING, ERROR, CRITICAL).
         structured: If True, use JSON formatter; otherwise use standard format.
     """
-    configure(name="guild", level=level, structured=structured)
+    logger = logging.getLogger("guild")
+
+    # Convert string level to int
+    numeric_level = getattr(logging, level.upper(), logging.INFO)
+    logger.setLevel(numeric_level)
+
+    # Clear existing handlers to avoid duplication
+    logger.handlers.clear()
+
+    handler = logging.StreamHandler()
+    handler.setLevel(numeric_level)
+
+    if structured:
+        formatter: logging.Formatter = StructuredFormatter()
+    else:
+        formatter = logging.Formatter(
+            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        )
+
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)

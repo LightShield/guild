@@ -753,7 +753,8 @@ class Storage:
             raise RuntimeError("Storage not connected. Call connect() first.")
         cursor = await self._db.execute(
             "SELECT id, summary, verified FROM memories"
-            " ORDER BY last_verified DESC NULLS LAST"
+            " ORDER BY CASE WHEN last_verified IS NULL THEN 1 ELSE 0 END,"
+            " last_verified DESC"
             " LIMIT ?",
             (limit,),
         )

@@ -102,7 +102,7 @@ class TestBackgroundLaunch:
     @pytest.mark.ac("AC-23.1.2")
     def test_background_flag_prints_task_id(self, project_dir: Path) -> None:
         """--background launches daemon and prints the task ID."""
-        with patch("guild.cli.main._launch_background_task") as mock_launch:
+        with patch("guild.cli.task_commands._launch_background_task") as mock_launch:
             result = runner.invoke(
                 app, ["task", "background job", "--background"],
             )
@@ -114,7 +114,7 @@ class TestBackgroundLaunch:
     @pytest.mark.ac("AC-23.1.1")
     def test_background_creates_task_in_storage(self, project_dir: Path) -> None:
         """--background persists the task in SQLite before forking."""
-        with patch("guild.cli.main._launch_background_task"):
+        with patch("guild.cli.task_commands._launch_background_task"):
             result = runner.invoke(
                 app, ["task", "stored task", "--background"],
             )
@@ -845,7 +845,7 @@ class TestKillAll:
     def test_kill_all_cli_flag(self, project_dir: Path) -> None:
         """guild kill --all via CLI prints count of killed tasks."""
         # No running tasks, so count should be 0
-        with patch("guild.cli.main._kill_all_tasks", return_value=0):
+        with patch("guild.cli.task_commands._kill_all_tasks", return_value=0):
             result = runner.invoke(app, ["kill", "--all"])
         assert result.exit_code == 0
         assert "Killed 0 task" in result.output
@@ -1188,7 +1188,7 @@ class TestBackgroundLaunchFailsGracefully:
     @pytest.mark.ac("AC-23.1.3")
     def test_background_with_unreachable_provider(self, project_dir: Path) -> None:
         """--background reports failure clearly when provider unreachable."""
-        with patch("guild.cli.main._launch_background_task", side_effect=ConnectionError("offline")):
+        with patch("guild.cli.task_commands._launch_background_task", side_effect=ConnectionError("offline")):
             result = runner.invoke(app, ["task", "test", "--background"])
         # Should show error, not a stack trace
         assert result.exit_code != 0 or "error" in result.output.lower()

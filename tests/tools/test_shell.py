@@ -52,7 +52,9 @@ class TestShellTimeout:
     """Tests for shell command timeout handling."""
 
     async def test_shell_timeout_returns_error(self) -> None:
-        result = await execute_shell({"command": "sleep 5", "timeout": 1}, working_dir="/tmp")
+        result = await execute_shell(
+            {"command": "sleep 5", "timeout": 1}, working_dir="/tmp", sandbox_mode="none"
+        )
 
         assert result.success is False
         assert result.error is not None
@@ -60,7 +62,9 @@ class TestShellTimeout:
 
     async def test_shell_respects_timeout_setting(self) -> None:
         # A fast command with generous timeout should succeed
-        result = await execute_shell({"command": "echo fast", "timeout": 10}, working_dir="/tmp")
+        result = await execute_shell(
+            {"command": "echo fast", "timeout": 10}, working_dir="/tmp", sandbox_mode="none"
+        )
 
         assert result.success is True
         assert "fast" in result.output
@@ -68,7 +72,9 @@ class TestShellTimeout:
     async def test_shell_timeout_kills_process(self) -> None:
         """After timeout, the child process is killed (not left orphaned)."""
         # Use a command that would run forever without the kill
-        result = await execute_shell({"command": "sleep 999", "timeout": 0.5}, working_dir="/tmp")
+        result = await execute_shell(
+            {"command": "sleep 999", "timeout": 0.5}, working_dir="/tmp", sandbox_mode="none"
+        )
 
         assert result.success is False
         assert result.error is not None
@@ -101,7 +107,9 @@ class TestShellExecution:
         assert "42" in result.error or "exit" in result.error.lower()
 
     async def test_shell_uses_working_dir(self, tmp_path: object) -> None:
-        result = await execute_shell({"command": "pwd"}, working_dir=str(tmp_path))
+        result = await execute_shell(
+            {"command": "pwd"}, working_dir=str(tmp_path), sandbox_mode="none"
+        )
 
         assert result.success is True
         assert str(tmp_path) in result.output
@@ -244,7 +252,9 @@ class TestShellEdgeCases:
             "guild.tools.shell.asyncio.create_subprocess_shell",
             side_effect=OSError("no such shell"),
         ):
-            result = await execute_shell({"command": "echo test"}, working_dir="/tmp")
+            result = await execute_shell(
+                {"command": "echo test"}, working_dir="/tmp", sandbox_mode="none"
+            )
         assert result.success is False
         assert "Failed to start" in (result.error or "")
 

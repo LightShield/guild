@@ -433,6 +433,7 @@ class TestGitWorktreeIsolation:
         (tmp_path / "README.md").write_text("init")
         await _git(tmp_path, "add", ".")
         await _git(tmp_path, "commit", "-m", "init")
+        await _git(tmp_path, "branch", "-M", "main")
 
         mgr = WorktreeManager(tmp_path)
         info = await mgr.create("task-001", base_branch="main")
@@ -453,6 +454,7 @@ class TestGitWorktreeIsolation:
         (tmp_path / "README.md").write_text("init")
         await _git(tmp_path, "add", ".")
         await _git(tmp_path, "commit", "-m", "init")
+        await _git(tmp_path, "branch", "-M", "main")
 
         mgr = WorktreeManager(tmp_path)
         info = await mgr.create("task-002", base_branch="main")
@@ -1521,6 +1523,7 @@ class TestWorktreeCleanup:
         (tmp_path / "README.md").write_text("init")
         await _git(tmp_path, "add", ".")
         await _git(tmp_path, "commit", "-m", "init")
+        await _git(tmp_path, "branch", "-M", "main")
 
         mgr = WorktreeManager(tmp_path)
         info = await mgr.create("task-cleanup", base_branch="main")
@@ -1946,6 +1949,7 @@ class TestWorktreeBranchNamingConvention:
         (tmp_path / "README.md").write_text("init")
         await _git(tmp_path, "add", ".")
         await _git(tmp_path, "commit", "-m", "init")
+        await _git(tmp_path, "branch", "-M", "main")
 
         mgr = WorktreeManager(tmp_path)
         info = await mgr.create("abc-123", base_branch="main")
@@ -1967,6 +1971,7 @@ class TestListActiveOnlyGuildManaged:
         (tmp_path / "README.md").write_text("init")
         await _git(tmp_path, "add", ".")
         await _git(tmp_path, "commit", "-m", "init")
+        await _git(tmp_path, "branch", "-M", "main")
 
         mgr = WorktreeManager(tmp_path)
         info = await mgr.create("guild-task", base_branch="main")
@@ -2012,6 +2017,7 @@ class TestMergeConflictDetection:
         (tmp_path / "file.txt").write_text("original")
         await _git(tmp_path, "add", ".")
         await _git(tmp_path, "commit", "-m", "init")
+        await _git(tmp_path, "branch", "-M", "main")
 
         mgr = WorktreeManager(tmp_path)
 
@@ -2056,6 +2062,7 @@ class TestStagingBranchAutoCreated:
         (tmp_path / "file.txt").write_text("initial")
         await _git(tmp_path, "add", ".")
         await _git(tmp_path, "commit", "-m", "init")
+        await _git(tmp_path, "branch", "-M", "main")
 
         mgr = WorktreeManager(tmp_path)
 

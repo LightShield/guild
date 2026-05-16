@@ -258,13 +258,32 @@ class TestTemporalKnowledgeEdgeCases:
 
     async def test_get_present_state_with_git(self, tmp_path: Path) -> None:
         """get_present_state runs git commands successfully."""
+        import subprocess
+
         guild_dir = tmp_path / ".guild"
         guild_dir.mkdir()
         store = Storage(tmp_path / "test.db")
         await store.connect()
         tk = TemporalKnowledge(guild_dir=guild_dir, storage=store)
-        # Use the actual guild repo as working_dir
-        result = await tk.get_present_state("/Users/ormagen/workspace/private/guild")
+        # Create a mini git repo for testing
+        repo_dir = tmp_path / "repo"
+        repo_dir.mkdir()
+        subprocess.run(["git", "init"], cwd=str(repo_dir), capture_output=True, check=True)
+        subprocess.run(
+            ["git", "config", "user.email", "test@test.com"],
+            cwd=str(repo_dir), capture_output=True, check=True,
+        )
+        subprocess.run(
+            ["git", "config", "user.name", "Test"],
+            cwd=str(repo_dir), capture_output=True, check=True,
+        )
+        (repo_dir / "file.txt").write_text("hello")
+        subprocess.run(["git", "add", "."], cwd=str(repo_dir), capture_output=True, check=True)
+        subprocess.run(
+            ["git", "commit", "-m", "init"],
+            cwd=str(repo_dir), capture_output=True, check=True,
+        )
+        result = await tk.get_present_state(str(repo_dir))
         assert "Present State" in result
         await store.close()
 
