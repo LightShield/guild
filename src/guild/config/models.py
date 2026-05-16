@@ -46,8 +46,14 @@ class GuildConfig(ConfigsLoader):  # type: ignore[misc]
         env="GUILD_MODEL",
         description="Model name",
     )
-    temperature: float = Field(default=0.7, section="provider", description="Sampling temperature")
-    max_tokens: int = Field(default=DEFAULT_MAX_TOKENS, section="provider", description="Max output tokens")
+    temperature: float = Field(
+        default=0.7, section="provider", description="Sampling temperature"
+    )
+    max_tokens: int = Field(
+        default=DEFAULT_MAX_TOKENS,
+        section="provider",
+        description="Max output tokens",
+    )
 
     # Guild section
     default_permission: PermissionTier = Field(
@@ -93,28 +99,42 @@ class GuildConfig(ConfigsLoader):  # type: ignore[misc]
 
     # Operational constants (guild section)
     shell_timeout_seconds: int = Field(
-        default=SHELL_TIMEOUT_SECONDS, section="guild", description="Shell command timeout in seconds"
+        default=SHELL_TIMEOUT_SECONDS,
+        section="guild",
+        description="Shell command timeout in seconds",
     )
     shell_max_output_chars: int = Field(
-        default=MAX_SHELL_OUTPUT_CHARS, section="guild", description="Max shell output characters before truncation"
+        default=MAX_SHELL_OUTPUT_CHARS,
+        section="guild",
+        description="Max shell output characters before truncation",
     )
     cli_provider_timeout_seconds: int = Field(
-        default=CLI_PROVIDER_TIMEOUT_SECONDS, section="guild", description="CLI provider command timeout in seconds"
+        default=CLI_PROVIDER_TIMEOUT_SECONDS,
+        section="guild",
+        description="CLI provider command timeout in seconds",
     )
     default_max_turns: int = Field(
         default=DEFAULT_MAX_TURNS, section="guild", description="Default max agent loop turns"
     )
     context_max_tokens: int = Field(
-        default=DEFAULT_CONTEXT_MAX_TOKENS, section="guild", description="Max estimated tokens for context window"
+        default=DEFAULT_CONTEXT_MAX_TOKENS,
+        section="guild",
+        description="Max estimated tokens for context window",
     )
     compact_threshold: float = Field(
-        default=DEFAULT_COMPACT_THRESHOLD, section="guild", description="Context token fraction triggering compaction"
+        default=DEFAULT_COMPACT_THRESHOLD,
+        section="guild",
+        description="Context token fraction triggering compaction",
     )
     preserve_recent_messages: int = Field(
-        default=DEFAULT_PRESERVE_RECENT, section="guild", description="Recent messages preserved during compaction"
+        default=DEFAULT_PRESERVE_RECENT,
+        section="guild",
+        description="Recent messages preserved during compaction",
     )
     websocket_poll_seconds: int = Field(
-        default=WEBSOCKET_POLL_SECONDS, section="guild", description="WebSocket status broadcast interval in seconds"
+        default=WEBSOCKET_POLL_SECONDS,
+        section="guild",
+        description="WebSocket status broadcast interval in seconds",
     )
 
     # Health check (provider section)

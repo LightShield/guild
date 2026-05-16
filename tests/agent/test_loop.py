@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from guild.agent.loop import AgentLoop
+from guild.agent.loop import AgentLoop, AgentLoopConfig
 from guild.provider.base import LLMResponse
 from guild.tools.base import ToolResult
 
@@ -79,7 +79,7 @@ class TestLoopBasics:
             infinite_tool_response,
             LLMResponse(content="final", tool_calls=None),
         )
-        loop = AgentLoop(provider=provider, tool_executors=_make_tool_executors(), max_turns=3)
+        loop = AgentLoop(provider=provider, tool_executors=_make_tool_executors(), config=AgentLoopConfig(max_turns=3))
         await loop.run(system_prompt="sys", user_input="read a.txt")
         # Should have stopped at max_turns; provider called at most max_turns times
         assert provider.generate.call_count <= 3
@@ -222,7 +222,7 @@ class TestLoopEdgeCases:
             tool_calls=[{"function": {"name": "file_read", "arguments": {"path": "a.txt"}}}],
         )
         provider = _make_provider(tool_response, tool_response)
-        loop = AgentLoop(provider=provider, tool_executors=_make_tool_executors(), max_turns=2)
+        loop = AgentLoop(provider=provider, tool_executors=_make_tool_executors(), config=AgentLoopConfig(max_turns=2))
         result = await loop.run(system_prompt="sys", user_input="loop forever")
         assert result == ""
 
@@ -463,11 +463,9 @@ class TestStuckRecovery:
             LLMResponse(content="Let me try a different approach.", tool_calls=None),
         )
         detector = StuckDetector(max_repeated_calls=3)
-        loop = AgentLoop(
-            provider=provider,
+        loop = AgentLoop(            provider=provider,
             tool_executors=_make_tool_executors(),
-            stuck_detector=detector,
-            max_turns=10,
+            config=AgentLoopConfig(stuck_detector=detector, max_turns=10),
         )
         result = await loop.run(system_prompt="sys", user_input="read a.txt")
 
@@ -494,11 +492,9 @@ class TestStuckRecovery:
             LLMResponse(content="Fixed it!", tool_calls=None),
         )
         detector = StuckDetector(max_repeated_calls=3)
-        loop = AgentLoop(
-            provider=provider,
+        loop = AgentLoop(            provider=provider,
             tool_executors=_make_tool_executors(),
-            stuck_detector=detector,
-            max_turns=10,
+            config=AgentLoopConfig(stuck_detector=detector, max_turns=10),
         )
         result = await loop.run(system_prompt="sys", user_input="do something")
         assert result == "Fixed it!"
@@ -519,11 +515,9 @@ class TestStuckRecovery:
             LLMResponse(content="", tool_calls=[same_call]),
         )
         detector = StuckDetector(max_repeated_calls=3)
-        loop = AgentLoop(
-            provider=provider,
+        loop = AgentLoop(            provider=provider,
             tool_executors=_make_tool_executors(),
-            stuck_detector=detector,
-            max_turns=20,
+            config=AgentLoopConfig(stuck_detector=detector, max_turns=20),
         )
         result = await loop.run(system_prompt="sys", user_input="read a.txt")
 
@@ -545,11 +539,9 @@ class TestHumanEscalation:
             *[LLMResponse(content="", tool_calls=[same_call]) for _ in range(6)],
         )
         detector = StuckDetector(max_repeated_calls=3)
-        loop = AgentLoop(
-            provider=provider,
+        loop = AgentLoop(            provider=provider,
             tool_executors=_make_tool_executors(),
-            stuck_detector=detector,
-            max_turns=20,
+            config=AgentLoopConfig(stuck_detector=detector, max_turns=20),
         )
         result = await loop.run(system_prompt="sys", user_input="Refactor the database module")
 
@@ -564,11 +556,9 @@ class TestHumanEscalation:
             *[LLMResponse(content="", tool_calls=[same_call]) for _ in range(6)],
         )
         detector = StuckDetector(max_repeated_calls=3)
-        loop = AgentLoop(
-            provider=provider,
+        loop = AgentLoop(            provider=provider,
             tool_executors=_make_tool_executors(),
-            stuck_detector=detector,
-            max_turns=20,
+            config=AgentLoopConfig(stuck_detector=detector, max_turns=20),
         )
         result = await loop.run(system_prompt="sys", user_input="Do task X")
 
@@ -587,8 +577,7 @@ class TestHumanEscalation:
         loop = AgentLoop(
             provider=provider,
             tool_executors=_make_tool_executors(),
-            stuck_detector=detector,
-            max_turns=20,
+            config=AgentLoopConfig(stuck_detector=detector, max_turns=20),
         )
         result = await loop.run(system_prompt="sys", user_input="Fix the bug")
 
@@ -769,7 +758,7 @@ class TestTokenBudget:
         loop = AgentLoop(
             provider=provider,
             tool_executors=_make_tool_executors(),
-            token_budget=900,  # budget < 1000 (500+500 from first call)
+            config=AgentLoopConfig(token_budget=900),  # budget < 1000 (500+500 from first call)
         )
         await loop.run(system_prompt="sys", user_input="read")
 
@@ -806,10 +795,9 @@ class TestTokenBudget:
                 content="Should not reach", tool_calls=None, input_tokens=1, output_tokens=1
             ),
         )
-        loop = AgentLoop(
-            provider=provider,
+        loop = AgentLoop(            provider=provider,
             tool_executors=_make_tool_executors(),
-            token_budget=700,
+            config=AgentLoopConfig(token_budget=700),
         )
         result = await loop.run(system_prompt="sys", user_input="multi-step task")
 
@@ -836,10 +824,9 @@ class TestTokenBudget:
                 output_tokens=5000,
             ),
         )
-        loop = AgentLoop(
-            provider=provider,
+        loop = AgentLoop(            provider=provider,
             tool_executors=_make_tool_executors(),
-            token_budget=0,
+            config=AgentLoopConfig(token_budget=0),
         )
         result = await loop.run(system_prompt="sys", user_input="read")
 
@@ -1000,7 +987,7 @@ class TestTimeoutBehavior:
         provider = _make_provider(
             tool_response, tool_response, tool_response, tool_response, tool_response
         )
-        loop = AgentLoop(provider=provider, tool_executors=_make_tool_executors(), max_turns=3)
+        loop = AgentLoop(provider=provider, tool_executors=_make_tool_executors(), config=AgentLoopConfig(max_turns=3))
         result = await loop.run(system_prompt="sys", user_input="keep reading")
         # Loop stopped at max_turns with empty content — partial result
         assert result == ""
@@ -1062,11 +1049,9 @@ class TestRealOllama:
             "file_write": execute_file_write,
         }
 
-        loop = AgentLoop(
-            provider=provider,
+        loop = AgentLoop(            provider=provider,
             tool_executors=tool_executors,
-            working_dir=str(tmp_path),
-            max_turns=5,
+            config=AgentLoopConfig(working_dir=str(tmp_path), max_turns=5),
         )
 
         result = await loop.run(
@@ -1128,11 +1113,7 @@ class TestAgentLoopUncoveredBranches:
         """_attempt_recovery works when stuck_detector is None (221->223)."""
         from unittest.mock import MagicMock
 
-        loop = AgentLoop(
-            provider=MagicMock(),
-            tool_executors={},
-            stuck_detector=None,
-        )
+        loop = AgentLoop(provider=MagicMock(), tool_executors={})
         loop._recovery_attempted = False
         result = loop._attempt_recovery()
         assert result is None
@@ -1149,11 +1130,7 @@ class TestSmartRecoveryPromptSelection:
         """When stuck reason mentions 'code 1', use test failure prompt."""
         from guild.agent.loop import _TEST_FAILURE_RECOVERY_PROMPT, AgentLoop
 
-        loop = AgentLoop(
-            provider=MagicMock(),
-            tool_executors={},
-            stuck_detector=None,
-        )
+        loop = AgentLoop(provider=MagicMock(), tool_executors={})
         prompt = loop._select_recovery_prompt(
             "Repeated identical error 3 times: Command exited with code 1"
         )
@@ -1163,11 +1140,7 @@ class TestSmartRecoveryPromptSelection:
         """When stuck reason mentions 'assert', use test failure prompt."""
         from guild.agent.loop import _TEST_FAILURE_RECOVERY_PROMPT, AgentLoop
 
-        loop = AgentLoop(
-            provider=MagicMock(),
-            tool_executors={},
-            stuck_detector=None,
-        )
+        loop = AgentLoop(provider=MagicMock(), tool_executors={})
         prompt = loop._select_recovery_prompt("Repeated identical error 3 times: AssertionError")
         assert prompt == _TEST_FAILURE_RECOVERY_PROMPT
 
@@ -1175,11 +1148,7 @@ class TestSmartRecoveryPromptSelection:
         """When stuck reason is generic, use the default prompt."""
         from guild.agent.loop import STUCK_RECOVERY_PROMPT, AgentLoop
 
-        loop = AgentLoop(
-            provider=MagicMock(),
-            tool_executors={},
-            stuck_detector=None,
-        )
+        loop = AgentLoop(provider=MagicMock(), tool_executors={})
         prompt = loop._select_recovery_prompt("Repeated identical tool call detected")
         assert prompt == STUCK_RECOVERY_PROMPT
 
@@ -1187,11 +1156,7 @@ class TestSmartRecoveryPromptSelection:
         """When stuck from no progress, use default prompt."""
         from guild.agent.loop import STUCK_RECOVERY_PROMPT, AgentLoop
 
-        loop = AgentLoop(
-            provider=MagicMock(),
-            tool_executors={},
-            stuck_detector=None,
-        )
+        loop = AgentLoop(provider=MagicMock(), tool_executors={})
         prompt = loop._select_recovery_prompt("No progress for 10 consecutive turns")
         assert prompt == STUCK_RECOVERY_PROMPT
 

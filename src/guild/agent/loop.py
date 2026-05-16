@@ -91,24 +91,16 @@ class AgentLoop:
         provider: LLMProvider,
         tool_executors: dict[str, ToolExecutor],
         config: AgentLoopConfig | None = None,
-        *,
-        working_dir: str | None = None,
-        max_turns: int = DEFAULT_MAX_TURNS,
-        stuck_detector: StuckDetector | None = None,
-        token_budget: int = 0,
     ) -> None:
         """Initialize AgentLoop."""
-        if config is not None:
-            working_dir = config.working_dir
-            max_turns = config.max_turns
-            stuck_detector = config.stuck_detector
-            token_budget = config.token_budget
+        if config is None:
+            config = AgentLoopConfig()
         self.provider = provider
         self.tool_executors = tool_executors
-        self.working_dir = working_dir
-        self.max_turns = max_turns
-        self.stuck_detector = stuck_detector
-        self.token_budget = token_budget
+        self.working_dir = config.working_dir
+        self.max_turns = config.max_turns
+        self.stuck_detector = config.stuck_detector
+        self.token_budget = config.token_budget
         self.messages: list[Message] = []
         self.recent_tool_calls: list[dict[str, Any]] = []
         self._task_description: str = ""

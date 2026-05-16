@@ -94,7 +94,7 @@ src/guild/
 ## Code Conventions
 
 - Python 3.11+, all modules have `__all__` exports
-- `mypy --strict` must pass (zero errors across 97 source files)
+- `mypy --strict` must pass (zero errors across 104 source files)
 - `ruff check` must pass (D-rules enabled with google docstring convention)
 - ConfigsLoader for config, dataclasses for internal data
 - All I/O is async (`aiosqlite`, `asyncio.create_subprocess_exec`)
