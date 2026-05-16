@@ -134,34 +134,14 @@ class PermissionChecker:
         actions regardless of tier unless explicitly overridden via
         ``allow_hardcoded_never``.
         """
-        # REQ-03.7: hardcoded-never sits above all tiers
         allowed, reason = self.check_hardcoded_never(tool_name, args)
         if not allowed:
-            self._record_audit(
-                AuditEntry(
-                    action="tool_blocked",
-                    tool=tool_name,
-                    agent_id=agent_id,
-                    status="hardcoded_never",
-                    reason=reason,
-                )
-            )
-            self.last_denial_reason = reason
-            return False
+            return self._deny(tool_name, agent_id, "hardcoded_never", reason)
 
         if self._tier == PermissionTier.NOTHING:
-            reason = "Tier 0 (NOTHING): all tool calls blocked"
-            self._record_audit(
-                AuditEntry(
-                    action="tool_blocked",
-                    tool=tool_name,
-                    agent_id=agent_id,
-                    status="tier_0_blocked",
-                    reason=reason,
-                )
+            return self._deny(
+                tool_name, agent_id, "tier_0_blocked", "Tier 0 (NOTHING): all tool calls blocked"
             )
-            self.last_denial_reason = reason
-            return False
 
         if self._tier == PermissionTier.AUTOPILOT:
             self._record_audit(
@@ -178,6 +158,20 @@ class PermissionChecker:
             return self._check_ask(tool_name, agent_id, args)
 
         return self._check_scoped(tool_name, args)
+
+    def _deny(self, tool_name: str, agent_id: str, status: str, reason: str) -> bool:
+        """Record a denial audit entry and return False."""
+        self._record_audit(
+            AuditEntry(
+                action="tool_blocked",
+                tool=tool_name,
+                agent_id=agent_id,
+                status=status,
+                reason=reason,
+            )
+        )
+        self.last_denial_reason = reason
+        return False
 
     def _record_audit(self, entry: AuditEntry) -> None:
         """Record an audit entry for a permission decision."""
