@@ -1,4 +1,4 @@
-"""Integration tests for daemon lifecycle, permissions, and artifacts.
+"""E2E acceptance tests for daemon lifecycle, permissions, and artifacts.
 
 Black-box tests exercising features from the outside.
 """
@@ -18,7 +18,7 @@ from guild.cli.main import app
 from guild.provider.base import LLMResponse
 
 runner = CliRunner()
-pytestmark = pytest.mark.integration
+pytestmark = pytest.mark.e2e
 
 
 @pytest.fixture()

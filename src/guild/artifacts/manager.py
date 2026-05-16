@@ -11,6 +11,8 @@ from pathlib import Path  # noqa: TC003
 
 from logger_python import get_logger
 
+from guild.task.spec import TaskStatus
+
 __all__ = ["Artifact", "ArtifactManager"]
 
 logger = get_logger(__name__)
@@ -78,7 +80,7 @@ class ArtifactManager:
         path.write_text(content, encoding="utf-8")
         now = datetime.now(UTC).isoformat()
         status = self._load_status(task_id)
-        status[name] = "pending"
+        status[name] = TaskStatus.PENDING.value
         self._save_status(task_id, status)
         logger.debug("Saved artifact %s/%s v1", task_id, name)
         return Artifact(task_id=task_id, name=name, path=path, version=1, created_at=now)
@@ -207,7 +209,7 @@ class ArtifactManager:
 
     def list_pending(self, task_id: str) -> list[Artifact]:
         """List artifacts awaiting review (status == 'pending')."""
-        return self._list_by_status(task_id, "pending")
+        return self._list_by_status(task_id, TaskStatus.PENDING.value)
 
     def list_accepted(self, task_id: str) -> list[Artifact]:
         """List accepted artifacts (status == 'accepted')."""

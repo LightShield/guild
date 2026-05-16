@@ -12,6 +12,7 @@ from rich.table import Table
 
 from guild.cli.main import app
 from guild.config.loader import find_guild_dir
+from guild.task.spec import TaskStatus
 
 __all__ = ["confidence", "serve"]
 
@@ -78,7 +79,7 @@ def confidence() -> None:
         table.add_row(
             category,
             str(len(task_names)),
-            "pending",
+            TaskStatus.PENDING.value,
         )
 
     console.print(table)

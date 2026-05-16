@@ -21,6 +21,7 @@ from guild.config.constants import (
     HEURISTIC_PASS_SCORE,
     SUB_AGENT_MAX_TURNS,
 )
+from guild.task.spec import TaskStatus
 
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from guild.blocks.definition import BlockDef, LoopDef, TeamDef
@@ -464,7 +465,7 @@ class TeamRunner:
         if self._storage:
             await self._storage.create_task(task_id, f"[{block_def.name}] {input_data[:100]}")
             await self._storage.register_agent(agent_id, block_def.name)
-            await self._storage.update_task(task_id, assigned_agent=agent_id, status="running")
+            await self._storage.update_task(task_id, assigned_agent=agent_id, status=TaskStatus.RUNNING.value)
             await self._storage.log_audit(
                 "task_created",
                 agent_id=agent_id,
@@ -494,7 +495,7 @@ class TeamRunner:
             for msg in loop.messages:
                 if msg.role in ("user", "assistant"):
                     await self._storage.append_message(agent_id, msg.role, msg.content)
-            await self._storage.update_task(task_id, status="completed", result=result[:500])
+            await self._storage.update_task(task_id, status=TaskStatus.COMPLETED.value, result=result[:500])
             await self._storage.log_audit(
                 "task_completed",
                 agent_id=agent_id,
