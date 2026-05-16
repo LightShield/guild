@@ -308,12 +308,13 @@ class TeamRunner:
 
         Raises BlockError if all retries are exhausted.
         """
+        # Fail-fast: validate preconditions before any state mutations.
         block_type = self._team.blocks[instance_name]
         block_def = self._registry.get_block(block_type)
         if block_def is None:
             raise BlockError(instance_name, f"Block type '{block_type}' not found")
-
         max_retries = block_def.max_retries
+
         self._agent_statuses[instance_name] = AgentStatus.SPAWNED
 
         last_error: str = ""
@@ -349,14 +350,16 @@ class TeamRunner:
         """Handle a failed block per caller decision (REQ-04.52)."""
         decision = self._caller_decisions.get(instance_name, DECISION_ESCALATE)
 
+        # Fail-fast: validate decision before applying any policy.
+        if decision not in (DECISION_SKIP, DECISION_ESCALATE):
+            raise EscalationError(f"Block '{instance_name}' failed: {err}")
+
         if decision == DECISION_SKIP:
             logger.warning("Skipping failed block '%s' per caller decision", instance_name)
             return f"[SKIPPED: {instance_name}]"
-        if decision == DECISION_ESCALATE:
-            raise EscalationError(
-                f"Block '{instance_name}' failed and requires human intervention: {err}"
-            )
-        raise EscalationError(f"Block '{instance_name}' failed: {err}")
+        raise EscalationError(
+            f"Block '{instance_name}' failed and requires human intervention: {err}"
+        )
 
     async def _run_loop(self, loop: LoopDef, initial_input: str) -> str:
         """Run a generator-evaluator loop (REQ-04.42/04.43).

@@ -15,6 +15,8 @@ from typing import Any
 
 from logger_python import get_logger
 
+from guild.task.spec import TaskStatus
+
 __all__ = ["ControlSocket"]
 
 logger = get_logger(__name__)
@@ -131,12 +133,11 @@ class ControlSocket:
 
         if msg_type == "command":
             return self._handle_command(data, writer)
-        elif msg_type == "message":
+        if msg_type == "message":
             content: str = data.get("content", "")
             self._message_queue.put_nowait(content)
             return {"status": "delivered"}
-        else:
-            return {"error": f"Unknown type: {msg_type}"}
+        return {"error": f"Unknown type: {msg_type}"}
 
     def _handle_command(self, data: dict[str, Any], writer: asyncio.StreamWriter) -> dict[str, str]:
         """Dispatch a command action and return the response."""
@@ -144,17 +145,16 @@ class ControlSocket:
 
         if action == "status":
             return {"status": self._status}
-        elif action == "pause":
+        if action == "pause":
             self._paused = True
-            return {"status": "paused"}
-        elif action == "resume":
+            return {"status": TaskStatus.PAUSED.value}
+        if action == "resume":
             self._paused = False
-            return {"status": "running"}
-        elif action == "kill":
+            return {"status": TaskStatus.RUNNING.value}
+        if action == "kill":
             self._shutdown_requested = True
             return {"status": "shutting_down"}
-        elif action == "subscribe":
+        if action == "subscribe":
             self._subscribers.append(writer)
             return {"status": "subscribed"}
-        else:
-            return {"error": f"Unknown action: {action}"}
+        return {"error": f"Unknown action: {action}"}

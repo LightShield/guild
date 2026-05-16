@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import os
 import signal
+from enum import Enum
 from typing import TYPE_CHECKING, Any
 
 from logger_python import get_logger
@@ -16,7 +17,17 @@ if TYPE_CHECKING:  # pragma: no cover — type-checking only
 from guild.config.constants import MAX_RECOVERY_CRASHES, RECOVERY_BACKOFF_BASE_SECONDS
 from guild.daemon.control_socket import ControlSocket
 
-__all__ = ["DaemonSupervisor"]
+__all__ = ["DaemonSupervisor", "SupervisorStatus"]
+
+
+class SupervisorStatus(str, Enum):
+    """Lifecycle states for the daemon supervisor."""
+
+    RUNNING = "running"
+    COMPLETED = "completed"
+    CRASHED = "crashed"
+    CRASHED_ESCALATED = "crashed_escalated"
+
 
 logger = get_logger(__name__)
 
@@ -50,7 +61,7 @@ class DaemonSupervisor:
         self._auto_recovery = auto_recovery
         self._crash_count: int = 0
         self._max_crashes: int = MAX_RECOVERY_CRASHES
-        self._status: str = "running"
+        self._status: str = SupervisorStatus.RUNNING.value
 
     @property
     def pid_path(self) -> Path:
@@ -153,7 +164,7 @@ class DaemonSupervisor:
         self.run_dir.mkdir(parents=True, exist_ok=True)
         self.write_pid_file()
         self.install_signal_handlers()
-        self._status = "running"
+        self._status = SupervisorStatus.RUNNING.value
         try:
             result = await self._run_with_recovery(coro, coro_factory)
             return result
@@ -171,7 +182,7 @@ class DaemonSupervisor:
         while True:
             try:
                 result = await current_coro
-                self._status = "completed"
+                self._status = SupervisorStatus.COMPLETED.value
                 return result
             except (
                 Exception
@@ -185,11 +196,11 @@ class DaemonSupervisor:
                 )
 
                 if not self._auto_recovery or coro_factory is None:
-                    self._status = "crashed"
+                    self._status = SupervisorStatus.CRASHED.value
                     raise
 
                 if self._crash_count >= self._max_crashes:
-                    self._status = "crashed_escalated"
+                    self._status = SupervisorStatus.CRASHED_ESCALATED.value
                     logger.error(
                         "Agent exceeded max crashes (%d). Escalating to human.",
                         self._max_crashes,
