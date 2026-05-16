@@ -243,3 +243,64 @@ class TestFallbackAdapterPlatformName:
         from guild.daemon.platform import FallbackAdapter
 
         assert FallbackAdapter().platform_name == sys.platform
+
+
+# --- Tests moved from e2e/test_cli_commands.py (black-box violation) ---
+
+
+class TestPlatformAdapterFromE2E:
+    """Verify PlatformAdapter can be instantiated for the current platform (AC-02.4.3)."""
+
+    @pytest.mark.ac("AC-02.4.3")
+    def test_adapter_interface_exists_and_works(self) -> None:
+        """PlatformAdapter can be instantiated for current platform."""
+        adapter = get_platform_adapter()
+        assert isinstance(adapter, PlatformAdapter)
+        assert isinstance(adapter.platform_name, str)
+
+
+class TestPlatformAdapterAbstract:
+    """Verify PlatformAdapter is abstract (AC-02.4.1)."""
+
+    @pytest.mark.ac("AC-02.4.1")
+    def test_platform_adapter_is_protocol(self) -> None:
+        """PlatformAdapter is a Protocol with required methods."""
+        assert hasattr(PlatformAdapter, "platform_name")
+        assert hasattr(PlatformAdapter, "is_user_idle")
+        assert hasattr(PlatformAdapter, "detect_sleep_wake")
+
+
+class TestConcreteAdaptersFromE2E:
+    """Verify concrete adapters exist for supported platforms (AC-02.4.2)."""
+
+    @pytest.mark.ac("AC-02.4.2")
+    def test_darwin_and_linux_adapters_importable(self) -> None:
+        """DarwinAdapter and LinuxAdapter are importable."""
+        assert DarwinAdapter is not None
+        assert LinuxAdapter is not None
+        assert FallbackAdapter is not None
+
+
+class TestFallbackAdapterFromE2E:
+    """FallbackAdapter is used on unsupported platforms (AC-02.4.4)."""
+
+    @pytest.mark.ac("AC-02.4.4")
+    def test_fallback_adapter_has_platform_name(self) -> None:
+        """FallbackAdapter exposes platform_name attribute."""
+        adapter = FallbackAdapter()
+        assert hasattr(adapter, "platform_name")
+        assert isinstance(adapter.platform_name, str)
+
+
+class TestCrossPlatformAbstractions:
+    """Verify key modules use pathlib.Path for file operations (AC-02.3.1)."""
+
+    @pytest.mark.ac("AC-02.3.1")
+    def test_pathlib_used_for_paths(self) -> None:
+        """Key modules use pathlib.Path for file operations."""
+        import inspect
+
+        from guild.storage.sqlite import Storage
+
+        sig = inspect.signature(Storage.__init__)
+        assert "db_path" in sig.parameters

@@ -159,3 +159,44 @@ class TestHealthCheckReturnsFalseAfterAllRetriesFail:
         assert result is False
         # 1 initial + 2 retries = 3
         assert inner.health_check.await_count == 3
+
+
+class TestConnectionFailureTyped:
+    """RetryProvider propagates connection errors after retries exhaust (AC-01.5.2)."""
+
+    @pytest.mark.ac("AC-01.5.2")
+    async def test_retry_provider_raises_on_connection_error(self) -> None:
+        """RetryProvider propagates connection errors after retries exhaust."""
+        mock_provider = AsyncMock()
+        mock_provider.generate = AsyncMock(side_effect=ConnectionError("offline"))
+        mock_provider.health_check = AsyncMock(return_value=False)
+
+        config = RetryConfig(max_retries=0, initial_delay_seconds=0.01)
+        retry_prov = RetryProvider(mock_provider, config)
+
+        with pytest.raises(ConnectionError, match="offline"):
+            await retry_prov.generate([{"role": "user", "content": "hi"}])
+
+
+class TestTransientRetryRecovery:
+    """RetryProvider retries and returns successful response (AC-01.5.3)."""
+
+    @pytest.mark.ac("AC-01.5.3")
+    async def test_retry_succeeds_after_transient_failure(self) -> None:
+        """RetryProvider retries and returns successful response."""
+        mock_provider = AsyncMock()
+        mock_provider.generate = AsyncMock(
+            side_effect=[
+                ConnectionError("transient"),
+                LLMResponse(
+                    content="ok", tool_calls=None, input_tokens=5, output_tokens=3, model="m"
+                ),
+            ]
+        )
+        mock_provider.health_check = AsyncMock(return_value=True)
+
+        config = RetryConfig(max_retries=1, initial_delay_seconds=0.01)
+        retry_prov = RetryProvider(mock_provider, config)
+
+        result = await retry_prov.generate([{"role": "user", "content": "hi"}])
+        assert result.content == "ok"

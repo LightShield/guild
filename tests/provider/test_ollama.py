@@ -383,3 +383,75 @@ class TestOllamaIntegration:
         assert result.tool_calls is not None
         assert len(result.tool_calls) >= 1
         assert result.tool_calls[0]["function"]["name"] == "file_read"
+
+
+# --- Tests moved from e2e/test_cli_commands.py (black-box violation) ---
+
+
+@pytest.mark.unit
+class TestOllamaStreaming:
+    """Verify streaming response support (AC-01.2.2)."""
+
+    @pytest.mark.ac("AC-01.2.2")
+    def test_ollama_provider_has_generate_method(self) -> None:
+        """OllamaProvider exposes generate() which handles streaming internally."""
+        provider = OllamaProvider(base_url="http://localhost:11434", model="test")
+        assert callable(provider.generate)
+
+
+@pytest.mark.unit
+class TestOllamaSpecificParams:
+    """Verify Ollama-specific parameters forwarding (AC-01.2.3)."""
+
+    @pytest.mark.ac("AC-01.2.3")
+    def test_ollama_provider_stores_model_and_url(self) -> None:
+        """OllamaProvider stores base_url and model from config."""
+        provider = OllamaProvider(base_url="http://custom:11434", model="gemma4:4b")
+        assert provider.model == "gemma4:4b"
+        assert provider.base_url == "http://custom:11434"
+
+
+@pytest.mark.unit
+class TestOllamaModelNotFoundFromE2E:
+    """Ollama provider handles model-not-found errors with a descriptive message (AC-01.2.4)."""
+
+    @pytest.mark.ac("AC-01.2.4")
+    async def test_nonexistent_model_descriptive_error(self) -> None:
+        """generate() with model='nonexistent-model-xyz' raises descriptive error."""
+        from unittest.mock import patch
+
+        provider = OllamaProvider(
+            base_url="http://localhost:11434", model="nonexistent-model-xyz"
+        )
+
+        mock_client = AsyncMock()
+        mock_client.chat = AsyncMock(
+            side_effect=ResponseError("model 'nonexistent-model-xyz' not found"),
+        )
+        with patch.object(provider, "_client", mock_client):
+            try:
+                await provider.generate([{"role": "user", "content": "hi"}])
+                pytest.fail("Expected an error for nonexistent model")
+            except Exception as e:
+                assert "model" in str(e).lower() and "not found" in str(e).lower()
+
+
+@pytest.mark.unit
+class TestOllamaReportsActualModel:
+    """Ollama provider reports the actual model name used in the response (AC-01.2.5)."""
+
+    @pytest.mark.ac("AC-01.2.5")
+    async def test_response_model_field_populated(self) -> None:
+        """LLMResponse.model is populated from the provider's model attribute."""
+        mock = AsyncMock()
+        mock.generate = AsyncMock(
+            return_value=LLMResponse(
+                content="hi",
+                tool_calls=None,
+                input_tokens=5,
+                output_tokens=3,
+                model="gemma4:4b",
+            )
+        )
+        result = await mock.generate([{"role": "user", "content": "test"}])
+        assert result.model == "gemma4:4b"

@@ -393,33 +393,6 @@ class TestSingleInstall:
         assert 'guild = "guild.cli.main:app"' in pyproject.read_text()
 
 
-class TestCrossPlatformAbstractions:
-    """Verify key modules use pathlib.Path for file operations."""
-
-    @pytest.mark.ac("AC-02.3.1")
-    def test_pathlib_used_for_paths(self) -> None:
-        """Key modules use pathlib.Path for file operations."""
-        import inspect
-
-        from guild.storage.sqlite import Storage
-
-        sig = inspect.signature(Storage.__init__)
-        assert "db_path" in sig.parameters
-
-
-class TestPlatformAdapter:
-    """Verify PlatformAdapter can be instantiated for the current platform."""
-
-    @pytest.mark.ac("AC-02.4.3")
-    def test_adapter_interface_exists_and_works(self) -> None:
-        """PlatformAdapter can be instantiated for current platform."""
-        from guild.daemon.platform import PlatformAdapter, get_platform_adapter
-
-        adapter = get_platform_adapter()
-        assert isinstance(adapter, PlatformAdapter)
-        assert isinstance(adapter.platform_name, str)
-
-
 # ======================================================================
 # New tests for uncovered ACs
 # ======================================================================
@@ -458,31 +431,6 @@ class TestProviderInterface:
 
         with pytest.raises(TypeError):
             IncompleteProvider()  # type: ignore[abstract]
-
-
-class TestOllamaStreaming:
-    """Verify streaming response support."""
-
-    @pytest.mark.ac("AC-01.2.2")
-    def test_ollama_provider_has_generate_method(self) -> None:
-        """OllamaProvider exposes generate() which handles streaming internally."""
-        from guild.provider.ollama import OllamaProvider
-
-        provider = OllamaProvider(base_url="http://localhost:11434", model="test")
-        assert callable(provider.generate)
-
-
-class TestOllamaSpecificParams:
-    """Verify Ollama-specific parameters forwarding."""
-
-    @pytest.mark.ac("AC-01.2.3")
-    def test_ollama_provider_stores_model_and_url(self) -> None:
-        """OllamaProvider stores base_url and model from config."""
-        from guild.provider.ollama import OllamaProvider
-
-        provider = OllamaProvider(base_url="http://custom:11434", model="gemma4:4b")
-        assert provider.model == "gemma4:4b"
-        assert provider.base_url == "http://custom:11434"
 
 
 class TestGenerationParamsConfigurable:
@@ -572,56 +520,6 @@ class TestHealthCheckTimeout:
         assert result is False
 
 
-class TestConnectionFailureTyped:
-    """Verify connection failure raises typed exception."""
-
-    @pytest.mark.ac("AC-01.5.2")
-    async def test_retry_provider_raises_on_connection_error(self) -> None:
-        """RetryProvider propagates connection errors after retries exhaust."""
-        from unittest.mock import AsyncMock
-
-        from guild.provider.retry import RetryConfig, RetryProvider
-
-        mock_provider = AsyncMock()
-        mock_provider.generate = AsyncMock(side_effect=ConnectionError("offline"))
-        mock_provider.health_check = AsyncMock(return_value=False)
-
-        config = RetryConfig(max_retries=0, initial_delay_seconds=0.01)
-        retry_prov = RetryProvider(mock_provider, config)
-
-        with pytest.raises(ConnectionError, match="offline"):
-            await retry_prov.generate([{"role": "user", "content": "hi"}])
-
-
-class TestTransientRetry:
-    """Verify transient failures are retried with backoff."""
-
-    @pytest.mark.ac("AC-01.5.3")
-    async def test_retry_succeeds_after_transient_failure(self) -> None:
-        """RetryProvider retries and returns successful response."""
-        from unittest.mock import AsyncMock
-
-        from guild.provider.base import LLMResponse
-        from guild.provider.retry import RetryConfig, RetryProvider
-
-        mock_provider = AsyncMock()
-        mock_provider.generate = AsyncMock(
-            side_effect=[
-                ConnectionError("transient"),
-                LLMResponse(
-                    content="ok", tool_calls=None, input_tokens=5, output_tokens=3, model="m"
-                ),
-            ]
-        )
-        mock_provider.health_check = AsyncMock(return_value=True)
-
-        config = RetryConfig(max_retries=1, initial_delay_seconds=0.01)
-        retry_prov = RetryProvider(mock_provider, config)
-
-        result = await retry_prov.generate([{"role": "user", "content": "hi"}])
-        assert result.content == "ok"
-
-
 class TestUnitTestsPassOnCurrentPlatform:
     """Verify unit test suite is runnable."""
 
@@ -660,88 +558,6 @@ class TestProcessSpawning:
                 continue
             text = py_file.read_text()
             assert "os.system(" not in text, f"os.system in {py_file.name}"
-
-
-class TestPlatformAdapterAbstract:
-    """Verify PlatformAdapter is abstract."""
-
-    @pytest.mark.ac("AC-02.4.1")
-    def test_platform_adapter_is_protocol(self) -> None:
-        """PlatformAdapter is a Protocol with required methods."""
-        from guild.daemon.platform import PlatformAdapter
-
-        assert hasattr(PlatformAdapter, "platform_name")
-        assert hasattr(PlatformAdapter, "is_user_idle")
-        assert hasattr(PlatformAdapter, "detect_sleep_wake")
-
-
-class TestConcreteAdapters:
-    """Verify concrete adapters exist for supported platforms."""
-
-    @pytest.mark.ac("AC-02.4.2")
-    def test_darwin_and_linux_adapters_importable(self) -> None:
-        """DarwinAdapter and LinuxAdapter are importable."""
-        from guild.daemon.platform import DarwinAdapter, FallbackAdapter, LinuxAdapter
-
-        assert DarwinAdapter is not None
-        assert LinuxAdapter is not None
-        assert FallbackAdapter is not None
-
-
-# ======================================================================
-# New tests for uncovered ACs (batch 1)
-# ======================================================================
-
-
-class TestOllamaModelNotFound:
-    """Ollama provider handles model-not-found errors with a descriptive message."""
-
-    @pytest.mark.ac("AC-01.2.4")
-    @pytest.mark.integration
-    async def test_nonexistent_model_descriptive_error(self) -> None:
-        """generate() with model='nonexistent-model-xyz' raises descriptive error."""
-        from unittest.mock import AsyncMock, patch
-
-        from ollama import ResponseError
-
-        from guild.provider.ollama import OllamaProvider
-
-        provider = OllamaProvider(base_url="http://localhost:11434", model="nonexistent-model-xyz")
-
-        mock_client = AsyncMock()
-        mock_client.chat = AsyncMock(
-            side_effect=ResponseError("model 'nonexistent-model-xyz' not found"),
-        )
-        with patch.object(provider, "_client", mock_client):
-            try:
-                await provider.generate([{"role": "user", "content": "hi"}])
-                pytest.fail("Expected an error for nonexistent model")
-            except Exception as e:
-                assert "model" in str(e).lower() and "not found" in str(e).lower()
-
-
-class TestOllamaReportsActualModel:
-    """Ollama provider reports the actual model name used in the response."""
-
-    @pytest.mark.ac("AC-01.2.5")
-    async def test_response_model_field_populated(self) -> None:
-        """LLMResponse.model is populated from the provider's model attribute."""
-        from unittest.mock import AsyncMock
-
-        from guild.provider.base import LLMResponse
-
-        mock = AsyncMock()
-        mock.generate = AsyncMock(
-            return_value=LLMResponse(
-                content="hi",
-                tool_calls=None,
-                input_tokens=5,
-                output_tokens=3,
-                model="gemma4:4b",
-            )
-        )
-        result = await mock.generate([{"role": "user", "content": "test"}])
-        assert result.model == "gemma4:4b"
 
 
 class TestConfigSetPersistsAndReloads:
@@ -791,16 +607,3 @@ class TestPathsWithSpaces:
         assert result.exit_code == 0
         assert (spaced_dir / ".guild").is_dir()
         assert (spaced_dir / ".guild" / "config.toml").exists()
-
-
-class TestFallbackAdapterUsed:
-    """FallbackAdapter is used on unsupported platforms and logs a warning."""
-
-    @pytest.mark.ac("AC-02.4.4")
-    def test_fallback_adapter_has_platform_name(self) -> None:
-        """FallbackAdapter exposes platform_name attribute."""
-        from guild.daemon.platform import FallbackAdapter
-
-        adapter = FallbackAdapter()
-        assert hasattr(adapter, "platform_name")
-        assert isinstance(adapter.platform_name, str)
