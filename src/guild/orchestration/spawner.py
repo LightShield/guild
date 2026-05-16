@@ -7,7 +7,12 @@ import uuid
 from typing import TYPE_CHECKING, Any
 
 from guild.agent.loop import AgentLoop
-from guild.config.constants import SUB_AGENT_MAX_TURNS
+from guild.config.constants import (
+    AGENT_ID_PREFIX_LEN,
+    MAX_SPAWN_DEPTH,
+    SUB_AGENT_MAX_TURNS,
+    TASK_LOG_PREVIEW_CHARS,
+)
 from guild.tools.base import ToolResult
 
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
@@ -39,7 +44,7 @@ class AgentSpawner:
         storage: Storage | None,
         bus: MessageBus,
         working_dir: str | None = None,
-        max_depth: int = 5,
+        max_depth: int = MAX_SPAWN_DEPTH,
     ) -> None:
         self._provider = provider
         self._storage = storage
@@ -77,7 +82,7 @@ class AgentSpawner:
             )
             raise RuntimeError(msg)
 
-        agent_id = agent_id or f"agent-{uuid.uuid4().hex[:8]}"
+        agent_id = agent_id or f"agent-{uuid.uuid4().hex[:AGENT_ID_PREFIX_LEN]}"
         prompt = system_prompt or _DEFAULT_SYSTEM_PROMPT
 
         # Build tool executors (empty for now — sub-agents inherit none
@@ -92,7 +97,7 @@ class AgentSpawner:
         )
         self._agents[agent_id] = loop
 
-        logger.info("Spawning sub-agent %s: %s", agent_id, task[:80])
+        logger.info("Spawning sub-agent %s: %s", agent_id, task[:TASK_LOG_PREVIEW_CHARS])
         result = await loop.run(prompt, task)
 
         return result

@@ -75,6 +75,18 @@ __all__ = [
     "MIN_TURNS",
     "MAX_TURNS_CAP",
     "AGENT_ID_PREFIX_LEN",
+    # Temporal knowledge
+    "DEFAULT_DECISION_HISTORY_LIMIT",
+    "DEFAULT_CONTEXT_DECISIONS",
+    "BRIEF_DECISION_LIMIT",
+    "TEMPORAL_CMD_TIMEOUT_SECONDS",
+    # Spawner
+    "MAX_SPAWN_DEPTH",
+    "TASK_LOG_PREVIEW_CHARS",
+    # RPG UI
+    "PROGRESS_BAR_WIDTH",
+    # Agent loop content preview
+    "LOOP_CONTENT_PREVIEW_CHARS",
     # Observability
     "REPLAY_CONTENT_MAX_CHARS",
     # Eval framework
@@ -201,6 +213,14 @@ STALE_DAYS: int = 30
 MAX_INDEX_LINES: int = 200
 
 # ---------------------------------------------------------------------------
+# Temporal knowledge
+# ---------------------------------------------------------------------------
+DEFAULT_DECISION_HISTORY_LIMIT: int = 20
+DEFAULT_CONTEXT_DECISIONS: int = 10
+BRIEF_DECISION_LIMIT: int = 5
+TEMPORAL_CMD_TIMEOUT_SECONDS: int = 10
+
+# ---------------------------------------------------------------------------
 # Orchestration
 # ---------------------------------------------------------------------------
 DEFAULT_MAX_RETRIES: int = 1
@@ -210,12 +230,28 @@ HEURISTIC_FAIL_SCORE: int = 30
 SUB_AGENT_MAX_TURNS: int = 30
 
 # ---------------------------------------------------------------------------
+# Spawner
+# ---------------------------------------------------------------------------
+MAX_SPAWN_DEPTH: int = 5
+TASK_LOG_PREVIEW_CHARS: int = 80
+
+# ---------------------------------------------------------------------------
 # CLI task runner
 # ---------------------------------------------------------------------------
 SECONDS_PER_TURN_ESTIMATE: int = 10
 MIN_TURNS: int = 5
 MAX_TURNS_CAP: int = 200
 AGENT_ID_PREFIX_LEN: int = 8
+
+# ---------------------------------------------------------------------------
+# RPG UI
+# ---------------------------------------------------------------------------
+PROGRESS_BAR_WIDTH: int = 10
+
+# ---------------------------------------------------------------------------
+# Agent loop content preview
+# ---------------------------------------------------------------------------
+LOOP_CONTENT_PREVIEW_CHARS: int = 200
 
 # ---------------------------------------------------------------------------
 # Observability

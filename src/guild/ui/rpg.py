@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from guild.config.constants import PROGRESS_BAR_WIDTH
+
 __all__ = ["RPG_TRANSLATIONS", "RPGMode"]
 
 RPG_TRANSLATIONS: dict[str, str] = {
@@ -51,9 +53,10 @@ class RPGMode:
     def progress_bar(self, current: int, total: int) -> str:
         """XP-style progress bar."""
         if total <= 0:
-            return "[----------] 0 XP"
-        filled = min(10, (current * 10) // total)
-        bar = "=" * filled + "-" * (10 - filled)
+            empty = "-" * PROGRESS_BAR_WIDTH
+            return f"[{empty}] 0 XP"
+        filled = min(PROGRESS_BAR_WIDTH, (current * PROGRESS_BAR_WIDTH) // total)
+        bar = "=" * filled + "-" * (PROGRESS_BAR_WIDTH - filled)
         return f"[{bar}] {current}/{total} XP"
 
     def quest_log_entry(self, task: dict[str, str]) -> str:

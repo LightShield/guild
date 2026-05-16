@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any
 
 from guild.agent.loop import AgentLoop
 from guild.config.constants import (
+    AGENT_ID_PREFIX_LEN,
     DEFAULT_LOOP_MAX_ITERATIONS,
     HEURISTIC_FAIL_SCORE,
     HEURISTIC_PASS_SCORE,
@@ -445,7 +446,7 @@ class TeamRunner:
         tool_executors = build_tool_executors() if block_def.tools else {}
 
         task_id = str(uuid.uuid4())
-        agent_id = f"{block_def.name}-{task_id[:8]}"
+        agent_id = f"{block_def.name}-{task_id[:AGENT_ID_PREFIX_LEN]}"
 
         if self._storage:
             await self._storage.create_task(

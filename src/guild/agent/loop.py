@@ -14,7 +14,7 @@ from guild.agent.completion import (
     should_nudge_completion,
 )
 from guild.agent.message import Message
-from guild.config.constants import DEFAULT_MAX_TURNS
+from guild.config.constants import DEFAULT_MAX_TURNS, LOOP_CONTENT_PREVIEW_CHARS
 from guild.tools.base import TOOL_SCHEMAS, ToolResult
 
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
@@ -334,7 +334,7 @@ class AgentLoop:
         last_assistant = ""
         for msg in reversed(self.messages):
             if msg.role == "assistant" and msg.content:
-                last_assistant = msg.content[:200]
+                last_assistant = msg.content[:LOOP_CONTENT_PREVIEW_CHARS]
                 break
 
         parts: list[str] = [

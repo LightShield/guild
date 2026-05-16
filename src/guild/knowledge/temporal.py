@@ -10,6 +10,14 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
+from guild.config.constants import (
+    BRIEF_DECISION_LIMIT,
+    DEFAULT_CONTEXT_DECISIONS,
+    DEFAULT_DECISION_HISTORY_LIMIT,
+    MIN_INJECTION_CONFIDENCE,
+    TEMPORAL_CMD_TIMEOUT_SECONDS,
+)
+
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from pathlib import Path
 
@@ -42,7 +50,9 @@ class TemporalKnowledge:
             return prompt_file.read_text()
         return None
 
-    async def get_decision_history(self, limit: int = 20) -> list[dict[str, Any]]:
+    async def get_decision_history(
+        self, limit: int = DEFAULT_DECISION_HISTORY_LIMIT
+    ) -> list[dict[str, Any]]:
         """Get recent decisions with rationale (REQ-27.1).
 
         Returns decisions ordered most-recent-first, up to limit.
@@ -63,13 +73,15 @@ class TemporalKnowledge:
             sections.append(f"## Project Instructions\n\n{instructions}")
 
         # REQ-27.1: Recent decisions
-        decisions = await self.get_decision_history(limit=10)
+        decisions = await self.get_decision_history(limit=DEFAULT_CONTEXT_DECISIONS)
         if decisions:
             decision_lines = self._format_decisions(decisions)
             sections.append(f"## Recent Decisions\n\n{decision_lines}")
 
         # REQ-27.4: Relevant learnings
-        learnings = await self._storage.list_learnings(min_confidence=0.5)
+        learnings = await self._storage.list_learnings(
+            min_confidence=MIN_INJECTION_CONFIDENCE
+        )
         if learnings:
             learning_lines = self._format_learnings(learnings)
             sections.append(f"## Learnings from Past Tasks\n\n{learning_lines}")
@@ -82,7 +94,7 @@ class TemporalKnowledge:
     def _format_decisions(self, decisions: list[dict[str, Any]]) -> str:
         """Format decision records into readable context."""
         lines: list[str] = []
-        for d in decisions[:10]:
+        for d in decisions[:DEFAULT_CONTEXT_DECISIONS]:
             decision_text = d.get("decision", "")
             rationale = d.get("rationale", "")
             lines.append(f"- {decision_text}: {rationale}")
@@ -91,7 +103,7 @@ class TemporalKnowledge:
     def _format_learnings(self, learnings: list[dict[str, Any]]) -> str:
         """Format learning records into readable context."""
         lines: list[str] = []
-        for item in learnings[:10]:
+        for item in learnings[:DEFAULT_CONTEXT_DECISIONS]:
             category = item.get("category", "unknown")
             content = item.get("content", "")
             confidence = item.get("confidence", 0)
@@ -133,12 +145,14 @@ class TemporalKnowledge:
         """
         sections: list[str] = []
 
-        decisions = await self.get_decision_history(limit=5)
+        decisions = await self.get_decision_history(limit=BRIEF_DECISION_LIMIT)
         if decisions:
             formatted = self._format_decisions(decisions)
             sections.append(f"### Recent Decisions\n{formatted}")
 
-        learnings = await self._storage.list_learnings(min_confidence=0.5)
+        learnings = await self._storage.list_learnings(
+            min_confidence=MIN_INJECTION_CONFIDENCE
+        )
         if learnings:
             formatted = self._format_learnings(learnings)
             sections.append(f"### Relevant Learnings\n{formatted}")
@@ -156,7 +170,7 @@ class TemporalKnowledge:
         not user-initiated shell execution (the shell tool's denylist
         does not apply here).
         """
-        timeout = 10  # seconds — git status/log should be fast
+        timeout = TEMPORAL_CMD_TIMEOUT_SECONDS
         try:
             argv = cmd.split()
             proc = await asyncio.create_subprocess_exec(
