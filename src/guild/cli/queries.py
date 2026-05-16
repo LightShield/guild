@@ -102,11 +102,6 @@ async def fetch_task_messages(guild_dir: Path, task_id: str) -> list[dict[str, A
         return await store.get_messages(agent_id)  # pragma: no cover — requires task with messages
 
 
-# ------------------------------------------------------------------
-# Learnings helpers
-# ------------------------------------------------------------------
-
-
 async def fetch_learnings(
     db_path: Path,
     category: str | None,

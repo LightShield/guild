@@ -77,11 +77,6 @@ __all__ = [
 console = Console()
 
 
-# ------------------------------------------------------------------
-# Project initialization and status
-# ------------------------------------------------------------------
-
-
 @app.command()
 def init(
     path: Path = typer.Argument(
@@ -127,11 +122,6 @@ def status() -> None:
     console.print(f"[bold]Model:[/bold] {config.model}")
     console.print(f"[bold]Tasks:[/bold] {task_count}")
     console.print(f"[bold]Agents:[/bold] {agent_count}")
-
-
-# ------------------------------------------------------------------
-# Configuration
-# ------------------------------------------------------------------
 
 
 @app.command(name="config")

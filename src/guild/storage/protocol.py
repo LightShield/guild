@@ -36,7 +36,6 @@ class StorageProtocol(Protocol):
         """Close the storage connection."""
         ...
 
-    # Tasks
     async def create_task(self, task_id: str, description: str) -> None:
         """Create a new task record."""
         ...
@@ -53,7 +52,6 @@ class StorageProtocol(Protocol):
         """Update fields on an existing task."""
         ...
 
-    # Agents
     async def register_agent(self, agent_id: str, block_name: str) -> None:
         """Register a new agent with its block type."""
         ...
@@ -66,7 +64,6 @@ class StorageProtocol(Protocol):
         """Update fields on an existing agent."""
         ...
 
-    # Messages
     async def append_message(self, agent_id: str, role: str, content: str, **kwargs: str) -> None:
         """Append a message to an agent's conversation history."""
         ...
@@ -75,7 +72,6 @@ class StorageProtocol(Protocol):
         """Retrieve all messages for an agent."""
         ...
 
-    # Audit
     async def log_audit(
         self,
         action: str,
@@ -89,7 +85,6 @@ class StorageProtocol(Protocol):
         """Retrieve recent audit log entries."""
         ...
 
-    # Decisions
     async def log_decision(
         self,
         record: DecisionRecord | None = None,
@@ -104,7 +99,6 @@ class StorageProtocol(Protocol):
         """Record a non-trivial decision with rationale."""
         ...
 
-    # Learnings
     async def add_learning(
         self,
         record: LearningRecord | None = None,
@@ -127,12 +121,10 @@ class StorageProtocol(Protocol):
         """Retrieve learnings filtered by confidence, category, or scope."""
         ...
 
-    # Token usage
     async def get_token_summary(self) -> dict[str, Any]:
         """Return aggregate token usage statistics."""
         ...
 
-    # Questions
     async def insert_question(
         self,
         record: QuestionRecord | None = None,
@@ -147,7 +139,6 @@ class StorageProtocol(Protocol):
         """Insert a new question into the escalation queue."""
         ...
 
-    # Checkpoints
     async def save_checkpoint(self, agent_id: str, task_id: str | None, state_json: str) -> None:
         """Persist a checkpoint for an agent."""
         ...

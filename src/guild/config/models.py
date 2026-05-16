@@ -99,22 +99,22 @@ class GuildConfig(ConfigsLoader):  # type: ignore[misc]
         default=MAX_SHELL_OUTPUT_CHARS, section="guild", description="Max shell output characters before truncation"
     )
     cli_provider_timeout_seconds: int = Field(
-        default=120, section="guild", description="CLI provider command timeout in seconds"
+        default=CLI_PROVIDER_TIMEOUT_SECONDS, section="guild", description="CLI provider command timeout in seconds"
     )
     default_max_turns: int = Field(
-        default=50, section="guild", description="Default max agent loop turns"
+        default=DEFAULT_MAX_TURNS, section="guild", description="Default max agent loop turns"
     )
     context_max_tokens: int = Field(
-        default=8000, section="guild", description="Max estimated tokens for context window"
+        default=DEFAULT_CONTEXT_MAX_TOKENS, section="guild", description="Max estimated tokens for context window"
     )
     compact_threshold: float = Field(
-        default=0.7, section="guild", description="Context token fraction triggering compaction"
+        default=DEFAULT_COMPACT_THRESHOLD, section="guild", description="Context token fraction triggering compaction"
     )
     preserve_recent_messages: int = Field(
-        default=4, section="guild", description="Recent messages preserved during compaction"
+        default=DEFAULT_PRESERVE_RECENT, section="guild", description="Recent messages preserved during compaction"
     )
     websocket_poll_seconds: int = Field(
-        default=2, section="guild", description="WebSocket status broadcast interval in seconds"
+        default=WEBSOCKET_POLL_SECONDS, section="guild", description="WebSocket status broadcast interval in seconds"
     )
 
     # Health check (provider section)
@@ -126,7 +126,7 @@ class GuildConfig(ConfigsLoader):  # type: ignore[misc]
 
     # Spawn depth limit (guild section)
     max_spawn_depth: int = Field(
-        default=5, section="guild", description="Max nested sub-agent spawn depth"
+        default=MAX_SPAWN_DEPTH, section="guild", description="Max nested sub-agent spawn depth"
     )
 
     # Auto-recovery (daemon section)

@@ -228,10 +228,6 @@ class Storage:
             await self._db.close()
             self._db = None
 
-    # ------------------------------------------------------------------
-    # Tasks
-    # ------------------------------------------------------------------
-
     async def create_task(self, task_id: str, description: str) -> None:
         """Insert a new task with pending status."""
         if self._db is None:
@@ -280,10 +276,6 @@ class Storage:
         )
         await self._db.commit()
 
-    # ------------------------------------------------------------------
-    # Agents
-    # ------------------------------------------------------------------
-
     async def register_agent(self, agent_id: str, block_name: str) -> None:
         """Register a new agent."""
         if self._db is None:
@@ -319,10 +311,6 @@ class Storage:
         )
         await self._db.commit()
 
-    # ------------------------------------------------------------------
-    # Messages
-    # ------------------------------------------------------------------
-
     async def append_message(self, agent_id: str, role: str, content: str, **kwargs: str) -> None:
         """Append a message to the agent's conversation history."""
         if self._db is None:
@@ -346,10 +334,6 @@ class Storage:
         )
         rows = await cursor.fetchall()
         return [dict(r) for r in rows]
-
-    # ------------------------------------------------------------------
-    # Audit
-    # ------------------------------------------------------------------
 
     async def log_audit(
         self,
@@ -375,10 +359,6 @@ class Storage:
         )
         rows = await cursor.fetchall()
         return [dict(r) for r in rows]
-
-    # ------------------------------------------------------------------
-    # Decisions
-    # ------------------------------------------------------------------
 
     async def log_decision(
         self,
@@ -441,10 +421,6 @@ class Storage:
             )
         rows = await cursor.fetchall()
         return [dict(r) for r in rows]
-
-    # ------------------------------------------------------------------
-    # Learnings
-    # ------------------------------------------------------------------
 
     async def add_learning(
         self,
@@ -880,10 +856,6 @@ class Storage:
             )
         rows = await cursor.fetchall()
         return [dict(r) for r in rows]
-
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
 
     async def _get_tables(self) -> list[str]:
         """Return list of table names (used in tests)."""
