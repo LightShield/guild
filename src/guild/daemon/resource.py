@@ -9,10 +9,11 @@ Detects user activity and system load to throttle agent work:
 from __future__ import annotations
 
 import asyncio
-import logging
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING, Any
+
+from logger_python import get_logger
 
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from collections.abc import Callable
@@ -27,7 +28,7 @@ __all__ = [
     "SchedulingMode",
 ]
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SchedulingMode(str, Enum):

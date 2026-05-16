@@ -7,15 +7,16 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 import os
 import socket
 from pathlib import Path  # noqa: TC003 — used at runtime
 from typing import Any
 
+from logger_python import get_logger
+
 __all__ = ["ControlSocket"]
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ControlSocket:

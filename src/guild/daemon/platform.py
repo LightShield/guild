@@ -5,9 +5,10 @@ Isolates all platform-dependent behavior behind a common interface (REQ-02.4).
 
 from __future__ import annotations
 
-import logging
 import sys
 from typing import Protocol, runtime_checkable
+
+from logger_python import get_logger
 
 __all__ = [
     "PlatformAdapter",
@@ -17,7 +18,7 @@ __all__ = [
     "FallbackAdapter",
 ]
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @runtime_checkable

@@ -8,11 +8,11 @@ single SQLite file.
 from __future__ import annotations
 
 import json
-import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 import aiosqlite
+from logger_python import get_logger
 
 from guild.config.constants import (
     CONFIDENCE_DECAY_DECREMENT,
@@ -32,7 +32,7 @@ __all__ = [
     "Storage",
 ]
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS tasks (

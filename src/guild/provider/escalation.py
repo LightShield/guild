@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass, field
 from typing import Any
+
+from logger_python import get_logger
 
 from guild.provider.base import LLMProvider, LLMResponse
 
@@ -17,7 +18,7 @@ __all__ = [
     "select_model_for_task",
 ]
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # --- REQ-17.3 / REQ-17.4: Model capability tagging and cheap selection ---
 

@@ -7,8 +7,9 @@ concerns.
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING
+
+from logger_python import get_logger
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -45,7 +46,7 @@ __all__ = [
     "run_team_task",
 ]
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 OLLAMA_PROVIDER_NAME = "ollama"
 

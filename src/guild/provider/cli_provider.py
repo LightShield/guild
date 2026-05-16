@@ -7,16 +7,17 @@ Does NOT support structured tool calling — text in/text out only.
 from __future__ import annotations
 
 import asyncio
-import logging
 import shutil
 from typing import Any
+
+from logger_python import get_logger
 
 from guild.config.constants import CLI_PROVIDER_TIMEOUT_SECONDS
 from guild.provider.base import LLMProvider, LLMResponse
 
 __all__ = ["CLIToolProvider"]
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class CLIToolProvider(LLMProvider):

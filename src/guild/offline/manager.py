@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import Protocol
+
+from logger_python import get_logger
 
 __all__ = ["OfflineManager"]
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _OFFLINE_DOCS: dict[str, str] = {
     "getting-started": (

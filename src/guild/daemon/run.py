@@ -11,12 +11,14 @@ import logging
 import sys
 from pathlib import Path
 
+from logger_python import get_logger
+
 from guild.config.loader import DB_FILENAME
 from guild.task.spec import TaskStatus
 
 __all__: list[str] = []
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 async def _run_task(

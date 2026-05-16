@@ -7,11 +7,12 @@ desktop toast, or webhook. Respects user presence/activity state.
 from __future__ import annotations
 
 import asyncio
-import logging
 import sys
 from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
+
+from logger_python import get_logger
 
 from guild.config.constants import NOTIFICATION_TITLE
 from guild.daemon.platform import get_platform_adapter
@@ -19,7 +20,7 @@ from guild.escalation.queue import QuestionPriority
 
 __all__ = ["NOTIFICATION_TITLE", "NotificationChannel", "Notifier"]
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class NotificationChannel(str, Enum):

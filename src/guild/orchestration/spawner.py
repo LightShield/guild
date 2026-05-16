@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-import logging
 import uuid
 from typing import TYPE_CHECKING, Any
+
+from logger_python import get_logger
 
 from guild.agent.loop import AgentLoop
 from guild.config.constants import (
@@ -22,7 +23,7 @@ if TYPE_CHECKING:  # pragma: no cover — type-checking only
 
 __all__ = ["AgentSpawner", "SUB_AGENT_MAX_TURNS"]
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _DEFAULT_SYSTEM_PROMPT = (
     "You are a helpful sub-agent. Complete the assigned task thoroughly "

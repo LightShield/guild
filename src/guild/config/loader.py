@@ -6,10 +6,11 @@ and project config.toml files (project overrides global).
 
 from __future__ import annotations
 
-import logging
 import tomllib
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+
+from logger_python import get_logger
 
 from guild.config.constants import CONFIG_FILENAME, DB_FILENAME, GUILD_DIR_NAME
 from guild.config.models import GuildConfig
@@ -33,7 +34,7 @@ __all__ = [
 ]
 _TEMP_FILE_PREFIX = "guild_config_"
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def find_guild_dir(start: Path | None = None) -> Path | None:

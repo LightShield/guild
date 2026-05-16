@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import json
-import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
+
+from logger_python import get_logger
 
 from guild.agent.message import Message
 
@@ -21,7 +22,7 @@ __all__ = [
     "save_checkpoint",
 ]
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

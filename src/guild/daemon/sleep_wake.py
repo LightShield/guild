@@ -8,11 +8,12 @@ LLM provider connection and optionally resumes or pauses the agent.
 from __future__ import annotations
 
 import asyncio
-import logging
 import time
 from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, Any, TypeVar
+
+from logger_python import get_logger
 
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from collections.abc import Callable, Coroutine
@@ -22,7 +23,7 @@ if TYPE_CHECKING:  # pragma: no cover — type-checking only
 
 __all__ = ["SleepWakeConfig", "SleepWakeDetector", "WakeBehavior"]
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 T = TypeVar("T")
 

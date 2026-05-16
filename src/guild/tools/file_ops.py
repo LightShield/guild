@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
-import logging
 from typing import Any
+
+from logger_python import get_logger
 
 from guild.config.constants import MAX_FILE_READ_CHARS
 from guild.tools.base import ToolResult, resolve_path
 
 __all__ = ["MAX_FILE_READ_CHARS", "execute_file_read", "execute_file_write"]
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 async def execute_file_read(args: dict[str, Any], working_dir: str | None = None) -> ToolResult:

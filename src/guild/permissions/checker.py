@@ -12,13 +12,14 @@ blocking destructive/irreversible actions regardless of the active tier.
 
 from __future__ import annotations
 
-import logging
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import PurePosixPath
 from typing import Any
+
+from logger_python import get_logger
 
 __all__ = [
     "AuditEntry",
@@ -28,7 +29,7 @@ __all__ = [
     "PromptFn",
 ]
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 PromptFn = Callable[[str, str, dict[str, Any]], bool]
 

@@ -7,11 +7,12 @@ verification steps, and status lifecycle enforcement.
 from __future__ import annotations
 
 import asyncio
-import logging
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING
+
+from logger_python import get_logger
 
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from guild.storage.sqlite import Storage
@@ -44,7 +45,7 @@ class TaskStatus(str, Enum):
     DONE = "done"
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # REQ-12.5: Valid status transitions
 VALID_TRANSITIONS: dict[str, list[str]] = {

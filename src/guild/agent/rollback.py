@@ -6,17 +6,18 @@ verify it, and revert if verification fails — without git worktrees.
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+
+from logger_python import get_logger
 
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from collections.abc import Awaitable, Callable
 
 __all__ = ["FileSnapshot", "RollbackContext", "try_with_rollback"]
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

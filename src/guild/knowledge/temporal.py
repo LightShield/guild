@@ -7,8 +7,9 @@ and learnings for injection into agent prompts.
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import TYPE_CHECKING, Any
+
+from logger_python import get_logger
 
 from guild.config.constants import (
     BRIEF_DECISION_LIMIT,
@@ -25,7 +26,7 @@ if TYPE_CHECKING:  # pragma: no cover — type-checking only
 
 __all__ = ["TemporalKnowledge"]
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class TemporalKnowledge:

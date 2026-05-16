@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING, Any
+
+from logger_python import get_logger
 
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from guild.tools.base import ToolResult
@@ -18,7 +19,7 @@ __all__ = [
     "should_nudge_completion",
 ]
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 COMPLETION_NUDGE: str = (
     "The action above succeeded. If this completes your task, "

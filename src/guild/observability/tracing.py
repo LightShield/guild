@@ -8,6 +8,8 @@ from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
+from logger_python import get_logger
+
 __all__ = [
     "TraceEvent",
     "Tracer",
@@ -37,7 +39,7 @@ class Tracer:
     """
 
     def __init__(self, logger: logging.Logger | None = None) -> None:
-        self._logger = logger or logging.getLogger("guild.trace")
+        self._logger = logger or get_logger("guild.trace")
         self._events: list[TraceEvent] = []
 
     def trace(self, event_type: str, **kwargs: object) -> None:

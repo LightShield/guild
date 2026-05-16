@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass, field
 from pathlib import Path  # noqa: TC003 — used at runtime
 
+from logger_python import get_logger
+
 __all__ = ["FRONTMATTER_DELIMITER", "SkillDef", "SkillRegistry"]
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 FRONTMATTER_DELIMITER = "---"
 

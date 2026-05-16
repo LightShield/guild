@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-import logging
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any
+
+from logger_python import get_logger
 
 from guild.agent.completion import (
     COMPLETION_NUDGE,
@@ -30,7 +31,7 @@ __all__ = [
     "ToolExecutor",
 ]
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 STUCK_RECOVERY_PROMPT = (
     "You appear to be stuck (repeating the same action or encountering repeated errors). "

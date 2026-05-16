@@ -10,16 +10,16 @@ of this file.
 # Note: do NOT use `from __future__ import annotations` — Typer 0.9
 # requires runtime type annotation introspection.
 
-import logging
 
 import typer
+from logger_python import get_logger
 from rich.console import Console
 
 from guild import __version__
 
 __all__ = ["app"]
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 console = Console()
 
 app = typer.Typer(

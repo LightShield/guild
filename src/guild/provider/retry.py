@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
+
+from logger_python import get_logger
 
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from collections.abc import Callable, Coroutine
@@ -14,7 +15,7 @@ from guild.provider.base import LLMProvider, LLMResponse
 
 __all__ = ["RetryConfig", "RetryProvider"]
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

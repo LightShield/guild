@@ -7,10 +7,11 @@ and parallel branch failure isolation.
 from __future__ import annotations
 
 import json
-import logging
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING, Any
+
+from logger_python import get_logger
 
 from guild.agent.loop import AgentLoop
 from guild.config.constants import (
@@ -36,7 +37,7 @@ __all__ = [
     "TeamRunner",
 ]
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 DECISION_SKIP = "skip"
 DECISION_ESCALATE = "escalate"

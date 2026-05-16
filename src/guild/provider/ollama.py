@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-import logging
 from typing import Any
+
+from logger_python import get_logger
 
 from ollama import AsyncClient, RequestError, ResponseError
 
@@ -11,7 +12,7 @@ from guild.provider.base import LLMProvider, LLMResponse
 
 __all__ = ["OllamaProvider", "create_provider"]
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class OllamaProvider(LLMProvider):

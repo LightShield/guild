@@ -7,14 +7,15 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 import os
 from dataclasses import dataclass, field
 from typing import Any
 
+from logger_python import get_logger
+
 __all__ = ["MCPClient", "MCPError", "MCPServerConfig", "MCPTool"]
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass
