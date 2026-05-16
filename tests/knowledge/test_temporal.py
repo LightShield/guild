@@ -15,7 +15,6 @@ from guild.storage.audit import DecisionRecord
 from guild.storage.learnings import LearningRecord
 
 
-
 @pytest.fixture
 async def storage(tmp_path: Path) -> Storage:
     """Create a connected Storage instance for testing."""
@@ -46,16 +45,20 @@ class TestDecisionHistory:
     async def test_get_decision_history(self, storage: Storage, guild_dir: Path) -> None:
         """Decisions are returned in reverse chronological order."""
         await storage.log_decision(
-            DecisionRecord(task_id="t1",
-            agent_id="a1",
-            decision="Use SQLite",
-            rationale="Simple, no server needed",)
+            DecisionRecord(
+                task_id="t1",
+                agent_id="a1",
+                decision="Use SQLite",
+                rationale="Simple, no server needed",
+            )
         )
         await storage.log_decision(
-            DecisionRecord(task_id="t1",
-            agent_id="a1",
-            decision="Use async",
-            rationale="Non-blocking I/O",)
+            DecisionRecord(
+                task_id="t1",
+                agent_id="a1",
+                decision="Use async",
+                rationale="Non-blocking I/O",
+            )
         )
 
         tk = TemporalKnowledge(guild_dir, storage)
@@ -115,15 +118,19 @@ class TestRelevantContext:
         """Learnings with sufficient confidence appear in context."""
         # Add a high-confidence learning
         await storage.add_learning(
-            LearningRecord(category="pattern",
-            content="Use dataclasses for internal data",
-            confidence=0.8,)
+            LearningRecord(
+                category="pattern",
+                content="Use dataclasses for internal data",
+                confidence=0.8,
+            )
         )
         # Add a low-confidence learning (should not appear)
         await storage.add_learning(
-            LearningRecord(category="tool_tip",
-            content="Try ruff for linting",
-            confidence=0.2,)
+            LearningRecord(
+                category="tool_tip",
+                content="Try ruff for linting",
+                confidence=0.2,
+            )
         )
 
         tk = TemporalKnowledge(guild_dir, storage)
@@ -204,16 +211,20 @@ class TestPresentStateAndPastInfo:
         """get_key_past_info returns decisions and learnings."""
         # Add a decision
         await storage.log_decision(
-            DecisionRecord(task_id="t1",
-            agent_id="a1",
-            decision="Use async patterns",
-            rationale="Better I/O performance",)
+            DecisionRecord(
+                task_id="t1",
+                agent_id="a1",
+                decision="Use async patterns",
+                rationale="Better I/O performance",
+            )
         )
         # Add a high-confidence learning
         await storage.add_learning(
-            LearningRecord(category="pattern",
-            content="Always validate inputs",
-            confidence=0.9,)
+            LearningRecord(
+                category="pattern",
+                content="Always validate inputs",
+                confidence=0.9,
+            )
         )
 
         tk = TemporalKnowledge(guild_dir, storage)
@@ -337,10 +348,12 @@ class TestTemporalKnowledgeBranches:
 
         # Add decisions so lines 68-69 are hit
         await store.log_decision(
-            DecisionRecord(task_id="t1",
-            agent_id="a1",
-            decision="Use pattern X",
-            rationale="It is efficient",)
+            DecisionRecord(
+                task_id="t1",
+                agent_id="a1",
+                decision="Use pattern X",
+                rationale="It is efficient",
+            )
         )
 
         tk = TemporalKnowledge(guild_dir, store)

@@ -1377,7 +1377,9 @@ class TestBudgetCheckBeforeEachLLMCall:
         provider = AsyncMock()
         provider.generate = counting_generate
 
-        loop = AgentLoop(provider=provider, tool_executors={}, config=AgentLoopConfig(token_budget=100))
+        loop = AgentLoop(
+            provider=provider, tool_executors={}, config=AgentLoopConfig(token_budget=100)
+        )
 
         await loop.run("system", "do work")
         # Budget is 100 tokens; first call uses 120 -> budget check fires on turn 2

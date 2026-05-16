@@ -229,7 +229,9 @@ class EvalFramework:
             }
         )
 
-    async def get_results(self, task_name: str | None = None, limit: int = DEFAULT_QUERY_LIMIT) -> list[EvalResult]:
+    async def get_results(
+        self, task_name: str | None = None, limit: int = DEFAULT_QUERY_LIMIT
+    ) -> list[EvalResult]:
         """Retrieve stored eval results (REQ-16.5)."""
         rows = await self._storage.list_eval_results(task_name=task_name, limit=limit)
         return [self._row_to_result(row) for row in rows]

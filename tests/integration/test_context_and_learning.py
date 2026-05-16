@@ -53,7 +53,6 @@ from guild.provider.base import LLMResponse
 from guild.storage.sqlite import Storage
 from guild.storage.learnings import LearningRecord
 
-
 pytestmark = pytest.mark.integration
 
 
@@ -124,9 +123,11 @@ class TestPersistentContext:
         store1 = Storage(db_path)
         await store1.connect()
         lid = await store1.add_learning(
-            LearningRecord(category="pattern",
-            content="Use guard clauses",
-            confidence=0.7,)
+            LearningRecord(
+                category="pattern",
+                content="Use guard clauses",
+                confidence=0.7,
+            )
         )
         await store1.close()
 
@@ -260,10 +261,12 @@ class TestSharedKnowledge:
         await storage.create_task("task-a", "Build API")
         await storage.update_task("task-a", assigned_agent="agent-a")
         lid = await storage.add_learning(
-            LearningRecord(category="pattern",
-            content="Always validate request bodies",
-            confidence=0.7,
-            source_task_id="task-a",)
+            LearningRecord(
+                category="pattern",
+                content="Always validate request bodies",
+                confidence=0.7,
+                source_task_id="task-a",
+            )
         )
 
         # Agent B queries learnings before its own task
@@ -583,9 +586,11 @@ class TestKnowledgeCategories:
         ids = []
         for cat in categories:
             lid = await storage.add_learning(
-                LearningRecord(category=cat,
-                content=f"Content for {cat}",
-                confidence=0.5,)
+                LearningRecord(
+                    category=cat,
+                    content=f"Content for {cat}",
+                    confidence=0.5,
+                )
             )
             ids.append(lid)
 
@@ -596,8 +601,12 @@ class TestKnowledgeCategories:
     @pytest.mark.ac("AC-09.2.2")
     async def test_filter_by_category(self, storage: Storage) -> None:
         """list_learnings(category=...) returns only matching entries."""
-        await storage.add_learning(LearningRecord(category="pattern", content="Use early returns", confidence=0.6))
-        await storage.add_learning(LearningRecord(category="tool_tip", content="Use --verbose", confidence=0.6))
+        await storage.add_learning(
+            LearningRecord(category="pattern", content="Use early returns", confidence=0.6)
+        )
+        await storage.add_learning(
+            LearningRecord(category="tool_tip", content="Use --verbose", confidence=0.6)
+        )
         await storage.add_learning(
             LearningRecord(category="anti_pattern", content="Avoid busy waits", confidence=0.6)
         )
@@ -649,7 +658,9 @@ class TestConfidenceScoring:
     @pytest.mark.ac("AC-09.3.1")
     async def test_initial_confidence(self, storage: Storage) -> None:
         """New learning starts at default confidence of 0.3."""
-        lid = await storage.add_learning(LearningRecord(category="pattern", content="Test", confidence=0.3))
+        lid = await storage.add_learning(
+            LearningRecord(category="pattern", content="Test", confidence=0.3)
+        )
         learning = await storage.get_learning(lid)
         assert learning is not None
         assert learning["confidence"] == pytest.approx(0.3)
@@ -657,7 +668,9 @@ class TestConfidenceScoring:
     @pytest.mark.ac("AC-09.3.2")
     async def test_validate_increases_confidence(self, storage: Storage) -> None:
         """Each validation call increases confidence by the increment constant."""
-        lid = await storage.add_learning(LearningRecord(category="pattern", content="A", confidence=0.3))
+        lid = await storage.add_learning(
+            LearningRecord(category="pattern", content="A", confidence=0.3)
+        )
 
         await storage.validate_learning(lid)
         after = await storage.get_learning(lid)
@@ -668,7 +681,9 @@ class TestConfidenceScoring:
     @pytest.mark.ac("AC-09.3.3")
     async def test_invalidate_decreases_confidence(self, storage: Storage) -> None:
         """Invalidation decreases confidence by the decrement constant."""
-        lid = await storage.add_learning(LearningRecord(category="pattern", content="B", confidence=0.6))
+        lid = await storage.add_learning(
+            LearningRecord(category="pattern", content="B", confidence=0.6)
+        )
 
         await storage.invalidate_learning(lid)
         after = await storage.get_learning(lid)
@@ -679,7 +694,9 @@ class TestConfidenceScoring:
     @pytest.mark.ac("AC-09.3.2")
     async def test_confidence_capped_at_one(self, storage: Storage) -> None:
         """Confidence cannot exceed 1.0 no matter how many validations."""
-        lid = await storage.add_learning(LearningRecord(category="pattern", content="C", confidence=0.95))
+        lid = await storage.add_learning(
+            LearningRecord(category="pattern", content="C", confidence=0.95)
+        )
 
         await storage.validate_learning(lid)
         await storage.validate_learning(lid)
@@ -692,7 +709,9 @@ class TestConfidenceScoring:
     @pytest.mark.ac("AC-09.3.3")
     async def test_confidence_floored_at_zero(self, storage: Storage) -> None:
         """Confidence cannot go below 0.0 on repeated invalidation."""
-        lid = await storage.add_learning(LearningRecord(category="pattern", content="D", confidence=0.1))
+        lid = await storage.add_learning(
+            LearningRecord(category="pattern", content="D", confidence=0.1)
+        )
 
         await storage.invalidate_learning(lid)
         await storage.invalidate_learning(lid)
@@ -705,7 +724,9 @@ class TestConfidenceScoring:
     @pytest.mark.ac("AC-09.3.3")
     async def test_decay_reduces_stale_confidence(self, storage: Storage) -> None:
         """decay_learnings reduces confidence of entries not validated recently."""
-        lid = await storage.add_learning(LearningRecord(category="pattern", content="E", confidence=0.8))
+        lid = await storage.add_learning(
+            LearningRecord(category="pattern", content="E", confidence=0.8)
+        )
 
         # Backdate the created_at to simulate age
         old_date = (datetime.now(UTC) - timedelta(days=45)).isoformat()
@@ -737,7 +758,9 @@ class TestConfidenceScoring:
     @pytest.mark.ac("AC-09.3.2")
     async def test_confidence_lifecycle(self, storage: Storage) -> None:
         """Full lifecycle: add -> validate x2 -> invalidate -> verify final score."""
-        lid = await storage.add_learning(LearningRecord(category="tool_tip", content="Lifecycle", confidence=0.3))
+        lid = await storage.add_learning(
+            LearningRecord(category="tool_tip", content="Lifecycle", confidence=0.3)
+        )
 
         await storage.validate_learning(lid)  # 0.3 + 0.1 = 0.4
         await storage.validate_learning(lid)  # 0.4 + 0.1 = 0.5
@@ -785,8 +808,12 @@ class TestLearningInjection:
     @pytest.mark.ac("AC-09.4.2")
     async def test_low_confidence_learnings_excluded_from_injection(self, storage: Storage) -> None:
         """Learnings below the confidence threshold are not injected."""
-        await storage.add_learning(LearningRecord(category="pattern", content="Dubious pattern", confidence=0.2))
-        await storage.add_learning(LearningRecord(category="pattern", content="Solid pattern", confidence=0.9))
+        await storage.add_learning(
+            LearningRecord(category="pattern", content="Dubious pattern", confidence=0.2)
+        )
+        await storage.add_learning(
+            LearningRecord(category="pattern", content="Solid pattern", confidence=0.9)
+        )
 
         learnings = await storage.list_learnings()
         injection = format_learnings_for_injection(learnings)
@@ -797,7 +824,9 @@ class TestLearningInjection:
     @pytest.mark.ac("AC-09.4.1")
     async def test_injection_into_dynamic_prompt_section(self, storage: Storage) -> None:
         """Injected learnings appear in the dynamic (not static) prompt section."""
-        await storage.add_learning(LearningRecord(category="pattern", content="Use early returns", confidence=0.8))
+        await storage.add_learning(
+            LearningRecord(category="pattern", content="Use early returns", confidence=0.8)
+        )
         learnings = await storage.list_learnings(min_confidence=MIN_INJECTION_CONFIDENCE)
         injection = format_learnings_for_injection(learnings)
 
@@ -817,9 +846,11 @@ class TestLearningInjection:
         store1 = Storage(db_path)
         await store1.connect()
         await store1.add_learning(
-            LearningRecord(category="domain_knowledge",
-            content="API rate limit is 100 req/min",
-            confidence=0.85,)
+            LearningRecord(
+                category="domain_knowledge",
+                content="API rate limit is 100 req/min",
+                confidence=0.85,
+            )
         )
         await store1.close()
 
@@ -843,8 +874,12 @@ class TestHumanLearningManagement:
     @pytest.mark.ac("AC-09.5.1")
     async def test_browse_learnings(self, storage: Storage) -> None:
         """List learnings returns all stored items for human review."""
-        await storage.add_learning(LearningRecord(category="pattern", content="Pattern A", confidence=0.5))
-        await storage.add_learning(LearningRecord(category="anti_pattern", content="Anti B", confidence=0.3))
+        await storage.add_learning(
+            LearningRecord(category="pattern", content="Pattern A", confidence=0.5)
+        )
+        await storage.add_learning(
+            LearningRecord(category="anti_pattern", content="Anti B", confidence=0.3)
+        )
 
         all_learnings = await storage.list_learnings()
         assert len(all_learnings) == 2
@@ -854,7 +889,9 @@ class TestHumanLearningManagement:
     @pytest.mark.ac("AC-09.5.2")
     async def test_approve_learning_boosts_confidence(self, storage: Storage) -> None:
         """Approving (validating) a learning increases its confidence."""
-        lid = await storage.add_learning(LearningRecord(category="pattern", content="Use async", confidence=0.4))
+        lid = await storage.add_learning(
+            LearningRecord(category="pattern", content="Use async", confidence=0.4)
+        )
         await storage.validate_learning(lid)
 
         learning = await storage.get_learning(lid)
@@ -864,7 +901,9 @@ class TestHumanLearningManagement:
     @pytest.mark.ac("AC-09.5.3")
     async def test_reject_learning_deletes_it(self, storage: Storage) -> None:
         """Rejecting a learning removes it from storage entirely."""
-        lid = await storage.add_learning(LearningRecord(category="tool_tip", content="Bad tip", confidence=0.3))
+        lid = await storage.add_learning(
+            LearningRecord(category="tool_tip", content="Bad tip", confidence=0.3)
+        )
         await storage.delete_learning(lid)
 
         learning = await storage.get_learning(lid)
@@ -873,8 +912,12 @@ class TestHumanLearningManagement:
     @pytest.mark.ac("AC-09.5.3")
     async def test_reject_removes_from_listing(self, storage: Storage) -> None:
         """After rejection, the learning no longer appears in list_learnings."""
-        lid = await storage.add_learning(LearningRecord(category="pattern", content="Reject me", confidence=0.5))
-        await storage.add_learning(LearningRecord(category="pattern", content="Keep me", confidence=0.6))
+        lid = await storage.add_learning(
+            LearningRecord(category="pattern", content="Reject me", confidence=0.5)
+        )
+        await storage.add_learning(
+            LearningRecord(category="pattern", content="Keep me", confidence=0.6)
+        )
         await storage.delete_learning(lid)
 
         remaining = await storage.list_learnings()
@@ -885,8 +928,12 @@ class TestHumanLearningManagement:
     async def test_filter_learnings_by_category(self, storage: Storage) -> None:
         """Browsing can be filtered by category for focused review."""
         await storage.add_learning(LearningRecord(category="pattern", content="P1", confidence=0.5))
-        await storage.add_learning(LearningRecord(category="anti_pattern", content="AP1", confidence=0.5))
-        await storage.add_learning(LearningRecord(category="tool_tip", content="T1", confidence=0.5))
+        await storage.add_learning(
+            LearningRecord(category="anti_pattern", content="AP1", confidence=0.5)
+        )
+        await storage.add_learning(
+            LearningRecord(category="tool_tip", content="T1", confidence=0.5)
+        )
 
         patterns = await storage.list_learnings(category="pattern")
         assert len(patterns) == 1
@@ -907,10 +954,12 @@ class TestCrossTaskLearning:
         await storage.create_task("task-A", "Build feature A")
         await storage.update_task("task-A", assigned_agent="agent-A")
         await storage.add_learning(
-            LearningRecord(category="pattern",
-            content="Validate all inputs at boundary",
-            confidence=0.8,
-            source_task_id="task-A",)
+            LearningRecord(
+                category="pattern",
+                content="Validate all inputs at boundary",
+                confidence=0.8,
+                source_task_id="task-A",
+            )
         )
 
         # Task B's agent queries learnings -- no task filter
@@ -962,15 +1011,19 @@ class TestBlockLevelScope:
     async def test_scoped_learning_stored_and_filtered(self, storage: Storage) -> None:
         """Learning with scope='parser' only appears when filtered by that scope."""
         await storage.add_learning(
-            LearningRecord(category="pattern",
-            content="Use recursive descent",
-            confidence=0.7,
-            scope="parser",)
+            LearningRecord(
+                category="pattern",
+                content="Use recursive descent",
+                confidence=0.7,
+                scope="parser",
+            )
         )
         await storage.add_learning(
-            LearningRecord(category="pattern",
-            content="Global pattern",
-            confidence=0.7,)
+            LearningRecord(
+                category="pattern",
+                content="Global pattern",
+                confidence=0.7,
+            )
         )
 
         parser_learnings = await storage.list_learnings(scope="parser")
@@ -983,7 +1036,9 @@ class TestBlockLevelScope:
         await storage.add_learning(
             LearningRecord(category="pattern", content="Scoped A", confidence=0.6, scope="block-a")
         )
-        await storage.add_learning(LearningRecord(category="pattern", content="Global B", confidence=0.6))
+        await storage.add_learning(
+            LearningRecord(category="pattern", content="Global B", confidence=0.6)
+        )
 
         all_learnings = await storage.list_learnings()
         assert len(all_learnings) == 2
@@ -992,15 +1047,19 @@ class TestBlockLevelScope:
     async def test_suggest_prompt_refinements_scoped(self, storage: Storage) -> None:
         """suggest_prompt_refinements respects block_name scope."""
         await storage.add_learning(
-            LearningRecord(category="anti_pattern",
-            content="Avoid nested callbacks",
-            confidence=0.8,
-            scope="async-block",)
+            LearningRecord(
+                category="anti_pattern",
+                content="Avoid nested callbacks",
+                confidence=0.8,
+                scope="async-block",
+            )
         )
         await storage.add_learning(
-            LearningRecord(category="anti_pattern",
-            content="Global anti-pattern",
-            confidence=0.8,)
+            LearningRecord(
+                category="anti_pattern",
+                content="Global anti-pattern",
+                confidence=0.8,
+            )
         )
 
         suggestions = await suggest_prompt_refinements(storage, block_name="async-block")
@@ -1056,7 +1115,9 @@ class TestLearningDecay:
     @pytest.mark.ac("AC-09.8.1")
     async def test_repeated_decay_floors_at_zero(self, storage: Storage) -> None:
         """Multiple decay cycles cannot push confidence below 0.0."""
-        lid = await storage.add_learning(LearningRecord(category="pattern", content="Fading", confidence=0.1))
+        lid = await storage.add_learning(
+            LearningRecord(category="pattern", content="Fading", confidence=0.1)
+        )
         old_date = (datetime.now(UTC) - timedelta(days=60)).isoformat()
         assert storage._db is not None
         await storage._db.execute(
@@ -1109,9 +1170,11 @@ class TestPromptRefinementSuggestions:
     async def test_anti_pattern_generates_guard_suggestion(self, storage: Storage) -> None:
         """Anti-patterns produce 'Add guard against: ...' suggestions."""
         await storage.add_learning(
-            LearningRecord(category="anti_pattern",
-            content="Avoid busy waits in async code",
-            confidence=0.8,)
+            LearningRecord(
+                category="anti_pattern",
+                content="Avoid busy waits in async code",
+                confidence=0.8,
+            )
         )
         suggestions = await suggest_prompt_refinements(storage)
         assert len(suggestions) == 1
@@ -1121,9 +1184,11 @@ class TestPromptRefinementSuggestions:
     async def test_tool_tip_generates_include_suggestion(self, storage: Storage) -> None:
         """Tool tips produce 'Include tip in prompt: ...' suggestions."""
         await storage.add_learning(
-            LearningRecord(category="tool_tip",
-            content="Use --dry-run for destructive commands",
-            confidence=0.7,)
+            LearningRecord(
+                category="tool_tip",
+                content="Use --dry-run for destructive commands",
+                confidence=0.7,
+            )
         )
         suggestions = await suggest_prompt_refinements(storage)
         assert len(suggestions) == 1
@@ -1132,7 +1197,9 @@ class TestPromptRefinementSuggestions:
     @pytest.mark.ac("AC-09.9.2")
     async def test_patterns_and_domain_knowledge_not_suggested(self, storage: Storage) -> None:
         """Only anti_pattern and tool_tip categories generate suggestions."""
-        await storage.add_learning(LearningRecord(category="pattern", content="Use guard clauses", confidence=0.9))
+        await storage.add_learning(
+            LearningRecord(category="pattern", content="Use guard clauses", confidence=0.9)
+        )
         await storage.add_learning(
             LearningRecord(category="domain_knowledge", content="API uses REST", confidence=0.9)
         )
@@ -1143,9 +1210,11 @@ class TestPromptRefinementSuggestions:
     async def test_low_confidence_learnings_not_suggested(self, storage: Storage) -> None:
         """Learnings below MIN_INJECTION_CONFIDENCE are excluded from suggestions."""
         await storage.add_learning(
-            LearningRecord(category="anti_pattern",
-            content="Maybe avoid this",
-            confidence=0.2,)
+            LearningRecord(
+                category="anti_pattern",
+                content="Maybe avoid this",
+                confidence=0.2,
+            )
         )
         suggestions = await suggest_prompt_refinements(storage)
         assert suggestions == []
@@ -1154,19 +1223,25 @@ class TestPromptRefinementSuggestions:
     async def test_mixed_suggestions(self, storage: Storage) -> None:
         """Multiple qualifying learnings produce multiple suggestions."""
         await storage.add_learning(
-            LearningRecord(category="anti_pattern",
-            content="No bare except",
-            confidence=0.8,)
+            LearningRecord(
+                category="anti_pattern",
+                content="No bare except",
+                confidence=0.8,
+            )
         )
         await storage.add_learning(
-            LearningRecord(category="tool_tip",
-            content="Pass --verbose to debug",
-            confidence=0.6,)
+            LearningRecord(
+                category="tool_tip",
+                content="Pass --verbose to debug",
+                confidence=0.6,
+            )
         )
         await storage.add_learning(
-            LearningRecord(category="pattern",
-            content="Ignored pattern",
-            confidence=0.9,)
+            LearningRecord(
+                category="pattern",
+                content="Ignored pattern",
+                confidence=0.9,
+            )
         )
         suggestions = await suggest_prompt_refinements(storage)
         assert len(suggestions) == 2
@@ -1304,10 +1379,12 @@ class TestScopedLearningNotInjectedElsewhere:
     ) -> None:
         """Learning scoped to 'database' is not returned for 'cli' scope."""
         await storage.add_learning(
-            LearningRecord(category="pattern",
-            content="Always use transactions",
-            confidence=0.8,
-            scope="database",)
+            LearningRecord(
+                category="pattern",
+                content="Always use transactions",
+                confidence=0.8,
+                scope="database",
+            )
         )
 
         cli_learnings = await storage.list_learnings(scope="cli")
@@ -1432,10 +1509,12 @@ class TestUnscopedLearningsAvailableToAll:
     async def test_unscoped_learning_returned_for_any_scope(self, storage: Storage) -> None:
         """A learning with scope=None is returned by list_learnings regardless of scope filter."""
         await storage.add_learning(
-            LearningRecord(category="pattern",
-            content="Always validate inputs",
-            confidence=0.8,
-            scope=None,)
+            LearningRecord(
+                category="pattern",
+                content="Always validate inputs",
+                confidence=0.8,
+                scope=None,
+            )
         )
 
         # Should be returned with no scope filter

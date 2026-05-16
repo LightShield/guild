@@ -123,7 +123,9 @@ class Notifier:
     ) -> None:
         """Send to configured webhook URL via HTTP POST."""
         if not self._webhook_url:
-            logger.warning("Webhook URL not configured for notification: %s", message[:LOG_PREVIEW_MAX_CHARS])
+            logger.warning(
+                "Webhook URL not configured for notification: %s", message[:LOG_PREVIEW_MAX_CHARS]
+            )
             return
 
         payload: dict[str, Any] = {

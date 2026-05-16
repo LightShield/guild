@@ -4,7 +4,12 @@ from __future__ import annotations
 
 import pytest
 
-from guild.permissions.checker import HARDCODED_NEVER, PermissionChecker, PermissionConfig, PermissionTier
+from guild.permissions.checker import (
+    HARDCODED_NEVER,
+    PermissionChecker,
+    PermissionConfig,
+    PermissionTier,
+)
 
 # ---------------------------------------------------------------------------
 # REQ-03.1: Tier 0 "Nothing" — no tool use at all
@@ -106,25 +111,37 @@ class TestScopedTier:
 
     def test_scoped_tier_allows_tools_in_allowlist(self) -> None:
         """Tool in allowlist is permitted."""
-        checker = PermissionChecker(PermissionConfig(tier=PermissionTier.SCOPED,
-            allowed_tools=["file_read", "file_write"],
-            allowed_paths=["/project"],))
+        checker = PermissionChecker(
+            PermissionConfig(
+                tier=PermissionTier.SCOPED,
+                allowed_tools=["file_read", "file_write"],
+                allowed_paths=["/project"],
+            )
+        )
         result = checker.check("file_read", "agent-1", {"path": "/project/src/main.py"})
         assert result is True
 
     def test_scoped_tier_blocks_tools_not_in_allowlist(self) -> None:
         """Tool not in allowlist is denied."""
-        checker = PermissionChecker(PermissionConfig(tier=PermissionTier.SCOPED,
-            allowed_tools=["file_read"],
-            allowed_paths=["/project"],))
+        checker = PermissionChecker(
+            PermissionConfig(
+                tier=PermissionTier.SCOPED,
+                allowed_tools=["file_read"],
+                allowed_paths=["/project"],
+            )
+        )
         result = checker.check("shell_exec", "agent-1", {"cmd": "rm -rf /"})
         assert result is False
 
     def test_scoped_tier_checks_path_boundaries(self) -> None:
         """Tool in allowlist with path inside boundary is allowed."""
-        checker = PermissionChecker(PermissionConfig(tier=PermissionTier.SCOPED,
-            allowed_tools=["file_write"],
-            allowed_paths=["/home/user/project"],))
+        checker = PermissionChecker(
+            PermissionConfig(
+                tier=PermissionTier.SCOPED,
+                allowed_tools=["file_write"],
+                allowed_paths=["/home/user/project"],
+            )
+        )
         result = checker.check(
             "file_write",
             "agent-1",
@@ -134,9 +151,13 @@ class TestScopedTier:
 
     def test_scoped_tier_blocks_path_outside_boundary(self) -> None:
         """Tool in allowlist but path outside boundary is denied."""
-        checker = PermissionChecker(PermissionConfig(tier=PermissionTier.SCOPED,
-            allowed_tools=["file_write"],
-            allowed_paths=["/home/user/project"],))
+        checker = PermissionChecker(
+            PermissionConfig(
+                tier=PermissionTier.SCOPED,
+                allowed_tools=["file_write"],
+                allowed_paths=["/home/user/project"],
+            )
+        )
         result = checker.check(
             "file_write",
             "agent-1",
@@ -146,9 +167,13 @@ class TestScopedTier:
 
     def test_scoped_allows_when_no_path_in_args(self) -> None:
         """Tool in allowlist with no path arg is allowed (no boundary check)."""
-        checker = PermissionChecker(PermissionConfig(tier=PermissionTier.SCOPED,
-            allowed_tools=["search"],
-            allowed_paths=["/project"],))
+        checker = PermissionChecker(
+            PermissionConfig(
+                tier=PermissionTier.SCOPED,
+                allowed_tools=["search"],
+                allowed_paths=["/project"],
+            )
+        )
         result = checker.check("search", "agent-1", {"query": "hello"})
         assert result is True
 
@@ -458,8 +483,12 @@ class TestPermissionsCheckerEdges:
 
     def test_scoped_path_exact_match(self) -> None:
         """Scoped tier allows path that exactly matches allowed path (line 224)."""
-        checker = PermissionChecker(PermissionConfig(tier=PermissionTier.SCOPED,
-            allowed_tools=["file_read"],
-            allowed_paths=["/exact/path"],))
+        checker = PermissionChecker(
+            PermissionConfig(
+                tier=PermissionTier.SCOPED,
+                allowed_tools=["file_read"],
+                allowed_paths=["/exact/path"],
+            )
+        )
         result = checker.check("file_read", "agent-1", {"path": "/exact/path"})
         assert result is True

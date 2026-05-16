@@ -15,7 +15,6 @@ from guild.storage.learnings import LearningRecord
 from guild.storage.questions import QuestionRecord
 
 
-
 @pytest.fixture
 async def storage(tmp_path: Path) -> Storage:
     """Create a connected Storage instance for testing."""
@@ -193,10 +192,12 @@ class TestDecisions:
     async def test_log_decision_persists_to_db(self, storage: Storage) -> None:
         """log_decision stores a decision record in the database."""
         await storage.log_decision(
-            DecisionRecord(task_id="t1",
-            agent_id="a1",
-            decision="Use SQLite over PostgreSQL",
-            rationale="Simpler deployment, no server needed",)
+            DecisionRecord(
+                task_id="t1",
+                agent_id="a1",
+                decision="Use SQLite over PostgreSQL",
+                rationale="Simpler deployment, no server needed",
+            )
         )
         decisions = await storage.list_decisions()
         assert len(decisions) == 1
@@ -209,11 +210,13 @@ class TestDecisions:
     async def test_log_decision_with_alternatives(self, storage: Storage) -> None:
         """log_decision stores rejected alternatives as JSON."""
         await storage.log_decision(
-            DecisionRecord(task_id="t1",
-            agent_id="a1",
-            decision="Use async/await",
-            rationale="Better concurrency model",
-            alternatives=["threading", "multiprocessing"],)
+            DecisionRecord(
+                task_id="t1",
+                agent_id="a1",
+                decision="Use async/await",
+                rationale="Better concurrency model",
+                alternatives=["threading", "multiprocessing"],
+            )
         )
         decisions = await storage.list_decisions()
         assert len(decisions) == 1
@@ -225,22 +228,28 @@ class TestDecisions:
     async def test_list_decisions_returns_recent_first(self, storage: Storage) -> None:
         """Decisions are returned most-recent first."""
         await storage.log_decision(
-            DecisionRecord(task_id="t1",
-            agent_id="a1",
-            decision="First decision",
-            rationale="First reason",)
+            DecisionRecord(
+                task_id="t1",
+                agent_id="a1",
+                decision="First decision",
+                rationale="First reason",
+            )
         )
         await storage.log_decision(
-            DecisionRecord(task_id="t1",
-            agent_id="a1",
-            decision="Second decision",
-            rationale="Second reason",)
+            DecisionRecord(
+                task_id="t1",
+                agent_id="a1",
+                decision="Second decision",
+                rationale="Second reason",
+            )
         )
         await storage.log_decision(
-            DecisionRecord(task_id="t1",
-            agent_id="a1",
-            decision="Third decision",
-            rationale="Third reason",)
+            DecisionRecord(
+                task_id="t1",
+                agent_id="a1",
+                decision="Third decision",
+                rationale="Third reason",
+            )
         )
         decisions = await storage.list_decisions()
         assert decisions[0]["decision"] == "Third decision"
@@ -249,16 +258,20 @@ class TestDecisions:
     async def test_list_decisions_filters_by_task_id(self, storage: Storage) -> None:
         """list_decisions with task_id returns only that task's decisions."""
         await storage.log_decision(
-            DecisionRecord(task_id="t1",
-            agent_id="a1",
-            decision="Decision for t1",
-            rationale="Reason for t1",)
+            DecisionRecord(
+                task_id="t1",
+                agent_id="a1",
+                decision="Decision for t1",
+                rationale="Reason for t1",
+            )
         )
         await storage.log_decision(
-            DecisionRecord(task_id="t2",
-            agent_id="a2",
-            decision="Decision for t2",
-            rationale="Reason for t2",)
+            DecisionRecord(
+                task_id="t2",
+                agent_id="a2",
+                decision="Decision for t2",
+                rationale="Reason for t2",
+            )
         )
         t1_decisions = await storage.list_decisions(task_id="t1")
         assert len(t1_decisions) == 1
@@ -268,10 +281,12 @@ class TestDecisions:
         """list_decisions respects the limit parameter."""
         for i in range(10):
             await storage.log_decision(
-                DecisionRecord(task_id="t1",
-                agent_id="a1",
-                decision=f"Decision {i}",
-                rationale=f"Reason {i}",)
+                DecisionRecord(
+                    task_id="t1",
+                    agent_id="a1",
+                    decision=f"Decision {i}",
+                    rationale=f"Reason {i}",
+                )
             )
         decisions = await storage.list_decisions(limit=3)
         assert len(decisions) == 3
@@ -390,9 +405,11 @@ class TestLearningsCategory:
     async def test_add_learning_with_category(self, storage: Storage) -> None:
         """add_learning stores a learning with the correct category."""
         lid = await storage.add_learning(
-            LearningRecord(category="pattern",
-            content="Always validate inputs before processing",
-            source_task_id="task-1",)
+            LearningRecord(
+                category="pattern",
+                content="Always validate inputs before processing",
+                source_task_id="task-1",
+            )
         )
         assert lid is not None
         learning = await storage.get_learning(lid)
@@ -441,7 +458,9 @@ class TestLearningsConfidence:
 
     async def test_confidence_capped_at_1(self, storage: Storage) -> None:
         """Confidence never exceeds 1.0 after multiple validations."""
-        lid = await storage.add_learning(LearningRecord(category="pattern", content="Test", confidence=0.95))
+        lid = await storage.add_learning(
+            LearningRecord(category="pattern", content="Test", confidence=0.95)
+        )
         await storage.validate_learning(lid)
         learning = await storage.get_learning(lid)
         assert learning["confidence"] == pytest.approx(1.0)
@@ -452,7 +471,9 @@ class TestLearningsConfidence:
 
     async def test_confidence_floored_at_0(self, storage: Storage) -> None:
         """Confidence never goes below 0.0 after multiple invalidations."""
-        lid = await storage.add_learning(LearningRecord(category="pattern", content="Test", confidence=0.1))
+        lid = await storage.add_learning(
+            LearningRecord(category="pattern", content="Test", confidence=0.1)
+        )
         await storage.invalidate_learning(lid)
         learning = await storage.get_learning(lid)
         assert learning["confidence"] == pytest.approx(0.0)
@@ -463,7 +484,9 @@ class TestLearningsConfidence:
 
     async def test_confidence_caps_at_1_after_many_validates(self, storage: Storage) -> None:
         """Repeated validate_learning calls never push confidence above 1.0."""
-        lid = await storage.add_learning(LearningRecord(category="pattern", content="Solid insight"))
+        lid = await storage.add_learning(
+            LearningRecord(category="pattern", content="Solid insight")
+        )
         # Start at 0.3, validate 10 times (would be 1.3 without cap)
         for _ in range(10):
             await storage.validate_learning(lid)
@@ -473,7 +496,9 @@ class TestLearningsConfidence:
 
     async def test_confidence_floors_at_0_after_many_invalidates(self, storage: Storage) -> None:
         """Repeated invalidate_learning calls never push confidence below 0.0."""
-        lid = await storage.add_learning(LearningRecord(category="anti_pattern", content="Bad habit"))
+        lid = await storage.add_learning(
+            LearningRecord(category="anti_pattern", content="Bad habit")
+        )
         # Start at 0.3, invalidate 10 times (would be -1.2 without floor)
         for _ in range(10):
             await storage.invalidate_learning(lid)
@@ -553,7 +578,17 @@ class TestStorageNotConnected:
             # Token summary
             ("get_token_summary", ()),
             # Questions
-            ("insert_question", (QuestionRecord(question_id="q1", question="why?", context="ctx", created_at="2024-01-01T00:00:00"),)),
+            (
+                "insert_question",
+                (
+                    QuestionRecord(
+                        question_id="q1",
+                        question="why?",
+                        context="ctx",
+                        created_at="2024-01-01T00:00:00",
+                    ),
+                ),
+            ),
             ("list_questions", ()),
             ("get_question", ("q1",)),
             ("answer_question", ("q1", "because")),
@@ -694,11 +729,13 @@ class TestStorageEdgeCases:
         store = Storage(tmp_path / "test.db")
         await store.connect()
         await store.insert_question(
-            QuestionRecord(question_id="q1",
-            question="What?",
-            context="ctx",
-            created_at="2024-01-01T00:00:00",
-            agent_id="a1",)
+            QuestionRecord(
+                question_id="q1",
+                question="What?",
+                context="ctx",
+                created_at="2024-01-01T00:00:00",
+                agent_id="a1",
+            )
         )
         questions = await store.list_questions(answered=None)
         assert len(questions) >= 1

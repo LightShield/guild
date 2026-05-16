@@ -420,9 +420,7 @@ class TestOllamaModelNotFoundFromE2E:
         """generate() with model='nonexistent-model-xyz' raises descriptive error."""
         from unittest.mock import patch
 
-        provider = OllamaProvider(
-            base_url="http://localhost:11434", model="nonexistent-model-xyz"
-        )
+        provider = OllamaProvider(base_url="http://localhost:11434", model="nonexistent-model-xyz")
 
         mock_client = AsyncMock()
         mock_client.chat = AsyncMock(

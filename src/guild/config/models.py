@@ -46,9 +46,7 @@ class GuildConfig(ConfigsLoader):  # type: ignore[misc]
         env="GUILD_MODEL",
         description="Model name",
     )
-    temperature: float = Field(
-        default=0.7, section="provider", description="Sampling temperature"
-    )
+    temperature: float = Field(default=0.7, section="provider", description="Sampling temperature")
     max_tokens: int = Field(
         default=DEFAULT_MAX_TOKENS,
         section="provider",

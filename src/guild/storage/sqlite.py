@@ -15,7 +15,11 @@ from typing import TYPE_CHECKING, Any
 import aiosqlite
 from logger_python import get_logger
 
-from guild.config.constants import DEFAULT_MEMORY_LIST_LIMIT, DEFAULT_QUERY_LIMIT, PRUNING_RETENTION_DAYS
+from guild.config.constants import (
+    DEFAULT_MEMORY_LIST_LIMIT,
+    DEFAULT_QUERY_LIMIT,
+    PRUNING_RETENTION_DAYS,
+)
 from guild.storage.audit import AuditOps, DecisionRecord
 from guild.storage.checkpoints import CheckpointOps
 from guild.storage.learnings import LearningOps, LearningRecord
@@ -441,7 +445,9 @@ class Storage:
         assert self._memories is not None
         return await self._memories.get_memory(memory_id)
 
-    async def list_memory_summaries(self, limit: int = DEFAULT_MEMORY_LIST_LIMIT) -> list[dict[str, Any]]:
+    async def list_memory_summaries(
+        self, limit: int = DEFAULT_MEMORY_LIST_LIMIT
+    ) -> list[dict[str, Any]]:
         """List memory summaries ordered by last_verified descending.
 
         Returns list of dicts with keys: id, summary, verified.

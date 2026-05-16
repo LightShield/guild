@@ -8,7 +8,11 @@ from typing import Any
 from guild.storage.connection import DBConnection
 from logger_python import get_logger
 
-from guild.config.constants import DEFAULT_MEMORY_LIST_LIMIT, MEMORY_SUMMARY_MAX_CHARS, PRUNING_RETENTION_DAYS
+from guild.config.constants import (
+    DEFAULT_MEMORY_LIST_LIMIT,
+    MEMORY_SUMMARY_MAX_CHARS,
+    PRUNING_RETENTION_DAYS,
+)
 
 __all__ = ["MemoryOps"]
 
@@ -53,7 +57,9 @@ class MemoryOps:
             return None
         return dict(row)
 
-    async def list_memory_summaries(self, limit: int = DEFAULT_MEMORY_LIST_LIMIT) -> list[dict[str, Any]]:
+    async def list_memory_summaries(
+        self, limit: int = DEFAULT_MEMORY_LIST_LIMIT
+    ) -> list[dict[str, Any]]:
         """List memory summaries ordered by last_verified descending.
 
         Returns list of dicts with keys: id, summary, verified.

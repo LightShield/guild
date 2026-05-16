@@ -441,7 +441,6 @@ class TestResourceDetection:
                 mode=SchedulingMode.POLITE,
                 cpu_reader=lambda: 65.5,
                 activity_detector=lambda: ActivityState.IDLE,
-        
             )
         )
         assert monitor.get_cpu_percent() == 65.5
@@ -459,7 +458,6 @@ class TestResourceDetection:
                 mode=SchedulingMode.POLITE,
                 gpu_reader=lambda: gpu_data,
                 activity_detector=lambda: ActivityState.IDLE,
-        
             )
         )
         status = monitor.get_gpu_status()
@@ -474,7 +472,6 @@ class TestResourceDetection:
             ResourceConfig(
                 mode=SchedulingMode.POLITE,
                 activity_detector=lambda: ActivityState.IDLE,
-        
             )
         )
         assert monitor.get_gpu_status() is None
@@ -491,7 +488,6 @@ class TestResourceDetection:
                 gpu_reader=lambda: gpu_data,
                 thermal_reader=lambda: thermal_data,
                 activity_detector=lambda: ActivityState.IDLE,
-        
             )
         )
         status = monitor.get_status()
@@ -518,7 +514,6 @@ class TestSchedulingModes:
                 mode=SchedulingMode.FULL,
                 activity_detector=lambda: ActivityState.ACTIVE,
                 cpu_reader=lambda: 95.0,
-        
             )
         )
         status = monitor.get_status()
@@ -539,7 +534,6 @@ class TestSchedulingModes:
                 thresholds=thresholds,
                 activity_detector=lambda: ActivityState.ACTIVE,
                 cpu_reader=lambda: 85.0,
-        
             )
         )
         status = monitor.get_status()
@@ -554,7 +548,6 @@ class TestSchedulingModes:
                 mode=SchedulingMode.STEALTH,
                 activity_detector=lambda: ActivityState.ACTIVE,
                 cpu_reader=lambda: 80.0,
-        
             )
         )
         status = monitor.get_status()
@@ -589,7 +582,6 @@ class TestPoliteDelay:
                 thresholds=thresholds,
                 activity_detector=lambda: ActivityState.ACTIVE,
                 cpu_reader=lambda: 90.0,
-        
             )
         )
         start = asyncio.get_event_loop().time()
@@ -607,7 +599,6 @@ class TestPoliteDelay:
                 thresholds=thresholds,
                 activity_detector=lambda: ActivityState.IDLE,
                 cpu_reader=lambda: 10.0,
-        
             )
         )
         start = asyncio.get_event_loop().time()
@@ -625,7 +616,6 @@ class TestPoliteDelay:
                 thresholds=thresholds,
                 activity_detector=lambda: ActivityState.ACTIVE,
                 cpu_reader=lambda: 90.0,
-        
             )
         )
         start = asyncio.get_event_loop().time()
@@ -661,7 +651,6 @@ class TestStealthPause:
                 thresholds=thresholds,
                 activity_detector=toggling_detector,
                 cpu_reader=lambda: 50.0,
-        
             )
         )
         await monitor.wait_if_throttled()
@@ -675,7 +664,6 @@ class TestStealthPause:
                 mode=SchedulingMode.STEALTH,
                 activity_detector=lambda: ActivityState.IDLE,
                 cpu_reader=lambda: 10.0,
-        
             )
         )
         start = asyncio.get_event_loop().time()
@@ -701,7 +689,6 @@ class TestStealthPause:
                 thresholds=thresholds,
                 activity_detector=timed_active_then_idle,
                 cpu_reader=lambda: 70.0,
-        
             )
         )
         start = asyncio.get_event_loop().time()
@@ -727,7 +714,6 @@ class TestThermalAwareness:
                 mode=SchedulingMode.POLITE,
                 thermal_reader=lambda: {"is_throttled": True, "cpu_temp_celsius": 95.0},
                 activity_detector=lambda: ActivityState.IDLE,
-        
             )
         )
         status = monitor.get_status()
@@ -742,7 +728,6 @@ class TestThermalAwareness:
                 mode=SchedulingMode.POLITE,
                 thermal_reader=lambda: {"is_throttled": False, "cpu_temp_celsius": 55.0},
                 activity_detector=lambda: ActivityState.IDLE,
-        
             )
         )
         status = monitor.get_status()
@@ -757,7 +742,6 @@ class TestThermalAwareness:
                 mode=SchedulingMode.POLITE,
                 thermal_reader=lambda: thermal,
                 activity_detector=lambda: ActivityState.IDLE,
-        
             )
         )
         status = monitor.get_status()
@@ -782,7 +766,6 @@ class TestThermalAwareness:
                 thresholds=thresholds,
                 gpu_reader=gpu_reader,
                 activity_detector=lambda: ActivityState.IDLE,
-        
             )
         )
         status = monitor.get_status()
@@ -906,7 +889,6 @@ class TestConfigurableThresholds:
                 thresholds=strict_thresholds,
                 gpu_reader=gpu_reader,
                 activity_detector=lambda: ActivityState.IDLE,
-        
             )
         )
         status = monitor.get_status()
@@ -921,7 +903,6 @@ class TestConfigurableThresholds:
                 thresholds=relaxed_thresholds,
                 gpu_reader=gpu_reader,
                 activity_detector=lambda: ActivityState.IDLE,
-        
             )
         )
         status2 = monitor2.get_status()
@@ -957,7 +938,6 @@ class TestResourceMonitorPolling:
                 thresholds=thresholds,
                 activity_detector=timed_detector,
                 cpu_reader=lambda: 50.0,
-        
             )
         )
         await monitor.wait_if_throttled()
@@ -986,7 +966,6 @@ class TestResourceMonitorPolling:
                 thresholds=thresholds,
                 activity_detector=counting_detector,
                 cpu_reader=lambda: 50.0,
-        
             )
         )
         await monitor.wait_if_throttled()
@@ -1007,7 +986,6 @@ class TestResourceMonitorPolling:
                 mode=SchedulingMode.FULL,
                 activity_detector=counting_detector,
                 cpu_reader=lambda: 90.0,
-        
             )
         )
         await monitor.wait_if_throttled()
@@ -1185,7 +1163,6 @@ class TestMemoryPressureDetection:
                 mode=SchedulingMode.POLITE,
                 cpu_reader=lambda: 95.0,
                 activity_detector=lambda: ActivityState.IDLE,
-        
             )
         )
         assert monitor.get_cpu_percent() == 95.0
@@ -1202,7 +1179,6 @@ class TestStealthPauseLogged:
                 mode=SchedulingMode.STEALTH,
                 activity_detector=lambda: ActivityState.ACTIVE,
                 cpu_reader=lambda: 50.0,
-        
             )
         )
         status = monitor.get_status()
@@ -1224,7 +1200,6 @@ class TestVramModelUnload:
                 thresholds=thresholds,
                 gpu_reader=gpu_reader,
                 activity_detector=lambda: ActivityState.IDLE,
-        
             )
         )
         status = monitor.get_status()
@@ -1244,7 +1219,6 @@ class TestResourceStatusGPU:
                 mode=SchedulingMode.POLITE,
                 gpu_reader=lambda: gpu_data,
                 activity_detector=lambda: ActivityState.IDLE,
-        
             )
         )
         status = monitor.get_status()

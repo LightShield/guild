@@ -49,9 +49,7 @@ def _simple_response(content: str = "Done.") -> LLMResponse:
     )
 
 
-def _tool_response(
-    tool_name: str, args: dict[str, Any], content: str = ""
-) -> LLMResponse:
+def _tool_response(tool_name: str, args: dict[str, Any], content: str = "") -> LLMResponse:
     """Shortcut for an LLM response that requests a single tool call."""
     return LLMResponse(
         content=content,
@@ -96,30 +94,20 @@ class TestControlSocket:
         reader, writer = await asyncio.open_unix_connection(str(sock_path))
 
         # Status
-        writer.write(
-            json.dumps({"type": "command", "action": "status"}).encode()
-            + b"\n"
-        )
+        writer.write(json.dumps({"type": "command", "action": "status"}).encode() + b"\n")
         await writer.drain()
         resp = json.loads(await reader.readline())
         assert resp["status"] == "running"
 
         # Message injection
-        writer.write(
-            json.dumps(
-                {"type": "message", "content": "focus on tests"}
-            ).encode()
-            + b"\n"
-        )
+        writer.write(json.dumps({"type": "message", "content": "focus on tests"}).encode() + b"\n")
         await writer.drain()
         resp = json.loads(await reader.readline())
         assert resp["status"] == "delivered"
         assert await cs.get_pending_message() == "focus on tests"
 
         # Kill
-        writer.write(
-            json.dumps({"type": "command", "action": "kill"}).encode() + b"\n"
-        )
+        writer.write(json.dumps({"type": "command", "action": "kill"}).encode() + b"\n")
         await writer.drain()
         resp = json.loads(await reader.readline())
         assert resp["status"] == "shutting_down"
@@ -221,7 +209,6 @@ class TestResourceAwareness:
                 mode=SchedulingMode.POLITE,
                 thresholds=thresholds,
                 gpu_reader=gpu_reader,
-        
             )
         )
         status = monitor.get_status()
@@ -232,7 +219,7 @@ class TestResourceAwareness:
     def test_no_pressure_no_throttle(self) -> None:
         """Low VRAM usage does not throttle."""
         from guild.daemon.resource import (
-    ResourceConfig,
+            ResourceConfig,
             ResourceMonitor,
             ResourceThresholds,
             SchedulingMode,
@@ -249,7 +236,6 @@ class TestResourceAwareness:
                 mode=SchedulingMode.POLITE,
                 thresholds=thresholds,
                 gpu_reader=gpu_reader,
-        
             )
         )
         status = monitor.get_status()
@@ -271,19 +257,14 @@ class TestAskTierPrompts:
 
         approvals: list[str] = []
 
-        def approve_all(
-            tool: str, agent_id: str, args: dict[str, Any]
-        ) -> bool:
+        def approve_all(tool: str, agent_id: str, args: dict[str, Any]) -> bool:
             approvals.append(tool)
             return True
 
         checker = PermissionChecker(
             PermissionConfig(tier=PermissionTier.ASK, prompt_fn=approve_all)
         )
-        assert (
-            checker.check("file_read", "agent-e2e", {"path": "/tmp/a"})
-            is True
-        )
+        assert checker.check("file_read", "agent-e2e", {"path": "/tmp/a"}) is True
         assert "file_read" in approvals
 
     @pytest.mark.ac("AC-03.2.3")
@@ -291,17 +272,11 @@ class TestAskTierPrompts:
         """Sad: prompt_fn returns False, tool call is blocked."""
         from guild.permissions.checker import PermissionChecker, PermissionTier
 
-        def deny_all(
-            tool: str, agent_id: str, args: dict[str, Any]
-        ) -> bool:
+        def deny_all(tool: str, agent_id: str, args: dict[str, Any]) -> bool:
             return False
 
-        checker = PermissionChecker(
-            PermissionConfig(tier=PermissionTier.ASK, prompt_fn=deny_all)
-        )
-        assert (
-            checker.check("shell", "agent-e2e", {"command": "ls"}) is False
-        )
+        checker = PermissionChecker(PermissionConfig(tier=PermissionTier.ASK, prompt_fn=deny_all))
+        assert checker.check("shell", "agent-e2e", {"command": "ls"}) is False
 
     @pytest.mark.ac("AC-03.2.2")
     def test_ask_tier_caches_per_tool_name(self, project_dir: Path) -> None:
@@ -310,9 +285,7 @@ class TestAskTierPrompts:
 
         call_count = 0
 
-        def counting_prompt(
-            tool: str, agent_id: str, args: dict[str, Any]
-        ) -> bool:
+        def counting_prompt(tool: str, agent_id: str, args: dict[str, Any]) -> bool:
             nonlocal call_count
             call_count += 1
             return True
@@ -322,9 +295,7 @@ class TestAskTierPrompts:
         )
         checker.check("file_read", "agent-e2e", {"path": "/a"})
         checker.check("file_read", "agent-e2e", {"path": "/b"})
-        checker.check(
-            "file_write", "agent-e2e", {"path": "/c", "content": "x"}
-        )
+        checker.check("file_write", "agent-e2e", {"path": "/c", "content": "x"})
 
         # file_read prompted once (cached), file_write prompted once = 2
         assert call_count == 2
@@ -335,9 +306,7 @@ class TestAskTierPrompts:
         from guild.permissions.checker import PermissionChecker, PermissionTier
 
         checker = PermissionChecker(PermissionConfig(tier=PermissionTier.ASK, prompt_fn=None))
-        assert (
-            checker.check("file_read", "agent-e2e", {"path": "/tmp"}) is False
-        )
+        assert checker.check("file_read", "agent-e2e", {"path": "/tmp"}) is False
 
 
 # ======================================================================
@@ -354,9 +323,11 @@ class TestScopedTier:
         from guild.permissions.checker import PermissionChecker, PermissionTier
 
         checker = PermissionChecker(
-            PermissionConfig(tier=PermissionTier.SCOPED,
-            allowed_tools=["file_read", "file_write"],
-            allowed_paths=[str(project_dir)],)
+            PermissionConfig(
+                tier=PermissionTier.SCOPED,
+                allowed_tools=["file_read", "file_write"],
+                allowed_paths=[str(project_dir)],
+            )
         )
         args = {"path": str(project_dir / "src" / "main.py")}
         assert checker.check("file_read", "agent-e2e", args) is True
@@ -367,25 +338,25 @@ class TestScopedTier:
         from guild.permissions.checker import PermissionChecker, PermissionTier
 
         checker = PermissionChecker(
-            PermissionConfig(tier=PermissionTier.SCOPED,
-            allowed_tools=["file_read"],
-            allowed_paths=[str(project_dir)],)
+            PermissionConfig(
+                tier=PermissionTier.SCOPED,
+                allowed_tools=["file_read"],
+                allowed_paths=[str(project_dir)],
+            )
         )
-        assert (
-            checker.check("shell", "agent-e2e", {"command": "ls"}) is False
-        )
+        assert checker.check("shell", "agent-e2e", {"command": "ls"}) is False
 
     @pytest.mark.ac("AC-03.3.2")
-    def test_scoped_blocks_path_outside_boundary(
-        self, project_dir: Path
-    ) -> None:
+    def test_scoped_blocks_path_outside_boundary(self, project_dir: Path) -> None:
         """Sad: tool in allowlist but path outside boundary is denied."""
         from guild.permissions.checker import PermissionChecker, PermissionTier
 
         checker = PermissionChecker(
-            PermissionConfig(tier=PermissionTier.SCOPED,
-            allowed_tools=["file_write"],
-            allowed_paths=[str(project_dir)],)
+            PermissionConfig(
+                tier=PermissionTier.SCOPED,
+                allowed_tools=["file_write"],
+                allowed_paths=[str(project_dir)],
+            )
         )
         assert (
             checker.check(
@@ -397,20 +368,18 @@ class TestScopedTier:
         )
 
     @pytest.mark.ac("AC-03.3.3")
-    def test_scoped_tool_with_no_path_arg_allowed(
-        self, project_dir: Path
-    ) -> None:
+    def test_scoped_tool_with_no_path_arg_allowed(self, project_dir: Path) -> None:
         """Edge: tool in allowlist with no path in args is allowed."""
         from guild.permissions.checker import PermissionChecker, PermissionTier
 
         checker = PermissionChecker(
-            PermissionConfig(tier=PermissionTier.SCOPED,
-            allowed_tools=["search"],
-            allowed_paths=[str(project_dir)],)
+            PermissionConfig(
+                tier=PermissionTier.SCOPED,
+                allowed_tools=["search"],
+                allowed_paths=[str(project_dir)],
+            )
         )
-        assert (
-            checker.check("search", "agent-e2e", {"query": "hello"}) is True
-        )
+        assert checker.check("search", "agent-e2e", {"query": "hello"}) is True
 
 
 # ======================================================================
@@ -427,21 +396,12 @@ class TestAutopilotTier:
         from guild.permissions.checker import PermissionChecker, PermissionTier
 
         checker = PermissionChecker(PermissionConfig(tier=PermissionTier.AUTOPILOT))
-        assert (
-            checker.check("shell", "agent-e2e", {"command": "echo hi"})
-            is True
-        )
-        assert (
-            checker.check("file_write", "agent-e2e", {"path": "/x"}) is True
-        )
-        assert (
-            checker.check("search", "agent-e2e", {"query": "foo"}) is True
-        )
+        assert checker.check("shell", "agent-e2e", {"command": "echo hi"}) is True
+        assert checker.check("file_write", "agent-e2e", {"path": "/x"}) is True
+        assert checker.check("search", "agent-e2e", {"query": "foo"}) is True
 
     @pytest.mark.ac("AC-03.4.2")
-    def test_autopilot_still_blocked_by_hardcoded_never(
-        self, project_dir: Path
-    ) -> None:
+    def test_autopilot_still_blocked_by_hardcoded_never(self, project_dir: Path) -> None:
         """Edge: autopilot cannot override the hardcoded-never layer."""
         from guild.permissions.checker import PermissionChecker, PermissionTier
 
@@ -493,9 +453,7 @@ class TestPermissionSwitching:
 
         prompt_count = 0
 
-        def counting_prompt(
-            tool: str, agent_id: str, args: dict[str, Any]
-        ) -> bool:
+        def counting_prompt(tool: str, agent_id: str, args: dict[str, Any]) -> bool:
             nonlocal prompt_count
             prompt_count += 1
             return True
@@ -522,9 +480,7 @@ class TestPermissionAudit:
     """Permission decisions produce data suitable for audit logging."""
 
     @pytest.mark.ac("AC-03.6.2")
-    def test_permission_check_returns_auditable_info(
-        self, project_dir: Path
-    ) -> None:
+    def test_permission_check_returns_auditable_info(self, project_dir: Path) -> None:
         """Happy: checker returns bool; tier and tool name available."""
         from guild.permissions.checker import PermissionChecker, PermissionTier
 
@@ -541,9 +497,7 @@ class TestPermissionAudit:
         from guild.permissions.checker import PermissionChecker, PermissionTier
 
         checker = PermissionChecker(PermissionConfig(tier=PermissionTier.AUTOPILOT))
-        allowed, reason = checker.check_hardcoded_never(
-            "shell", {"command": "rm -rf /"}
-        )
+        allowed, reason = checker.check_hardcoded_never("shell", {"command": "rm -rf /"})
         assert allowed is False
         assert "rm -rf /" in reason
         assert len(reason) > 10  # substantive description
@@ -575,25 +529,16 @@ class TestHardcodedNever:
         from guild.permissions.checker import PermissionChecker, PermissionTier
 
         checker = PermissionChecker(PermissionConfig(tier=PermissionTier.AUTOPILOT))
-        assert (
-            checker.check("shell", "agent-e2e", {"command": command}) is False
-        )
+        assert checker.check("shell", "agent-e2e", {"command": command}) is False
 
     @pytest.mark.ac("AC-03.7.1")
-    def test_safe_command_allowed_in_autopilot(
-        self, project_dir: Path
-    ) -> None:
+    def test_safe_command_allowed_in_autopilot(self, project_dir: Path) -> None:
         """Sad (reverse): safe commands are NOT blocked."""
         from guild.permissions.checker import PermissionChecker, PermissionTier
 
         checker = PermissionChecker(PermissionConfig(tier=PermissionTier.AUTOPILOT))
-        assert (
-            checker.check("shell", "agent-e2e", {"command": "ls -la"}) is True
-        )
-        assert (
-            checker.check("shell", "agent-e2e", {"command": "git status"})
-            is True
-        )
+        assert checker.check("shell", "agent-e2e", {"command": "ls -la"}) is True
+        assert checker.check("shell", "agent-e2e", {"command": "git status"}) is True
 
     @pytest.mark.ac("AC-03.7.2")
     def test_hardcoded_never_override_flag(self, project_dir: Path) -> None:
@@ -610,24 +555,19 @@ class TestHardcodedNever:
         assert reason == ""
 
     @pytest.mark.ac("AC-03.7.1")
-    def test_hardcoded_never_blocks_in_all_tiers(
-        self, project_dir: Path
-    ) -> None:
+    def test_hardcoded_never_blocks_in_all_tiers(self, project_dir: Path) -> None:
         """Edge: destructive command blocked in scoped + autopilot."""
         from guild.permissions.checker import PermissionChecker, PermissionTier
 
         for tier in [PermissionTier.SCOPED, PermissionTier.AUTOPILOT]:
             checker = PermissionChecker(
-                PermissionConfig(tier=tier,
-                allowed_tools=["shell"],
-                allowed_paths=["/"],)
-            )
-            assert (
-                checker.check(
-                    "shell", "agent-e2e", {"command": "rm -rf /"}
+                PermissionConfig(
+                    tier=tier,
+                    allowed_tools=["shell"],
+                    allowed_paths=["/"],
                 )
-                is False
             )
+            assert checker.check("shell", "agent-e2e", {"command": "rm -rf /"}) is False
 
 
 # ======================================================================
@@ -639,9 +579,7 @@ class TestReversibility:
     """Safe, reversible operations pass; irreversible ones are blocked."""
 
     @pytest.mark.ac("AC-03.8.1")
-    def test_read_only_commands_pass_everywhere(
-        self, project_dir: Path
-    ) -> None:
+    def test_read_only_commands_pass_everywhere(self, project_dir: Path) -> None:
         """Happy: read-only commands allowed in scoped and autopilot tiers."""
         from guild.permissions.checker import PermissionChecker, PermissionTier
 
@@ -653,15 +591,14 @@ class TestReversibility:
         ]:
             for tier in [PermissionTier.SCOPED, PermissionTier.AUTOPILOT]:
                 checker = PermissionChecker(
-                    PermissionConfig(tier=tier,
-                    allowed_tools=["shell"],
-                    allowed_paths=["/"],)
+                    PermissionConfig(
+                        tier=tier,
+                        allowed_tools=["shell"],
+                        allowed_paths=["/"],
+                    )
                 )
                 assert (
-                    checker.check(
-                        "shell", "agent-e2e", {"command": command}
-                    )
-                    is True
+                    checker.check("shell", "agent-e2e", {"command": command}) is True
                 ), f"'{command}' blocked in {tier.value}"
 
     @pytest.mark.ac("AC-03.8.2")
@@ -670,12 +607,7 @@ class TestReversibility:
         from guild.permissions.checker import PermissionChecker, PermissionTier
 
         checker = PermissionChecker(PermissionConfig(tier=PermissionTier.AUTOPILOT))
-        assert (
-            checker.check(
-                "shell", "agent-e2e", {"command": "mkfs.ext4 /dev/sda1"}
-            )
-            is False
-        )
+        assert checker.check("shell", "agent-e2e", {"command": "mkfs.ext4 /dev/sda1"}) is False
 
     @pytest.mark.ac("AC-03.8.1")
     def test_reversible_git_operations_pass(self, project_dir: Path) -> None:
@@ -692,12 +624,7 @@ class TestReversibility:
             )
             is True
         )
-        assert (
-            checker.check(
-                "shell", "agent-e2e", {"command": "git diff HEAD"}
-            )
-            is True
-        )
+        assert checker.check("shell", "agent-e2e", {"command": "git diff HEAD"}) is True
         # Force-push is irreversible
         assert (
             checker.check(
@@ -718,23 +645,26 @@ class TestAgentNoPauseInternal:
     """Agent continues autonomously without unnecessary pauses (internal)."""
 
     @pytest.mark.ac("AC-06.1.1")
-    def test_scoped_tools_proceed_without_prompting(
-        self, project_dir: Path
-    ) -> None:
+    def test_scoped_tools_proceed_without_prompting(self, project_dir: Path) -> None:
         """Edge: in scoped mode, tools within scope proceed with no prompt."""
         from guild.permissions.checker import PermissionChecker, PermissionTier
 
         checker = PermissionChecker(
-            PermissionConfig(tier=PermissionTier.SCOPED,
-            allowed_tools=["file_read", "file_write"],
-            allowed_paths=[str(project_dir)],)
+            PermissionConfig(
+                tier=PermissionTier.SCOPED,
+                allowed_tools=["file_read", "file_write"],
+                allowed_paths=[str(project_dir)],
+            )
         )
         # No prompt_fn installed, yet in-scope tools pass
-        assert checker.check(
-            "file_read",
-            "agent-e2e",
-            {"path": str(project_dir / "x.txt")},
-        ) is True
+        assert (
+            checker.check(
+                "file_read",
+                "agent-e2e",
+                {"path": str(project_dir / "x.txt")},
+            )
+            is True
+        )
 
 
 # ======================================================================
@@ -751,15 +681,11 @@ class TestSelfVerifyCompletion:
         from guild.agent.loop import SELF_REVIEW_PROMPT, AgentLoop
         from guild.tools.base import ToolResult
 
-        async def mock_write(
-            args: dict[str, Any], wd: str | None = None
-        ) -> ToolResult:
+        async def mock_write(args: dict[str, Any], wd: str | None = None) -> ToolResult:
             return ToolResult(success=True, output="Wrote file")
 
         provider = _make_mock_provider(
-            _tool_response(
-                "file_write", {"path": "x.py", "content": "code"}
-            ),
+            _tool_response("file_write", {"path": "x.py", "content": "code"}),
             _simple_response("File written."),
             _simple_response("Reviewed. All correct."),
         )
@@ -770,9 +696,7 @@ class TestSelfVerifyCompletion:
         result = await loop.run("sys", "Write code", self_review=True)
 
         review_msgs = [
-            m
-            for m in loop.messages
-            if m.role == "user" and SELF_REVIEW_PROMPT in m.content
+            m for m in loop.messages if m.role == "user" and SELF_REVIEW_PROMPT in m.content
         ]
         assert len(review_msgs) == 1
         assert "Reviewed" in result
@@ -787,9 +711,7 @@ class TestSelfVerifyCompletion:
         result = await loop.run("sys", "Do task", self_review=False)
 
         review_msgs = [
-            m
-            for m in loop.messages
-            if m.role == "user" and SELF_REVIEW_PROMPT in m.content
+            m for m in loop.messages if m.role == "user" and SELF_REVIEW_PROMPT in m.content
         ]
         assert len(review_msgs) == 0
         assert result == "Task complete."
@@ -800,17 +722,13 @@ class TestSelfVerifyCompletion:
         from guild.agent.loop import AgentLoop, AgentLoopConfig
         from guild.tools.base import ToolResult
 
-        async def mock_write(
-            args: dict[str, Any], wd: str | None = None
-        ) -> ToolResult:
+        async def mock_write(args: dict[str, Any], wd: str | None = None) -> ToolResult:
             return ToolResult(success=True, output="Wrote fix")
 
         provider = _make_mock_provider(
             _simple_response("File written."),
             # Self-review phase: finds a bug, calls tool, then confirms
-            _tool_response(
-                "file_write", {"path": "x.py", "content": "fixed"}
-            ),
+            _tool_response("file_write", {"path": "x.py", "content": "fixed"}),
             _simple_response("Fixed a bug during review."),
         )
         loop = AgentLoop(
@@ -836,9 +754,7 @@ class TestStuckDetection:
         from guild.agent.stuck import StuckDetector
         from guild.tools.base import ToolResult
 
-        async def mock_read(
-            args: dict[str, Any], wd: str | None = None
-        ) -> ToolResult:
+        async def mock_read(args: dict[str, Any], wd: str | None = None) -> ToolResult:
             return ToolResult(success=True, output="file contents")
 
         same_call = _tool_response("file_read", {"path": "a.txt"})
@@ -858,9 +774,7 @@ class TestStuckDetection:
         result = await loop.run("sys", "read a.txt")
 
         recovery_msgs = [
-            m
-            for m in loop.messages
-            if m.role == "user" and STUCK_RECOVERY_PROMPT in m.content
+            m for m in loop.messages if m.role == "user" and STUCK_RECOVERY_PROMPT in m.content
         ]
         assert len(recovery_msgs) == 1
 
@@ -871,9 +785,7 @@ class TestStuckDetection:
         from guild.agent.stuck import StuckDetector
         from guild.tools.base import ToolResult
 
-        async def mock_read(
-            args: dict[str, Any], wd: str | None = None
-        ) -> ToolResult:
+        async def mock_read(args: dict[str, Any], wd: str | None = None) -> ToolResult:
             return ToolResult(success=True, output="data")
 
         same_call = _tool_response("file_read", {"path": "a.txt"})
@@ -904,21 +816,15 @@ class TestStuckDetection:
         from guild.agent.stuck import StuckDetector
         from guild.tools.base import ToolResult
 
-        async def mock_read(
-            args: dict[str, Any], wd: str | None = None
-        ) -> ToolResult:
+        async def mock_read(args: dict[str, Any], wd: str | None = None) -> ToolResult:
             return ToolResult(success=True, output="ok")
 
-        async def mock_write(
-            args: dict[str, Any], wd: str | None = None
-        ) -> ToolResult:
+        async def mock_write(args: dict[str, Any], wd: str | None = None) -> ToolResult:
             return ToolResult(success=True, output="ok")
 
         provider = _make_mock_provider(
             _tool_response("file_read", {"path": "a.txt"}),
-            _tool_response(
-                "file_write", {"path": "b.txt", "content": "x"}
-            ),
+            _tool_response("file_write", {"path": "b.txt", "content": "x"}),
             _tool_response("file_read", {"path": "c.txt"}),
             _simple_response("All done."),
         )
@@ -949,22 +855,16 @@ class TestGracefulDegradation:
         from guild.agent.loop import AgentLoop, AgentLoopConfig
         from guild.tools.base import ToolResult
 
-        async def failing_read(
-            args: dict[str, Any], wd: str | None = None
-        ) -> ToolResult:
+        async def failing_read(args: dict[str, Any], wd: str | None = None) -> ToolResult:
             return ToolResult(success=False, output="", error="File not found")
 
-        async def mock_write(
-            args: dict[str, Any], wd: str | None = None
-        ) -> ToolResult:
+        async def mock_write(args: dict[str, Any], wd: str | None = None) -> ToolResult:
             return ToolResult(success=True, output="Created file")
 
         provider = _make_mock_provider(
             _tool_response("file_read", {"path": "missing.txt"}),
             # After failure, model tries a different approach
-            _tool_response(
-                "file_write", {"path": "new.txt", "content": "fresh"}
-            ),
+            _tool_response("file_write", {"path": "new.txt", "content": "fresh"}),
             _simple_response("Created a new file instead."),
         )
         loop = AgentLoop(
@@ -997,9 +897,7 @@ class TestGracefulDegradation:
         from guild.agent.loop import AgentLoop, AgentLoopConfig
         from guild.tools.base import ToolResult
 
-        async def exploding_tool(
-            args: dict[str, Any], wd: str | None = None
-        ) -> ToolResult:
+        async def exploding_tool(args: dict[str, Any], wd: str | None = None) -> ToolResult:
             raise RuntimeError("Unexpected failure")
 
         provider = _make_mock_provider(
@@ -1030,9 +928,7 @@ class TestHumanEscalation:
         from guild.agent.stuck import StuckDetector
         from guild.tools.base import ToolResult
 
-        async def mock_read(
-            args: dict[str, Any], wd: str | None = None
-        ) -> ToolResult:
+        async def mock_read(args: dict[str, Any], wd: str | None = None) -> ToolResult:
             return ToolResult(success=True, output="data")
 
         same_call = _tool_response("file_read", {"path": "x.py"})
@@ -1057,9 +953,7 @@ class TestHumanEscalation:
         from guild.agent.stuck import StuckDetector
         from guild.tools.base import ToolResult
 
-        async def mock_read(
-            args: dict[str, Any], wd: str | None = None
-        ) -> ToolResult:
+        async def mock_read(args: dict[str, Any], wd: str | None = None) -> ToolResult:
             return ToolResult(success=True, output="data")
 
         same_call = _tool_response("file_read", {"path": "x.py"})
@@ -1169,9 +1063,7 @@ class TestMultiTurn:
 
         assert result == "R4"
         user_msgs = [m for m in loop.messages if m.role == "user"]
-        assistant_msgs = [
-            m for m in loop.messages if m.role == "assistant"
-        ]
+        assistant_msgs = [m for m in loop.messages if m.role == "assistant"]
         assert len(user_msgs) == 4
         assert len(assistant_msgs) == 4
 
@@ -1197,9 +1089,7 @@ class TestSelfReview:
         result = await loop.run("sys", "Write code", self_review=True)
 
         review_msgs = [
-            m
-            for m in loop.messages
-            if m.role == "user" and SELF_REVIEW_PROMPT in m.content
+            m for m in loop.messages if m.role == "user" and SELF_REVIEW_PROMPT in m.content
         ]
         assert len(review_msgs) == 1
         assert "Reviewed" in result
@@ -1211,9 +1101,7 @@ class TestSelfReview:
         from guild.agent.stuck import StuckDetector
         from guild.tools.base import ToolResult
 
-        async def mock_read(
-            args: dict[str, Any], wd: str | None = None
-        ) -> ToolResult:
+        async def mock_read(args: dict[str, Any], wd: str | None = None) -> ToolResult:
             return ToolResult(success=True, output="data")
 
         same_call = _tool_response("file_read", {"path": "x"})
@@ -1230,9 +1118,7 @@ class TestSelfReview:
         assert "stuck" in result.lower() or "need help" in result.lower()
         # Self-review prompt should NOT have been injected after escalation
         review_msgs = [
-            m
-            for m in loop.messages
-            if m.role == "user" and SELF_REVIEW_PROMPT in m.content
+            m for m in loop.messages if m.role == "user" and SELF_REVIEW_PROMPT in m.content
         ]
         assert len(review_msgs) == 0
 
@@ -1246,9 +1132,7 @@ class TestSelfReview:
         await loop.run("sys", "task")
 
         review_msgs = [
-            m
-            for m in loop.messages
-            if m.role == "user" and SELF_REVIEW_PROMPT in m.content
+            m for m in loop.messages if m.role == "user" and SELF_REVIEW_PROMPT in m.content
         ]
         assert len(review_msgs) == 0
 
@@ -1262,9 +1146,7 @@ class TestTryTestRollback:
     """File-level snapshotting and rollback for impactful decisions."""
 
     @pytest.mark.ac("AC-06.11.2")
-    async def test_rollback_on_verification_failure(
-        self, project_dir: Path
-    ) -> None:
+    async def test_rollback_on_verification_failure(self, project_dir: Path) -> None:
         """Happy: verification fails => files restored to original state."""
         from guild.agent.rollback import try_with_rollback
 
@@ -1278,18 +1160,14 @@ class TestTryTestRollback:
         async def verify() -> bool:
             return False  # verification fails
 
-        success, result = await try_with_rollback(
-            execute, verify, [str(target)]
-        )
+        success, result = await try_with_rollback(execute, verify, [str(target)])
 
         assert success is False
         assert result is None
         assert target.read_text() == "original"
 
     @pytest.mark.ac("AC-06.11.1")
-    async def test_changes_kept_on_verification_success(
-        self, project_dir: Path
-    ) -> None:
+    async def test_changes_kept_on_verification_success(self, project_dir: Path) -> None:
         """Sad (reverse): verification succeeds => changes kept."""
         from guild.agent.rollback import try_with_rollback
 
@@ -1303,18 +1181,14 @@ class TestTryTestRollback:
         async def verify() -> bool:
             return True
 
-        success, result = await try_with_rollback(
-            execute, verify, [str(target)]
-        )
+        success, result = await try_with_rollback(execute, verify, [str(target)])
 
         assert success is True
         assert result == "done"
         assert target.read_text() == "new content"
 
     @pytest.mark.ac("AC-06.11.2")
-    async def test_rollback_deletes_newly_created_files(
-        self, project_dir: Path
-    ) -> None:
+    async def test_rollback_deletes_newly_created_files(self, project_dir: Path) -> None:
         """Edge: file created during execute is deleted on rollback."""
         from guild.agent.rollback import try_with_rollback
 
@@ -1328,17 +1202,13 @@ class TestTryTestRollback:
         async def verify() -> bool:
             return False
 
-        success, _ = await try_with_rollback(
-            execute, verify, [str(new_file)]
-        )
+        success, _ = await try_with_rollback(execute, verify, [str(new_file)])
 
         assert success is False
         assert not new_file.exists()
 
     @pytest.mark.ac("AC-06.11.2")
-    async def test_rollback_handles_multiple_files(
-        self, project_dir: Path
-    ) -> None:
+    async def test_rollback_handles_multiple_files(self, project_dir: Path) -> None:
         """Edge: multiple files are all rolled back atomically."""
         from guild.agent.rollback import try_with_rollback
 
@@ -1355,9 +1225,7 @@ class TestTryTestRollback:
         async def verify() -> bool:
             return False
 
-        success, _ = await try_with_rollback(
-            execute, verify, [str(f1), str(f2)]
-        )
+        success, _ = await try_with_rollback(execute, verify, [str(f1), str(f2)])
 
         assert success is False
         assert f1.read_text() == "1"
@@ -1402,17 +1270,17 @@ class TestAskTierPerCallMode:
 
         call_count = 0
 
-        def counting_prompt(
-            tool: str, agent_id: str, args: dict[str, Any]
-        ) -> bool:
+        def counting_prompt(tool: str, agent_id: str, args: dict[str, Any]) -> bool:
             nonlocal call_count
             call_count += 1
             return True
 
         checker = PermissionChecker(
-            PermissionConfig(tier=PermissionTier.ASK,
-            prompt_fn=counting_prompt,
-            per_call=True,)
+            PermissionConfig(
+                tier=PermissionTier.ASK,
+                prompt_fn=counting_prompt,
+                per_call=True,
+            )
         )
         checker.check("file_read", "agent-e2e", {"path": "/a"})
         checker.check("file_read", "agent-e2e", {"path": "/b"})
@@ -1429,16 +1297,16 @@ class TestScopedViolationReportsSpecificBoundary:
     """Scope violation is reported with the specific boundary exceeded."""
 
     @pytest.mark.ac("AC-03.3.4")
-    def test_scoped_violation_includes_boundary(
-        self, project_dir: Path
-    ) -> None:
+    def test_scoped_violation_includes_boundary(self, project_dir: Path) -> None:
         """Scope violation error includes the specific scope boundary."""
         from guild.permissions.checker import PermissionChecker, PermissionTier
 
         checker = PermissionChecker(
-            PermissionConfig(tier=PermissionTier.SCOPED,
-            allowed_tools=["file_write"],
-            allowed_paths=[str(project_dir / "src")],)
+            PermissionConfig(
+                tier=PermissionTier.SCOPED,
+                allowed_tools=["file_write"],
+                allowed_paths=[str(project_dir / "src")],
+            )
         )
         # Attempt outside scope should mention the boundary
         result = checker.check(
@@ -1463,17 +1331,13 @@ class TestSwitchTiersClearsSessionApprovals:
     """Switching tiers clears session-level approvals."""
 
     @pytest.mark.ac("AC-03.5.3")
-    def test_tier_switch_clears_approval_cache(
-        self, project_dir: Path
-    ) -> None:
+    def test_tier_switch_clears_approval_cache(self, project_dir: Path) -> None:
         """Switching tier away and back re-prompts previously approved."""
         from guild.permissions.checker import PermissionChecker, PermissionTier
 
         prompt_count = 0
 
-        def counting_prompt(
-            tool: str, agent_id: str, args: dict[str, Any]
-        ) -> bool:
+        def counting_prompt(tool: str, agent_id: str, args: dict[str, Any]) -> bool:
             nonlocal prompt_count
             prompt_count += 1
             return True
@@ -1521,9 +1385,7 @@ class TestHardcodedNeverBlocksRecordedInAudit:
     """Hardcoded-never blocks are recorded in audit with matched pattern."""
 
     @pytest.mark.ac("AC-03.6.4")
-    def test_hardcoded_never_block_provides_pattern(
-        self, project_dir: Path
-    ) -> None:
+    def test_hardcoded_never_block_provides_pattern(self, project_dir: Path) -> None:
         """Hardcoded-never block returns the matched denylist pattern."""
         from guild.permissions.checker import PermissionChecker, PermissionTier
 
@@ -1544,17 +1406,17 @@ class TestHardcodedNeverCannotBeWeakenedViaConfig:
     """Hardcoded-never patterns cannot be weakened via config file."""
 
     @pytest.mark.ac("AC-03.7.4")
-    def test_hardcoded_never_not_weakened_by_config(
-        self, project_dir: Path
-    ) -> None:
+    def test_hardcoded_never_not_weakened_by_config(self, project_dir: Path) -> None:
         """Hardcoded-never patterns remain active regardless of config."""
         from guild.permissions.checker import PermissionChecker, PermissionTier
 
         # Even with the most permissive tier, hardcoded never blocks
         checker = PermissionChecker(
-            PermissionConfig(tier=PermissionTier.AUTOPILOT,
-            allowed_tools=["shell"],
-            allowed_paths=["/"],)
+            PermissionConfig(
+                tier=PermissionTier.AUTOPILOT,
+                allowed_tools=["shell"],
+                allowed_paths=["/"],
+            )
         )
         assert (
             checker.check(
@@ -1595,9 +1457,7 @@ class TestInteractiveAttachStreamsExisting:
     """Attaching streams existing output before accepting input."""
 
     @pytest.mark.ac("AC-05.4a.2")
-    async def test_subscribe_receives_pending_broadcasts(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_subscribe_receives_pending_broadcasts(self, tmp_path: Path) -> None:
         """Subscribed client receives messages already broadcast."""
         from guild.daemon.control_socket import ControlSocket
 
@@ -1609,21 +1469,14 @@ class TestInteractiveAttachStreamsExisting:
         reader, writer = await asyncio.open_unix_connection(str(sock_path))
 
         # Subscribe first
-        writer.write(
-            json.dumps(
-                {"type": "command", "action": "subscribe"}
-            ).encode()
-            + b"\n"
-        )
+        writer.write(json.dumps({"type": "command", "action": "subscribe"}).encode() + b"\n")
         await writer.drain()
         ack = json.loads(await reader.readline())
         assert ack["status"] == "subscribed"
 
         # Broadcast messages and verify receipt
         for i in range(3):
-            await cs.broadcast(
-                {"type": "agent_message", "content": f"msg-{i}"}
-            )
+            await cs.broadcast({"type": "agent_message", "content": f"msg-{i}"})
             line = await asyncio.wait_for(reader.readline(), timeout=2.0)
             data = json.loads(line)
             assert data["content"] == f"msg-{i}"
@@ -1642,9 +1495,7 @@ class TestVerificationFailureDetails:
     """Verification failure details are included in task final status."""
 
     @pytest.mark.ac("AC-06.2.3")
-    async def test_verification_failure_details_in_status(
-        self, project_dir: Path
-    ) -> None:
+    async def test_verification_failure_details_in_status(self, project_dir: Path) -> None:
         """Task status shows specific verification failure message."""
         from guild.task.spec import (
             TaskSpec,
@@ -1656,9 +1507,7 @@ class TestVerificationFailureDetails:
         spec = TaskSpec(
             description="Test task",
             verification_steps=[
-                VerificationStep(
-                    type="file_exists", target="nonexistent.py"
-                ),
+                VerificationStep(type="file_exists", target="nonexistent.py"),
                 VerificationStep(type="command", target="false"),
             ],
         )
@@ -1733,9 +1582,7 @@ class TestTimeoutProgressReport:
                 model="mock",
             )
 
-        async def mock_file_read(
-            args: dict[str, Any], _cid: str | None = None
-        ) -> ToolResult:
+        async def mock_file_read(args: dict[str, Any], _cid: str | None = None) -> ToolResult:
             return ToolResult(success=True, output="contents")
 
         provider = AsyncMock()
@@ -1801,9 +1648,7 @@ class TestSendPreservesToolContext:
                 model="mock",
             )
 
-        async def mock_file_read(
-            args: dict[str, Any], _cid: str | None = None
-        ) -> ToolResult:
+        async def mock_file_read(args: dict[str, Any], _cid: str | None = None) -> ToolResult:
             return ToolResult(success=True, output="file contents here")
 
         provider = AsyncMock()
@@ -1822,9 +1667,7 @@ class TestSendPreservesToolContext:
 
         assert len(captured_messages) > 0
         all_roles = [m["role"] for m in captured_messages[0]]
-        assert (
-            "tool" in all_roles
-        ), "Tool results from step 1 should be in step 2 context"
+        assert "tool" in all_roles, "Tool results from step 1 should be in step 2 context"
 
 
 # ======================================================================
@@ -1852,9 +1695,7 @@ class TestSelfReviewConfigurable:
         )
         loop = AgentLoop(provider=provider, tool_executors={})
 
-        result = await loop.run(
-            "system prompt", "build a feature", self_review=False
-        )
+        result = await loop.run("system prompt", "build a feature", self_review=False)
         assert result == "Implementation done."
         message_contents = [m.content for m in loop.messages]
         assert SELF_REVIEW_PROMPT not in message_contents
@@ -1876,8 +1717,6 @@ class TestSelfReviewConfigurable:
         )
         loop = AgentLoop(provider=provider, tool_executors={})
 
-        await loop.run(
-            "system prompt", "build a feature", self_review=True
-        )
+        await loop.run("system prompt", "build a feature", self_review=True)
         message_contents = [m.content for m in loop.messages]
         assert SELF_REVIEW_PROMPT in message_contents

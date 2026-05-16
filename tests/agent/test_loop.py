@@ -79,7 +79,11 @@ class TestLoopBasics:
             infinite_tool_response,
             LLMResponse(content="final", tool_calls=None),
         )
-        loop = AgentLoop(provider=provider, tool_executors=_make_tool_executors(), config=AgentLoopConfig(max_turns=3))
+        loop = AgentLoop(
+            provider=provider,
+            tool_executors=_make_tool_executors(),
+            config=AgentLoopConfig(max_turns=3),
+        )
         await loop.run(system_prompt="sys", user_input="read a.txt")
         # Should have stopped at max_turns; provider called at most max_turns times
         assert provider.generate.call_count <= 3
@@ -222,7 +226,11 @@ class TestLoopEdgeCases:
             tool_calls=[{"function": {"name": "file_read", "arguments": {"path": "a.txt"}}}],
         )
         provider = _make_provider(tool_response, tool_response)
-        loop = AgentLoop(provider=provider, tool_executors=_make_tool_executors(), config=AgentLoopConfig(max_turns=2))
+        loop = AgentLoop(
+            provider=provider,
+            tool_executors=_make_tool_executors(),
+            config=AgentLoopConfig(max_turns=2),
+        )
         result = await loop.run(system_prompt="sys", user_input="loop forever")
         assert result == ""
 
@@ -463,7 +471,8 @@ class TestStuckRecovery:
             LLMResponse(content="Let me try a different approach.", tool_calls=None),
         )
         detector = StuckDetector(max_repeated_calls=3)
-        loop = AgentLoop(            provider=provider,
+        loop = AgentLoop(
+            provider=provider,
             tool_executors=_make_tool_executors(),
             config=AgentLoopConfig(stuck_detector=detector, max_turns=10),
         )
@@ -492,7 +501,8 @@ class TestStuckRecovery:
             LLMResponse(content="Fixed it!", tool_calls=None),
         )
         detector = StuckDetector(max_repeated_calls=3)
-        loop = AgentLoop(            provider=provider,
+        loop = AgentLoop(
+            provider=provider,
             tool_executors=_make_tool_executors(),
             config=AgentLoopConfig(stuck_detector=detector, max_turns=10),
         )
@@ -515,7 +525,8 @@ class TestStuckRecovery:
             LLMResponse(content="", tool_calls=[same_call]),
         )
         detector = StuckDetector(max_repeated_calls=3)
-        loop = AgentLoop(            provider=provider,
+        loop = AgentLoop(
+            provider=provider,
             tool_executors=_make_tool_executors(),
             config=AgentLoopConfig(stuck_detector=detector, max_turns=20),
         )
@@ -539,7 +550,8 @@ class TestHumanEscalation:
             *[LLMResponse(content="", tool_calls=[same_call]) for _ in range(6)],
         )
         detector = StuckDetector(max_repeated_calls=3)
-        loop = AgentLoop(            provider=provider,
+        loop = AgentLoop(
+            provider=provider,
             tool_executors=_make_tool_executors(),
             config=AgentLoopConfig(stuck_detector=detector, max_turns=20),
         )
@@ -556,7 +568,8 @@ class TestHumanEscalation:
             *[LLMResponse(content="", tool_calls=[same_call]) for _ in range(6)],
         )
         detector = StuckDetector(max_repeated_calls=3)
-        loop = AgentLoop(            provider=provider,
+        loop = AgentLoop(
+            provider=provider,
             tool_executors=_make_tool_executors(),
             config=AgentLoopConfig(stuck_detector=detector, max_turns=20),
         )
@@ -795,7 +808,8 @@ class TestTokenBudget:
                 content="Should not reach", tool_calls=None, input_tokens=1, output_tokens=1
             ),
         )
-        loop = AgentLoop(            provider=provider,
+        loop = AgentLoop(
+            provider=provider,
             tool_executors=_make_tool_executors(),
             config=AgentLoopConfig(token_budget=700),
         )
@@ -824,7 +838,8 @@ class TestTokenBudget:
                 output_tokens=5000,
             ),
         )
-        loop = AgentLoop(            provider=provider,
+        loop = AgentLoop(
+            provider=provider,
             tool_executors=_make_tool_executors(),
             config=AgentLoopConfig(token_budget=0),
         )
@@ -944,9 +959,13 @@ class TestAgentDoesNotPause:
         """In scoped mode, tools within scope proceed without prompting."""
         from guild.permissions.checker import PermissionChecker, PermissionConfig, PermissionTier
 
-        checker = PermissionChecker(PermissionConfig(tier=PermissionTier.SCOPED,
-            allowed_tools=["file_read", "file_write"],
-            allowed_paths=["/project"],))
+        checker = PermissionChecker(
+            PermissionConfig(
+                tier=PermissionTier.SCOPED,
+                allowed_tools=["file_read", "file_write"],
+                allowed_paths=["/project"],
+            )
+        )
         # Confirm that permission checks pass without any prompt_fn
         assert checker.check("file_read", "agent-1", {"path": "/project/a.txt"}) is True
         assert (
@@ -985,7 +1004,11 @@ class TestTimeoutBehavior:
         provider = _make_provider(
             tool_response, tool_response, tool_response, tool_response, tool_response
         )
-        loop = AgentLoop(provider=provider, tool_executors=_make_tool_executors(), config=AgentLoopConfig(max_turns=3))
+        loop = AgentLoop(
+            provider=provider,
+            tool_executors=_make_tool_executors(),
+            config=AgentLoopConfig(max_turns=3),
+        )
         result = await loop.run(system_prompt="sys", user_input="keep reading")
         # Loop stopped at max_turns with empty content — partial result
         assert result == ""
@@ -1047,7 +1070,8 @@ class TestRealOllama:
             "file_write": execute_file_write,
         }
 
-        loop = AgentLoop(            provider=provider,
+        loop = AgentLoop(
+            provider=provider,
             tool_executors=tool_executors,
             config=AgentLoopConfig(working_dir=str(tmp_path), max_turns=5),
         )

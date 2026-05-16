@@ -523,9 +523,7 @@ class TeamRunner:
         loop = AgentLoop(
             provider=self._provider,
             tool_executors=tool_executors,
-            config=AgentLoopConfig(
-                working_dir=self._working_dir, max_turns=SUB_AGENT_MAX_TURNS
-            ),
+            config=AgentLoopConfig(working_dir=self._working_dir, max_turns=SUB_AGENT_MAX_TURNS),
         )
         result = await loop.run(
             system_prompt=system_prompt,

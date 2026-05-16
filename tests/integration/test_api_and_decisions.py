@@ -162,9 +162,7 @@ class TestDecisionLogEntries:
     """Verify decision log entries contain alternatives and rationale."""
 
     @pytest.mark.ac("AC-06.12.2")
-    async def test_decision_log_stores_rationale(
-        self, project_dir: Path
-    ) -> None:
+    async def test_decision_log_stores_rationale(self, project_dir: Path) -> None:
         """Decision log entry includes the rationale field."""
         from guild.storage.sqlite import Storage
 
@@ -172,10 +170,12 @@ class TestDecisionLogEntries:
         store = Storage(db_path)
         await store.connect()
         await store.log_decision(
-            DecisionRecord(task_id="t-dec",
-            agent_id="a-dec",
-            decision="Use SQLite",
-            rationale="Simpler than Postgres, no external deps",)
+            DecisionRecord(
+                task_id="t-dec",
+                agent_id="a-dec",
+                decision="Use SQLite",
+                rationale="Simpler than Postgres, no external deps",
+            )
         )
         decisions = await store.list_decisions(limit=5)
         assert len(decisions) >= 1
