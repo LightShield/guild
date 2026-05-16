@@ -1,6 +1,6 @@
 """Guild CLI — Typer app instance and version callback.
 
-The ``app`` object is the single entry point (guild.cli.main:app).  Command
+The `app` object is the single entry point (guild.cli.main:app).  Command
 functions are registered by importing the command-group modules at the bottom
 of this file.
 """
@@ -10,16 +10,16 @@ of this file.
 # Note: do NOT use `from __future__ import annotations` — Typer 0.9
 # requires runtime type annotation introspection.
 
+import logging
 
 import typer
-from logger_python import get_logger
 from rich.console import Console
 
 from guild import __version__
 
 __all__ = ["app"]
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 console = Console()
 
 app = typer.Typer(

@@ -83,7 +83,7 @@ def create_provider_for_backend(provider_name: str, base_url: str, model: str) -
 def create_chat_loop(config: GuildConfig, working_dir: str, permission: str) -> AgentLoop:
     """Create an AgentLoop instance for interactive chat (REQ-06.9)."""
     from guild.agent.loop import AgentLoop
-    from guild.permissions.checker import PermissionChecker, PermissionTier
+    from guild.permissions.checker import PermissionChecker, PermissionConfig, PermissionTier
     from guild.tools.registry import build_tool_executors
 
     PermissionTier(permission)  # fail fast on invalid permission tier
@@ -92,13 +92,14 @@ def create_chat_loop(config: GuildConfig, working_dir: str, permission: str) -> 
     tool_executors = build_tool_executors()
 
     tier = PermissionTier(permission)
-    _checker = PermissionChecker(tier=tier)
+    _checker = PermissionChecker(PermissionConfig(tier=tier))
+
+    from guild.agent.loop import AgentLoopConfig
 
     return AgentLoop(
         provider=provider,
         tool_executors=tool_executors,
-        working_dir=working_dir,
-        max_turns=DEFAULT_MAX_TURNS,
+        config=AgentLoopConfig(working_dir=working_dir, max_turns=DEFAULT_MAX_TURNS),
     )
 
 
@@ -157,40 +158,25 @@ def create_task_agent_loop(config: GuildConfig, working_dir: str, timeout: int) 
         max_repeated_calls=config.stuck_max_repeated_calls,
     )
 
+    from guild.agent.loop import AgentLoopConfig
+
     return AgentLoop(
         provider=provider,
         tool_executors=tool_executors,
-        working_dir=working_dir,
-        max_turns=max_turns,
-        stuck_detector=stuck_detector,
+        config=AgentLoopConfig(
+            working_dir=working_dir,
+            max_turns=max_turns,
+            stuck_detector=stuck_detector,
+        ),
     )
 
 
-async def run_task(
-    task_run_or_config: TaskRunConfig | GuildConfig,
-    guild_dir_or_working_dir: Path | str = "",
-    description: str = "",
-    permission: str = "",
-    timeout: int = 0,
-    guild_dir: Path | None = None,
-) -> str:
+async def run_task(task_run: TaskRunConfig, guild_dir: Path) -> str:
     """Execute a task through the agent loop."""
     from guild.permissions.checker import PermissionTier
     from guild.storage.sqlite import Storage
 
-    # Support both new dataclass-based and old positional calling conventions
-    if isinstance(task_run_or_config, TaskRunConfig):
-        task_run = task_run_or_config
-        resolved_guild_dir: Path = guild_dir_or_working_dir  # type: ignore[assignment]
-    else:
-        task_run = TaskRunConfig(
-            config=task_run_or_config,
-            working_dir=str(guild_dir_or_working_dir),
-            description=description,
-            permission=permission,
-            timeout=timeout,
-        )
-        resolved_guild_dir = guild_dir  # type: ignore[assignment]
+    resolved_guild_dir = guild_dir
 
     if not task_run.description or not task_run.description.strip():
         raise ValueError("Task description cannot be empty")
@@ -301,7 +287,7 @@ async def run_team_task(
 ) -> str:
     """Run a task through a multi-agent team composition."""
     from guild.blocks.registry import BlockRegistry
-    from guild.orchestration.team_runner import TeamRunner
+    from guild.orchestration.team_runner import TeamRunner, TeamRunnerConfig
     from guild.storage.sqlite import Storage
 
     db_path = guild_dir / DB_FILENAME
@@ -318,8 +304,7 @@ async def run_team_task(
             team=team_def,
             registry=registry,
             provider=provider,
-            storage=store,
-            working_dir=working_dir,
+            config=TeamRunnerConfig(storage=store, working_dir=working_dir),
         )
         result = await runner.run(description)
     return result

@@ -16,6 +16,8 @@ from guild.agent.learning import (
 )
 from guild.provider.base import LLMResponse
 from guild.storage.sqlite import Storage
+from guild.storage.learnings import LearningRecord
+
 
 
 @pytest.fixture
@@ -218,11 +220,11 @@ class TestBlockScopedLearning:
     async def test_learning_scoped_to_block(self, storage: Storage) -> None:
         """A learning can be stored with a scope tied to a block name."""
         learning_id = await storage.add_learning(
-            category="pattern",
+            LearningRecord(category="pattern",
             content="Always validate inputs in coder block",
             confidence=0.6,
             scope="coder",
-            source_task_id="task-scope-1",
+            source_task_id="task-scope-1",)
         )
         learning = await storage.get_learning(learning_id)
         assert learning is not None
@@ -232,22 +234,22 @@ class TestBlockScopedLearning:
     async def test_list_learnings_filters_by_scope(self, storage: Storage) -> None:
         """list_learnings with scope param returns only that scope."""
         await storage.add_learning(
-            category="tool_tip",
+            LearningRecord(category="tool_tip",
             content="Coder tip",
             confidence=0.7,
-            scope="coder",
+            scope="coder",)
         )
         await storage.add_learning(
-            category="tool_tip",
+            LearningRecord(category="tool_tip",
             content="Reviewer tip",
             confidence=0.7,
-            scope="reviewer",
+            scope="reviewer",)
         )
         await storage.add_learning(
-            category="tool_tip",
+            LearningRecord(category="tool_tip",
             content="Global tip",
             confidence=0.7,
-            scope=None,
+            scope=None,)
         )
 
         coder_learnings = await storage.list_learnings(scope="coder")
@@ -269,16 +271,16 @@ class TestPromptRefinementSuggestions:
 
         # Add some anti-pattern learnings
         await storage.add_learning(
-            category="anti_pattern",
+            LearningRecord(category="anti_pattern",
             content="Agent tends to overwrite files without reading first",
             confidence=0.8,
-            scope="coder",
+            scope="coder",)
         )
         await storage.add_learning(
-            category="tool_tip",
+            LearningRecord(category="tool_tip",
             content="Use file_read before file_write",
             confidence=0.7,
-            scope="coder",
+            scope="coder",)
         )
 
         suggestions = await suggest_prompt_refinements(storage, block_name="coder")
@@ -413,12 +415,12 @@ class TestLearningEdgeBranches:
         await store.connect()
 
         # Add learnings of various categories
-        await store.add_learning(category="pattern", content="Use async", confidence=0.9)
-        await store.add_learning(category="domain_knowledge", content="API is REST", confidence=0.8)
+        await store.add_learning(LearningRecord(category="pattern", content="Use async", confidence=0.9))
+        await store.add_learning(LearningRecord(category="domain_knowledge", content="API is REST", confidence=0.8))
         await store.add_learning(
-            category="anti_pattern", content="Avoid busy waits", confidence=0.7
+            LearningRecord(category="anti_pattern", content="Avoid busy waits", confidence=0.7)
         )
-        await store.add_learning(category="tool_tip", content="Use --verbose flag", confidence=0.6)
+        await store.add_learning(LearningRecord(category="tool_tip", content="Use --verbose flag", confidence=0.6))
 
         suggestions = await suggest_prompt_refinements(store)
 

@@ -55,19 +55,15 @@ class AgentSpawner:
         storage: Storage | None,
         bus: MessageBus,
         config: SpawnerConfig | None = None,
-        *,
-        working_dir: str | None = None,
-        max_depth: int = MAX_SPAWN_DEPTH,
     ) -> None:
         """Initialize AgentSpawner."""
-        if config is not None:
-            working_dir = config.working_dir
-            max_depth = config.max_depth
+        if config is None:
+            config = SpawnerConfig()
         self._provider = provider
         self._storage = storage
         self._bus = bus
-        self._working_dir = working_dir
-        self._max_depth = max_depth
+        self._working_dir = config.working_dir
+        self._max_depth = config.max_depth
         self._current_depth = 0
         self._agents: dict[str, AgentLoop] = {}
 
@@ -103,11 +99,14 @@ class AgentSpawner:
         # unless explicitly provided via the tools parameter)
         tool_executors: dict[str, Any] = {}
 
+        from guild.agent.loop import AgentLoopConfig
+
         loop = AgentLoop(
             provider=self._provider,
             tool_executors=tool_executors,
-            working_dir=self._working_dir,
-            max_turns=SUB_AGENT_MAX_TURNS,
+            config=AgentLoopConfig(
+                working_dir=self._working_dir, max_turns=SUB_AGENT_MAX_TURNS
+            ),
         )
         self._agents[agent_id] = loop
 

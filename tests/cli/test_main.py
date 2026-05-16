@@ -9,6 +9,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from typer.testing import CliRunner
+from guild.storage.audit import DecisionRecord
+from guild.storage.learnings import LearningRecord
+
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -391,11 +394,11 @@ class TestDecisionsCommand:
             store = Storage(db_path)
             await store.connect()
             await store.log_decision(
-                task_id="task-1",
+                DecisionRecord(task_id="task-1",
                 agent_id="agent-1",
                 decision="Use Typer for CLI",
                 rationale="Excellent type annotation support",
-                alternatives=["click", "argparse"],
+                alternatives=["click", "argparse"],)
             )
             await store.close()
 
@@ -682,9 +685,9 @@ class TestLearningsCommand:
             store = Storage(db_path)
             await store.connect()
             await store.add_learning(
-                category="pattern",
+                LearningRecord(category="pattern",
                 content="Always validate inputs",
-                confidence=0.7,
+                confidence=0.7,)
             )
             await store.close()
 
@@ -706,9 +709,9 @@ class TestLearningsCommand:
             store = Storage(db_path)
             await store.connect()
             lid = await store.add_learning(
-                category="tool_tip",
+                LearningRecord(category="tool_tip",
                 content="Use grep for search",
-                confidence=0.3,
+                confidence=0.3,)
             )
             await store.close()
             return lid
@@ -741,9 +744,9 @@ class TestLearningsCommand:
             store = Storage(db_path)
             await store.connect()
             lid = await store.add_learning(
-                category="anti_pattern",
+                LearningRecord(category="anti_pattern",
                 content="Never use eval()",
-                confidence=0.5,
+                confidence=0.5,)
             )
             await store.close()
             return lid
@@ -869,9 +872,9 @@ class TestLearningsDecay:
             store = Storage(db_path)
             await store.connect()
             await store.add_learning(
-                category="pattern",
+                LearningRecord(category="pattern",
                 content="Old learning",
-                confidence=0.2,
+                confidence=0.2,)
             )
             await store.close()
 

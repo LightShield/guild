@@ -942,13 +942,11 @@ class TestAgentDoesNotPause:
 
     async def test_agent_does_not_prompt_in_scoped_mode(self) -> None:
         """In scoped mode, tools within scope proceed without prompting."""
-        from guild.permissions.checker import PermissionChecker, PermissionTier
+        from guild.permissions.checker import PermissionChecker, PermissionConfig, PermissionTier
 
-        checker = PermissionChecker(
-            tier=PermissionTier.SCOPED,
+        checker = PermissionChecker(PermissionConfig(tier=PermissionTier.SCOPED,
             allowed_tools=["file_read", "file_write"],
-            allowed_paths=["/project"],
-        )
+            allowed_paths=["/project"],))
         # Confirm that permission checks pass without any prompt_fn
         assert checker.check("file_read", "agent-1", {"path": "/project/a.txt"}) is True
         assert (

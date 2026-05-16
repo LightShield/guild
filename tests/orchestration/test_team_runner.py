@@ -14,6 +14,7 @@ from guild.orchestration.team_runner import (
     EscalationError,
     EvaluatorResult,
     TeamRunner,
+    TeamRunnerConfig,
 )
 from guild.provider.base import LLMResponse
 
@@ -1229,8 +1230,7 @@ class TestInvokeAgentLearningInjection:
             team=team,
             registry=registry,
             provider=provider,
-            storage=mock_storage,
-            working_dir="/tmp",
+            config=TeamRunnerConfig(storage=mock_storage, working_dir="/tmp"),
         )
 
         coder_def = registry.get_block("coder")

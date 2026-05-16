@@ -49,11 +49,12 @@ async def _run_task(
         provider = create_provider_for_backend(config.provider_name, config.base_url, config.model)
         tool_executors = build_tool_executors()
 
+        from guild.agent.loop import AgentLoopConfig
+
         loop = AgentLoop(
             provider=provider,
             tool_executors=tool_executors,
-            working_dir=working_dir,
-            max_turns=DEFAULT_MAX_TURNS,
+            config=AgentLoopConfig(working_dir=working_dir, max_turns=DEFAULT_MAX_TURNS),
         )
 
         run_dir = guild_dir / "run"

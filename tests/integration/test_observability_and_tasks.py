@@ -1357,7 +1357,7 @@ class TestBudgetCheckBeforeEachLLMCall:
     @pytest.mark.ac("AC-10.2.5")
     async def test_agent_exits_after_budget_exceeded(self) -> None:
         """Agent exits immediately after the first LLM call that pushes total above budget."""
-        from guild.agent.loop import AgentLoop
+        from guild.agent.loop import AgentLoopConfig, AgentLoop
 
         call_count = 0
 
@@ -1377,11 +1377,7 @@ class TestBudgetCheckBeforeEachLLMCall:
         provider = AsyncMock()
         provider.generate = counting_generate
 
-        loop = AgentLoop(
-            provider=provider,
-            tool_executors={},
-            token_budget=100,
-        )
+        loop = AgentLoop(provider=provider, tool_executors={}, config=AgentLoopConfig(token_budget=100))
 
         await loop.run("system", "do work")
         # Budget is 100 tokens; first call uses 120 -> budget check fires on turn 2

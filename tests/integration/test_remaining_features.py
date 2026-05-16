@@ -39,6 +39,9 @@ from unittest.mock import AsyncMock
 import pytest
 
 from guild.storage.sqlite import Storage
+from guild.storage.audit import DecisionRecord
+from guild.storage.learnings import LearningRecord
+
 
 pytestmark = pytest.mark.integration
 
@@ -1266,16 +1269,16 @@ class TestTemporalDecisions:
         from guild.knowledge.temporal import TemporalKnowledge
 
         await storage.log_decision(
-            task_id="t1",
+            DecisionRecord(task_id="t1",
             agent_id="a1",
             decision="Use SQLite over Postgres",
-            rationale="Simpler deployment, no external deps",
+            rationale="Simpler deployment, no external deps",)
         )
         await storage.log_decision(
-            task_id="t1",
+            DecisionRecord(task_id="t1",
             agent_id="a1",
             decision="Use asyncio for I/O",
-            rationale="Consistent with existing codebase",
+            rationale="Consistent with existing codebase",)
         )
 
         tk = TemporalKnowledge(Path("/tmp/fake_guild"), storage)
@@ -1289,10 +1292,10 @@ class TestTemporalDecisions:
 
         for i in range(10):
             await storage.log_decision(
-                task_id="t1",
+                DecisionRecord(task_id="t1",
                 agent_id="a1",
                 decision=f"Decision {i}",
-                rationale=f"Reason {i}",
+                rationale=f"Reason {i}",)
             )
 
         tk = TemporalKnowledge(Path("/tmp/fake_guild"), storage)
@@ -1307,10 +1310,10 @@ class TestTemporalDecisions:
         from guild.knowledge.temporal import TemporalKnowledge
 
         await storage.log_decision(
-            task_id="t1",
+            DecisionRecord(task_id="t1",
             agent_id="a1",
             decision="Use dataclasses",
-            rationale="Simpler than Pydantic",
+            rationale="Simpler than Pydantic",)
         )
 
         tk = TemporalKnowledge(tmp_path, storage)
@@ -1377,15 +1380,15 @@ class TestPresentState:
         from guild.knowledge.temporal import TemporalKnowledge
 
         await storage.log_decision(
-            task_id="t1",
+            DecisionRecord(task_id="t1",
             agent_id="a1",
             decision="Use REST",
-            rationale="Simpler than gRPC",
+            rationale="Simpler than gRPC",)
         )
         await storage.add_learning(
-            category="pattern",
+            LearningRecord(category="pattern",
             content="Validate inputs early",
-            confidence=0.8,
+            confidence=0.8,)
         )
 
         tk = TemporalKnowledge(tmp_path / ".guild", storage)
@@ -1472,14 +1475,14 @@ class TestRelevantLearningsContext:
         from guild.knowledge.temporal import TemporalKnowledge
 
         await storage.add_learning(
-            category="pattern",
+            LearningRecord(category="pattern",
             content="Use guard clauses for early exit",
-            confidence=0.8,
+            confidence=0.8,)
         )
         await storage.add_learning(
-            category="tool_tip",
+            LearningRecord(category="tool_tip",
             content="Use --verbose flag for debugging",
-            confidence=0.7,
+            confidence=0.7,)
         )
 
         tk = TemporalKnowledge(tmp_path, storage)
@@ -1496,9 +1499,9 @@ class TestRelevantLearningsContext:
         from guild.knowledge.temporal import TemporalKnowledge
 
         await storage.add_learning(
-            category="pattern",
+            LearningRecord(category="pattern",
             content="Low confidence tip",
-            confidence=0.2,
+            confidence=0.2,)
         )
 
         tk = TemporalKnowledge(tmp_path, storage)
@@ -1779,16 +1782,16 @@ class TestDecisionsSearchFilter:
     async def test_decisions_searchable_by_keyword(self, storage: Storage) -> None:
         """Decisions containing 'database' are returned by keyword search."""
         await storage.log_decision(
-            decision="Chose SQLite over Postgres",
+            DecisionRecord(decision="Chose SQLite over Postgres",
             rationale="Single-file, no server",
             task_id="t1",
-            agent_id="a1",
+            agent_id="a1",)
         )
         await storage.log_decision(
-            decision="Use async I/O throughout",
+            DecisionRecord(decision="Use async I/O throughout",
             rationale="Better concurrency",
             task_id="t2",
-            agent_id="a1",
+            agent_id="a1",)
         )
 
         all_decisions = await storage.list_decisions(limit=50)
@@ -1862,10 +1865,10 @@ class TestModuleScopedLearningsFiltered:
     ) -> None:
         """Learning scoped to 'storage/' is NOT injected when working on 'cli/'."""
         await storage.add_learning(
-            category="pattern",
+            LearningRecord(category="pattern",
             content="aiosqlite requires explicit commit",
             confidence=0.8,
-            scope="storage",
+            scope="storage",)
         )
 
         cli_learnings = await storage.list_learnings(scope="cli")

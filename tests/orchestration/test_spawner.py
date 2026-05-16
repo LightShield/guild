@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from guild.orchestration.bus import MessageBus
-from guild.orchestration.spawner import AgentSpawner
+from guild.orchestration.spawner import AgentSpawner, SpawnerConfig
 from guild.provider.base import LLMResponse
 from guild.tools.base import TOOL_SCHEMAS
 
@@ -145,7 +145,7 @@ class TestSpawnMaxDepth:
         """spawn() raises RuntimeError when current depth >= max_depth."""
         provider = _make_provider()
         bus = MessageBus()
-        spawner = AgentSpawner(provider=provider, storage=None, bus=bus, max_depth=2)
+        spawner = AgentSpawner(provider=provider, storage=None, bus=bus, config=SpawnerConfig(max_depth=2))
         # Simulate being at max depth already
         spawner._current_depth = 2
 

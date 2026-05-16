@@ -103,7 +103,7 @@ async def recover_from_checkpoint(
         tool_executors: Dict of tool name to executor callable.
         working_dir: Working directory for tool execution.
     """
-    from guild.agent.loop import DEFAULT_MAX_TURNS, AgentLoop
+    from guild.agent.loop import DEFAULT_MAX_TURNS, AgentLoop, AgentLoopConfig
 
     checkpoint = await load_checkpoint(storage, agent_id)
     if checkpoint is None:
@@ -112,9 +112,7 @@ async def recover_from_checkpoint(
     loop = AgentLoop(
         provider=provider,
         tool_executors=tool_executors,
-        working_dir=working_dir,
-        max_turns=DEFAULT_MAX_TURNS,
-        token_budget=0,
+        config=AgentLoopConfig(working_dir=working_dir, max_turns=DEFAULT_MAX_TURNS),
     )
 
     # Messages are already Message objects from from_dict()

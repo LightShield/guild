@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from guild.config.constants import PROGRESS_BAR_WIDTH
-from guild.task.spec import TaskStatus
 
 __all__ = ["RPG_TRANSLATIONS", "RPGMode"]
 
@@ -16,11 +15,11 @@ RPG_TRANSLATIONS: dict[str, str] = {
     "block": "class",
     "blocks": "classes",
     "learnings": "lore",
-    TaskStatus.DONE.value: "quest complete",
-    TaskStatus.FAILED.value: "quest failed",
-    TaskStatus.RUNNING.value: "on adventure",
+    "done": "quest complete",
+    "failed": "quest failed",
+    "running": "on adventure",
     "idle": "resting",
-    TaskStatus.PENDING.value: "quest posted",
+    "pending": "quest posted",
     "token": "gold",
     "tokens": "gold",
 }
@@ -39,7 +38,6 @@ class RPGMode:
     """RPG theme for CLI output."""
 
     def __init__(self, enabled: bool = False) -> None:
-        """Initialize RPGMode."""
         self.enabled = enabled
 
     def translate(self, text: str) -> str:
@@ -64,7 +62,7 @@ class RPGMode:
     def quest_log_entry(self, task: dict[str, str]) -> str:
         """Format a task as a quest log entry."""
         name = task.get("name", "Unknown Quest")
-        status = task.get("status", TaskStatus.PENDING.value)
+        status = task.get("status", "pending")
         rpg_status = self.translate(status) if self.enabled else status
         task_id = task.get("id", "???")
         return f"[Quest #{task_id}] {name} — {rpg_status}"

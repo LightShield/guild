@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from guild.agent.loop import AgentLoop
+from guild.agent.loop import AgentLoopConfig, AgentLoop
 from guild.provider.base import LLMResponse
 from guild.storage.sqlite import Storage
 from guild.tools.registry import build_tool_executors
@@ -76,8 +76,7 @@ class TestAgentLoopWithRealTools:
         loop = AgentLoop(
             provider=provider,
             tool_executors=tool_executors,
-            working_dir=working_dir,
-            max_turns=5,
+            config=AgentLoopConfig(working_dir=working_dir, max_turns=5),
         )
         result = await loop.run(
             system_prompt="You are a helpful assistant.",
@@ -115,8 +114,7 @@ class TestAgentLoopWithRealTools:
         loop = AgentLoop(
             provider=provider,
             tool_executors=tool_executors,
-            working_dir=working_dir,
-            max_turns=5,
+            config=AgentLoopConfig(working_dir=working_dir, max_turns=5),
         )
         result = await loop.run(
             system_prompt="You are a helpful assistant.",
@@ -154,8 +152,7 @@ class TestAgentLoopWithRealTools:
         loop = AgentLoop(
             provider=provider,
             tool_executors=tool_executors,
-            working_dir=working_dir,
-            max_turns=5,
+            config=AgentLoopConfig(working_dir=working_dir, max_turns=5),
         )
         result = await loop.run(
             system_prompt="You are a helpful assistant.",
@@ -189,8 +186,7 @@ class TestAgentLoopWithRealStorage:
         loop = AgentLoop(
             provider=provider,
             tool_executors=tool_executors,
-            working_dir=working_dir,
-            max_turns=5,
+            config=AgentLoopConfig(working_dir=working_dir, max_turns=5),
         )
         result = await loop.run(
             system_prompt="You are a helpful assistant.",
@@ -237,7 +233,7 @@ class TestTeamExecutionPersistsToStorage:
         """Each block in a team run creates a task record in storage."""
         from guild.blocks.definition import BlockDef, Connection, TeamDef
         from guild.blocks.registry import BlockRegistry
-        from guild.orchestration.team_runner import TeamRunner
+        from guild.orchestration.team_runner import TeamRunner, TeamRunnerConfig
         from guild.provider.base import LLMResponse
 
         # Create a simple 2-block team
@@ -287,8 +283,7 @@ class TestTeamExecutionPersistsToStorage:
             team=registry.get_team("dev"),
             registry=registry,
             provider=provider,
-            storage=store,
-            working_dir=working_dir,
+            config=TeamRunnerConfig(storage=store, working_dir=working_dir),
         )
         await runner.run("Build a hello world app")
 

@@ -8,6 +8,7 @@ import pytest
 
 from guild.agent.loop import DEFAULT_MAX_TURNS
 from guild.cli.task_runner import (
+    TaskRunConfig,
     build_system_prompt_with_learnings,
     compute_max_turns,
     create_provider_for_backend,
@@ -207,7 +208,7 @@ class TestRunTask:
         guild_dir.mkdir()
 
         with pytest.raises(ValueError, match="Task description cannot be empty"):
-            await run_task(config, str(tmp_path), "", "autopilot", 0, guild_dir)
+            await run_task(TaskRunConfig(config=config, working_dir=str(tmp_path), description="", permission="autopilot", timeout=0), guild_dir)
 
     async def test_whitespace_only_description_raises(self, tmp_path) -> None:
         """A whitespace-only task description raises ValueError (line 161)."""
@@ -216,7 +217,7 @@ class TestRunTask:
         guild_dir.mkdir()
 
         with pytest.raises(ValueError, match="Task description cannot be empty"):
-            await run_task(config, str(tmp_path), "   ", "autopilot", 0, guild_dir)
+            await run_task(TaskRunConfig(config=config, working_dir=str(tmp_path), description="   ", permission="autopilot", timeout=0), guild_dir)
 
 
 @pytest.mark.unit

@@ -114,28 +114,15 @@ class PermissionChecker:
         prompt_fn: Callback for ASK tier — receives (tool, agent_id, args).
     """
 
-    def __init__(
-        self,
-        config: PermissionConfig | None = None,
-        *,
-        tier: PermissionTier = PermissionTier.NOTHING,
-        allowed_paths: list[str] | None = None,
-        allowed_tools: list[str] | None = None,
-        prompt_fn: PromptFn | None = None,
-        per_call: bool = False,
-    ) -> None:
+    def __init__(self, config: PermissionConfig | None = None) -> None:
         """Initialize PermissionChecker."""
-        if config is not None:
-            tier = config.tier
-            allowed_paths = config.allowed_paths
-            allowed_tools = config.allowed_tools
-            prompt_fn = config.prompt_fn
-            per_call = config.per_call
-        self._tier = tier
-        self._allowed_paths = allowed_paths or []
-        self._allowed_tools = allowed_tools or []
-        self._prompt_fn = prompt_fn
-        self._per_call = per_call
+        if config is None:
+            config = PermissionConfig(tier=PermissionTier.NOTHING)
+        self._tier = config.tier
+        self._allowed_paths = config.allowed_paths or []
+        self._allowed_tools = config.allowed_tools or []
+        self._prompt_fn = config.prompt_fn
+        self._per_call = config.per_call
         self._session_approvals: set[str] = set()
         self.audit_entries: list[AuditEntry] = []
         self.last_denial_reason: str = ""

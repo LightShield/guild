@@ -28,7 +28,7 @@ from guild.git.policy import BranchPolicy, MergeApproval
 from guild.git.worktree import BRANCH_PREFIX, WorktreeManager
 from guild.mcp.client import MCPClient, MCPError, MCPServerConfig
 from guild.orchestration.bus import MessageBus, SharedContext
-from guild.orchestration.spawner import AgentSpawner
+from guild.orchestration.spawner import AgentSpawner, SpawnerConfig
 from guild.orchestration.team_runner import (
     DECISION_ESCALATE,
     DECISION_SKIP,
@@ -1705,7 +1705,7 @@ class TestSpawnDepthBounded:
         """Spawn at depth exceeding max is rejected."""
         provider = _mock_provider()
         bus = MessageBus()
-        spawner = AgentSpawner(provider, storage=None, bus=bus, max_depth=2)
+        spawner = AgentSpawner(provider, storage=None, bus=bus, config=SpawnerConfig(max_depth=2))
         # depth=0 -> ok, depth=1 -> ok within max_depth=2
         result = await spawner.spawn(task="deep", agent_id="deep-agent")
         assert result is not None

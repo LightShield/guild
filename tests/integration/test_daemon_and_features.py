@@ -18,6 +18,7 @@ from typer.testing import CliRunner
 from guild.agent.loop import AgentLoopConfig
 from guild.cli.main import app
 from guild.daemon.resource import ResourceConfig
+from guild.permissions.checker import PermissionConfig
 from guild.provider.base import LLMResponse
 
 runner = CliRunner()
@@ -277,7 +278,7 @@ class TestAskTierPrompts:
             return True
 
         checker = PermissionChecker(
-            tier=PermissionTier.ASK, prompt_fn=approve_all
+            PermissionConfig(tier=PermissionTier.ASK, prompt_fn=approve_all)
         )
         assert (
             checker.check("file_read", "agent-e2e", {"path": "/tmp/a"})
@@ -296,7 +297,7 @@ class TestAskTierPrompts:
             return False
 
         checker = PermissionChecker(
-            tier=PermissionTier.ASK, prompt_fn=deny_all
+            PermissionConfig(tier=PermissionTier.ASK, prompt_fn=deny_all)
         )
         assert (
             checker.check("shell", "agent-e2e", {"command": "ls"}) is False
@@ -317,7 +318,7 @@ class TestAskTierPrompts:
             return True
 
         checker = PermissionChecker(
-            tier=PermissionTier.ASK, prompt_fn=counting_prompt
+            PermissionConfig(tier=PermissionTier.ASK, prompt_fn=counting_prompt)
         )
         checker.check("file_read", "agent-e2e", {"path": "/a"})
         checker.check("file_read", "agent-e2e", {"path": "/b"})
@@ -333,7 +334,7 @@ class TestAskTierPrompts:
         """Edge: ASK tier with no prompt_fn installed always denies."""
         from guild.permissions.checker import PermissionChecker, PermissionTier
 
-        checker = PermissionChecker(tier=PermissionTier.ASK, prompt_fn=None)
+        checker = PermissionChecker(PermissionConfig(tier=PermissionTier.ASK, prompt_fn=None))
         assert (
             checker.check("file_read", "agent-e2e", {"path": "/tmp"}) is False
         )
@@ -353,9 +354,9 @@ class TestScopedTier:
         from guild.permissions.checker import PermissionChecker, PermissionTier
 
         checker = PermissionChecker(
-            tier=PermissionTier.SCOPED,
+            PermissionConfig(tier=PermissionTier.SCOPED,
             allowed_tools=["file_read", "file_write"],
-            allowed_paths=[str(project_dir)],
+            allowed_paths=[str(project_dir)],)
         )
         args = {"path": str(project_dir / "src" / "main.py")}
         assert checker.check("file_read", "agent-e2e", args) is True
@@ -366,9 +367,9 @@ class TestScopedTier:
         from guild.permissions.checker import PermissionChecker, PermissionTier
 
         checker = PermissionChecker(
-            tier=PermissionTier.SCOPED,
+            PermissionConfig(tier=PermissionTier.SCOPED,
             allowed_tools=["file_read"],
-            allowed_paths=[str(project_dir)],
+            allowed_paths=[str(project_dir)],)
         )
         assert (
             checker.check("shell", "agent-e2e", {"command": "ls"}) is False
@@ -382,9 +383,9 @@ class TestScopedTier:
         from guild.permissions.checker import PermissionChecker, PermissionTier
 
         checker = PermissionChecker(
-            tier=PermissionTier.SCOPED,
+            PermissionConfig(tier=PermissionTier.SCOPED,
             allowed_tools=["file_write"],
-            allowed_paths=[str(project_dir)],
+            allowed_paths=[str(project_dir)],)
         )
         assert (
             checker.check(
@@ -403,9 +404,9 @@ class TestScopedTier:
         from guild.permissions.checker import PermissionChecker, PermissionTier
 
         checker = PermissionChecker(
-            tier=PermissionTier.SCOPED,
+            PermissionConfig(tier=PermissionTier.SCOPED,
             allowed_tools=["search"],
-            allowed_paths=[str(project_dir)],
+            allowed_paths=[str(project_dir)],)
         )
         assert (
             checker.check("search", "agent-e2e", {"query": "hello"}) is True
@@ -425,7 +426,7 @@ class TestAutopilotTier:
         """Happy: autopilot permits shell, file_write, etc."""
         from guild.permissions.checker import PermissionChecker, PermissionTier
 
-        checker = PermissionChecker(tier=PermissionTier.AUTOPILOT)
+        checker = PermissionChecker(PermissionConfig(tier=PermissionTier.AUTOPILOT))
         assert (
             checker.check("shell", "agent-e2e", {"command": "echo hi"})
             is True
@@ -444,7 +445,7 @@ class TestAutopilotTier:
         """Edge: autopilot cannot override the hardcoded-never layer."""
         from guild.permissions.checker import PermissionChecker, PermissionTier
 
-        checker = PermissionChecker(tier=PermissionTier.AUTOPILOT)
+        checker = PermissionChecker(PermissionConfig(tier=PermissionTier.AUTOPILOT))
         assert (
             checker.check(
                 "shell",
@@ -468,7 +469,7 @@ class TestPermissionSwitching:
         """Happy: switching from nothing to autopilot unlocks tool calls."""
         from guild.permissions.checker import PermissionChecker, PermissionTier
 
-        checker = PermissionChecker(tier=PermissionTier.NOTHING)
+        checker = PermissionChecker(PermissionConfig(tier=PermissionTier.NOTHING))
         assert checker.check("file_read", "agent-e2e", {}) is False
 
         checker.set_tier(PermissionTier.AUTOPILOT)
@@ -479,7 +480,7 @@ class TestPermissionSwitching:
         """Sad: switching from autopilot to nothing locks everything."""
         from guild.permissions.checker import PermissionChecker, PermissionTier
 
-        checker = PermissionChecker(tier=PermissionTier.AUTOPILOT)
+        checker = PermissionChecker(PermissionConfig(tier=PermissionTier.AUTOPILOT))
         assert checker.check("file_read", "agent-e2e", {}) is True
 
         checker.set_tier(PermissionTier.NOTHING)
@@ -500,7 +501,7 @@ class TestPermissionSwitching:
             return True
 
         checker = PermissionChecker(
-            tier=PermissionTier.ASK, prompt_fn=counting_prompt
+            PermissionConfig(tier=PermissionTier.ASK, prompt_fn=counting_prompt)
         )
         checker.check("file_read", "agent-e2e", {"path": "/a"})
         assert prompt_count == 1
@@ -527,7 +528,7 @@ class TestPermissionAudit:
         """Happy: checker returns bool; tier and tool name available."""
         from guild.permissions.checker import PermissionChecker, PermissionTier
 
-        checker = PermissionChecker(tier=PermissionTier.NOTHING)
+        checker = PermissionChecker(PermissionConfig(tier=PermissionTier.NOTHING))
         result = checker.check("shell", "agent-e2e", {"command": "ls"})
 
         assert isinstance(result, bool)
@@ -539,7 +540,7 @@ class TestPermissionAudit:
         """Sad: denied calls include a descriptive reason for audit log."""
         from guild.permissions.checker import PermissionChecker, PermissionTier
 
-        checker = PermissionChecker(tier=PermissionTier.AUTOPILOT)
+        checker = PermissionChecker(PermissionConfig(tier=PermissionTier.AUTOPILOT))
         allowed, reason = checker.check_hardcoded_never(
             "shell", {"command": "rm -rf /"}
         )
@@ -573,7 +574,7 @@ class TestHardcodedNever:
         """Happy: destructive commands are blocked even in autopilot."""
         from guild.permissions.checker import PermissionChecker, PermissionTier
 
-        checker = PermissionChecker(tier=PermissionTier.AUTOPILOT)
+        checker = PermissionChecker(PermissionConfig(tier=PermissionTier.AUTOPILOT))
         assert (
             checker.check("shell", "agent-e2e", {"command": command}) is False
         )
@@ -585,7 +586,7 @@ class TestHardcodedNever:
         """Sad (reverse): safe commands are NOT blocked."""
         from guild.permissions.checker import PermissionChecker, PermissionTier
 
-        checker = PermissionChecker(tier=PermissionTier.AUTOPILOT)
+        checker = PermissionChecker(PermissionConfig(tier=PermissionTier.AUTOPILOT))
         assert (
             checker.check("shell", "agent-e2e", {"command": "ls -la"}) is True
         )
@@ -599,7 +600,7 @@ class TestHardcodedNever:
         """Edge: explicit allow_hardcoded_never flag bypasses the layer."""
         from guild.permissions.checker import PermissionChecker, PermissionTier
 
-        checker = PermissionChecker(tier=PermissionTier.AUTOPILOT)
+        checker = PermissionChecker(PermissionConfig(tier=PermissionTier.AUTOPILOT))
         allowed, reason = checker.check_hardcoded_never(
             "shell",
             {"command": "git push --force origin main"},
@@ -617,9 +618,9 @@ class TestHardcodedNever:
 
         for tier in [PermissionTier.SCOPED, PermissionTier.AUTOPILOT]:
             checker = PermissionChecker(
-                tier=tier,
+                PermissionConfig(tier=tier,
                 allowed_tools=["shell"],
-                allowed_paths=["/"],
+                allowed_paths=["/"],)
             )
             assert (
                 checker.check(
@@ -652,9 +653,9 @@ class TestReversibility:
         ]:
             for tier in [PermissionTier.SCOPED, PermissionTier.AUTOPILOT]:
                 checker = PermissionChecker(
-                    tier=tier,
+                    PermissionConfig(tier=tier,
                     allowed_tools=["shell"],
-                    allowed_paths=["/"],
+                    allowed_paths=["/"],)
                 )
                 assert (
                     checker.check(
@@ -668,7 +669,7 @@ class TestReversibility:
         """Sad: irreversible commands are blocked by hardcoded-never."""
         from guild.permissions.checker import PermissionChecker, PermissionTier
 
-        checker = PermissionChecker(tier=PermissionTier.AUTOPILOT)
+        checker = PermissionChecker(PermissionConfig(tier=PermissionTier.AUTOPILOT))
         assert (
             checker.check(
                 "shell", "agent-e2e", {"command": "mkfs.ext4 /dev/sda1"}
@@ -681,7 +682,7 @@ class TestReversibility:
         """Edge: reversible git commands allowed; force-push is not."""
         from guild.permissions.checker import PermissionChecker, PermissionTier
 
-        checker = PermissionChecker(tier=PermissionTier.AUTOPILOT)
+        checker = PermissionChecker(PermissionConfig(tier=PermissionTier.AUTOPILOT))
         # Safe git ops
         assert (
             checker.check(
@@ -724,9 +725,9 @@ class TestAgentNoPauseInternal:
         from guild.permissions.checker import PermissionChecker, PermissionTier
 
         checker = PermissionChecker(
-            tier=PermissionTier.SCOPED,
+            PermissionConfig(tier=PermissionTier.SCOPED,
             allowed_tools=["file_read", "file_write"],
-            allowed_paths=[str(project_dir)],
+            allowed_paths=[str(project_dir)],)
         )
         # No prompt_fn installed, yet in-scope tools pass
         assert checker.check(
@@ -1376,7 +1377,7 @@ class TestTier0BlockedToolsAudited:
         """Tier 0 blocked tool call creates audit entry with reason."""
         from guild.permissions.checker import PermissionChecker, PermissionTier
 
-        checker = PermissionChecker(tier=PermissionTier.NOTHING)
+        checker = PermissionChecker(PermissionConfig(tier=PermissionTier.NOTHING))
         result = checker.check("file_read", "agent-e2e", {"path": "/tmp"})
         assert result is False
         # Audit log should contain action="tool_blocked"
@@ -1409,9 +1410,9 @@ class TestAskTierPerCallMode:
             return True
 
         checker = PermissionChecker(
-            tier=PermissionTier.ASK,
+            PermissionConfig(tier=PermissionTier.ASK,
             prompt_fn=counting_prompt,
-            per_call=True,
+            per_call=True,)
         )
         checker.check("file_read", "agent-e2e", {"path": "/a"})
         checker.check("file_read", "agent-e2e", {"path": "/b"})
@@ -1435,9 +1436,9 @@ class TestScopedViolationReportsSpecificBoundary:
         from guild.permissions.checker import PermissionChecker, PermissionTier
 
         checker = PermissionChecker(
-            tier=PermissionTier.SCOPED,
+            PermissionConfig(tier=PermissionTier.SCOPED,
             allowed_tools=["file_write"],
-            allowed_paths=[str(project_dir / "src")],
+            allowed_paths=[str(project_dir / "src")],)
         )
         # Attempt outside scope should mention the boundary
         result = checker.check(
@@ -1478,7 +1479,7 @@ class TestSwitchTiersClearsSessionApprovals:
             return True
 
         checker = PermissionChecker(
-            tier=PermissionTier.ASK, prompt_fn=counting_prompt
+            PermissionConfig(tier=PermissionTier.ASK, prompt_fn=counting_prompt)
         )
         checker.check("file_read", "agent-e2e", {"path": "/a"})
         assert prompt_count == 1
@@ -1502,7 +1503,7 @@ class TestAutoPermittedActionsLogged:
         """Tier 3 tool calls create audit entries with auto_permitted."""
         from guild.permissions.checker import PermissionChecker, PermissionTier
 
-        checker = PermissionChecker(tier=PermissionTier.AUTOPILOT)
+        checker = PermissionChecker(PermissionConfig(tier=PermissionTier.AUTOPILOT))
         result = checker.check("file_read", "agent-e2e", {"path": "/tmp"})
         assert result is True
         # Audit log should contain entry with status="auto_permitted"
@@ -1526,7 +1527,7 @@ class TestHardcodedNeverBlocksRecordedInAudit:
         """Hardcoded-never block returns the matched denylist pattern."""
         from guild.permissions.checker import PermissionChecker, PermissionTier
 
-        checker = PermissionChecker(tier=PermissionTier.AUTOPILOT)
+        checker = PermissionChecker(PermissionConfig(tier=PermissionTier.AUTOPILOT))
         allowed, reason = checker.check_hardcoded_never(
             "shell", {"command": "git push --force origin main"}
         )
@@ -1551,9 +1552,9 @@ class TestHardcodedNeverCannotBeWeakenedViaConfig:
 
         # Even with the most permissive tier, hardcoded never blocks
         checker = PermissionChecker(
-            tier=PermissionTier.AUTOPILOT,
+            PermissionConfig(tier=PermissionTier.AUTOPILOT,
             allowed_tools=["shell"],
-            allowed_paths=["/"],
+            allowed_paths=["/"],)
         )
         assert (
             checker.check(

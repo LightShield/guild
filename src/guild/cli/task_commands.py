@@ -113,9 +113,16 @@ def task(
     config = load_config(guild_dir)
     working_dir = str(guild_dir.parent)
 
-    result = asyncio.run(
-        _run_task(config, working_dir, description, permission, timeout, guild_dir)
+    from guild.cli.task_runner import TaskRunConfig
+
+    task_run = TaskRunConfig(
+        config=config,
+        working_dir=working_dir,
+        description=description,
+        permission=permission,
+        timeout=timeout,
     )
+    result = asyncio.run(_run_task(task_run, guild_dir))
     console.print(f"\n[green]Done.[/green] {result}")
 
 

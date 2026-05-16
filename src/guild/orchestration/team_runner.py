@@ -169,19 +169,15 @@ class TeamRunner:
         registry: BlockRegistry,
         provider: LLMProvider,
         config: TeamRunnerConfig | None = None,
-        *,
-        storage: Storage | None = None,
-        working_dir: str | None = None,
     ) -> None:
         """Initialize TeamRunner."""
-        if config is not None:
-            storage = config.storage
-            working_dir = config.working_dir
+        if config is None:
+            config = TeamRunnerConfig()
         self._team = team
         self._registry = registry
         self._provider = provider
-        self._storage = storage
-        self._working_dir = working_dir
+        self._storage = config.storage
+        self._working_dir = config.working_dir
         self._outputs: dict[str, str] = {}
         self._agent_statuses: dict[str, AgentStatus] = {}
         self._caller_decisions: dict[str, str] = {}
@@ -522,11 +518,14 @@ class TeamRunner:
         task_id, agent_id = await self._create_block_task(block_def, input_data)
         system_prompt = await self._build_block_prompt(block_def)
 
+        from guild.agent.loop import AgentLoopConfig
+
         loop = AgentLoop(
             provider=self._provider,
             tool_executors=tool_executors,
-            working_dir=self._working_dir,
-            max_turns=SUB_AGENT_MAX_TURNS,
+            config=AgentLoopConfig(
+                working_dir=self._working_dir, max_turns=SUB_AGENT_MAX_TURNS
+            ),
         )
         result = await loop.run(
             system_prompt=system_prompt,
