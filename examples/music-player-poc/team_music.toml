@@ -1,0 +1,19 @@
+[team]
+name = "music-builder"
+description = "Coder writes, E2E runner verifies it actually works"
+entry_block = "code"
+
+[team.blocks]
+code = "coder"
+test = "e2e_runner"
+
+[[team.loops]]
+generator_block = "code"
+evaluator_block = "test"
+max_iterations = 5
+
+[[team.connections]]
+source_block = "code"
+source_port = "output"
+target_block = "test"
+target_port = "input"

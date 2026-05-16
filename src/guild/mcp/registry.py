@@ -4,9 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from logger_python import get_logger
-
 from guild.mcp.client import MCPClient, MCPServerConfig, MCPTool
+from logger_python import get_logger
 
 __all__ = ["MCPToolRegistry"]
 

@@ -1,4 +1,6 @@
-"""Vendored logger_python — thin wrapper over stdlib logging.
+"""logger_python — thin structured logging wrapper over stdlib logging.
+
+Vendored in-tree so the project is self-sufficient after clone.
 
 Provides:
 - get_logger(name) -> logging.Logger
@@ -49,15 +51,12 @@ def configure(
     """
     logger = logging.getLogger(name)
 
-    # Convert string level to int
     if isinstance(level, str):
         numeric_level = getattr(logging, level.upper(), logging.INFO)
     else:
         numeric_level = level
 
     logger.setLevel(numeric_level)
-
-    # Clear existing handlers to avoid duplication
     logger.handlers.clear()
 
     handler = logging.StreamHandler()
@@ -71,6 +70,4 @@ def configure(
 
     handler.setFormatter(formatter)
     logger.addHandler(handler)
-
-    # Prevent propagation to root to avoid duplicate messages
     logger.propagate = False

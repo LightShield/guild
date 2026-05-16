@@ -13,9 +13,8 @@ import socket
 from pathlib import Path  # noqa: TC003 — used at runtime
 from typing import Any
 
-from logger_python import get_logger
-
 from guild.task.spec import TaskStatus
+from logger_python import get_logger
 
 __all__ = ["ControlSocket"]
 

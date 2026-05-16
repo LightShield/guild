@@ -10,7 +10,7 @@ import asyncio
 import json
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 from typer.testing import CliRunner
@@ -192,7 +192,6 @@ class TestResourceAwareness:
     def test_vram_pressure_triggers_throttle(self) -> None:
         """High VRAM usage causes the resource monitor to throttle."""
         from guild.daemon.resource import (
-            ResourceConfig,
             ResourceMonitor,
             ResourceThresholds,
             SchedulingMode,
@@ -219,7 +218,6 @@ class TestResourceAwareness:
     def test_no_pressure_no_throttle(self) -> None:
         """Low VRAM usage does not throttle."""
         from guild.daemon.resource import (
-            ResourceConfig,
             ResourceMonitor,
             ResourceThresholds,
             SchedulingMode,
@@ -719,7 +717,7 @@ class TestSelfVerifyCompletion:
     @pytest.mark.ac("AC-06.2.1")
     async def test_self_review_can_trigger_fixes(self) -> None:
         """Edge: self-review finds an issue and uses a tool to fix it."""
-        from guild.agent.loop import AgentLoop, AgentLoopConfig
+        from guild.agent.loop import AgentLoop
         from guild.tools.base import ToolResult
 
         async def mock_write(args: dict[str, Any], wd: str | None = None) -> ToolResult:
@@ -998,7 +996,7 @@ class TestMultiTurn:
     @pytest.mark.ac("AC-06.9.1")
     async def test_send_preserves_context(self) -> None:
         """Happy: send() sees messages from prior turns."""
-        from guild.agent.loop import AgentLoop, AgentLoopConfig
+        from guild.agent.loop import AgentLoop
 
         provider = _make_mock_provider(
             _simple_response("Hello! I am ready."),
@@ -1016,7 +1014,7 @@ class TestMultiTurn:
     @pytest.mark.ac("AC-06.9.1")
     async def test_run_resets_history(self) -> None:
         """Sad: calling run() again clears the conversation."""
-        from guild.agent.loop import AgentLoop, AgentLoopConfig
+        from guild.agent.loop import AgentLoop
 
         provider = _make_mock_provider(
             _simple_response("First run."),
@@ -1035,7 +1033,7 @@ class TestMultiTurn:
     @pytest.mark.ac("AC-06.9.2")
     async def test_send_without_run_raises(self) -> None:
         """Edge: send() before run() raises RuntimeError."""
-        from guild.agent.loop import AgentLoop, AgentLoopConfig
+        from guild.agent.loop import AgentLoop
 
         provider = _make_mock_provider(_simple_response("Nope"))
         loop = AgentLoop(provider=provider, tool_executors={})
@@ -1046,7 +1044,7 @@ class TestMultiTurn:
     @pytest.mark.ac("AC-06.9.1")
     async def test_multiple_sends_accumulate(self) -> None:
         """Edge: four consecutive messages all preserved in history."""
-        from guild.agent.loop import AgentLoop, AgentLoopConfig
+        from guild.agent.loop import AgentLoop
 
         provider = _make_mock_provider(
             _simple_response("R1"),
@@ -1612,7 +1610,7 @@ class TestSendPreservesToolContext:
     @pytest.mark.ac("AC-06.9.3")
     async def test_send_preserves_tool_results_from_run(self) -> None:
         """Messages for step 2 include tool call results from step 1."""
-        from guild.agent.loop import AgentLoop, AgentLoopConfig
+        from guild.agent.loop import AgentLoop
         from guild.tools.base import ToolResult
 
         call_counter = 0

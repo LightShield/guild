@@ -40,7 +40,7 @@ class TestLoopBasics:
     async def test_loop_exits_on_text_only_response(self) -> None:
         """If the model returns text without tool calls, the loop exits."""
         provider = _make_provider(
-            LLMResponse(content="Done! The task is complete.", tool_calls=None)
+            LLMResponse(content="Done! The task is complete.", tool_calls=None),
         )
         loop = AgentLoop(provider=provider, tool_executors=_make_tool_executors())
         result = await loop.run(system_prompt="You are helpful.", user_input="Say hi")
@@ -642,7 +642,6 @@ class TestAdversarialSelfReview:
         loop = AgentLoop(provider=provider, tool_executors=_make_tool_executors())
         result = await loop.run(system_prompt="sys", user_input="Do task")
 
-        # No review prompt should be in messages
         user_msgs = [m for m in loop.messages if m.role == "user"]
         review_msgs = [m for m in user_msgs if SELF_REVIEW_PROMPT in m.content]
         assert len(review_msgs) == 0
@@ -1052,18 +1051,19 @@ class TestRealOllama:
 
     async def test_real_ollama_creates_file_without_looping(self, tmp_path) -> None:
         """Full integration: model calls file_write, loop completes."""
+        from guild.config.models import GuildConfig
         from guild.provider.ollama import create_provider
         from guild.tools.file_ops import execute_file_read, execute_file_write
 
+        config = GuildConfig.load(file=".guild/config.toml", args=[])
         provider = create_provider(
-            base_url="http://192.168.0.110:11434",
+            base_url=config.base_url,
             model="gemma4-26b-moe-agent",
         )
 
-        # Check connectivity
         healthy = await provider.health_check()
         if not healthy:
-            pytest.skip("Ollama not reachable at http://192.168.0.110:11434")
+            pytest.skip(f"Ollama not reachable at {config.base_url}")
 
         tool_executors = {
             "file_read": execute_file_read,

@@ -19,6 +19,7 @@ if TYPE_CHECKING:
 
 from guild import __version__
 from guild.config.constants import (
+    DEFAULT_QUERY_LIMIT,
     GUILD_DIR_NAME,
     HTTP_BAD_REQUEST,
     HTTP_NOT_FOUND,
@@ -28,7 +29,6 @@ from guild.config.constants import (
     JSONRPC_METHOD_NOT_FOUND,
     JSONRPC_PARSE_ERROR,
     WEBSOCKET_POLL_SECONDS,
-    DEFAULT_QUERY_LIMIT,
 )
 from guild.config.loader import DB_FILENAME
 from guild.task.spec import TaskStatus
@@ -238,8 +238,6 @@ def _register_teams_endpoints(app: Any, guild_dir: Path) -> None:
         """Save a team composition from the visual composer (REQ-05.6)."""
         from fastapi import HTTPException
 
-        from guild.config.loader import write_toml_bytes
-
         body = await request.json()
         name: str = body.get("name", "")
         if not name:
@@ -249,13 +247,23 @@ def _register_teams_endpoints(app: Any, guild_dir: Path) -> None:
         team_path = teams_dir / f"{name}.toml"
         blocks: dict[str, str] = body.get("blocks", {})
         connections: list[dict[str, str]] = body.get("connections", [])
-        team_data: dict[str, Any] = {
-            "team": {"name": name, "entry_block": next(iter(blocks), "")},
-            "blocks": blocks,
-            "connections": connections,
-        }
-        with open(team_path, "wb") as f:
-            write_toml_bytes(f, team_data)
+
+        lines = [
+            "[team]",
+            f'name = "{name}"',
+            f'entry_block = "{next(iter(blocks), "")}"',
+            "",
+            "[team.blocks]",
+        ]
+        for key, val in blocks.items():
+            lines.append(f'{key} = "{val}"')
+        for conn in connections:
+            lines.append("")
+            lines.append("[[team.connections]]")
+            for k, v in conn.items():
+                lines.append(f'{k} = "{v}"')
+        lines.append("")
+        team_path.write_text("\n".join(lines))
         return {"status": "ok", "name": name}
 
 

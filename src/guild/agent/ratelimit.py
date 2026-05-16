@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from guild.config.constants import DEFAULT_RATE_LIMIT_CALLS, DEFAULT_RATE_LIMIT_WINDOW_SECONDS
-
 import asyncio
 import time
 from typing import TYPE_CHECKING, Any
+
+from guild.config.constants import DEFAULT_RATE_LIMIT_CALLS, DEFAULT_RATE_LIMIT_WINDOW_SECONDS
 
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from collections.abc import Coroutine

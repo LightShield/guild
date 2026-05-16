@@ -11,8 +11,6 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING, Any
 
-from logger_python import get_logger
-
 from guild.agent.loop import AgentLoop
 from guild.config.constants import (
     AGENT_ID_PREFIX_LEN,
@@ -22,6 +20,7 @@ from guild.config.constants import (
     SUB_AGENT_MAX_TURNS,
 )
 from guild.task.spec import TaskStatus
+from logger_python import get_logger
 
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from guild.blocks.definition import BlockDef, LoopDef, TeamDef
@@ -44,6 +43,7 @@ logger = get_logger(__name__)
 
 DECISION_SKIP = "skip"
 DECISION_ESCALATE = "escalate"
+_LOOP_ESCALATION_THRESHOLD = 2
 
 _EVAL_PASS_KEY = "pass"
 _EVAL_PASSED_KEY = "passed"
@@ -361,11 +361,16 @@ class TeamRunner:
         """Run a generator-evaluator loop (REQ-04.42/04.43).
 
         Continues until evaluator passes or max_iterations reached.
+        After ESCALATION_THRESHOLD consecutive failures, escalates the
+        generator block to the next model in the escalation chain.
         """
         max_iter = loop.max_iterations or DEFAULT_LOOP_MAX_ITERATIONS
         current_input = initial_input
 
         for iteration in range(max_iter):
+            if iteration == _LOOP_ESCALATION_THRESHOLD:
+                self._escalate_block_model(loop.generator_block)
+
             gen_output = await self._run_block(loop.generator_block, current_input)
 
             eval_input = self._build_evaluator_input(loop, gen_output)
@@ -383,6 +388,44 @@ class TeamRunner:
 
         self._outputs[loop.generator_block] = gen_output
         return gen_output
+
+    def _escalate_block_model(self, block_instance: str) -> None:
+        """Upgrade a block to use the next model in the escalation chain."""
+        try:
+            block_type = self._team.blocks.get(block_instance, "")
+            block_def = self._registry.get_block(block_type)
+            if block_def is None:
+                return
+
+            chain = self._get_escalation_chain()
+            if not chain:
+                return
+
+            current_model = block_def.model or ""
+            for candidate in chain:
+                if candidate != current_model:
+                    logger.info(
+                        "Escalating block '%s' from %s to %s after %d failures",
+                        block_instance,
+                        current_model or "(default)",
+                        candidate,
+                        _LOOP_ESCALATION_THRESHOLD,
+                    )
+                    block_def.model = candidate
+                    return
+        except Exception:
+            logger.debug("Block escalation skipped (no config)", exc_info=True)
+
+    def _get_escalation_chain(self) -> list[str]:
+        """Get escalation chain models from config, or empty list."""
+        try:
+            from guild.config.models import GuildConfig
+
+            config: Any = GuildConfig.load(file=".guild/config.toml", args=[])
+            chain = getattr(config, "escalation_chain", "")
+            return [m.strip() for m in chain.split(",") if m.strip()]
+        except (FileNotFoundError, OSError, ValueError, AttributeError):
+            return []
 
     def _build_evaluator_input(self, loop: LoopDef, artifact: str) -> str:
         """Build evaluator input including criteria from config (REQ-04.44)."""
@@ -416,7 +459,10 @@ class TeamRunner:
         if not isinstance(data, dict):
             return None
 
-        passed = data.get(_EVAL_PASS_KEY, data.get(_EVAL_PASSED_KEY, False))
+        passed = data.get(_EVAL_PASS_KEY, data.get(_EVAL_PASSED_KEY, None))
+        if passed is None:
+            status = str(data.get("status", "")).lower()
+            passed = status in ("pass", "success", "ok", "passed")
         score = int(data.get(_EVAL_SCORE_KEY, 0))
         feedback = str(data.get(_EVAL_FEEDBACK_KEY, ""))
         excluded_keys = {_EVAL_PASS_KEY, _EVAL_PASSED_KEY, _EVAL_SCORE_KEY, _EVAL_FEEDBACK_KEY}
@@ -498,7 +544,7 @@ class TeamRunner:
             return
 
         for msg in loop.messages:
-            if msg.role in ("user", "assistant"):
+            if msg.role and msg.content:
                 await self._storage.append_message(agent_id, msg.role, msg.content)
         await self._storage.update_task(
             task_id, status=TaskStatus.COMPLETED.value, result=result[:500]
@@ -518,10 +564,12 @@ class TeamRunner:
         task_id, agent_id = await self._create_block_task(block_def, input_data)
         system_prompt = await self._build_block_prompt(block_def)
 
+        provider = self._get_provider_for_block(block_def)
+
         from guild.agent.loop import AgentLoopConfig
 
         loop = AgentLoop(
-            provider=self._provider,
+            provider=provider,
             tool_executors=tool_executors,
             config=AgentLoopConfig(working_dir=self._working_dir, max_turns=SUB_AGENT_MAX_TURNS),
         )
@@ -533,3 +581,33 @@ class TeamRunner:
 
         await self._persist_block_result(block_def, loop, task_id, agent_id, result)
         return result
+
+    def _get_provider_for_block(self, block_def: BlockDef) -> LLMProvider:
+        """Get the provider for a block, using per-block model override if set."""
+        if not block_def.model:
+            return self._provider
+
+        from guild.cli.task_runner import create_provider_for_backend
+        from guild.provider.retry import RetryConfig, RetryProvider
+
+        base_url = self._resolve_base_url()
+        raw = create_provider_for_backend("ollama", base_url, block_def.model)
+        config = RetryConfig(max_retries=5, initial_delay_seconds=5.0)
+        return RetryProvider(raw, config=config)
+
+    def _resolve_base_url(self) -> str:
+        """Walk the provider chain to find the actual base_url."""
+        candidate: Any = self._provider
+        for _ in range(10):
+            url = getattr(candidate, "base_url", None)
+            if url:
+                return str(url)
+            inner = getattr(candidate, "_provider", None) or getattr(candidate, "_chain", None)
+            if inner is None:
+                break
+            if hasattr(inner, "current"):
+                url = getattr(inner.current, "base_url", None)
+                if url:
+                    return str(url)
+            candidate = inner
+        return "http://localhost:11434"

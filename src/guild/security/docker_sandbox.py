@@ -12,8 +12,6 @@ from __future__ import annotations
 import asyncio
 import shutil
 
-from logger_python import get_logger
-
 from guild.config.constants import (
     DOCKER_CPU_LIMIT,
     DOCKER_DEFAULT_IMAGE,
@@ -22,6 +20,7 @@ from guild.config.constants import (
     DOCKER_TIMEOUT_BUFFER,
     SHELL_TIMEOUT_SECONDS,
 )
+from logger_python import get_logger
 
 __all__ = [
     "DOCKER_DEFAULT_IMAGE",

@@ -11,10 +11,9 @@ import logging
 import sys
 from pathlib import Path
 
-from logger_python import get_logger
-
 from guild.config.loader import DB_FILENAME
 from guild.task.spec import TaskStatus
+from logger_python import get_logger
 
 __all__: list[str] = []
 

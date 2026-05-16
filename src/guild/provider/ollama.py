@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from logger_python import get_logger
 from ollama import AsyncClient, RequestError, ResponseError
 
 from guild.provider.base import LLMProvider, LLMResponse
+from logger_python import get_logger
 
 __all__ = ["OllamaProvider", "create_provider"]
 
@@ -21,7 +21,15 @@ class OllamaProvider(LLMProvider):
         """Initialize OllamaProvider."""
         self.base_url = base_url
         self.model = model
-        self._client = AsyncClient(host=base_url)
+        self._client = AsyncClient(host=base_url, timeout=120.0)
+        self._options: dict[str, Any] = {}
+
+    def set_throttle(self, active: bool) -> None:
+        """Enable/disable resource throttling (reduces GPU layers when active)."""
+        if active:
+            self._options["num_gpu"] = 0
+        else:
+            self._options.pop("num_gpu", None)
 
     async def health_check(self) -> bool:
         """Check if the Ollama server is reachable by listing models."""
@@ -44,6 +52,8 @@ class OllamaProvider(LLMProvider):
         }
         if tools:
             kwargs["tools"] = tools
+        if self._options:
+            kwargs["options"] = self._options
 
         try:
             response = await self._client.chat(**kwargs)

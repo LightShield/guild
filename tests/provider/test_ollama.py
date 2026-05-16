@@ -327,29 +327,37 @@ class TestCreateProvider:
 # --- Integration tests (real Ollama required) ---
 
 
+def _integration_config() -> tuple[str, str]:
+    """Load base_url and model from .guild/config.toml."""
+    from guild.config.models import GuildConfig
+
+    config = GuildConfig.load(file=".guild/config.toml", args=[])
+    return config.base_url, config.model  # type: ignore[return-value]
+
+
 @pytest.mark.integration
 class TestOllamaIntegration:
     """Integration tests against a real Ollama instance."""
 
-    BASE_URL = "http://192.168.0.110:11434"
-    MODEL = "gemma4-4b-dense-med"
-
     async def test_real_health_check_succeeds(self) -> None:
-        provider = create_provider(base_url=self.BASE_URL, model=self.MODEL)
+        base_url, model = _integration_config()
+        provider = create_provider(base_url=base_url, model=model)
         result = await provider.health_check()
         assert result is True
 
     async def test_real_generate_returns_text(self) -> None:
-        provider = create_provider(base_url=self.BASE_URL, model=self.MODEL)
+        base_url, model = _integration_config()
+        provider = create_provider(base_url=base_url, model=model)
         messages = [{"role": "user", "content": "Say exactly: hello world"}]
         result = await provider.generate(messages)
 
         assert isinstance(result, LLMResponse)
         assert len(result.content) > 0
-        assert result.model == self.MODEL
+        assert result.model == model
 
     async def test_real_generate_with_tools_returns_tool_call(self) -> None:
-        provider = create_provider(base_url=self.BASE_URL, model=self.MODEL)
+        base_url, model = _integration_config()
+        provider = create_provider(base_url=base_url, model=model)
         messages = [
             {
                 "role": "user",

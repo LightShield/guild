@@ -77,4 +77,6 @@ def format_tool_result(tool_name: str, result: ToolResult) -> str:
         return f"[{tool_name}] {result.output}{_CLOSURE_HINT}"
 
     error_detail = result.error or "Unknown error"
+    if result.output:
+        return f"[{tool_name}] Error: {error_detail}\n{result.output}"
     return f"[{tool_name}] Error: {error_detail}"

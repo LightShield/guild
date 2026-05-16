@@ -10,9 +10,9 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 from guild.knowledge.temporal import TemporalKnowledge
-from guild.storage.sqlite import Storage
 from guild.storage.audit import DecisionRecord
 from guild.storage.learnings import LearningRecord
+from guild.storage.sqlite import Storage
 
 
 @pytest.fixture

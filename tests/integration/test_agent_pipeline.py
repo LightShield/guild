@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from guild.agent.loop import AgentLoopConfig, AgentLoop
+from guild.agent.loop import AgentLoop, AgentLoopConfig
 from guild.provider.base import LLMResponse
 from guild.storage.sqlite import Storage
 from guild.tools.registry import build_tool_executors

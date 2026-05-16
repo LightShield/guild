@@ -5,9 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from logger_python import get_logger
-
 from guild.provider.base import LLMProvider, LLMResponse
+from logger_python import get_logger
 
 __all__ = [
     "EscalatingProvider",

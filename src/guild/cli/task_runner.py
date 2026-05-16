@@ -146,6 +146,7 @@ def create_task_agent_loop(config: GuildConfig, working_dir: str, timeout: int) 
     """Build an AgentLoop configured for task execution."""
     from guild.agent.loop import AgentLoop
     from guild.agent.stuck import StuckDetector
+    from guild.daemon.resource import ResourceConfig, ResourceMonitor
     from guild.tools.registry import build_tool_executors
 
     provider = create_resilient_provider(config)
@@ -158,6 +159,8 @@ def create_task_agent_loop(config: GuildConfig, working_dir: str, timeout: int) 
         max_repeated_calls=config.stuck_max_repeated_calls,
     )
 
+    resource_monitor = ResourceMonitor(ResourceConfig(mode=config.resource_mode))
+
     from guild.agent.loop import AgentLoopConfig
 
     return AgentLoop(
@@ -167,6 +170,8 @@ def create_task_agent_loop(config: GuildConfig, working_dir: str, timeout: int) 
             working_dir=working_dir,
             max_turns=max_turns,
             stuck_detector=stuck_detector,
+            require_tool_use=True,
+            resource_monitor=resource_monitor,
         ),
     )
 

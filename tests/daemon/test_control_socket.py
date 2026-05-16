@@ -137,6 +137,7 @@ class TestControlSocketCommands:
 class TestControlSocketMessageInjection:
     """Control socket injects user messages into the agent loop."""
 
+    @pytest.mark.ac("AC-05.4a.1")
     async def test_message_queued_for_agent(self, tmp_path: Path) -> None:
         """A 'message' type queues content for the agent loop to consume."""
         from guild.daemon.control_socket import ControlSocket
@@ -197,6 +198,7 @@ class TestControlSocketMessageInjection:
 class TestControlSocketResponseStreaming:
     """Agent responses stream back to attached clients."""
 
+    @pytest.mark.ac("AC-05.4a.2")
     async def test_broadcast_sends_to_connected_client(self, tmp_path: Path) -> None:
         """broadcast() sends a message to all connected clients."""
         from guild.daemon.control_socket import ControlSocket
@@ -359,6 +361,7 @@ class TestControlSocketEdgeCases:
         assert sock_path.exists()
         await cs.stop()
 
+    @pytest.mark.ac("AC-05.4a.3")
     async def test_client_disconnect_during_broadcast(self, tmp_path: Path) -> None:
         """Disconnected subscribers are removed during broadcast."""
         from guild.daemon.control_socket import ControlSocket

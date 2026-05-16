@@ -1357,7 +1357,7 @@ class TestBudgetCheckBeforeEachLLMCall:
     @pytest.mark.ac("AC-10.2.5")
     async def test_agent_exits_after_budget_exceeded(self) -> None:
         """Agent exits immediately after the first LLM call that pushes total above budget."""
-        from guild.agent.loop import AgentLoopConfig, AgentLoop
+        from guild.agent.loop import AgentLoop, AgentLoopConfig
 
         call_count = 0
 

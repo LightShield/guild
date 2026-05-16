@@ -50,8 +50,8 @@ from guild.config.constants import (
 from guild.knowledge.memory import MemoryIndex
 from guild.orchestration.bus import SharedContext
 from guild.provider.base import LLMResponse
-from guild.storage.sqlite import Storage
 from guild.storage.learnings import LearningRecord
+from guild.storage.sqlite import Storage
 
 pytestmark = pytest.mark.integration
 

@@ -15,8 +15,8 @@ from guild.agent.learning import (
     format_learnings_for_injection,
 )
 from guild.provider.base import LLMResponse
-from guild.storage.sqlite import Storage
 from guild.storage.learnings import LearningRecord
+from guild.storage.sqlite import Storage
 
 
 @pytest.fixture

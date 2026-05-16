@@ -38,9 +38,9 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from guild.storage.sqlite import Storage
 from guild.storage.audit import DecisionRecord
 from guild.storage.learnings import LearningRecord
+from guild.storage.sqlite import Storage
 
 pytestmark = pytest.mark.integration
 

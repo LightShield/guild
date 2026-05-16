@@ -9,8 +9,6 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any
 
-from logger_python import get_logger
-
 from guild.config.constants import (
     BRIEF_DECISION_LIMIT,
     DEFAULT_CONTEXT_DECISIONS,
@@ -18,6 +16,7 @@ from guild.config.constants import (
     MIN_INJECTION_CONFIDENCE,
     TEMPORAL_CMD_TIMEOUT_SECONDS,
 )
+from logger_python import get_logger
 
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from pathlib import Path

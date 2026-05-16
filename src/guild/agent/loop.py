@@ -6,8 +6,6 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from logger_python import get_logger
-
 from guild.agent.completion import (
     COMPLETION_NUDGE,
     DEDUP_MESSAGE,
@@ -18,9 +16,11 @@ from guild.agent.completion import (
 from guild.agent.message import Message
 from guild.config.constants import DEFAULT_MAX_TURNS, LOOP_CONTENT_PREVIEW_CHARS
 from guild.tools.base import TOOL_SCHEMAS, ToolResult
+from logger_python import get_logger
 
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from guild.agent.stuck import StuckDetector
+    from guild.daemon.resource import ResourceMonitor
     from guild.provider.base import LLMProvider, LLMResponse
 
 __all__ = [
@@ -75,6 +75,8 @@ class AgentLoopConfig:
     max_turns: int = DEFAULT_MAX_TURNS
     stuck_detector: StuckDetector | None = field(default=None)
     token_budget: int = 0
+    require_tool_use: bool = False
+    resource_monitor: ResourceMonitor | None = field(default=None)
 
 
 class AgentLoop:
@@ -101,6 +103,8 @@ class AgentLoop:
         self.max_turns = config.max_turns
         self.stuck_detector = config.stuck_detector
         self.token_budget = config.token_budget
+        self.require_tool_use = config.require_tool_use
+        self._resource_monitor = config.resource_monitor
         self.messages: list[Message] = []
         self.recent_tool_calls: list[dict[str, Any]] = []
         self._task_description: str = ""
@@ -136,7 +140,7 @@ class AgentLoop:
         if self.stuck_detector:
             self.stuck_detector.reset()
 
-        result = await self._execute_turns()
+        result = await self._execute_turns(is_initial=True)
 
         if self_review and not result.startswith("I'm stuck and need help."):
             result = await self._run_self_review()
@@ -155,9 +159,9 @@ class AgentLoop:
             raise RuntimeError("Must call run() before send().")
         self.messages.append(Message(role="user", content=user_input))
         self.recent_tool_calls = []
-        return await self._execute_turns()
+        return await self._execute_turns(is_initial=False)
 
-    async def _execute_turns(self) -> str:
+    async def _execute_turns(self, is_initial: bool = False) -> str:
         """Drive the tool-calling loop until the model stops or max_turns."""
         tool_schemas = self._get_tool_schemas()
         last_content = ""
@@ -173,6 +177,12 @@ class AgentLoop:
                 )
                 break
 
+            if self._resource_monitor:
+                await self._resource_monitor.wait_if_throttled()
+                throttle = self._resource_monitor.is_user_active
+                if hasattr(self.provider, "set_throttle"):
+                    self.provider.set_throttle(throttle)
+
             raw_messages = [m.to_dict() for m in self.messages]
             response = await self.provider.generate(raw_messages, tools=tool_schemas)
             last_content = response.content or ""
@@ -184,6 +194,24 @@ class AgentLoop:
             self.messages.append(assistant_msg)
 
             if not response.has_tool_call:
+                if (
+                    self.require_tool_use
+                    and is_initial
+                    and self.total_tool_calls == 0
+                    and _turn == 0
+                ):
+                    is_initial = False
+                    self.messages.append(
+                        Message(
+                            role="user",
+                            content=(
+                                "You did not use any tools. You MUST use file_write, shell, "
+                                "or other tools to actually create files and complete the task. "
+                                "Do not just describe what to do — actually do it with tools."
+                            ),
+                        )
+                    )
+                    continue
                 break
 
             tool_calls = response.tool_calls or []
@@ -252,8 +280,16 @@ class AgentLoop:
             return _TEST_FAILURE_RECOVERY_PROMPT
         return STUCK_RECOVERY_PROMPT
 
-    def _produce_escalation(self) -> str:
-        """Build and return a structured escalation message."""
+    def _produce_escalation(self) -> str | None:
+        """Attempt model escalation first; fall back to human escalation."""
+        escalating = self._find_escalating_provider()
+        if escalating is not None and escalating.notify_stuck():
+            logger.info("Escalated to stronger model, continuing loop")
+            self._recovery_attempted = False
+            if self.stuck_detector:
+                self.stuck_detector.reset()
+            return None  # Continue loop with the stronger model
+
         reason = self.stuck_detector.get_reason() if self.stuck_detector else "Unknown"
         attempts = ", ".join(self._attempted_tools) if self._attempted_tools else "None"
         escalation = ESCALATION_TEMPLATE.format(
@@ -264,6 +300,19 @@ class AgentLoop:
         )
         self.messages.append(Message(role="assistant", content=escalation))
         return escalation
+
+    def _find_escalating_provider(self) -> Any:
+        """Walk the provider wrapper chain to find an EscalatingProvider."""
+        from guild.provider.escalation import EscalatingProvider
+
+        candidate: Any = self.provider
+        for _ in range(5):
+            if isinstance(candidate, EscalatingProvider):
+                return candidate
+            candidate = getattr(candidate, "_provider", None)
+            if candidate is None:
+                break
+        return None
 
     async def _run_self_review(self) -> str:
         """Inject self-review prompt and execute one more round."""

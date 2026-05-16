@@ -9,10 +9,10 @@ import pytest
 if TYPE_CHECKING:
     from pathlib import Path
 
-from guild.storage.sqlite import Storage
 from guild.storage.audit import DecisionRecord
 from guild.storage.learnings import LearningRecord
 from guild.storage.questions import QuestionRecord
+from guild.storage.sqlite import Storage
 
 
 @pytest.fixture

@@ -30,6 +30,7 @@ def a2a_app(tmp_path: Path) -> Any:
 class TestAgentCardDiscovery:
     """A2A agent card at /.well-known/agent.json."""
 
+    @pytest.mark.ac("AC-04.7a.1")
     def test_agent_card_returns_valid_json(self, a2a_app: Any) -> None:
         from starlette.testclient import TestClient
 
@@ -65,6 +66,7 @@ class TestAgentCardDiscovery:
 class TestA2ATaskSend:
     """A2A tasks/send — create a task via JSON-RPC."""
 
+    @pytest.mark.ac("AC-04.7a.2")
     def test_send_creates_task_and_returns_submitted(self, a2a_app: Any) -> None:
         from starlette.testclient import TestClient
 
@@ -88,6 +90,7 @@ class TestA2ATaskSend:
         assert "id" in task
         assert task["status"]["state"] == "submitted"
 
+    @pytest.mark.ac("AC-04.7a.4")
     def test_send_without_message_returns_error(self, a2a_app: Any) -> None:
         from starlette.testclient import TestClient
 
@@ -218,6 +221,7 @@ class TestA2ATaskCancel:
 class TestA2AProtocolErrors:
     """A2A JSON-RPC protocol error handling."""
 
+    @pytest.mark.ac("AC-04.7a.3")
     def test_unknown_method_returns_method_not_found(self, a2a_app: Any) -> None:
         from starlette.testclient import TestClient
 

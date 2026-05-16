@@ -6,11 +6,10 @@ import asyncio
 import re
 from typing import Any
 
-from logger_python import get_logger
-
 from guild.config.constants import MAX_SHELL_OUTPUT_CHARS, SHELL_TIMEOUT_SECONDS
 from guild.security.docker_sandbox import is_docker_available, run_in_sandbox
 from guild.tools.base import ToolResult
+from logger_python import get_logger
 
 __all__ = [
     "MAX_SHELL_OUTPUT_CHARS",

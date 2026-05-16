@@ -196,6 +196,11 @@ class ResourceMonitor:
             await self._wait_stealth()
             return
 
+    @property
+    def is_user_active(self) -> bool:
+        """Return whether the user is currently active."""
+        return self.detect_activity() == ActivityState.ACTIVE
+
     async def _wait_polite(self) -> None:
         """Polite mode: delay if user is active."""
         activity = self.detect_activity()

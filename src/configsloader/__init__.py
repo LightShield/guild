@@ -1,11 +1,6 @@
-"""Vendored ConfigsLoader — multi-source configuration loading.
+"""ConfigsLoader — multi-source configuration loading (CLI > env > file > defaults).
 
-Provides Field descriptor and ConfigsLoader base class that supports:
-- Class-level field declarations with Field()
-- TOML file loading
-- Environment variable overlay
-- CLI argument overlay
-- Default values from Field declarations
+Vendored in-tree so the project is self-sufficient after clone.
 """
 
 from __future__ import annotations
@@ -70,7 +65,6 @@ class _ConfigsLoaderMeta(type):
 
     def __new__(mcs, name: str, bases: tuple[type, ...], namespace: dict[str, Any]) -> type:
         cls = super().__new__(mcs, name, bases, namespace)
-        # Collect all FieldDescriptor instances from all MRO classes
         fields: dict[str, FieldDescriptor] = {}
         for klass in reversed(cls.__mro__):
             for attr_name, attr_val in vars(klass).items():
@@ -82,17 +76,18 @@ class _ConfigsLoaderMeta(type):
 
 
 class ConfigsLoader(metaclass=_ConfigsLoaderMeta):
-    """Base class for declarative configuration with multi-source loading."""
+    """Base class for declarative configuration with multi-source loading.
+
+    Subclass this, declare fields with Field(), then call .load() to
+    resolve values from CLI > env > config file > defaults.
+    """
 
     _fields: dict[str, FieldDescriptor]
 
     def __init__(self, **kwargs: Any) -> None:
-        # Set fields from kwargs; for fields not in kwargs, use default
         for field_name, field_desc in self._fields.items():
             if field_name in kwargs:
-                value = kwargs[field_name]
-                # Coerce value to field's type based on default
-                value = self._coerce(field_desc, value)
+                value = self._coerce(field_desc, kwargs[field_name])
                 setattr(self, field_name, value)
             else:
                 setattr(self, field_name, field_desc.default)
@@ -101,28 +96,22 @@ class ConfigsLoader(metaclass=_ConfigsLoaderMeta):
     def _coerce(cls, field_desc: FieldDescriptor, value: Any) -> Any:
         """Coerce a value to match the field's default type."""
         default = field_desc.default
-        if value is None:
-            return value
-        if default is None:
+        if value is None or default is None:
             return value
 
         target_type = type(default)
 
-        # Handle enum types
         if hasattr(target_type, "__members__"):
             if isinstance(value, str):
-                # Try to find enum value by value string
                 for member in target_type:
                     if member.value == value:
                         return member
-                # Try by name
                 try:
                     return target_type(value)
                 except (ValueError, KeyError):
                     return value
             return value
 
-        # Handle basic types
         if isinstance(value, target_type):
             return value
 
@@ -148,7 +137,6 @@ class ConfigsLoader(metaclass=_ConfigsLoaderMeta):
         config_path: Path | str | None = None,
         cli_args: list[str] | None = None,
         env_prefix: str | None = None,
-        # Alternative parameter names used by the codebase
         file: Path | str | None = None,
         args: list[str] | None = None,
         **kwargs: Any,
@@ -160,12 +148,7 @@ class ConfigsLoader(metaclass=_ConfigsLoaderMeta):
         2. Environment variables
         3. Config file (TOML)
         4. Default values
-
-        Supports both parameter naming conventions:
-        - config_path / cli_args / env_prefix (canonical)
-        - file / args (shorthand used by Guild)
         """
-        # Normalize parameter names
         toml_path = file or config_path
         arg_list = args if args is not None else cli_args
         if arg_list is None:
@@ -173,31 +156,23 @@ class ConfigsLoader(metaclass=_ConfigsLoaderMeta):
 
         values: dict[str, Any] = {}
 
-        # 1. Load from TOML file
         if toml_path:
             file_values = cls._load_toml(toml_path)
             values.update(file_values)
 
-        # 2. Overlay environment variables
         env_values = cls._load_env()
         values.update(env_values)
 
-        # 3. Overlay CLI args
         cli_values = cls._parse_cli_args(arg_list)
         values.update(cli_values)
 
-        # 4. Overlay explicit kwargs
         values.update(kwargs)
 
         return cls(**values)
 
     @classmethod
     def _load_toml(cls, path: Path | str) -> dict[str, Any]:
-        """Load field values from a TOML file.
-
-        The TOML file is organized by sections (e.g., [provider]).
-        Fields are matched by their section + field_name.
-        """
+        """Load field values from a TOML file."""
         path = Path(path)
         if not path.is_file():
             return {}
@@ -216,7 +191,6 @@ class ConfigsLoader(metaclass=_ConfigsLoaderMeta):
                 if field_name in data[section]:
                     values[field_name] = data[section][field_name]
             elif field_name in data:
-                # Top-level key (no section)
                 values[field_name] = data[field_name]
 
         return values
@@ -239,7 +213,6 @@ class ConfigsLoader(metaclass=_ConfigsLoaderMeta):
         """Parse CLI arguments matching field flags."""
         values: dict[str, Any] = {}
 
-        # Build a map of flag -> field_name
         flag_map: dict[str, str] = {}
         for field_name, field_desc in cls._fields.items():
             for flag in field_desc.flags:

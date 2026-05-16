@@ -6,9 +6,8 @@ import json
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from logger_python import get_logger
-
 from guild.agent.message import Message
+from logger_python import get_logger
 
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from guild.agent.loop import AgentLoop

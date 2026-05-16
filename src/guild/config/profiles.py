@@ -11,10 +11,9 @@ from dataclasses import dataclass, field
 from pathlib import Path  # noqa: TC003 - used at runtime in function bodies
 from typing import TYPE_CHECKING, Any
 
-from logger_python import get_logger
-
 from guild.config.constants import AGENTS_FILENAME, DEFAULT_MAX_TURNS, PERMISSIONS_FILENAME
 from guild.permissions.checker import PermissionTier
+from logger_python import get_logger
 
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from guild.config.models import GuildConfig

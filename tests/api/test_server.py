@@ -48,6 +48,7 @@ def test_api_routes_defined() -> None:
 
 
 @pytest.mark.unit
+@pytest.mark.ac("AC-04.7a.5")
 def test_create_app_raises_without_fastapi() -> None:
     """create_app raises ImportError when fastapi is not installed."""
     import builtins
@@ -151,6 +152,7 @@ def test_frontend_serves_html(tmp_path: Path) -> None:
 
 
 @pytest.mark.unit
+@pytest.mark.ac("AC-05.7.2")
 def test_websocket_sends_status_updates(guild_api_dir: Path) -> None:
     """WebSocket /ws sends JSON status updates."""
     from starlette.testclient import TestClient
@@ -180,12 +182,9 @@ def test_guild_serve_command_exists() -> None:
 
 
 @pytest.mark.unit
+@pytest.mark.ac("AC-05.6.3")
 def test_visual_composer_api_routes_exist() -> None:
-    """The API provides blocks/teams data routes (backend side only)."""
-    # NOTE: REQ-05.6 (visual composer) and REQ-05.7 (communication graph) are
-    # frontend features that cannot be meaningfully unit-tested without a browser.
-    # These tests only verify the backend API exposes the required data routes.
-    # The frontend requirements remain UNCOVERED until E2E browser tests exist.
+    """The API provides blocks/teams data routes (backend for visual composer)."""
     assert "GET /api/blocks" in API_ROUTES
     assert "GET /api/teams" in API_ROUTES
 
@@ -555,6 +554,7 @@ def test_websocket_disconnect_path(guild_api_dir: Path) -> None:
 
 
 @pytest.mark.unit
+@pytest.mark.ac("AC-04.24a.1")
 def test_api_save_team(guild_api_dir: Path) -> None:
     """POST /api/teams saves a team composition to disk."""
     from starlette.testclient import TestClient
@@ -583,6 +583,39 @@ def test_api_save_team(guild_api_dir: Path) -> None:
     # Verify file was created
     team_file = guild_api_dir / "teams" / "my-team.toml"
     assert team_file.exists()
+
+
+@pytest.mark.unit
+@pytest.mark.ac("AC-04.24a.2")
+def test_api_saved_team_loadable_by_registry(guild_api_dir: Path) -> None:
+    """Team saved via POST /api/teams is loadable by BlockRegistry."""
+    from starlette.testclient import TestClient
+
+    from guild.blocks.registry import BlockRegistry
+
+    app = create_app(guild_dir=guild_api_dir)
+    with TestClient(app) as client:
+        client.post(
+            "/api/teams",
+            json={
+                "name": "roundtrip-team",
+                "blocks": {"p": "planner", "c": "coder"},
+                "connections": [
+                    {
+                        "source_block": "p",
+                        "target_block": "c",
+                        "source_port": "plan",
+                        "target_port": "spec",
+                    }
+                ],
+            },
+        )
+    reg = BlockRegistry()
+    teams_dir = guild_api_dir / "teams"
+    reg.load_from_dir(teams_dir)
+    team = reg.get_team("roundtrip-team")
+    assert team is not None
+    assert team.entry_block is not None
 
 
 @pytest.mark.unit

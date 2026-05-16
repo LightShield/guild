@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from typer.testing import CliRunner
+
 from guild.storage.audit import DecisionRecord
 from guild.storage.learnings import LearningRecord
 
