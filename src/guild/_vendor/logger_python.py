@@ -63,6 +63,7 @@ def configure(
     handler = logging.StreamHandler()
     handler.setLevel(numeric_level)
 
+    formatter: logging.Formatter
     if structured:
         formatter = _StructuredFormatter()
     else:

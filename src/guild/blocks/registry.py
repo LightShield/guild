@@ -8,7 +8,7 @@ from logger_python import get_logger
 try:
     import tomllib
 except ModuleNotFoundError:  # pragma: no cover
-    import tomli as tomllib  # type: ignore[no-redef, import-not-found]
+    import tomli as tomllib  # type: ignore[no-redef]
 
 from guild.permissions.checker import PermissionTier
 

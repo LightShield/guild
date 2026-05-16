@@ -12,6 +12,8 @@ __all__ = [
     "CLI_PROVIDER_TIMEOUT_SECONDS",
     # Agent loop
     "DEFAULT_MAX_TURNS",
+    # Provider defaults
+    "DEFAULT_MAX_TOKENS",
     # Context management
     "DEFAULT_CONTEXT_MAX_TOKENS",
     "DEFAULT_COMPACT_THRESHOLD",
@@ -117,6 +119,11 @@ CLI_PROVIDER_TIMEOUT_SECONDS: int = 120
 # Agent loop
 # ---------------------------------------------------------------------------
 DEFAULT_MAX_TURNS: int = 50
+
+# ---------------------------------------------------------------------------
+# Provider defaults
+# ---------------------------------------------------------------------------
+DEFAULT_MAX_TOKENS: int = 4096
 
 # ---------------------------------------------------------------------------
 # Context management

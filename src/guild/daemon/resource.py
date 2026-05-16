@@ -79,7 +79,7 @@ def _default_activity_detector() -> (
     MVP: uses psutil if available, otherwise assumes IDLE.
     """
     try:
-        import psutil  # type: ignore[import-untyped]
+        import psutil
 
         cpu: float = psutil.cpu_percent(interval=0.1)
         if cpu > DEFAULT_CPU_THRESHOLD:

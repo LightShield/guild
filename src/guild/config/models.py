@@ -6,8 +6,20 @@ and TOML file support.
 
 from __future__ import annotations
 
-from configsloader import ConfigsLoader, Field  # type: ignore[import-untyped]
+from configsloader import ConfigsLoader, Field
 
+from guild.config.constants import (
+    CLI_PROVIDER_TIMEOUT_SECONDS,
+    DEFAULT_COMPACT_THRESHOLD,
+    DEFAULT_CONTEXT_MAX_TOKENS,
+    DEFAULT_MAX_TOKENS,
+    DEFAULT_MAX_TURNS,
+    DEFAULT_PRESERVE_RECENT,
+    MAX_SHELL_OUTPUT_CHARS,
+    MAX_SPAWN_DEPTH,
+    SHELL_TIMEOUT_SECONDS,
+    WEBSOCKET_POLL_SECONDS,
+)
 from guild.daemon.resource import SchedulingMode
 from guild.permissions.checker import PermissionTier
 
@@ -35,7 +47,7 @@ class GuildConfig(ConfigsLoader):  # type: ignore[misc]
         description="Model name",
     )
     temperature: float = Field(default=0.7, section="provider", description="Sampling temperature")
-    max_tokens: int = Field(default=4096, section="provider", description="Max output tokens")
+    max_tokens: int = Field(default=DEFAULT_MAX_TOKENS, section="provider", description="Max output tokens")
 
     # Guild section
     default_permission: PermissionTier = Field(
@@ -81,10 +93,10 @@ class GuildConfig(ConfigsLoader):  # type: ignore[misc]
 
     # Operational constants (guild section)
     shell_timeout_seconds: int = Field(
-        default=60, section="guild", description="Shell command timeout in seconds"
+        default=SHELL_TIMEOUT_SECONDS, section="guild", description="Shell command timeout in seconds"
     )
     shell_max_output_chars: int = Field(
-        default=20_000, section="guild", description="Max shell output characters before truncation"
+        default=MAX_SHELL_OUTPUT_CHARS, section="guild", description="Max shell output characters before truncation"
     )
     cli_provider_timeout_seconds: int = Field(
         default=120, section="guild", description="CLI provider command timeout in seconds"
