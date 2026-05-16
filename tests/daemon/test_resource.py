@@ -8,6 +8,7 @@ import pytest
 
 from guild.daemon.resource import (
     ActivityState,
+    ResourceConfig,
     ResourceMonitor,
     ResourceThresholds,
     SchedulingMode,
@@ -21,18 +22,24 @@ class TestIdleDetection:
     def test_idle_detection_returns_idle_when_no_activity(self) -> None:
         """When CPU is below threshold, user is considered idle."""
         monitor = ResourceMonitor(
-            mode=SchedulingMode.POLITE,
-            activity_detector=lambda: ActivityState.IDLE,
-            cpu_reader=lambda: 10.0,
+            ResourceConfig(
+                mode=SchedulingMode.POLITE,
+                activity_detector=lambda: ActivityState.IDLE,
+                cpu_reader=lambda: 10.0,
+        
+            )
         )
         assert monitor.detect_activity() == ActivityState.IDLE
 
     def test_idle_detection_returns_active_when_recent_activity(self) -> None:
         """When CPU is above threshold, user is considered active."""
         monitor = ResourceMonitor(
-            mode=SchedulingMode.POLITE,
-            activity_detector=lambda: ActivityState.ACTIVE,
-            cpu_reader=lambda: 90.0,
+            ResourceConfig(
+                mode=SchedulingMode.POLITE,
+                activity_detector=lambda: ActivityState.ACTIVE,
+                cpu_reader=lambda: 90.0,
+        
+            )
         )
         assert monitor.detect_activity() == ActivityState.ACTIVE
 
@@ -40,9 +47,12 @@ class TestIdleDetection:
         """Activity detector reporting IDLE when CPU is below threshold."""
         # Edge case: CPU is exactly at the threshold boundary (below)
         monitor = ResourceMonitor(
-            mode=SchedulingMode.POLITE,
-            activity_detector=lambda: ActivityState.IDLE,
-            cpu_reader=lambda: 79.9,  # Just below default 80% threshold
+            ResourceConfig(
+                mode=SchedulingMode.POLITE,
+                activity_detector=lambda: ActivityState.IDLE,
+                cpu_reader=lambda: 79.9,  # Just below default 80% threshold
+        
+            )
         )
         assert monitor.detect_activity() == ActivityState.IDLE
         # Verify CPU reading is coherent with idle state
@@ -56,9 +66,12 @@ class TestCpuLoadDetection:
     def test_cpu_load_detection(self) -> None:
         """CPU reader returns current utilization percentage."""
         monitor = ResourceMonitor(
-            mode=SchedulingMode.FULL,
-            activity_detector=lambda: ActivityState.IDLE,
-            cpu_reader=lambda: 42.5,
+            ResourceConfig(
+                mode=SchedulingMode.FULL,
+                activity_detector=lambda: ActivityState.IDLE,
+                cpu_reader=lambda: 42.5,
+        
+            )
         )
         assert monitor.get_cpu_percent() == 42.5
 
@@ -70,9 +83,12 @@ class TestSchedulingModes:
     async def test_full_mode_never_throttles(self) -> None:
         """Full mode returns immediately regardless of activity."""
         monitor = ResourceMonitor(
-            mode=SchedulingMode.FULL,
-            activity_detector=lambda: ActivityState.ACTIVE,
-            cpu_reader=lambda: 95.0,
+            ResourceConfig(
+                mode=SchedulingMode.FULL,
+                activity_detector=lambda: ActivityState.ACTIVE,
+                cpu_reader=lambda: 95.0,
+        
+            )
         )
         # Should return immediately, no delay
         start = asyncio.get_event_loop().time()
@@ -84,10 +100,13 @@ class TestSchedulingModes:
         """Polite mode delays when user is active."""
         thresholds = ResourceThresholds(polite_delay_seconds=0.1)
         monitor = ResourceMonitor(
-            mode=SchedulingMode.POLITE,
-            thresholds=thresholds,
-            activity_detector=lambda: ActivityState.ACTIVE,
-            cpu_reader=lambda: 90.0,
+            ResourceConfig(
+                mode=SchedulingMode.POLITE,
+                thresholds=thresholds,
+                activity_detector=lambda: ActivityState.ACTIVE,
+                cpu_reader=lambda: 90.0,
+        
+            )
         )
         start = asyncio.get_event_loop().time()
         await monitor.wait_if_throttled()
@@ -108,10 +127,13 @@ class TestSchedulingModes:
 
         thresholds = ResourceThresholds(poll_interval_seconds=0.05)
         monitor = ResourceMonitor(
-            mode=SchedulingMode.STEALTH,
-            thresholds=thresholds,
-            activity_detector=toggling_detector,
-            cpu_reader=lambda: 50.0,
+            ResourceConfig(
+                mode=SchedulingMode.STEALTH,
+                thresholds=thresholds,
+                activity_detector=toggling_detector,
+                cpu_reader=lambda: 50.0,
+        
+            )
         )
         await monitor.wait_if_throttled()
         # Should have polled multiple times before getting IDLE
@@ -126,10 +148,13 @@ class TestPoliteDelay:
         """Different polite_delay_seconds values produce different wait times."""
         thresholds = ResourceThresholds(polite_delay_seconds=0.15)
         monitor = ResourceMonitor(
-            mode=SchedulingMode.POLITE,
-            thresholds=thresholds,
-            activity_detector=lambda: ActivityState.ACTIVE,
-            cpu_reader=lambda: 90.0,
+            ResourceConfig(
+                mode=SchedulingMode.POLITE,
+                thresholds=thresholds,
+                activity_detector=lambda: ActivityState.ACTIVE,
+                cpu_reader=lambda: 90.0,
+        
+            )
         )
         start = asyncio.get_event_loop().time()
         await monitor.wait_if_throttled()
@@ -141,10 +166,13 @@ class TestPoliteDelay:
         """Polite mode skips the delay when user is idle."""
         thresholds = ResourceThresholds(polite_delay_seconds=5.0)
         monitor = ResourceMonitor(
-            mode=SchedulingMode.POLITE,
-            thresholds=thresholds,
-            activity_detector=lambda: ActivityState.IDLE,
-            cpu_reader=lambda: 10.0,
+            ResourceConfig(
+                mode=SchedulingMode.POLITE,
+                thresholds=thresholds,
+                activity_detector=lambda: ActivityState.IDLE,
+                cpu_reader=lambda: 10.0,
+        
+            )
         )
         start = asyncio.get_event_loop().time()
         await monitor.wait_if_throttled()
@@ -156,10 +184,13 @@ class TestPoliteDelay:
         """Polite delay duration matches the configured polite_delay_seconds value."""
         thresholds = ResourceThresholds(polite_delay_seconds=0.2)
         monitor = ResourceMonitor(
-            mode=SchedulingMode.POLITE,
-            thresholds=thresholds,
-            activity_detector=lambda: ActivityState.ACTIVE,
-            cpu_reader=lambda: 95.0,
+            ResourceConfig(
+                mode=SchedulingMode.POLITE,
+                thresholds=thresholds,
+                activity_detector=lambda: ActivityState.ACTIVE,
+                cpu_reader=lambda: 95.0,
+        
+            )
         )
         start = asyncio.get_event_loop().time()
         await monitor.wait_if_throttled()
@@ -185,10 +216,13 @@ class TestStealthWait:
 
         thresholds = ResourceThresholds(poll_interval_seconds=0.02)
         monitor = ResourceMonitor(
-            mode=SchedulingMode.STEALTH,
-            thresholds=thresholds,
-            activity_detector=counting_detector,
-            cpu_reader=lambda: 50.0,
+            ResourceConfig(
+                mode=SchedulingMode.STEALTH,
+                thresholds=thresholds,
+                activity_detector=counting_detector,
+                cpu_reader=lambda: 50.0,
+        
+            )
         )
         await monitor.wait_if_throttled()
         assert len(calls) >= 4
@@ -207,10 +241,13 @@ class TestStealthWait:
 
         thresholds = ResourceThresholds(poll_interval_seconds=0.02)
         monitor = ResourceMonitor(
-            mode=SchedulingMode.STEALTH,
-            thresholds=thresholds,
-            activity_detector=detector_becomes_idle,
-            cpu_reader=lambda: 50.0,
+            ResourceConfig(
+                mode=SchedulingMode.STEALTH,
+                thresholds=thresholds,
+                activity_detector=detector_becomes_idle,
+                cpu_reader=lambda: 50.0,
+        
+            )
         )
         start = asyncio.get_event_loop().time()
         await monitor.wait_if_throttled()
@@ -234,10 +271,13 @@ class TestStealthWait:
 
         thresholds = ResourceThresholds(poll_interval_seconds=0.02)
         monitor = ResourceMonitor(
-            mode=SchedulingMode.STEALTH,
-            thresholds=thresholds,
-            activity_detector=always_active_then_idle,
-            cpu_reader=lambda: 85.0,
+            ResourceConfig(
+                mode=SchedulingMode.STEALTH,
+                thresholds=thresholds,
+                activity_detector=always_active_then_idle,
+                cpu_reader=lambda: 85.0,
+        
+            )
         )
         start = asyncio.get_event_loop().time()
         await monitor.wait_if_throttled()
@@ -281,9 +321,12 @@ class TestGetStatus:
     def test_get_status_returns_throttled_when_active_polite(self) -> None:
         """get_status reports throttled=True in polite mode with active user."""
         monitor = ResourceMonitor(
-            mode=SchedulingMode.POLITE,
-            activity_detector=lambda: ActivityState.ACTIVE,
-            cpu_reader=lambda: 85.0,
+            ResourceConfig(
+                mode=SchedulingMode.POLITE,
+                activity_detector=lambda: ActivityState.ACTIVE,
+                cpu_reader=lambda: 85.0,
+        
+            )
         )
         status = monitor.get_status()
         assert status.mode == SchedulingMode.POLITE
@@ -295,9 +338,12 @@ class TestGetStatus:
     def test_get_status_returns_not_throttled_when_idle(self) -> None:
         """get_status reports throttled=False in polite mode with idle user."""
         monitor = ResourceMonitor(
-            mode=SchedulingMode.POLITE,
-            activity_detector=lambda: ActivityState.IDLE,
-            cpu_reader=lambda: 20.0,
+            ResourceConfig(
+                mode=SchedulingMode.POLITE,
+                activity_detector=lambda: ActivityState.IDLE,
+                cpu_reader=lambda: 20.0,
+        
+            )
         )
         status = monitor.get_status()
         assert status.is_throttled is False
@@ -306,9 +352,12 @@ class TestGetStatus:
     def test_get_status_stealth_active_gives_paused_reason(self) -> None:
         """get_status reports 'paused until idle' reason in stealth mode."""
         monitor = ResourceMonitor(
-            mode=SchedulingMode.STEALTH,
-            activity_detector=lambda: ActivityState.ACTIVE,
-            cpu_reader=lambda: 75.0,
+            ResourceConfig(
+                mode=SchedulingMode.STEALTH,
+                activity_detector=lambda: ActivityState.ACTIVE,
+                cpu_reader=lambda: 75.0,
+        
+            )
         )
         status = monitor.get_status()
         assert status.is_throttled is True
@@ -317,9 +366,12 @@ class TestGetStatus:
     def test_get_status_full_mode_never_throttled(self) -> None:
         """get_status reports throttled=False in full mode regardless."""
         monitor = ResourceMonitor(
-            mode=SchedulingMode.FULL,
-            activity_detector=lambda: ActivityState.ACTIVE,
-            cpu_reader=lambda: 99.0,
+            ResourceConfig(
+                mode=SchedulingMode.FULL,
+                activity_detector=lambda: ActivityState.ACTIVE,
+                cpu_reader=lambda: 99.0,
+        
+            )
         )
         status = monitor.get_status()
         assert status.is_throttled is False
@@ -345,10 +397,13 @@ class TestMonitorPolling:
 
         thresholds = ResourceThresholds(poll_interval_seconds=0.05)
         monitor = ResourceMonitor(
-            mode=SchedulingMode.STEALTH,
-            thresholds=thresholds,
-            activity_detector=timed_detector,
-            cpu_reader=lambda: 50.0,
+            ResourceConfig(
+                mode=SchedulingMode.STEALTH,
+                thresholds=thresholds,
+                activity_detector=timed_detector,
+                cpu_reader=lambda: 50.0,
+        
+            )
         )
         await monitor.wait_if_throttled()
         # At least 2 intervals should have elapsed
@@ -400,8 +455,11 @@ class TestGpuVramAwareness:
         from guild.daemon.resource import ResourceMonitor, SchedulingMode
 
         monitor = ResourceMonitor(
-            mode=SchedulingMode.POLITE,
-            gpu_reader=_gpu_high,
+            ResourceConfig(
+                mode=SchedulingMode.POLITE,
+                gpu_reader=_gpu_high,
+        
+            )
         )
         expected = {
             "gpu_percent": 90.0,
@@ -420,9 +478,12 @@ class TestGpuVramAwareness:
 
         thresholds = ResourceThresholds(vram_pressure_percent=85.0)
         monitor = ResourceMonitor(
-            mode=SchedulingMode.POLITE,
-            thresholds=thresholds,
-            gpu_reader=_gpu_over_threshold,
+            ResourceConfig(
+                mode=SchedulingMode.POLITE,
+                thresholds=thresholds,
+                gpu_reader=_gpu_over_threshold,
+        
+            )
         )
         status = monitor.get_status()
         assert status.is_throttled
@@ -438,9 +499,12 @@ class TestGpuVramAwareness:
 
         thresholds = ResourceThresholds(vram_pressure_percent=85.0)
         monitor = ResourceMonitor(
-            mode=SchedulingMode.POLITE,
-            thresholds=thresholds,
-            gpu_reader=_gpu_under_threshold,
+            ResourceConfig(
+                mode=SchedulingMode.POLITE,
+                thresholds=thresholds,
+                gpu_reader=_gpu_under_threshold,
+        
+            )
         )
         status = monitor.get_status()
         assert not status.is_throttled
@@ -449,7 +513,7 @@ class TestGpuVramAwareness:
         """Without a gpu_reader, get_gpu_status returns None."""
         from guild.daemon.resource import ResourceMonitor, SchedulingMode
 
-        monitor = ResourceMonitor(mode=SchedulingMode.POLITE)
+        monitor = ResourceMonitor(ResourceConfig(mode=SchedulingMode.POLITE))
         assert monitor.get_gpu_status() is None
 
     def test_gpu_status_in_resource_status(self) -> None:
@@ -457,8 +521,11 @@ class TestGpuVramAwareness:
         from guild.daemon.resource import ResourceMonitor, SchedulingMode
 
         monitor = ResourceMonitor(
-            mode=SchedulingMode.POLITE,
-            gpu_reader=_gpu_mid,
+            ResourceConfig(
+                mode=SchedulingMode.POLITE,
+                gpu_reader=_gpu_mid,
+        
+            )
         )
         status = monitor.get_status()
         assert status.gpu_status is not None
@@ -474,8 +541,11 @@ class TestThermalAwareness:
         from guild.daemon.resource import ResourceMonitor, SchedulingMode
 
         monitor = ResourceMonitor(
-            mode=SchedulingMode.POLITE,
-            thermal_reader=_thermal_throttled_hot,
+            ResourceConfig(
+                mode=SchedulingMode.POLITE,
+                thermal_reader=_thermal_throttled_hot,
+        
+            )
         )
         expected = {"is_throttled": True, "cpu_temp_celsius": 95.0}
         assert monitor.get_thermal_status() == expected
@@ -485,8 +555,11 @@ class TestThermalAwareness:
         from guild.daemon.resource import ResourceMonitor, SchedulingMode
 
         monitor = ResourceMonitor(
-            mode=SchedulingMode.POLITE,
-            thermal_reader=_thermal_throttled_critical,
+            ResourceConfig(
+                mode=SchedulingMode.POLITE,
+                thermal_reader=_thermal_throttled_critical,
+        
+            )
         )
         status = monitor.get_status()
         assert status.is_throttled
@@ -497,8 +570,11 @@ class TestThermalAwareness:
         from guild.daemon.resource import ResourceMonitor, SchedulingMode
 
         monitor = ResourceMonitor(
-            mode=SchedulingMode.POLITE,
-            thermal_reader=_thermal_ok_warm,
+            ResourceConfig(
+                mode=SchedulingMode.POLITE,
+                thermal_reader=_thermal_ok_warm,
+        
+            )
         )
         status = monitor.get_status()
         assert not status.is_throttled
@@ -507,7 +583,7 @@ class TestThermalAwareness:
         """Without a thermal_reader, get_thermal_status returns None."""
         from guild.daemon.resource import ResourceMonitor, SchedulingMode
 
-        monitor = ResourceMonitor(mode=SchedulingMode.POLITE)
+        monitor = ResourceMonitor(ResourceConfig(mode=SchedulingMode.POLITE))
         assert monitor.get_thermal_status() is None
 
     def test_thermal_status_in_resource_status(self) -> None:
@@ -515,8 +591,11 @@ class TestThermalAwareness:
         from guild.daemon.resource import ResourceMonitor, SchedulingMode
 
         monitor = ResourceMonitor(
-            mode=SchedulingMode.POLITE,
-            thermal_reader=_thermal_ok_cool,
+            ResourceConfig(
+                mode=SchedulingMode.POLITE,
+                thermal_reader=_thermal_ok_cool,
+        
+            )
         )
         status = monitor.get_status()
         assert status.thermal_status is not None
@@ -531,9 +610,12 @@ class TestGpuVramEdgeCases:
         """VRAM total of 0 doesn't divide-by-zero, returns no throttle."""
         gpu_reader = lambda: {"gpu_percent": 50.0, "vram_used_mb": 100, "vram_total_mb": 0}
         monitor = ResourceMonitor(
-            mode=SchedulingMode.POLITE,
-            gpu_reader=gpu_reader,
-            activity_detector=lambda: ActivityState.ACTIVE,
+            ResourceConfig(
+                mode=SchedulingMode.POLITE,
+                gpu_reader=gpu_reader,
+                activity_detector=lambda: ActivityState.ACTIVE,
+        
+            )
         )
         status = monitor.get_status()
         assert not status.is_throttled or "vram" not in status.reason.lower()
@@ -542,9 +624,12 @@ class TestGpuVramEdgeCases:
         """In STEALTH mode with VRAM pressure, reason includes VRAM."""
         gpu_reader = lambda: {"gpu_percent": 90.0, "vram_used_mb": 7500, "vram_total_mb": 8192}
         monitor = ResourceMonitor(
-            mode=SchedulingMode.STEALTH,
-            gpu_reader=gpu_reader,
-            activity_detector=lambda: ActivityState.ACTIVE,
+            ResourceConfig(
+                mode=SchedulingMode.STEALTH,
+                gpu_reader=gpu_reader,
+                activity_detector=lambda: ActivityState.ACTIVE,
+        
+            )
         )
         status = monitor.get_status()
         assert status.is_throttled
@@ -553,8 +638,11 @@ class TestGpuVramEdgeCases:
     def test_stealth_no_gpu_or_thermal_shows_stealth_reason(self) -> None:
         """STEALTH mode without GPU/thermal pressure shows user-active reason."""
         monitor = ResourceMonitor(
-            mode=SchedulingMode.STEALTH,
-            activity_detector=lambda: ActivityState.ACTIVE,
+            ResourceConfig(
+                mode=SchedulingMode.STEALTH,
+                activity_detector=lambda: ActivityState.ACTIVE,
+        
+            )
         )
         status = monitor.get_status()
         assert status.is_throttled
@@ -582,9 +670,12 @@ class TestResourceMonitorStealthExit:
             return ActivityState.IDLE
 
         monitor = ResourceMonitor(
-            mode=SchedulingMode.STEALTH,
-            activity_detector=detector,
-            cpu_reader=lambda: 20.0,
+            ResourceConfig(
+                mode=SchedulingMode.STEALTH,
+                activity_detector=detector,
+                cpu_reader=lambda: 20.0,
+        
+            )
         )
         monitor.thresholds.poll_interval_seconds = 0.01
         await monitor.wait_if_throttled()
@@ -606,9 +697,12 @@ class TestResourceThrottleStealthExit:
         import time
 
         monitor = ResourceMonitor(
-            mode=SchedulingMode.STEALTH,
-            activity_detector=lambda: ActivityState.IDLE,
-            cpu_reader=lambda: 10.0,
+            ResourceConfig(
+                mode=SchedulingMode.STEALTH,
+                activity_detector=lambda: ActivityState.IDLE,
+                cpu_reader=lambda: 10.0,
+        
+            )
         )
 
         # Should return immediately since user is IDLE
@@ -628,10 +722,13 @@ class TestResourceThrottleStealthExit:
             return ActivityState.ACTIVE if call_count <= 1 else ActivityState.IDLE
 
         monitor = ResourceMonitor(
-            mode=SchedulingMode.STEALTH,
-            thresholds=ResourceThresholds(poll_interval_seconds=0.01),
-            activity_detector=activity_changes,
-            cpu_reader=lambda: 10.0,
+            ResourceConfig(
+                mode=SchedulingMode.STEALTH,
+                thresholds=ResourceThresholds(poll_interval_seconds=0.01),
+                activity_detector=activity_changes,
+                cpu_reader=lambda: 10.0,
+        
+            )
         )
 
         await monitor.wait_if_throttled()

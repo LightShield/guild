@@ -5,10 +5,10 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
-import aiosqlite
+from guild.storage.connection import DBConnection
 from logger_python import get_logger
 
-from guild.config.constants import MEMORY_SUMMARY_MAX_CHARS, PRUNING_RETENTION_DAYS
+from guild.config.constants import DEFAULT_MEMORY_LIST_LIMIT, MEMORY_SUMMARY_MAX_CHARS, PRUNING_RETENTION_DAYS
 
 __all__ = ["MemoryOps"]
 
@@ -23,7 +23,7 @@ def _now() -> str:
 class MemoryOps:
     """Memory persistence operations."""
 
-    def __init__(self, db: aiosqlite.Connection) -> None:
+    def __init__(self, db: DBConnection) -> None:
         """Initialize with a database connection."""
         self._db = db
 
@@ -53,7 +53,7 @@ class MemoryOps:
             return None
         return dict(row)
 
-    async def list_memory_summaries(self, limit: int = 200) -> list[dict[str, Any]]:
+    async def list_memory_summaries(self, limit: int = DEFAULT_MEMORY_LIST_LIMIT) -> list[dict[str, Any]]:
         """List memory summaries ordered by last_verified descending.
 
         Returns list of dicts with keys: id, summary, verified.

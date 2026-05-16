@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any
 import aiosqlite
 from logger_python import get_logger
 
-from guild.config.constants import DEFAULT_QUERY_LIMIT, PRUNING_RETENTION_DAYS
+from guild.config.constants import DEFAULT_MEMORY_LIST_LIMIT, DEFAULT_QUERY_LIMIT, PRUNING_RETENTION_DAYS
 from guild.storage.audit import AuditOps, DecisionRecord
 from guild.storage.checkpoints import CheckpointOps
 from guild.storage.learnings import LearningOps, LearningRecord
@@ -292,29 +292,11 @@ class Storage:
         assert self._audit is not None
         return await self._audit.list_audit(limit)
 
-    async def log_decision(
-        self,
-        record: DecisionRecord | None = None,
-        task_id: str | None = None,
-        agent_id: str | None = None,
-        decision: str = "",
-        rationale: str = "",
-        alternatives: list[str] | None = None,
-        *,
-        reversible: bool = True,
-    ) -> None:
+    async def log_decision(self, record: DecisionRecord) -> None:
         """Record a non-trivial decision with rationale."""
         self._ensure_connected()
         assert self._audit is not None
-        await self._audit.log_decision(
-            record=record,
-            task_id=task_id,
-            agent_id=agent_id,
-            decision=decision,
-            rationale=rationale,
-            alternatives=alternatives,
-            reversible=reversible,
-        )
+        await self._audit.log_decision(record)
 
     async def list_decisions(
         self,
@@ -330,26 +312,11 @@ class Storage:
     # Learning operations
     # ------------------------------------------------------------------
 
-    async def add_learning(
-        self,
-        record: LearningRecord | None = None,
-        category: str = "",
-        content: str = "",
-        confidence: float = 0.3,
-        scope: str | None = None,
-        source_task_id: str | None = None,
-    ) -> int:
+    async def add_learning(self, record: LearningRecord) -> int:
         """Insert a new learning and return its ID."""
         self._ensure_connected()
         assert self._learnings is not None
-        return await self._learnings.add_learning(
-            record=record,
-            category=category,
-            content=content,
-            confidence=confidence,
-            scope=scope,
-            source_task_id=source_task_id,
-        )
+        return await self._learnings.add_learning(record)
 
     async def list_learnings(
         self,
@@ -414,30 +381,11 @@ class Storage:
     # Questions (REQ-15.1)
     # ------------------------------------------------------------------
 
-    async def insert_question(
-        self,
-        record: QuestionRecord | None = None,
-        question_id: str = "",
-        question: str = "",
-        context: str = "",
-        created_at: str = "",
-        task_id: str | None = None,
-        agent_id: str | None = None,
-        priority: str = "normal",
-    ) -> None:
+    async def insert_question(self, record: QuestionRecord) -> None:
         """Insert a new question into the escalation queue."""
         self._ensure_connected()
         assert self._questions is not None
-        await self._questions.insert_question(
-            record=record,
-            question_id=question_id,
-            question=question,
-            context=context,
-            created_at=created_at,
-            task_id=task_id,
-            agent_id=agent_id,
-            priority=priority,
-        )
+        await self._questions.insert_question(record)
 
     async def list_questions(self, answered: bool | None = None) -> list[dict[str, Any]]:
         """List questions, optionally filtered by answered status."""
@@ -493,7 +441,7 @@ class Storage:
         assert self._memories is not None
         return await self._memories.get_memory(memory_id)
 
-    async def list_memory_summaries(self, limit: int = 200) -> list[dict[str, Any]]:
+    async def list_memory_summaries(self, limit: int = DEFAULT_MEMORY_LIST_LIMIT) -> list[dict[str, Any]]:
         """List memory summaries ordered by last_verified descending.
 
         Returns list of dicts with keys: id, summary, verified.

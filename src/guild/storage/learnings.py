@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
-import aiosqlite
+from guild.storage.connection import DBConnection
 from logger_python import get_logger
 
 from guild.config.constants import (
@@ -41,28 +41,12 @@ class LearningRecord:
 class LearningOps:
     """Learning and token usage persistence operations."""
 
-    def __init__(self, db: aiosqlite.Connection) -> None:
+    def __init__(self, db: DBConnection) -> None:
         """Initialize with a database connection."""
         self._db = db
 
-    async def add_learning(
-        self,
-        record: LearningRecord | None = None,
-        category: str = "",
-        content: str = "",
-        confidence: float = 0.3,
-        scope: str | None = None,
-        source_task_id: str | None = None,
-    ) -> int:
+    async def add_learning(self, record: LearningRecord) -> int:
         """Insert a new learning and return its ID."""
-        if record is None:
-            record = LearningRecord(
-                category=category,
-                content=content,
-                confidence=confidence,
-                scope=scope,
-                source_task_id=source_task_id,
-            )
         cursor = await self._db.execute(
             "INSERT INTO learnings"
             " (category, content, confidence, scope, source_task_id, created_at)"

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
-import aiosqlite
+from guild.storage.connection import DBConnection
 from logger_python import get_logger
 
 __all__ = ["QuestionOps", "QuestionRecord"]
@@ -35,32 +35,12 @@ class QuestionRecord:
 class QuestionOps:
     """Question (escalation queue) persistence operations."""
 
-    def __init__(self, db: aiosqlite.Connection) -> None:
+    def __init__(self, db: DBConnection) -> None:
         """Initialize with a database connection."""
         self._db = db
 
-    async def insert_question(
-        self,
-        record: QuestionRecord | None = None,
-        question_id: str = "",
-        question: str = "",
-        context: str = "",
-        created_at: str = "",
-        task_id: str | None = None,
-        agent_id: str | None = None,
-        priority: str = "normal",
-    ) -> None:
+    async def insert_question(self, record: QuestionRecord) -> None:
         """Insert a new question into the escalation queue."""
-        if record is None:
-            record = QuestionRecord(
-                question_id=question_id,
-                question=question,
-                context=context,
-                created_at=created_at,
-                task_id=task_id,
-                agent_id=agent_id,
-                priority=priority,
-            )
         await self._db.execute(
             "INSERT INTO questions"
             " (id, task_id, agent_id, question, context, priority, created_at)"

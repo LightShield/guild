@@ -52,7 +52,7 @@ from guild.cli.queries import (
     reject_learning as _reject_learning,
 )
 from guild.cli.toml_utils import set_config_value as _set_config_value
-from guild.config.constants import CLI_CONTEXT_COL_WIDTH, CLI_ID_COL_WIDTH
+from guild.config.constants import CLI_CONTEXT_COL_WIDTH, CLI_ID_COL_WIDTH, DEFAULT_QUERY_LIMIT
 from guild.config.loader import (
     CONFIG_FILENAME,
     DB_FILENAME,
@@ -171,7 +171,7 @@ def config_cmd(
 
 @app.command()
 def audit(
-    limit: int = typer.Option(50, "--limit", "-n", help="Number of entries."),
+    limit: int = typer.Option(DEFAULT_QUERY_LIMIT, "--limit", "-n", help="Number of entries."),
 ) -> None:
     """Show recent audit log entries."""
     guild_dir = find_guild_dir()
@@ -206,7 +206,7 @@ def audit(
 @app.command()
 def decisions(
     task_id: Optional[str] = typer.Option(None, "--task", "-t", help="Filter by task ID."),
-    limit: int = typer.Option(50, "--limit", "-n", help="Number of entries."),
+    limit: int = typer.Option(DEFAULT_QUERY_LIMIT, "--limit", "-n", help="Number of entries."),
 ) -> None:
     """Show recent decision log entries."""
     guild_dir = find_guild_dir()
@@ -246,7 +246,7 @@ def learnings(
     reject: Optional[int] = typer.Option(None, "--reject", help="Reject/delete a learning by ID."),
     decay: bool = typer.Option(False, "--decay", help="Run decay on old unvalidated learnings."),
     category: Optional[str] = typer.Option(None, "--category", "-c", help="Filter by category."),
-    limit: int = typer.Option(50, "--limit", "-n", help="Number of entries."),
+    limit: int = typer.Option(DEFAULT_QUERY_LIMIT, "--limit", "-n", help="Number of entries."),
 ) -> None:
     """Browse, approve, reject, or decay learnings."""
     guild_dir = find_guild_dir()
@@ -307,7 +307,7 @@ def _display_learnings_table(entries: list[dict[str, Any]]) -> None:
 
 @app.command()
 def questions(
-    limit: int = typer.Option(50, "--limit", "-n", help="Number of entries."),
+    limit: int = typer.Option(DEFAULT_QUERY_LIMIT, "--limit", "-n", help="Number of entries."),
 ) -> None:
     """List pending escalation questions from agents (REQ-15.1)."""
     guild_dir = find_guild_dir()
@@ -425,7 +425,7 @@ def usage() -> None:
 @app.command(name="resource-status")
 def resource_status_cmd() -> None:
     """Show current resource scheduling mode and system state."""
-    from guild.daemon.resource import ResourceMonitor, SchedulingMode
+    from guild.daemon.resource import ResourceConfig, ResourceMonitor, SchedulingMode
 
     guild_dir = find_guild_dir()
     if guild_dir is None:
@@ -433,7 +433,7 @@ def resource_status_cmd() -> None:
         raise typer.Exit(code=1)
 
     config = load_config(guild_dir)
-    monitor = ResourceMonitor(mode=SchedulingMode(config.resource_mode))
+    monitor = ResourceMonitor(ResourceConfig(mode=SchedulingMode(config.resource_mode)))
     resource_status = monitor.get_status()
 
     console.print(f"[bold]Mode:[/bold] {resource_status.mode.value}")

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from guild.config.constants import DEFAULT_RATE_LIMIT_CALLS, DEFAULT_RATE_LIMIT_WINDOW_SECONDS
+
 import asyncio
 import time
 from typing import TYPE_CHECKING, Any
@@ -62,8 +64,8 @@ class RateLimiter:
 
     def __init__(
         self,
-        max_calls: int = 30,
-        window_seconds: float = 60.0,
+        max_calls: int = DEFAULT_RATE_LIMIT_CALLS,
+        window_seconds: float = DEFAULT_RATE_LIMIT_WINDOW_SECONDS,
     ) -> None:
         """Initialize RateLimiter."""
         self._max = max_calls

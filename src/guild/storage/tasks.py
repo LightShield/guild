@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
-import aiosqlite
+from guild.storage.connection import DBConnection
 from logger_python import get_logger
 
 __all__ = ["TaskOps"]
@@ -21,7 +21,7 @@ def _now() -> str:
 class TaskOps:
     """Task and agent persistence operations."""
 
-    def __init__(self, db: aiosqlite.Connection) -> None:
+    def __init__(self, db: DBConnection) -> None:
         """Initialize with a database connection."""
         self._db = db
 

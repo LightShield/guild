@@ -14,7 +14,7 @@ from typing import Any
 
 from logger_python import get_logger
 
-from guild.config.constants import NOTIFICATION_TITLE
+from guild.config.constants import LOG_PREVIEW_MAX_CHARS, NOTIFICATION_TITLE
 from guild.daemon.platform import get_platform_adapter
 from guild.escalation.queue import QuestionPriority
 
@@ -74,7 +74,7 @@ class Notifier:
             if adapter.is_user_idle():
                 logger.info(
                     "User idle — queuing notification: %s",
-                    message[:80],
+                    message[:LOG_PREVIEW_MAX_CHARS],
                 )
                 return
 
@@ -123,7 +123,7 @@ class Notifier:
     ) -> None:
         """Send to configured webhook URL via HTTP POST."""
         if not self._webhook_url:
-            logger.warning("Webhook URL not configured for notification: %s", message[:80])
+            logger.warning("Webhook URL not configured for notification: %s", message[:LOG_PREVIEW_MAX_CHARS])
             return
 
         payload: dict[str, Any] = {

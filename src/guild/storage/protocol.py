@@ -18,6 +18,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
+from guild.config.constants import DEFAULT_QUERY_LIMIT
+
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from guild.storage.sqlite import DecisionRecord, LearningRecord, QuestionRecord
 
@@ -81,33 +83,15 @@ class StorageProtocol(Protocol):
         """Write an entry to the audit log."""
         ...
 
-    async def list_audit(self, limit: int = 50) -> list[dict[str, Any]]:
+    async def list_audit(self, limit: int = DEFAULT_QUERY_LIMIT) -> list[dict[str, Any]]:
         """Retrieve recent audit log entries."""
         ...
 
-    async def log_decision(
-        self,
-        record: DecisionRecord | None = None,
-        task_id: str | None = None,
-        agent_id: str | None = None,
-        decision: str = "",
-        rationale: str = "",
-        alternatives: list[str] | None = None,
-        *,
-        reversible: bool = True,
-    ) -> None:
+    async def log_decision(self, record: DecisionRecord) -> None:
         """Record a non-trivial decision with rationale."""
         ...
 
-    async def add_learning(
-        self,
-        record: LearningRecord | None = None,
-        category: str = "",
-        content: str = "",
-        confidence: float = 0.3,
-        scope: str | None = None,
-        source_task_id: str | None = None,
-    ) -> int:
+    async def add_learning(self, record: LearningRecord) -> int:
         """Store a new learning and return its ID."""
         ...
 
@@ -116,7 +100,7 @@ class StorageProtocol(Protocol):
         min_confidence: float = 0.0,
         category: str | None = None,
         scope: str | None = None,
-        limit: int = 50,
+        limit: int = DEFAULT_QUERY_LIMIT,
     ) -> list[dict[str, Any]]:
         """Retrieve learnings filtered by confidence, category, or scope."""
         ...
@@ -125,17 +109,7 @@ class StorageProtocol(Protocol):
         """Return aggregate token usage statistics."""
         ...
 
-    async def insert_question(
-        self,
-        record: QuestionRecord | None = None,
-        question_id: str = "",
-        question: str = "",
-        context: str = "",
-        created_at: str = "",
-        task_id: str | None = None,
-        agent_id: str | None = None,
-        priority: str = "normal",
-    ) -> None:
+    async def insert_question(self, record: QuestionRecord) -> None:
         """Insert a new question into the escalation queue."""
         ...
 

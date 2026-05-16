@@ -123,6 +123,13 @@ __all__ = [
     "DEFAULT_QUERY_LIMIT",
     "PRUNING_RETENTION_DAYS",
     # API server
+    # Memory list defaults
+    "DEFAULT_MEMORY_LIST_LIMIT",
+    # Logging
+    "LOG_PREVIEW_MAX_CHARS",
+    # Rate limiting
+    "DEFAULT_RATE_LIMIT_CALLS",
+    "DEFAULT_RATE_LIMIT_WINDOW_SECONDS",
     "DEFAULT_API_PORT",
 ]
 
@@ -346,3 +353,19 @@ PRUNING_RETENTION_DAYS: int = 30
 # API server
 # ---------------------------------------------------------------------------
 DEFAULT_API_PORT: int = 8585
+
+# ---------------------------------------------------------------------------
+# Memory list defaults
+# ---------------------------------------------------------------------------
+DEFAULT_MEMORY_LIST_LIMIT: int = 200
+
+# ---------------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------------
+LOG_PREVIEW_MAX_CHARS: int = 80
+
+# ---------------------------------------------------------------------------
+# Rate limiting
+# ---------------------------------------------------------------------------
+DEFAULT_RATE_LIMIT_CALLS: int = 30
+DEFAULT_RATE_LIMIT_WINDOW_SECONDS: float = 60.0

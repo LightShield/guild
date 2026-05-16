@@ -52,7 +52,7 @@ class ResourceThresholds:
     """Configurable thresholds for resource-aware scheduling."""
 
     idle_timeout_seconds: float = DEFAULT_IDLE_THRESHOLD_SECONDS
-    cpu_threshold_percent: float = 80.0
+    cpu_threshold_percent: float = DEFAULT_CPU_THRESHOLD
     polite_delay_seconds: float = 10.0
     poll_interval_seconds: float = 5.0
     vram_pressure_percent: float = 85.0
@@ -120,31 +120,16 @@ class ResourceMonitor:
     user activity state.
     """
 
-    def __init__(
-        self,
-        config: ResourceConfig | None = None,
-        *,
-        mode: SchedulingMode = SchedulingMode.POLITE,
-        thresholds: ResourceThresholds | None = None,
-        activity_detector: Callable[[], ActivityState] | None = None,
-        cpu_reader: Callable[[], float] | None = None,
-        gpu_reader: Callable[[], dict[str, Any]] | None = None,
-        thermal_reader: Callable[[], dict[str, Any]] | None = None,
-    ) -> None:
+    def __init__(self, config: ResourceConfig | None = None) -> None:
         """Initialize ResourceMonitor."""
-        if config is not None:
-            mode = config.mode
-            thresholds = config.thresholds
-            activity_detector = config.activity_detector
-            cpu_reader = config.cpu_reader
-            gpu_reader = config.gpu_reader
-            thermal_reader = config.thermal_reader
-        self.mode = mode
-        self.thresholds = thresholds or ResourceThresholds()
-        self._activity_detector = activity_detector or _default_activity_detector
-        self._cpu_reader = cpu_reader or _default_cpu_reader
-        self._gpu_reader = gpu_reader
-        self._thermal_reader = thermal_reader
+        if config is None:
+            config = ResourceConfig()
+        self.mode = config.mode
+        self.thresholds = config.thresholds or ResourceThresholds()
+        self._activity_detector = config.activity_detector or _default_activity_detector
+        self._cpu_reader = config.cpu_reader or _default_cpu_reader
+        self._gpu_reader = config.gpu_reader
+        self._thermal_reader = config.thermal_reader
 
     def detect_activity(self) -> ActivityState:
         """Return current user activity state via injected detector."""

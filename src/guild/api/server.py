@@ -28,6 +28,7 @@ from guild.config.constants import (
     JSONRPC_METHOD_NOT_FOUND,
     JSONRPC_PARSE_ERROR,
     WEBSOCKET_POLL_SECONDS,
+    DEFAULT_QUERY_LIMIT,
 )
 from guild.config.loader import DB_FILENAME
 from guild.task.spec import TaskStatus
@@ -272,7 +273,7 @@ def _register_audit_endpoint(app: Any, get_storage: Callable[[], "Storage"]) -> 
     """Register the GET /api/audit route."""
 
     @app.get("/api/audit")  # type: ignore[untyped-decorator]
-    async def get_audit(limit: int = 50) -> list[dict[str, Any]]:
+    async def get_audit(limit: int = DEFAULT_QUERY_LIMIT) -> list[dict[str, Any]]:
         """Return recent audit log entries."""
         storage = get_storage()
         return await storage.list_audit(limit=limit)
@@ -390,7 +391,11 @@ def _register_a2a_routes(app: Any) -> None:
 
         method = body.get("method")
         if not method:
-            return _jsonrpc_error(body.get("id"), JSONRPC_INVALID_REQUEST, "Invalid request: missing method")
+            return _jsonrpc_error(
+                body.get("id"),
+                JSONRPC_INVALID_REQUEST,
+                "Invalid request: missing method",
+            )
 
         req_id = body.get("id")
         params: dict[str, Any] = body.get("params", {})

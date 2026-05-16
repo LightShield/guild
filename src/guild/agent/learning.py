@@ -15,11 +15,14 @@ from guild.config.constants import (
     DEFAULT_CONFIDENCE,
     LEARNING_CONTENT_MAX_CHARS,
     MIN_INJECTION_CONFIDENCE,
+    LOG_PREVIEW_MAX_CHARS,
 )
 
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from guild.provider.base import LLMProvider
     from guild.storage.sqlite import Storage
+
+from guild.storage.learnings import LearningRecord
 
 __all__ = [
     "LEARNER_PROMPT",
@@ -116,10 +119,12 @@ async def _store_parsed_learnings(
             continue
 
         learning_id = await storage.add_learning(
-            category=parsed["category"],
-            content=parsed["content"],
-            confidence=DEFAULT_CONFIDENCE,
-            source_task_id=task_id,
+            LearningRecord(
+                category=parsed["category"],
+                content=parsed["content"],
+                confidence=DEFAULT_CONFIDENCE,
+                source_task_id=task_id,
+            )
         )
         stored.append(
             {
@@ -216,7 +221,7 @@ def _parse_learning_line(line: str) -> dict[str, Any] | None:
     try:
         data = json.loads(line)
     except (json.JSONDecodeError, ValueError):
-        logger.debug("Skipping invalid JSON line: %s", line[:80])
+        logger.debug("Skipping invalid JSON line: %s", line[:LOG_PREVIEW_MAX_CHARS])
         return None
 
     if not isinstance(data, dict):

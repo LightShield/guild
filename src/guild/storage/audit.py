@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
-import aiosqlite
+from guild.storage.connection import DBConnection
 from logger_python import get_logger
 
 from guild.config.constants import DEFAULT_QUERY_LIMIT
@@ -37,7 +37,7 @@ class DecisionRecord:
 class AuditOps:
     """Audit log and decision persistence operations."""
 
-    def __init__(self, db: aiosqlite.Connection) -> None:
+    def __init__(self, db: DBConnection) -> None:
         """Initialize with a database connection."""
         self._db = db
 
@@ -62,27 +62,8 @@ class AuditOps:
         rows = await cursor.fetchall()
         return [dict(r) for r in rows]
 
-    async def log_decision(
-        self,
-        record: DecisionRecord | None = None,
-        task_id: str | None = None,
-        agent_id: str | None = None,
-        decision: str = "",
-        rationale: str = "",
-        alternatives: list[str] | None = None,
-        *,
-        reversible: bool = True,
-    ) -> None:
+    async def log_decision(self, record: DecisionRecord) -> None:
         """Record a non-trivial decision with rationale."""
-        if record is None:
-            record = DecisionRecord(
-                decision=decision,
-                rationale=rationale,
-                task_id=task_id,
-                agent_id=agent_id,
-                alternatives=alternatives,
-                reversible=reversible,
-            )
         alts_json = json.dumps(record.alternatives) if record.alternatives else None
         await self._db.execute(
             "INSERT INTO decisions"
