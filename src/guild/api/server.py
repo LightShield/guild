@@ -18,7 +18,17 @@ if TYPE_CHECKING:
     from guild.storage.sqlite import Storage
 
 from guild import __version__
-from guild.config.constants import GUILD_DIR_NAME, WEBSOCKET_POLL_SECONDS
+from guild.config.constants import (
+    GUILD_DIR_NAME,
+    HTTP_BAD_REQUEST,
+    HTTP_NOT_FOUND,
+    JSONRPC_INTERNAL_ERROR,
+    JSONRPC_INVALID_PARAMS,
+    JSONRPC_INVALID_REQUEST,
+    JSONRPC_METHOD_NOT_FOUND,
+    JSONRPC_PARSE_ERROR,
+    WEBSOCKET_POLL_SECONDS,
+)
 from guild.config.loader import DB_FILENAME
 from guild.task.spec import TaskStatus
 
@@ -88,7 +98,7 @@ def _register_task_query_routes(app: Any, get_storage: Callable[[], "Storage"]) 
         storage = get_storage()
         task = await storage.get_task(task_id)
         if task is None:
-            raise HTTPException(status_code=404, detail="Task not found")
+            raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Task not found")
         return task
 
     @app.post("/api/tasks")  # type: ignore[untyped-decorator]
@@ -100,7 +110,7 @@ def _register_task_query_routes(app: Any, get_storage: Callable[[], "Storage"]) 
         body = await request.json()
         description = body.get("description", "")
         if not description:
-            raise HTTPException(status_code=400, detail="description is required")
+            raise HTTPException(status_code=HTTP_BAD_REQUEST, detail="description is required")
         task_id = str(uuid.uuid4())
         await storage.create_task(task_id, description)
         await storage.log_audit("task_created", details=f"task_id={task_id}")
@@ -117,7 +127,7 @@ def _register_task_action_routes(app: Any, get_storage: Callable[[], "Storage"])
         storage = get_storage()
         task = await storage.get_task(task_id)
         if task is None:
-            raise HTTPException(status_code=404, detail="Task not found")
+            raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Task not found")
         await storage.update_task(task_id, status=TaskStatus.KILLED)
         await storage.log_audit("task_killed", details=f"task_id={task_id}")
         return {"id": task_id, "action": TaskStatus.KILLED}
@@ -128,7 +138,7 @@ def _register_task_action_routes(app: Any, get_storage: Callable[[], "Storage"])
         storage = get_storage()
         task = await storage.get_task(task_id)
         if task is None:
-            raise HTTPException(status_code=404, detail="Task not found")
+            raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Task not found")
         await storage.update_task(task_id, status=TaskStatus.PAUSED)
         await storage.log_audit("task_paused", details=f"task_id={task_id}")
         return {"id": task_id, "action": TaskStatus.PAUSED}
@@ -139,7 +149,7 @@ def _register_task_action_routes(app: Any, get_storage: Callable[[], "Storage"])
         storage = get_storage()
         task = await storage.get_task(task_id)
         if task is None:
-            raise HTTPException(status_code=404, detail="Task not found")
+            raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Task not found")
         await storage.update_task(task_id, status=TaskStatus.RUNNING)
         await storage.log_audit("task_resumed", details=f"task_id={task_id}")
         return {"id": task_id, "action": "resumed"}
@@ -232,7 +242,7 @@ def _register_teams_endpoints(app: Any, guild_dir: Path) -> None:
         body = await request.json()
         name: str = body.get("name", "")
         if not name:
-            raise HTTPException(status_code=400, detail="Team name is required")
+            raise HTTPException(status_code=HTTP_BAD_REQUEST, detail="Team name is required")
         teams_dir = guild_dir / "teams"
         teams_dir.mkdir(exist_ok=True)
         team_path = teams_dir / f"{name}.toml"
@@ -376,11 +386,11 @@ def _register_a2a_routes(app: Any) -> None:
         try:
             body = await request.json()
         except (ValueError, json.JSONDecodeError):
-            return _jsonrpc_error(None, -32700, "Parse error")
+            return _jsonrpc_error(None, JSONRPC_PARSE_ERROR, "Parse error")
 
         method = body.get("method")
         if not method:
-            return _jsonrpc_error(body.get("id"), -32600, "Invalid request: missing method")
+            return _jsonrpc_error(body.get("id"), JSONRPC_INVALID_REQUEST, "Invalid request: missing method")
 
         req_id = body.get("id")
         params: dict[str, Any] = body.get("params", {})
@@ -401,7 +411,7 @@ def _dispatch_a2a_method(
     elif method == "tasks/cancel":
         return _a2a_tasks_cancel(req_id, params, a2a_tasks)
     else:
-        return _jsonrpc_error(req_id, -32601, f"Method not found: {method}")
+        return _jsonrpc_error(req_id, JSONRPC_METHOD_NOT_FOUND, f"Method not found: {method}")
 
 
 def _a2a_tasks_send(
@@ -412,7 +422,7 @@ def _a2a_tasks_send(
 
     message = params.get("message")
     if not message:
-        return _jsonrpc_error(req_id, -32602, "Invalid params: missing message")
+        return _jsonrpc_error(req_id, JSONRPC_INVALID_PARAMS, "Invalid params: missing message")
     task_id = str(uuid.uuid4())
     a2a_tasks[task_id] = {
         "id": task_id,
@@ -429,7 +439,7 @@ def _a2a_tasks_get(
     task_id = params.get("id", "")
     task = a2a_tasks.get(task_id)
     if task is None:
-        return _jsonrpc_error(req_id, -32001, "Task not found")
+        return _jsonrpc_error(req_id, JSONRPC_INTERNAL_ERROR, "Task not found")
     return _jsonrpc_result(req_id, {"id": task["id"], "status": task["status"]})
 
 
@@ -440,7 +450,7 @@ def _a2a_tasks_cancel(
     task_id = params.get("id", "")
     task = a2a_tasks.get(task_id)
     if task is None:
-        return _jsonrpc_error(req_id, -32001, "Task not found")
+        return _jsonrpc_error(req_id, JSONRPC_INTERNAL_ERROR, "Task not found")
     task["status"] = {"state": "canceled"}
     return _jsonrpc_result(req_id, {"id": task["id"], "status": task["status"]})
 

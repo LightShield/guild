@@ -52,6 +52,11 @@ from guild.cli.task_runner import (
 from guild.cli.task_runner import (
     run_task as _run_task,
 )
+from guild.config.constants import (
+    CLI_DESC_COL_WIDTH,
+    CLI_ID_COL_WIDTH,
+    CLI_RESULT_COL_WIDTH,
+)
 from guild.config.loader import (
     DB_FILENAME,
     find_guild_dir,
@@ -392,19 +397,19 @@ def history(
         return
 
     table = Table(title="Task History")
-    table.add_column("Task ID", style="cyan", max_width=12)
+    table.add_column("Task ID", style="cyan", max_width=CLI_ID_COL_WIDTH)
     table.add_column("Status", style="yellow")
     table.add_column("Description", style="white")
     table.add_column("Created", style="dim")
-    table.add_column("Result", style="green", max_width=40)
+    table.add_column("Result", style="green", max_width=CLI_RESULT_COL_WIDTH)
 
     for t in tasks:
         table.add_row(
-            t.get("task_id", "")[:12],
+            t.get("task_id", "")[:CLI_ID_COL_WIDTH],
             t.get("status", ""),
             t.get("description", ""),
             t.get("created_at", ""),
-            (t.get("result") or "")[:40],
+            (t.get("result") or "")[:CLI_RESULT_COL_WIDTH],
         )
 
     console.print(table)
@@ -438,7 +443,7 @@ def _render_task_tree(db_path: Path, root_task_id: str) -> None:
         if t is None:  # pragma: no cover — defensive guard
             return
         prefix = "  " * indent
-        desc = t.get("description", "")[:50]
+        desc = t.get("description", "")[:CLI_DESC_COL_WIDTH]
         status = t.get("status", "")
         console.print(f"{prefix}{tid[:12]} [{status}] {desc}")
         for child in children_map.get(tid, []):  # pragma: no cover — parent_id not yet in DB

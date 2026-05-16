@@ -13,6 +13,8 @@ from guild.config.constants import (
     CONFIDENCE_DECAY_DECREMENT,
     CONFIDENCE_INVALIDATE_DECREMENT,
     CONFIDENCE_VALIDATE_INCREMENT,
+    DEFAULT_QUERY_LIMIT,
+    PRUNING_RETENTION_DAYS,
 )
 
 __all__ = ["LearningOps", "LearningRecord"]
@@ -82,7 +84,7 @@ class LearningOps:
         min_confidence: float = 0.0,
         category: str | None = None,
         scope: str | None = None,
-        limit: int = 50,
+        limit: int = DEFAULT_QUERY_LIMIT,
     ) -> list[dict[str, Any]]:
         """List learnings filtered by confidence, category, and scope."""
         query = "SELECT * FROM learnings WHERE confidence >= ?"
@@ -122,7 +124,7 @@ class LearningOps:
         )
         await self._db.commit()
 
-    async def decay_learnings(self, days_since_validation: int = 30) -> int:
+    async def decay_learnings(self, days_since_validation: int = PRUNING_RETENTION_DAYS) -> int:
         """Decay confidence for learnings unvalidated for N days.
 
         Returns the number of affected rows.

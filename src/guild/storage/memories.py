@@ -8,7 +8,7 @@ from typing import Any
 import aiosqlite
 from logger_python import get_logger
 
-from guild.config.constants import MEMORY_SUMMARY_MAX_CHARS
+from guild.config.constants import MEMORY_SUMMARY_MAX_CHARS, PRUNING_RETENTION_DAYS
 
 __all__ = ["MemoryOps"]
 
@@ -76,7 +76,7 @@ class MemoryOps:
         )
         await self._db.commit()
 
-    async def consolidate_memories(self, stale_days: int = 30) -> int:
+    async def consolidate_memories(self, stale_days: int = PRUNING_RETENTION_DAYS) -> int:
         """Remove stale unverified memories and merge duplicates.
 
         Returns count of deleted rows.

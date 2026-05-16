@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any
 import aiosqlite
 from logger_python import get_logger
 
-from guild.config.constants import DEFAULT_QUERY_LIMIT
+from guild.config.constants import DEFAULT_QUERY_LIMIT, PRUNING_RETENTION_DAYS
 from guild.storage.audit import AuditOps, DecisionRecord
 from guild.storage.checkpoints import CheckpointOps
 from guild.storage.learnings import LearningOps, LearningRecord
@@ -356,7 +356,7 @@ class Storage:
         min_confidence: float = 0.0,
         category: str | None = None,
         scope: str | None = None,
-        limit: int = 50,
+        limit: int = DEFAULT_QUERY_LIMIT,
     ) -> list[dict[str, Any]]:
         """List learnings filtered by confidence, category, and scope."""
         self._ensure_connected()
@@ -375,7 +375,7 @@ class Storage:
         assert self._learnings is not None
         await self._learnings.invalidate_learning(learning_id)
 
-    async def decay_learnings(self, days_since_validation: int = 30) -> int:
+    async def decay_learnings(self, days_since_validation: int = PRUNING_RETENTION_DAYS) -> int:
         """Decay confidence for learnings unvalidated for N days.
 
         Returns the number of affected rows.
@@ -508,7 +508,7 @@ class Storage:
         assert self._memories is not None
         await self._memories.verify_memory(memory_id)
 
-    async def consolidate_memories(self, stale_days: int = 30) -> int:
+    async def consolidate_memories(self, stale_days: int = PRUNING_RETENTION_DAYS) -> int:
         """Remove stale unverified memories and merge duplicates.
 
         Returns count of deleted rows.
@@ -565,7 +565,7 @@ class Storage:
         await self._db.commit()
 
     async def list_eval_results(
-        self, task_name: str | None = None, limit: int = 50
+        self, task_name: str | None = None, limit: int = DEFAULT_QUERY_LIMIT
     ) -> list[dict[str, Any]]:
         """List eval results, most recent first, optionally by task_name."""
         self._ensure_connected()

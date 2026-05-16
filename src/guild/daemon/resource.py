@@ -18,7 +18,7 @@ from logger_python import get_logger
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from collections.abc import Callable
 
-from guild.config.constants import DEFAULT_CPU_THRESHOLD
+from guild.config.constants import DEFAULT_CPU_THRESHOLD, DEFAULT_IDLE_THRESHOLD_SECONDS
 
 __all__ = [
     "ActivityState",
@@ -51,7 +51,7 @@ class ActivityState(str, Enum):
 class ResourceThresholds:
     """Configurable thresholds for resource-aware scheduling."""
 
-    idle_timeout_seconds: float = 300.0
+    idle_timeout_seconds: float = DEFAULT_IDLE_THRESHOLD_SECONDS
     cpu_threshold_percent: float = 80.0
     polite_delay_seconds: float = 10.0
     poll_interval_seconds: float = 5.0

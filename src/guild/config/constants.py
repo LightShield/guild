@@ -102,6 +102,28 @@ __all__ = [
     "STAGING_DIR_NAME",
     # Escalation
     "NOTIFICATION_TITLE",
+    # JSON-RPC error codes
+    "JSONRPC_PARSE_ERROR",
+    "JSONRPC_INVALID_REQUEST",
+    "JSONRPC_METHOD_NOT_FOUND",
+    "JSONRPC_INVALID_PARAMS",
+    "JSONRPC_INTERNAL_ERROR",
+    # HTTP status codes
+    "HTTP_BAD_REQUEST",
+    "HTTP_NOT_FOUND",
+    # CLI column widths
+    "CLI_ID_COL_WIDTH",
+    "CLI_CONTEXT_COL_WIDTH",
+    "CLI_RESULT_COL_WIDTH",
+    "CLI_DESC_COL_WIDTH",
+    # Daemon platform
+    "PLATFORM_SUBPROCESS_TIMEOUT",
+    "DEFAULT_IDLE_THRESHOLD_SECONDS",
+    # Storage query defaults
+    "DEFAULT_QUERY_LIMIT",
+    "PRUNING_RETENTION_DAYS",
+    # API server
+    "DEFAULT_API_PORT",
 ]
 
 # ---------------------------------------------------------------------------
@@ -284,3 +306,43 @@ STAGING_DIR_NAME: str = "_staging"
 # Escalation
 # ---------------------------------------------------------------------------
 NOTIFICATION_TITLE: str = "Guild"
+
+# ---------------------------------------------------------------------------
+# JSON-RPC error codes (standard + application-specific)
+# ---------------------------------------------------------------------------
+JSONRPC_PARSE_ERROR: int = -32700
+JSONRPC_INVALID_REQUEST: int = -32600
+JSONRPC_METHOD_NOT_FOUND: int = -32601
+JSONRPC_INVALID_PARAMS: int = -32602
+JSONRPC_INTERNAL_ERROR: int = -32001
+
+# ---------------------------------------------------------------------------
+# HTTP status codes
+# ---------------------------------------------------------------------------
+HTTP_BAD_REQUEST: int = 400
+HTTP_NOT_FOUND: int = 404
+
+# ---------------------------------------------------------------------------
+# CLI column widths
+# ---------------------------------------------------------------------------
+CLI_ID_COL_WIDTH: int = 12
+CLI_CONTEXT_COL_WIDTH: int = 40
+CLI_RESULT_COL_WIDTH: int = 40
+CLI_DESC_COL_WIDTH: int = 50
+
+# ---------------------------------------------------------------------------
+# Daemon platform
+# ---------------------------------------------------------------------------
+PLATFORM_SUBPROCESS_TIMEOUT: int = 5
+DEFAULT_IDLE_THRESHOLD_SECONDS: float = 300.0
+
+# ---------------------------------------------------------------------------
+# Storage query defaults
+# ---------------------------------------------------------------------------
+DEFAULT_QUERY_LIMIT: int = 50
+PRUNING_RETENTION_DAYS: int = 30
+
+# ---------------------------------------------------------------------------
+# API server
+# ---------------------------------------------------------------------------
+DEFAULT_API_PORT: int = 8585

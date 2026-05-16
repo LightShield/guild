@@ -11,6 +11,7 @@ from rich.console import Console
 from rich.table import Table
 
 from guild.cli.main import app
+from guild.config.constants import DEFAULT_API_PORT
 from guild.config.loader import find_guild_dir
 from guild.task.spec import TaskStatus
 
@@ -27,7 +28,7 @@ console = Console()
 @app.command()
 def serve(
     host: str = typer.Option("127.0.0.1", "--host", help="Host to bind to."),
-    port: int = typer.Option(8585, "--port", help="Port to serve on."),
+    port: int = typer.Option(DEFAULT_API_PORT, "--port", help="Port to serve on."),
 ) -> None:
     """Start the Guild web GUI and API server (REQ-05.5)."""
     guild_dir = find_guild_dir()

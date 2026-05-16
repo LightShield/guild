@@ -52,6 +52,7 @@ from guild.cli.queries import (
     reject_learning as _reject_learning,
 )
 from guild.cli.toml_utils import set_config_value as _set_config_value
+from guild.config.constants import CLI_CONTEXT_COL_WIDTH, CLI_ID_COL_WIDTH
 from guild.config.loader import (
     CONFIG_FILENAME,
     DB_FILENAME,
@@ -322,18 +323,18 @@ def questions(
         return
 
     table = Table(title="Pending Questions")
-    table.add_column("ID", style="cyan", max_width=12)
+    table.add_column("ID", style="cyan", max_width=CLI_ID_COL_WIDTH)
     table.add_column("Priority", style="yellow")
     table.add_column("Question", style="white")
-    table.add_column("Context", style="dim", max_width=40)
+    table.add_column("Context", style="dim", max_width=CLI_CONTEXT_COL_WIDTH)
     table.add_column("Created", style="dim")
 
     for q in entries[:limit]:
         table.add_row(
-            q.id[:12],
+            q.id[:CLI_ID_COL_WIDTH],
             q.priority.value,
             q.question,
-            q.context[:40],
+            q.context[:CLI_CONTEXT_COL_WIDTH],
             q.created_at,
         )
 

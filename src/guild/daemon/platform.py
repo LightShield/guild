@@ -10,6 +10,8 @@ from typing import Protocol, runtime_checkable
 
 from logger_python import get_logger
 
+from guild.config.constants import DEFAULT_IDLE_THRESHOLD_SECONDS, PLATFORM_SUBPROCESS_TIMEOUT
+
 __all__ = [
     "PlatformAdapter",
     "get_platform_adapter",
@@ -30,7 +32,7 @@ class PlatformAdapter(Protocol):
         """Return the platform identifier."""
         ...
 
-    def is_user_idle(self, threshold_seconds: float = 300.0) -> bool:
+    def is_user_idle(self, threshold_seconds: float = DEFAULT_IDLE_THRESHOLD_SECONDS) -> bool:
         """Check if the user has been idle for at least threshold_seconds."""
         ...
 
@@ -51,7 +53,7 @@ class DarwinAdapter:
         """Return the platform identifier."""
         return "darwin"
 
-    def is_user_idle(self, threshold_seconds: float = 300.0) -> bool:
+    def is_user_idle(self, threshold_seconds: float = DEFAULT_IDLE_THRESHOLD_SECONDS) -> bool:
         """Check user idle time via ioreg HIDIdleTime (nanoseconds)."""
         try:
             import subprocess
@@ -60,7 +62,7 @@ class DarwinAdapter:
                 ["ioreg", "-c", "IOHIDSystem"],
                 capture_output=True,
                 text=True,
-                timeout=5,
+                timeout=PLATFORM_SUBPROCESS_TIMEOUT,
             )
             for line in result.stdout.splitlines():
                 if "HIDIdleTime" in line:
@@ -90,7 +92,7 @@ class DarwinAdapter:
                     f'display notification "{message}" with title "{title}"',
                 ],
                 capture_output=True,
-                timeout=5,
+                timeout=PLATFORM_SUBPROCESS_TIMEOUT,
             )
             return True
         except (OSError, subprocess.TimeoutExpired):
@@ -105,7 +107,7 @@ class LinuxAdapter:
         """Return the platform identifier."""
         return "linux"
 
-    def is_user_idle(self, threshold_seconds: float = 300.0) -> bool:
+    def is_user_idle(self, threshold_seconds: float = DEFAULT_IDLE_THRESHOLD_SECONDS) -> bool:
         """Check user idle time via xprintidle (milliseconds)."""
         try:
             import subprocess
@@ -114,7 +116,7 @@ class LinuxAdapter:
                 ["xprintidle"],
                 capture_output=True,
                 text=True,
-                timeout=5,
+                timeout=PLATFORM_SUBPROCESS_TIMEOUT,
             )
             if result.returncode == 0:
                 idle_ms = int(result.stdout.strip())
@@ -135,7 +137,7 @@ class LinuxAdapter:
             subprocess.run(
                 ["notify-send", title, message],
                 capture_output=True,
-                timeout=5,
+                timeout=PLATFORM_SUBPROCESS_TIMEOUT,
             )
             return True
         except (OSError, FileNotFoundError, subprocess.TimeoutExpired):
@@ -150,7 +152,7 @@ class FallbackAdapter:
         """Return the platform identifier."""
         return sys.platform
 
-    def is_user_idle(self, threshold_seconds: float = 300.0) -> bool:
+    def is_user_idle(self, threshold_seconds: float = DEFAULT_IDLE_THRESHOLD_SECONDS) -> bool:
         """Always returns False (assume user is present)."""
         return False
 
