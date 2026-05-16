@@ -10,8 +10,9 @@ Provides OS-level isolation via Docker containers:
 from __future__ import annotations
 
 import asyncio
-import logging
 import shutil
+
+from logger_python import get_logger
 
 from guild.config.constants import (
     DOCKER_CPU_LIMIT,
@@ -29,7 +30,7 @@ __all__ = [
     "run_in_sandbox",
 ]
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def is_docker_available() -> bool:

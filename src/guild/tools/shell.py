@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 import re
 from typing import Any
+
+from logger_python import get_logger
 
 from guild.config.constants import MAX_SHELL_OUTPUT_CHARS, SHELL_TIMEOUT_SECONDS
 from guild.security.docker_sandbox import is_docker_available, run_in_sandbox
@@ -18,7 +19,7 @@ __all__ = [
     "execute_shell",
 ]
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Compiled regex patterns for dangerous commands.
 # Each tuple: (compiled_pattern, human-readable reason).

@@ -7,11 +7,12 @@ Includes WebSocket endpoint for real-time status updates.
 
 import asyncio
 import json
-import logging
 from collections.abc import AsyncGenerator, Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+
+from logger_python import get_logger
 
 if TYPE_CHECKING:
     from guild.storage.sqlite import Storage
@@ -23,7 +24,7 @@ from guild.task.spec import TaskStatus
 
 __all__ = ["API_ROUTES", "create_app"]
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 API_ROUTES: dict[str, str] = {
     "GET /api/status": "Project status, tasks, agents",

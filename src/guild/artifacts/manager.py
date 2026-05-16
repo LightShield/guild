@@ -4,15 +4,16 @@ from __future__ import annotations
 
 import difflib
 import json
-import logging
 import shutil
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path  # noqa: TC003
 
+from logger_python import get_logger
+
 __all__ = ["Artifact", "ArtifactManager"]
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

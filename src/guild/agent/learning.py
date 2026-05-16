@@ -7,8 +7,9 @@ learnings into future agent prompts.
 from __future__ import annotations
 
 import json
-import logging
 from typing import TYPE_CHECKING, Any
+
+from logger_python import get_logger
 
 from guild.config.constants import (
     DEFAULT_CONFIDENCE,
@@ -29,7 +30,7 @@ __all__ = [
     "suggest_prompt_refinements",
 ]
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 LEARNER_PROMPT = (
     "Review the session log below. Extract useful knowledge as JSON lines.\n"

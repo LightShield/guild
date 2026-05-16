@@ -8,11 +8,12 @@ REQ-08.11: Tool result caching (optional, per-tool).
 
 from __future__ import annotations
 
-import logging
 import time
 from collections import OrderedDict
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
+
+from logger_python import get_logger
 
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from collections.abc import Callable
@@ -31,7 +32,7 @@ __all__ = [
     "ToolProperties",
 ]
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

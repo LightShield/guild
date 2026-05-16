@@ -6,11 +6,12 @@ Handles kill, pause, resume, crash recovery, and stale lock cleanup.
 from __future__ import annotations
 
 import asyncio
-import logging
 import os
 import signal
 from enum import IntEnum
 from typing import TYPE_CHECKING, Any
+
+from logger_python import get_logger
 
 from guild.task.spec import TaskStatus
 
@@ -21,7 +22,7 @@ if TYPE_CHECKING:  # pragma: no cover — type-checking only
 
 __all__ = ["ExitCode", "LifecycleManager", "TaskQueue"]
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ExitCode(IntEnum):

@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
-import logging
 from typing import Any
+
+from logger_python import get_logger
 
 from guild.mcp.client import MCPClient, MCPServerConfig, MCPTool
 
 __all__ = ["MCPToolRegistry"]
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class MCPToolRegistry:

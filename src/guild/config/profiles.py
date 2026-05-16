@@ -6,11 +6,12 @@ and .guild/permissions.toml respectively.
 
 from __future__ import annotations
 
-import logging
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path  # noqa: TC003 - used at runtime in function bodies
 from typing import TYPE_CHECKING, Any
+
+from logger_python import get_logger
 
 from guild.config.constants import AGENTS_FILENAME, DEFAULT_MAX_TURNS, PERMISSIONS_FILENAME
 from guild.permissions.checker import PermissionTier
@@ -28,7 +29,7 @@ __all__ = [
     "validate_config",
 ]
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

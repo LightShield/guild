@@ -10,16 +10,17 @@ Provides a declarative security policy for agent execution:
 
 from __future__ import annotations
 
-import logging
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
+
+from logger_python import get_logger
 
 from guild.config.constants import SECURITY_FILENAME
 
 __all__ = ["SandboxPolicy", "load_sandbox_policy"]
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _SECRET_PLACEHOLDER_RE = re.compile(r"\$\{([A-Z_][A-Z0-9_]*)\}")
 

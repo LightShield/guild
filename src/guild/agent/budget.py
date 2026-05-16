@@ -5,7 +5,7 @@ Provides threshold-based alerts when an agent approaches its token budget.
 
 from __future__ import annotations
 
-import logging
+from logger_python import get_logger
 
 from guild.config.constants import BUDGET_ALERT_THRESHOLDS
 
@@ -14,7 +14,7 @@ __all__ = [
     "check_budget_alert",
 ]
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def check_budget_alert(

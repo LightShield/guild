@@ -1,10 +1,11 @@
 """Git worktree management for parallel task isolation."""
 
 import asyncio
-import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+
+from logger_python import get_logger
 
 from guild.config.constants import (
     BRANCH_PREFIX,
@@ -21,7 +22,7 @@ __all__ = [
     "WorktreeManager",
 ]
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

@@ -8,11 +8,12 @@ and self-development benchmarks (REQ-16.7).
 
 from __future__ import annotations
 
-import logging
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
+
+from logger_python import get_logger
 
 from guild.agent.message import Message
 from guild.config.constants import (
@@ -34,7 +35,7 @@ __all__ = [
     "SELF_DEV_BENCHMARKS",
 ]
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

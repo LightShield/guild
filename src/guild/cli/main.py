@@ -11,11 +11,11 @@ to helper modules (task_runner, daemon_ops, queries, toml_utils).
 # requires runtime type annotation introspection.
 
 import asyncio
-import logging
 from pathlib import Path
 from typing import Any, Optional
 
 import typer
+from logger_python import get_logger
 from rich.console import Console
 from rich.table import Table
 
@@ -105,7 +105,7 @@ from guild.task.spec import TaskStatus
 
 __all__ = ["app"]
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 console = Console()
 
 app = typer.Typer(

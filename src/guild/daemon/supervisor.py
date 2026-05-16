@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 import os
 import signal
 from typing import TYPE_CHECKING, Any
+
+from logger_python import get_logger
 
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from collections.abc import Callable, Coroutine
@@ -17,7 +18,7 @@ from guild.daemon.control_socket import ControlSocket
 
 __all__ = ["DaemonSupervisor"]
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class DaemonSupervisor:

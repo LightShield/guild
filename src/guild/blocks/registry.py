@@ -1,8 +1,9 @@
 """Block registry — catalog of available blocks and teams."""
 
-import logging
 from pathlib import Path
 from typing import Any
+
+from logger_python import get_logger
 
 try:
     import tomllib
@@ -16,7 +17,7 @@ from .port_types import check_port_compatibility
 
 __all__ = ["BlockRegistry"]
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class BlockRegistry:

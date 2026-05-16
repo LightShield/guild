@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import fnmatch
-import logging
 import os
 import re
 from pathlib import Path
 from typing import Any
+
+from logger_python import get_logger
 
 from guild.config.constants import MAX_GLOB_RESULTS, MAX_SEARCH_RESULTS
 from guild.tools.base import ToolResult, resolve_path
@@ -19,7 +20,7 @@ __all__ = [
     "execute_search",
 ]
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Directories to always skip during traversal.
 _SKIP_DIRS: set[str] = {".git", "__pycache__", "node_modules", ".venv", "venv"}

@@ -10,6 +10,8 @@ requires-python = ">=3.11"
 dependencies = [
     # Configuration loading from TOML/YAML files with schema validation
     "configsloader>=0.1.0",
+    # Structured logging with consistent format across projects
+    "logger-python>=0.1.0",
     # CLI framework with type-based argument parsing (powers `guild` command)
     "typer>=0.9,<1",
     # Terminal formatting: tables, syntax highlighting, progress bars

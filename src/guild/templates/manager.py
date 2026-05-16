@@ -3,16 +3,17 @@
 from __future__ import annotations
 
 import json
-import logging
 import shutil
 from dataclasses import asdict, dataclass, field
 from pathlib import Path  # noqa: TC003
+
+from logger_python import get_logger
 
 from guild.permissions.checker import PermissionTier
 
 __all__ = ["Template", "TemplateManager"]
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass
