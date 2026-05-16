@@ -166,7 +166,15 @@ def _register_status_routes(
     app: Any, get_storage: Callable[[], "Storage"], guild_dir: Path
 ) -> None:
     """Register status, learnings, and audit routes."""
-    from fastapi import Request
+    _register_status_endpoint(app, get_storage)
+    _register_blocks_endpoint(app)
+    _register_teams_endpoints(app, guild_dir)
+    _register_learnings_endpoint(app, get_storage)
+    _register_audit_endpoint(app, get_storage)
+
+
+def _register_status_endpoint(app: Any, get_storage: Callable[[], "Storage"]) -> None:
+    """Register the GET /api/status route."""
 
     @app.get("/api/status")  # type: ignore[untyped-decorator]
     async def get_status() -> dict[str, Any]:
@@ -182,6 +190,10 @@ def _register_status_routes(
             "total_output_tokens": summary["total_output"],
         }
 
+
+def _register_blocks_endpoint(app: Any) -> None:
+    """Register the GET /api/blocks route."""
+
     @app.get("/api/blocks")  # type: ignore[untyped-decorator]
     async def list_blocks() -> list[dict[str, str]]:
         """List available block definitions."""
@@ -192,6 +204,11 @@ def _register_status_routes(
             return [{"name": block.name} for block in registry.list_blocks()]
         except (ImportError, OSError):
             return []
+
+
+def _register_teams_endpoints(app: Any, guild_dir: Path) -> None:
+    """Register the GET/POST /api/teams routes."""
+    from fastapi import Request
 
     @app.get("/api/teams")  # type: ignore[untyped-decorator]
     async def list_teams() -> list[dict[str, str]]:
@@ -229,11 +246,19 @@ def _register_status_routes(
             write_toml_bytes(f, team_data)
         return {"status": "ok", "name": name}
 
+
+def _register_learnings_endpoint(app: Any, get_storage: Callable[[], "Storage"]) -> None:
+    """Register the GET /api/learnings route."""
+
     @app.get("/api/learnings")  # type: ignore[untyped-decorator]
     async def list_learnings() -> list[dict[str, Any]]:
         """List all stored learnings."""
         storage = get_storage()
         return await storage.list_learnings()
+
+
+def _register_audit_endpoint(app: Any, get_storage: Callable[[], "Storage"]) -> None:
+    """Register the GET /api/audit route."""
 
     @app.get("/api/audit")  # type: ignore[untyped-decorator]
     async def get_audit(limit: int = 50) -> list[dict[str, Any]]:
@@ -326,8 +351,6 @@ def _jsonrpc_result(req_id: Any, result: Any) -> dict[str, Any]:
 
 def _register_a2a_routes(app: Any) -> None:
     """Register A2A protocol routes (REQ-04.7a)."""
-    import uuid
-
     from fastapi import Request
 
     # In-memory A2A task store (keyed by task ID)
@@ -362,39 +385,104 @@ def _register_a2a_routes(app: Any) -> None:
 
         req_id = body.get("id")
         params: dict[str, Any] = body.get("params", {})
+        return _dispatch_a2a_method(method, req_id, params, a2a_tasks)
 
-        if method == "tasks/send":
-            message = params.get("message")
-            if not message:
-                return _jsonrpc_error(req_id, -32602, "Invalid params: missing message")
-            task_id = str(uuid.uuid4())
-            a2a_tasks[task_id] = {
-                "id": task_id,
-                "status": {"state": "submitted"},
-                "message": message,
-            }
-            return _jsonrpc_result(
-                req_id, {"id": task_id, "status": {"state": "submitted"}}
-            )
-        elif method == "tasks/get":
-            task_id = params.get("id", "")
-            task = a2a_tasks.get(task_id)
-            if task is None:
-                return _jsonrpc_error(req_id, -32001, "Task not found")
-            return _jsonrpc_result(
-                req_id, {"id": task["id"], "status": task["status"]}
-            )
-        elif method == "tasks/cancel":
-            task_id = params.get("id", "")
-            task = a2a_tasks.get(task_id)
-            if task is None:
-                return _jsonrpc_error(req_id, -32001, "Task not found")
-            task["status"] = {"state": "canceled"}
-            return _jsonrpc_result(
-                req_id, {"id": task["id"], "status": task["status"]}
-            )
-        else:
-            return _jsonrpc_error(req_id, -32601, f"Method not found: {method}")
+
+def _dispatch_a2a_method(
+    method: str,
+    req_id: Any,
+    params: dict[str, Any],
+    a2a_tasks: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    """Dispatch an A2A JSON-RPC method to the appropriate handler."""
+    if method == "tasks/send":
+        return _a2a_tasks_send(req_id, params, a2a_tasks)
+    elif method == "tasks/get":
+        return _a2a_tasks_get(req_id, params, a2a_tasks)
+    elif method == "tasks/cancel":
+        return _a2a_tasks_cancel(req_id, params, a2a_tasks)
+    else:
+        return _jsonrpc_error(req_id, -32601, f"Method not found: {method}")
+
+
+def _a2a_tasks_send(
+    req_id: Any, params: dict[str, Any], a2a_tasks: dict[str, dict[str, Any]]
+) -> dict[str, Any]:
+    """Handle A2A tasks/send method."""
+    import uuid
+
+    message = params.get("message")
+    if not message:
+        return _jsonrpc_error(req_id, -32602, "Invalid params: missing message")
+    task_id = str(uuid.uuid4())
+    a2a_tasks[task_id] = {
+        "id": task_id,
+        "status": {"state": "submitted"},
+        "message": message,
+    }
+    return _jsonrpc_result(req_id, {"id": task_id, "status": {"state": "submitted"}})
+
+
+def _a2a_tasks_get(
+    req_id: Any, params: dict[str, Any], a2a_tasks: dict[str, dict[str, Any]]
+) -> dict[str, Any]:
+    """Handle A2A tasks/get method."""
+    task_id = params.get("id", "")
+    task = a2a_tasks.get(task_id)
+    if task is None:
+        return _jsonrpc_error(req_id, -32001, "Task not found")
+    return _jsonrpc_result(req_id, {"id": task["id"], "status": task["status"]})
+
+
+def _a2a_tasks_cancel(
+    req_id: Any, params: dict[str, Any], a2a_tasks: dict[str, dict[str, Any]]
+) -> dict[str, Any]:
+    """Handle A2A tasks/cancel method."""
+    task_id = params.get("id", "")
+    task = a2a_tasks.get(task_id)
+    if task is None:
+        return _jsonrpc_error(req_id, -32001, "Task not found")
+    task["status"] = {"state": "canceled"}
+    return _jsonrpc_result(req_id, {"id": task["id"], "status": task["status"]})
+
+
+def _build_lifespan(
+    guild_dir: Path, db_path: Path, injected_storage: "Storage | None"
+) -> Callable[..., Any]:
+    """Build the FastAPI lifespan context manager."""
+    from guild.storage.sqlite import Storage
+
+    @asynccontextmanager
+    async def lifespan(app: Any) -> AsyncGenerator[None, None]:
+        """Manage Storage lifecycle: connect on startup, close on shutdown."""
+        if injected_storage is not None:  # pragma: no cover — injected storage path for testing
+            app.state.storage = injected_storage
+            app.state.guild_dir = guild_dir
+            logger.debug("API using injected storage for %s", guild_dir)
+            yield
+            return
+        store = Storage(db_path)
+        await store.connect()
+        try:
+            app.state.storage = store
+            app.state.guild_dir = guild_dir
+            logger.debug("API storage connected: %s", db_path)
+            yield
+        finally:
+            await store.close()
+            logger.debug("API storage closed for %s", db_path)
+
+    return lifespan
+
+
+def _register_all_routes(app: Any, get_storage: Callable[[], "Storage"], guild_dir: Path) -> None:
+    """Register all API routes on the app."""
+    _register_a2a_routes(app)
+    _register_task_routes(app, get_storage)
+    _register_agent_routes(app, get_storage)
+    _register_config_routes(app, get_storage, guild_dir)
+    _register_websocket(app, get_storage)
+    _register_static_files(app)
 
 
 def create_app(
@@ -420,39 +508,13 @@ def create_app(
     _guild_dir = guild_dir or find_guild_dir() or Path.cwd() / GUILD_DIR_NAME
     _db_path = _guild_dir / DB_FILENAME
 
-    _injected_storage = storage
-
-    @asynccontextmanager
-    async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-        """Manage Storage lifecycle: connect on startup, close on shutdown."""
-        if _injected_storage is not None:  # pragma: no cover — injected storage path for testing
-            app.state.storage = _injected_storage
-            app.state.guild_dir = _guild_dir
-            logger.debug("API using injected storage for %s", _guild_dir)
-            yield
-            return
-        store = Storage(_db_path)
-        await store.connect()
-        try:
-            app.state.storage = store
-            app.state.guild_dir = _guild_dir
-            logger.debug("API storage connected: %s", _db_path)
-            yield
-        finally:
-            await store.close()
-            logger.debug("API storage closed for %s", _db_path)
-
+    lifespan = _build_lifespan(_guild_dir, _db_path, storage)
     app = FastAPI(title="Guild", version=__version__, lifespan=lifespan)
 
     def _get_storage() -> Storage:
         """Retrieve Storage from app state."""
         return app.state.storage  # type: ignore[no-any-return]
 
-    _register_a2a_routes(app)
-    _register_task_routes(app, _get_storage)
-    _register_agent_routes(app, _get_storage)
-    _register_config_routes(app, _get_storage, _guild_dir)
-    _register_websocket(app, _get_storage)
-    _register_static_files(app)
+    _register_all_routes(app, _get_storage, _guild_dir)
 
     return app

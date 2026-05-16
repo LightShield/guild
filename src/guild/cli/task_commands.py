@@ -151,7 +151,6 @@ def chat(
     except (KeyboardInterrupt, EOFError):
         console.print("\n[dim]Goodbye.[/dim]")
 
-
 @app.command()
 def attach(
     task_id: str = typer.Argument(..., help="Task ID to attach to."),
@@ -171,64 +170,79 @@ def attach(
         )
         raise typer.Exit(code=1)
 
-    async def _attach_repl() -> None:  # pragma: no cover — interactive I/O
-        reader, writer = await asyncio.open_unix_connection(str(sock_path))
-        writer.write(
-            json.dumps({"type": "command", "action": "subscribe"}).encode() + b"\n"
+    asyncio.run(_attach_repl(sock_path, task_id))  # pragma: no cover — interactive I/O
+
+
+async def _attach_repl(sock_path: "Path", task_id: str) -> None:  # pragma: no cover — interactive I/O
+    """Connect to the task socket and run the interactive REPL."""
+    reader, writer = await asyncio.open_unix_connection(str(sock_path))
+    if not await _subscribe_to_task(reader, writer):
+        return
+
+    console.print(f"[bold green]Attached to task {task_id}[/bold green] (Ctrl+C to detach)")
+
+    try:
+        await asyncio.gather(
+            _read_task_responses(reader),
+            _send_user_input(writer),
         )
-        await writer.drain()
-        ack = await reader.readline()
-        ack_data = json.loads(ack)
-        if ack_data.get("status") != "subscribed":
-            console.print("[red]Error:[/red] Failed to subscribe to task output.")
-            writer.close()
-            await writer.wait_closed()
-            return
+    except (KeyboardInterrupt, asyncio.CancelledError):
+        pass
+    finally:
+        writer.close()
+        await writer.wait_closed()
+        console.print("[dim]Detached.[/dim]")
 
-        console.print(f"[bold green]Attached to task {task_id}[/bold green] (Ctrl+C to detach)")
 
-        import sys
+async def _subscribe_to_task(  # pragma: no cover — interactive I/O
+    reader: asyncio.StreamReader, writer: asyncio.StreamWriter
+) -> bool:
+    """Send subscribe command and verify acknowledgement."""
+    writer.write(
+        json.dumps({"type": "command", "action": "subscribe"}).encode() + b"\n"
+    )
+    await writer.drain()
+    ack = await reader.readline()
+    ack_data = json.loads(ack)
+    if ack_data.get("status") != "subscribed":
+        console.print("[red]Error:[/red] Failed to subscribe to task output.")
+        writer.close()
+        await writer.wait_closed()
+        return False
+    return True
 
-        async def _read_responses() -> None:
-            """Read and display responses from the agent."""
-            while True:
-                line = await reader.readline()
-                if not line:
-                    console.print("[dim]Connection closed.[/dim]")
-                    break
-                data = json.loads(line)
-                msg_type = data.get("type", "")
-                content = data.get("content", "")
-                if msg_type == "agent_message":
-                    console.print(f"[bold]agent:[/bold] {content}")
-                else:
-                    console.print(f"[dim]{data}[/dim]")
 
-        async def _send_input() -> None:
-            """Read user input and send as messages."""
-            loop = asyncio.get_event_loop()
-            while True:
-                try:
-                    line = await loop.run_in_executor(None, sys.stdin.readline)
-                except EOFError:
-                    break
-                if not line:
-                    break
-                msg = json.dumps({"type": "message", "content": line.strip()})
-                writer.write(msg.encode() + b"\n")
-                await writer.drain()
+async def _read_task_responses(reader: asyncio.StreamReader) -> None:  # pragma: no cover — interactive I/O
+    """Read and display responses from the agent."""
+    while True:
+        line = await reader.readline()
+        if not line:
+            console.print("[dim]Connection closed.[/dim]")
+            break
+        data = json.loads(line)
+        msg_type = data.get("type", "")
+        content = data.get("content", "")
+        if msg_type == "agent_message":
+            console.print(f"[bold]agent:[/bold] {content}")
+        else:
+            console.print(f"[dim]{data}[/dim]")
 
+
+async def _send_user_input(writer: asyncio.StreamWriter) -> None:  # pragma: no cover — interactive I/O
+    """Read user input and send as messages."""
+    import sys
+
+    loop = asyncio.get_event_loop()
+    while True:
         try:
-            await asyncio.gather(_read_responses(), _send_input())
-        except (KeyboardInterrupt, asyncio.CancelledError):
-            pass
-        finally:
-            writer.close()
-            await writer.wait_closed()
-            console.print("[dim]Detached.[/dim]")
-
-    asyncio.run(_attach_repl())  # pragma: no cover — interactive I/O
-
+            line = await loop.run_in_executor(None, sys.stdin.readline)
+        except EOFError:
+            break
+        if not line:
+            break
+        msg = json.dumps({"type": "message", "content": line.strip()})
+        writer.write(msg.encode() + b"\n")
+        await writer.drain()
 
 # ------------------------------------------------------------------
 # Process lifecycle commands

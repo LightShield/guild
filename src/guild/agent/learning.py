@@ -42,7 +42,6 @@ LEARNER_PROMPT = (
 _VALID_CATEGORIES = {"pattern", "anti_pattern", "tool_tip", "domain_knowledge"}
 
 
-
 async def extract_learnings(
     task_id: str,
     storage: Storage,
@@ -55,30 +54,61 @@ async def extract_learnings(
 
     Returns the list of successfully stored learnings.
     """
+    messages = await _fetch_task_messages(task_id, storage)
+    if messages is None:
+        return []
+
+    response = await _generate_learnings_response(messages, provider)
+    raw_lines = (response.content or "").strip().splitlines()
+    stored = await _store_parsed_learnings(raw_lines, task_id, storage)
+
+    logger.info(
+        "Extracted %d learnings from task %s (%d lines skipped)",
+        len(stored),
+        task_id,
+        len(raw_lines) - len(stored),
+    )
+    return stored
+
+
+async def _fetch_task_messages(
+    task_id: str, storage: "Storage"
+) -> list[dict[str, Any]] | None:
+    """Fetch messages for a task's assigned agent, or None if unavailable."""
     task = await storage.get_task(task_id)
     if task is None:
         logger.debug("extract_learnings: task %s not found", task_id)
-        return []
+        return None
 
     agent_id = task.get("assigned_agent")
     if not agent_id:
         logger.debug("extract_learnings: task %s has no assigned agent", task_id)
-        return []
+        return None
 
     messages = await storage.get_messages(agent_id)
     if not messages:
         logger.debug("extract_learnings: no messages for agent %s", agent_id)
-        return []
+        return None
 
+    return messages
+
+
+async def _generate_learnings_response(
+    messages: list[dict[str, Any]], provider: "LLMProvider"
+) -> Any:
+    """Build the learner prompt and generate LLM response."""
     session_log = _format_session_log(messages)
-
     llm_messages = [
         {"role": "system", "content": LEARNER_PROMPT},
         {"role": "user", "content": session_log},
     ]
-    response = await provider.generate(llm_messages)
+    return await provider.generate(llm_messages)
 
-    raw_lines = (response.content or "").strip().splitlines()
+
+async def _store_parsed_learnings(
+    raw_lines: list[str], task_id: str, storage: "Storage"
+) -> list[dict[str, Any]]:
+    """Parse raw LLM output lines and store valid learnings."""
     stored: list[dict[str, Any]] = []
 
     for line in raw_lines:
@@ -101,12 +131,6 @@ async def extract_learnings(
             }
         )
 
-    logger.info(
-        "Extracted %d learnings from task %s (%d lines skipped)",
-        len(stored),
-        task_id,
-        len(raw_lines) - len(stored),
-    )
     return stored
 
 
