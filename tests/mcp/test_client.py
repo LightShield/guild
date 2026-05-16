@@ -226,9 +226,7 @@ class TestMCPClientAsyncContextManager:
     """Tests for MCPClient.__aenter__/__aexit__ — async context manager."""
 
     @patch("guild.mcp.client.asyncio.create_subprocess_exec", new_callable=AsyncMock)
-    async def test_async_with_calls_connect_and_disconnect(
-        self, mock_exec: AsyncMock
-    ) -> None:
+    async def test_async_with_calls_connect_and_disconnect(self, mock_exec: AsyncMock) -> None:
         """Using `async with MCPClient(...)` calls connect on enter and disconnect on exit."""
         fake_proc = _make_fake_process([])
         mock_exec.return_value = fake_proc
@@ -271,7 +269,7 @@ class TestMCPClientEdgeCases:
             await client._send_request("test/method", {})
 
     def test_config_property(self) -> None:
-        """config property returns the server config."""
+        """Config property returns the server config."""
         config = MCPServerConfig(name="my-server", command="node", args=["mcp.js"])
         client = MCPClient(config)
         assert client.config.name == "my-server"

@@ -145,9 +145,7 @@ class TestSpawnMaxDepth:
         """spawn() raises RuntimeError when current depth >= max_depth."""
         provider = _make_provider()
         bus = MessageBus()
-        spawner = AgentSpawner(
-            provider=provider, storage=None, bus=bus, max_depth=2
-        )
+        spawner = AgentSpawner(provider=provider, storage=None, bus=bus, max_depth=2)
         # Simulate being at max depth already
         spawner._current_depth = 2
 

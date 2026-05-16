@@ -6,15 +6,16 @@ in SQLite and supports priority ordering and batch answers.
 
 from __future__ import annotations
 
-from logger_python import get_logger
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import Enum
 from typing import TYPE_CHECKING, Any
 
+from logger_python import get_logger
+
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
-    from guild.storage.sqlite import QuestionRecord, Storage
+    from guild.storage.sqlite import Storage
 
 __all__ = ["PendingQuestion", "QuestionPriority", "QuestionQueue"]
 

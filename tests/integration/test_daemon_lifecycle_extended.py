@@ -7,6 +7,7 @@ Uses CliRunner for CLI commands and real ControlSocket/Supervisor for daemon
 features.  Provider (external I/O) is mocked at the boundary; everything else
 is real.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -15,7 +16,7 @@ import os
 import signal
 import time
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from typer.testing import CliRunner
@@ -36,16 +37,19 @@ pytestmark = pytest.mark.integration
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _mock_provider() -> AsyncMock:
     """Create a mock provider that finishes after one turn."""
     provider = AsyncMock()
-    provider.generate = AsyncMock(return_value=LLMResponse(
-        content="Done.",
-        tool_calls=None,
-        input_tokens=10,
-        output_tokens=5,
-        model="mock",
-    ))
+    provider.generate = AsyncMock(
+        return_value=LLMResponse(
+            content="Done.",
+            tool_calls=None,
+            input_tokens=10,
+            output_tokens=5,
+            model="mock",
+        )
+    )
     provider.health_check = AsyncMock(return_value=True)
     return provider
 
@@ -104,7 +108,8 @@ class TestBackgroundLaunch:
         """--background launches daemon and prints the task ID."""
         with patch("guild.cli.task_commands._launch_background_task") as mock_launch:
             result = runner.invoke(
-                app, ["task", "background job", "--background"],
+                app,
+                ["task", "background job", "--background"],
             )
 
         assert result.exit_code == 0
@@ -116,7 +121,8 @@ class TestBackgroundLaunch:
         """--background persists the task in SQLite before forking."""
         with patch("guild.cli.task_commands._launch_background_task"):
             result = runner.invoke(
-                app, ["task", "stored task", "--background"],
+                app,
+                ["task", "stored task", "--background"],
             )
 
         assert result.exit_code == 0
@@ -183,7 +189,7 @@ class TestAttachReconnects:
 
     @pytest.mark.ac("AC-23.3.2")
     def test_attach_fails_without_socket(self, project_dir: Path) -> None:
-        """attach errors when no control socket exists for the task."""
+        """Attach errors when no control socket exists for the task."""
         result = runner.invoke(app, ["attach", "nonexistent-task"])
         assert result.exit_code != 0
         assert "not running" in result.output.lower() or "Error" in result.output
@@ -226,14 +232,14 @@ class TestLogsCommand:
 
     @pytest.mark.ac("AC-23.4.1")
     def test_logs_shows_no_messages_for_unknown_task(self, project_dir: Path) -> None:
-        """logs on a non-existent task shows 'No messages'."""
+        """Logs on a non-existent task shows 'No messages'."""
         result = runner.invoke(app, ["logs", "unknown-task-id"])
         assert result.exit_code == 0
         assert "No messages" in result.output
 
     @pytest.mark.ac("AC-23.4.1")
     def test_logs_shows_messages_after_task(self, project_dir: Path) -> None:
-        """logs displays messages recorded by a completed task."""
+        """Logs displays messages recorded by a completed task."""
         with patch(
             "guild.cli.task_runner.create_resilient_provider",
             return_value=_mock_provider(),
@@ -256,14 +262,14 @@ class TestPsCommand:
 
     @pytest.mark.ac("AC-23.5.2")
     def test_ps_empty_project(self, project_dir: Path) -> None:
-        """ps on a fresh project shows 'No running tasks'."""
+        """Ps on a fresh project shows 'No running tasks'."""
         result = runner.invoke(app, ["ps"])
         assert result.exit_code == 0
         assert "no" in result.output.lower()
 
     @pytest.mark.ac("AC-23.5.1")
     def test_ps_shows_live_pid(self, project_dir: Path) -> None:
-        """ps lists tasks that have a live PID file in the run directory."""
+        """Ps lists tasks that have a live PID file in the run directory."""
         run_dir = project_dir / ".guild" / "run"
         run_dir.mkdir(exist_ok=True)
         _write_pid_file(run_dir, "live-task", os.getpid())
@@ -276,7 +282,7 @@ class TestPsCommand:
 
     @pytest.mark.ac("AC-23.5.1")
     def test_ps_ignores_dead_pid(self, project_dir: Path) -> None:
-        """ps does not show tasks whose PID is dead."""
+        """Ps does not show tasks whose PID is dead."""
         run_dir = project_dir / ".guild" / "run"
         run_dir.mkdir(exist_ok=True)
         _write_pid_file(run_dir, "dead-task", 999999999)
@@ -326,7 +332,8 @@ class TestMinimalSupervisor:
 
     @pytest.mark.ac("AC-23.6.2")
     async def test_supervisor_starts_and_stops_control_socket(
-        self, guild_env: dict,
+        self,
+        guild_env: dict,
     ) -> None:
         """Supervisor can start/stop a control socket for its task."""
         run_dir = guild_env["run_dir"]
@@ -399,7 +406,7 @@ class TestForegroundDefault:
 
     @pytest.mark.ac("AC-23.8.1")
     def test_task_runs_foreground_by_default(self, project_dir: Path) -> None:
-        """guild task without --background runs synchronously in foreground."""
+        """Guild task without --background runs synchronously in foreground."""
         with patch(
             "guild.cli.task_runner.create_resilient_provider",
             return_value=_mock_provider(),
@@ -470,7 +477,7 @@ class TestKillCommand:
 
     @pytest.mark.ac("AC-25.1.3")
     def test_kill_cli_no_task_id_errors(self, project_dir: Path) -> None:
-        """guild kill without task_id or --all shows error."""
+        """Guild kill without task_id or --all shows error."""
         result = runner.invoke(app, ["kill"])
         assert result.exit_code != 0
         assert "Provide a task ID" in result.output or "Error" in result.output
@@ -610,7 +617,8 @@ class TestSignalHandling:
 
     @pytest.mark.ac("AC-25.4.1")
     async def test_signal_handlers_installed_and_restored(
-        self, guild_env: dict,
+        self,
+        guild_env: dict,
     ) -> None:
         """Supervisor installs custom signal handlers during run, restores after."""
         run_dir = guild_env["run_dir"]
@@ -646,7 +654,8 @@ class TestSignalHandling:
 
     @pytest.mark.ac("AC-25.4.3")
     async def test_checkpoint_callback_invoked_on_signal(
-        self, guild_env: dict,
+        self,
+        guild_env: dict,
     ) -> None:
         """on_checkpoint callback is invoked when shutdown signal fires."""
         run_dir = guild_env["run_dir"]
@@ -657,7 +666,9 @@ class TestSignalHandling:
             checkpoint_called = True
 
         sup = DaemonSupervisor(
-            run_dir=run_dir, task_id="sig-cp", on_checkpoint=checkpoint,
+            run_dir=run_dir,
+            task_id="sig-cp",
+            on_checkpoint=checkpoint,
         )
 
         async def work() -> str:
@@ -710,7 +721,8 @@ class TestOrphanDetection:
             return pid == os.getpid()
 
         with patch(
-            "guild.daemon.lifecycle._process_alive", side_effect=selective_alive,
+            "guild.daemon.lifecycle._process_alive",
+            side_effect=selective_alive,
         ):
             orphans = mgr.detect_orphans()
 
@@ -843,7 +855,7 @@ class TestKillAll:
 
     @pytest.mark.ac("AC-25.8.1")
     def test_kill_all_cli_flag(self, project_dir: Path) -> None:
-        """guild kill --all via CLI prints count of killed tasks."""
+        """Guild kill --all via CLI prints count of killed tasks."""
         # No running tasks, so count should be 0
         with patch("guild.cli.task_commands._kill_all_tasks", return_value=0):
             result = runner.invoke(app, ["kill", "--all"])
@@ -1050,7 +1062,8 @@ class TestInterruptedCallsRetried:
             return "retried successfully"
 
         result = await detector.retry_after_sleep(
-            provider=provider, operation=flaky_generate,
+            provider=provider,
+            operation=flaky_generate,
         )
 
         assert result == "retried successfully"
@@ -1074,7 +1087,8 @@ class TestInterruptedCallsRetried:
 
         with pytest.raises(ConnectionError, match="permanent failure"):
             await detector.retry_after_sleep(
-                provider=provider, operation=always_fails,
+                provider=provider,
+                operation=always_fails,
             )
 
 
@@ -1116,7 +1130,8 @@ class TestSleepWakeAuditLog:
 
     @pytest.mark.ac("AC-26.5.2")
     async def test_audit_events_persisted_in_real_storage(
-        self, guild_env: dict,
+        self,
+        guild_env: dict,
     ) -> None:
         """Sleep/wake events appear in real SQLite audit log."""
         store = await _make_storage(guild_env["guild_dir"])
@@ -1188,7 +1203,10 @@ class TestBackgroundLaunchFailsGracefully:
     @pytest.mark.ac("AC-23.1.3")
     def test_background_with_unreachable_provider(self, project_dir: Path) -> None:
         """--background reports failure clearly when provider unreachable."""
-        with patch("guild.cli.task_commands._launch_background_task", side_effect=ConnectionError("offline")):
+        with patch(
+            "guild.cli.task_commands._launch_background_task",
+            side_effect=ConnectionError("offline"),
+        ):
             result = runner.invoke(app, ["task", "test", "--background"])
         # Should show error, not a stack trace
         assert result.exit_code != 0 or "error" in result.output.lower()
@@ -1230,9 +1248,7 @@ class TestDetachDoesNotStopBackground:
 
         # Socket should still be operational
         reader2, writer2 = await asyncio.open_unix_connection(str(sock_path))
-        writer2.write(
-            json.dumps({"type": "command", "action": "status"}).encode() + b"\n"
-        )
+        writer2.write(json.dumps({"type": "command", "action": "status"}).encode() + b"\n")
         await writer2.drain()
         resp = json.loads(await reader2.readline())
         assert resp["status"] == "running"
@@ -1264,7 +1280,8 @@ class TestQueueSurvivesReboot:
 
     @pytest.mark.ac("AC-23.7.3")
     async def test_tasks_persist_across_storage_restart(
-        self, guild_env: dict,
+        self,
+        guild_env: dict,
     ) -> None:
         """Tasks created in one storage session are visible after reopen."""
         db_path = guild_env["guild_dir"] / "reboot.db"
@@ -1577,7 +1594,8 @@ class TestRetryUseSamePrompt:
             return "success"
 
         result = await detector.retry_after_sleep(
-            provider=provider, operation=tracked_operation,
+            provider=provider,
+            operation=tracked_operation,
         )
         assert result == "success"
         assert len(captured_calls) == 2
@@ -1593,7 +1611,7 @@ class TestLogsNonexistentTask:
 
     @pytest.mark.ac("AC-23.4.3")
     def test_logs_nonexistent_id_no_crash(self, project_dir: Path) -> None:
-        """guild logs with nonexistent task ID does not crash."""
+        """Guild logs with nonexistent task ID does not crash."""
         result = runner.invoke(app, ["logs", "nonexistent-id-xyz"])
         # Should not crash -- exit code may be 0 or 1 but no traceback
         assert "Traceback" not in result.output
@@ -1641,7 +1659,7 @@ class TestNoGpuGraceful:
     @pytest.mark.ac("AC-24.2.4")
     def test_resource_status_no_gpu_no_error(self) -> None:
         """ResourceStatus without GPU info does not crash."""
-        from guild.daemon.resource import ResourceStatus, ActivityState, SchedulingMode
+        from guild.daemon.resource import ActivityState, ResourceStatus, SchedulingMode
 
         status = ResourceStatus(
             mode=SchedulingMode.POLITE,

@@ -5,10 +5,9 @@ REQ-16.x (eval framework), and REQ-17.x (provider routing).
 
 Uses real components throughout. Only LLM provider calls are mocked.
 """
+
 from __future__ import annotations
 
-import asyncio
-import os
 import time
 from pathlib import Path
 from typing import Any
@@ -21,14 +20,12 @@ from guild.cli.main import app
 from guild.config.loader import ConfigWatcher, load_config
 from guild.config.models import GuildConfig
 from guild.config.profiles import (
-    AgentProfile,
-    PermissionProfile,
     load_agent_profiles,
     load_permission_profiles,
     validate_config,
 )
 from guild.escalation.notify import NotificationChannel, Notifier
-from guild.escalation.queue import PendingQuestion, QuestionPriority, QuestionQueue
+from guild.escalation.queue import QuestionPriority, QuestionQueue
 from guild.eval.framework import (
     SELF_DEV_BENCHMARKS,
     BenchmarkTask,
@@ -43,10 +40,8 @@ from guild.provider.escalation import (
     EscalatingProvider,
     EscalationChain,
     MalformedOutputError,
-    ModelCapability,
     select_model_for_task,
 )
-from guild.provider.retry import RetryConfig, RetryProvider
 from guild.security.sandbox import SandboxPolicy, load_sandbox_policy
 from guild.storage.sqlite import Storage
 
@@ -164,7 +159,7 @@ class TestSandboxPathBoundaries:
         """Load policy from a security.toml file with filesystem rules."""
         security_toml = guild_dir / "security.toml"
         security_toml.write_text(
-            '[filesystem]\n'
+            "[filesystem]\n"
             f'allowed_paths = ["{guild_dir.parent}"]\n'
             f'denied_paths = ["{guild_dir.parent}/private"]\n'
         )
@@ -196,9 +191,7 @@ class TestSandboxNetwork:
         """Load network controls from security.toml."""
         security_toml = guild_dir / "security.toml"
         security_toml.write_text(
-            '[network]\n'
-            'allowed = false\n'
-            'hosts_allowlist = ["localhost"]\n'
+            "[network]\n" "allowed = false\n" 'hosts_allowlist = ["localhost"]\n'
         )
         policy = load_sandbox_policy(guild_dir)
         assert policy.network_allowed is False
@@ -234,10 +227,7 @@ class TestSandboxSecrets:
     def test_secrets_loaded_from_toml(self, guild_dir: Path) -> None:
         """Secrets section in security.toml is parsed into policy."""
         security_toml = guild_dir / "security.toml"
-        security_toml.write_text(
-            '[secrets]\n'
-            'API_KEY = "test-secret-val"\n'
-        )
+        security_toml.write_text("[secrets]\n" 'API_KEY = "test-secret-val"\n')
         policy = load_sandbox_policy(guild_dir)
         assert policy.secrets["API_KEY"] == "test-secret-val"
 
@@ -320,13 +310,13 @@ class TestConfigAgentDefinitions:
         """Agent profiles are loaded from agents.toml."""
         agents_toml = guild_dir / "agents.toml"
         agents_toml.write_text(
-            '[planner]\n'
+            "[planner]\n"
             'model = "gemma4-4b-dense-med"\n'
             'system_prompt = "You plan tasks."\n'
             'tools = ["file_read", "search"]\n'
             'permission = "scoped"\n'
-            'max_turns = 20\n'
-            'token_budget = 5000\n'
+            "max_turns = 20\n"
+            "token_budget = 5000\n"
         )
         profiles = load_agent_profiles(guild_dir)
         assert "planner" in profiles
@@ -360,8 +350,7 @@ class TestConfigTeamDefinitions:
         blocks_dir = project_dir / ".guild" / "blocks"
         blocks_dir.mkdir(exist_ok=True)
         (blocks_dir / "team_qa.toml").write_text(
-            '[team]\nname = "qa"\nentry_block = "test"\n'
-            '\n[team.blocks]\ntest = "tester"\n'
+            '[team]\nname = "qa"\nentry_block = "test"\n' '\n[team.blocks]\ntest = "tester"\n'
         )
         # Verify the file can be loaded as TOML
         import tomllib
@@ -380,7 +369,7 @@ class TestConfigPermissionProfiles:
         """Permission profiles are loaded from permissions.toml."""
         perms_toml = guild_dir / "permissions.toml"
         perms_toml.write_text(
-            '[restricted]\n'
+            "[restricted]\n"
             'tier = "scoped"\n'
             'allowed_paths = ["/safe"]\n'
             'allowed_tools = ["file_read"]\n'
@@ -453,12 +442,8 @@ class TestConfigValidation:
         """Agent profile referencing an invalid permission tier is flagged."""
         guild_dir = tmp_path / ".guild"
         guild_dir.mkdir()
-        (guild_dir / "config.toml").write_text(
-            '[provider]\nmodel = "m"\nbase_url = "http://x"\n'
-        )
-        (guild_dir / "agents.toml").write_text(
-            '[bad_agent]\npermission = "nonexistent_tier"\n'
-        )
+        (guild_dir / "config.toml").write_text('[provider]\nmodel = "m"\nbase_url = "http://x"\n')
+        (guild_dir / "agents.toml").write_text('[bad_agent]\npermission = "nonexistent_tier"\n')
         config = load_config(guild_dir=guild_dir)
         errors = validate_config(config, guild_dir)
         assert any("bad_agent" in e for e in errors)
@@ -542,7 +527,8 @@ class TestEscalationPresenceNotify:
             mock_stdout.write = MagicMock()
             mock_stdout.flush = MagicMock()
             await notifier.notify(
-                "Urgent question", priority=QuestionPriority.BLOCKING,
+                "Urgent question",
+                priority=QuestionPriority.BLOCKING,
             )
         mock_stdout.write.assert_called()
 
@@ -589,13 +575,16 @@ class TestEscalationBatchApproval:
         """Multiple questions can be answered in a single batch call."""
         queue = QuestionQueue(storage)
         q1 = await queue.post_question(
-            question="Q1?", context="ctx1",
+            question="Q1?",
+            context="ctx1",
         )
         q2 = await queue.post_question(
-            question="Q2?", context="ctx2",
+            question="Q2?",
+            context="ctx2",
         )
         q3 = await queue.post_question(
-            question="Q3?", context="ctx3",
+            question="Q3?",
+            context="ctx3",
         )
 
         count = await queue.batch_answer({q1: "Yes", q2: "No", q3: "Maybe"})
@@ -695,7 +684,11 @@ class TestEvalABTest:
         provider_b = _mock_provider(model="model-b", input_tokens=200, output_tokens=100)
 
         result_a, result_b = await framework.run_ab_test(
-            task, provider_a, provider_b, "config-a", "config-b",
+            task,
+            provider_a,
+            provider_b,
+            "config-a",
+            "config-b",
         )
         assert result_a.model == "model-a"
         assert result_b.model == "model-b"
@@ -706,18 +699,30 @@ class TestEvalABTest:
         """Compare results picks a winner based on metrics."""
         framework = EvalFramework(storage)
         result_a = EvalResult(
-            task_name="t", model="a", config_hash="ha",
+            task_name="t",
+            model="a",
+            config_hash="ha",
             metrics=EvalMetrics(
-                task_completed=True, duration_seconds=1.0,
-                input_tokens=100, output_tokens=50, tool_calls=2, turns=3,
+                task_completed=True,
+                duration_seconds=1.0,
+                input_tokens=100,
+                output_tokens=50,
+                tool_calls=2,
+                turns=3,
             ),
             timestamp="2026-01-01",
         )
         result_b = EvalResult(
-            task_name="t", model="b", config_hash="hb",
+            task_name="t",
+            model="b",
+            config_hash="hb",
             metrics=EvalMetrics(
-                task_completed=True, duration_seconds=5.0,
-                input_tokens=500, output_tokens=250, tool_calls=10, turns=8,
+                task_completed=True,
+                duration_seconds=5.0,
+                input_tokens=500,
+                output_tokens=250,
+                tool_calls=10,
+                turns=8,
             ),
             timestamp="2026-01-01",
         )
@@ -764,18 +769,30 @@ class TestEvalRegressionDetection:
         """If baseline completed but current failed, it is a regression."""
         framework = EvalFramework(storage)
         baseline = EvalResult(
-            task_name="t", model="m", config_hash="h",
+            task_name="t",
+            model="m",
+            config_hash="h",
             metrics=EvalMetrics(
-                task_completed=True, duration_seconds=1.0,
-                input_tokens=100, output_tokens=50, tool_calls=2, turns=3,
+                task_completed=True,
+                duration_seconds=1.0,
+                input_tokens=100,
+                output_tokens=50,
+                tool_calls=2,
+                turns=3,
             ),
             timestamp="2026-01-01",
         )
         current = EvalResult(
-            task_name="t", model="m", config_hash="h",
+            task_name="t",
+            model="m",
+            config_hash="h",
             metrics=EvalMetrics(
-                task_completed=False, duration_seconds=0.5,
-                input_tokens=50, output_tokens=20, tool_calls=1, turns=1,
+                task_completed=False,
+                duration_seconds=0.5,
+                input_tokens=50,
+                output_tokens=20,
+                tool_calls=1,
+                turns=1,
                 error="Timed out",
             ),
             timestamp="2026-01-02",
@@ -789,18 +806,30 @@ class TestEvalRegressionDetection:
         """2x duration increase is flagged as regression."""
         framework = EvalFramework(storage)
         baseline = EvalResult(
-            task_name="t", model="m", config_hash="h",
+            task_name="t",
+            model="m",
+            config_hash="h",
             metrics=EvalMetrics(
-                task_completed=True, duration_seconds=1.0,
-                input_tokens=100, output_tokens=50, tool_calls=2, turns=3,
+                task_completed=True,
+                duration_seconds=1.0,
+                input_tokens=100,
+                output_tokens=50,
+                tool_calls=2,
+                turns=3,
             ),
             timestamp="2026-01-01",
         )
         current = EvalResult(
-            task_name="t", model="m", config_hash="h",
+            task_name="t",
+            model="m",
+            config_hash="h",
             metrics=EvalMetrics(
-                task_completed=True, duration_seconds=3.0,
-                input_tokens=100, output_tokens=50, tool_calls=2, turns=3,
+                task_completed=True,
+                duration_seconds=3.0,
+                input_tokens=100,
+                output_tokens=50,
+                tool_calls=2,
+                turns=3,
             ),
             timestamp="2026-01-02",
         )
@@ -813,18 +842,30 @@ class TestEvalRegressionDetection:
         """Slightly slower run is not a regression."""
         framework = EvalFramework(storage)
         baseline = EvalResult(
-            task_name="t", model="m", config_hash="h",
+            task_name="t",
+            model="m",
+            config_hash="h",
             metrics=EvalMetrics(
-                task_completed=True, duration_seconds=1.0,
-                input_tokens=100, output_tokens=50, tool_calls=2, turns=3,
+                task_completed=True,
+                duration_seconds=1.0,
+                input_tokens=100,
+                output_tokens=50,
+                tool_calls=2,
+                turns=3,
             ),
             timestamp="2026-01-01",
         )
         current = EvalResult(
-            task_name="t", model="m", config_hash="h",
+            task_name="t",
+            model="m",
+            config_hash="h",
             metrics=EvalMetrics(
-                task_completed=True, duration_seconds=1.5,
-                input_tokens=120, output_tokens=60, tool_calls=3, turns=4,
+                task_completed=True,
+                duration_seconds=1.5,
+                input_tokens=120,
+                output_tokens=60,
+                tool_calls=3,
+                turns=4,
             ),
             timestamp="2026-01-02",
         )
@@ -870,10 +911,16 @@ class TestEvalResultsPersistence:
         """Eval results persist to SQLite and can be retrieved."""
         framework = EvalFramework(storage)
         result = EvalResult(
-            task_name="persist_test", model="test-model", config_hash="h1",
+            task_name="persist_test",
+            model="test-model",
+            config_hash="h1",
             metrics=EvalMetrics(
-                task_completed=True, duration_seconds=2.5,
-                input_tokens=150, output_tokens=75, tool_calls=3, turns=4,
+                task_completed=True,
+                duration_seconds=2.5,
+                input_tokens=150,
+                output_tokens=75,
+                tool_calls=3,
+                turns=4,
             ),
             timestamp="2026-01-01T00:00:00",
         )
@@ -891,10 +938,16 @@ class TestEvalResultsPersistence:
         framework = EvalFramework(storage)
         for i in range(5):
             result = EvalResult(
-                task_name="limit_test", model="m", config_hash=f"h{i}",
+                task_name="limit_test",
+                model="m",
+                config_hash=f"h{i}",
                 metrics=EvalMetrics(
-                    task_completed=True, duration_seconds=1.0,
-                    input_tokens=10, output_tokens=5, tool_calls=1, turns=1,
+                    task_completed=True,
+                    duration_seconds=1.0,
+                    input_tokens=10,
+                    output_tokens=5,
+                    tool_calls=1,
+                    turns=1,
                 ),
                 timestamp=f"2026-01-0{i + 1}",
             )
@@ -967,9 +1020,7 @@ class TestProviderPerAgentModel:
     @pytest.mark.ac("AC-17.1.2")
     def test_agent_profile_without_model_uses_none(self, guild_dir: Path) -> None:
         """Agent profiles without explicit model default to None (use global)."""
-        (guild_dir / "agents.toml").write_text(
-            '[default_agent]\nsystem_prompt = "Hi."\n'
-        )
+        (guild_dir / "agents.toml").write_text('[default_agent]\nsystem_prompt = "Hi."\n')
         profiles = load_agent_profiles(guild_dir)
         assert profiles["default_agent"].model is None
 
@@ -1055,9 +1106,7 @@ class TestProviderCapabilityTags:
     @pytest.mark.ac("AC-17.4.2")
     def test_capability_tag_filtering(self) -> None:
         """Models can be filtered by capability tag."""
-        reasoning_models = [
-            k for k, v in MODEL_CAPABILITIES.items() if "reasoning" in v.tags
-        ]
+        reasoning_models = [k for k, v in MODEL_CAPABILITIES.items() if "reasoning" in v.tags]
         assert len(reasoning_models) >= 1
 
 
@@ -1169,7 +1218,7 @@ class TestProviderConfigurableChains:
         guild_dir.mkdir()
         (guild_dir / "config.toml").write_text(
             '[provider]\nmodel = "m"\nbase_url = "http://x"\n\n'
-            '[escalation]\n'
+            "[escalation]\n"
             'escalation_chain = "model-a,model-b,model-c"\n'
             'escalation_cli_providers = "gemini,claude"\n'
         )
@@ -1288,9 +1337,7 @@ class TestAgentProfileMissingFields:
     @pytest.mark.ac("AC-14.1.2")
     def test_agent_profile_without_model_field(self, guild_dir: Path) -> None:
         """Agent profile without model defaults to None."""
-        (guild_dir / "agents.toml").write_text(
-            '[minimal_agent]\nsystem_prompt = "Do things."\n'
-        )
+        (guild_dir / "agents.toml").write_text('[minimal_agent]\nsystem_prompt = "Do things."\n')
         profiles = load_agent_profiles(guild_dir)
         assert "minimal_agent" in profiles
         assert profiles["minimal_agent"].model is None
@@ -1345,12 +1392,8 @@ class TestUnknownConfigKeyWarning:
         """Invalid permission tier in agent profile flagged by validation."""
         gd = tmp_path / ".guild"
         gd.mkdir()
-        (gd / "config.toml").write_text(
-            '[provider]\nmodel = "m"\nbase_url = "http://x"\n'
-        )
-        (gd / "agents.toml").write_text(
-            '[bad]\npermission = "invalid_tier"\n'
-        )
+        (gd / "config.toml").write_text('[provider]\nmodel = "m"\nbase_url = "http://x"\n')
+        (gd / "agents.toml").write_text('[bad]\npermission = "invalid_tier"\n')
         config = load_config(guild_dir=gd)
         errors = validate_config(config, gd)
         assert any("bad" in e for e in errors)
@@ -1410,11 +1453,17 @@ class TestABTestIdenticalConfigs:
         """A/B test with same provider produces comparable results."""
         framework = EvalFramework(storage)
         task = BenchmarkTask(
-            name="identical_test", description="Test thing.", verification=[],
+            name="identical_test",
+            description="Test thing.",
+            verification=[],
         )
         provider = _mock_provider(model="same-model", input_tokens=100, output_tokens=50)
         result_a, result_b = await framework.run_ab_test(
-            task, provider, provider, "cfg-a", "cfg-a",
+            task,
+            provider,
+            provider,
+            "cfg-a",
+            "cfg-a",
         )
         assert result_a.task_name == result_b.task_name
         assert result_a.model == result_b.model
@@ -1470,13 +1519,17 @@ class TestOSLevelSandbox:
         """When Docker is available, shell commands execute inside a container."""
         from guild.tools.shell import execute_shell
 
-        with patch(
-            "guild.tools.shell.is_docker_available", return_value=True,
-        ), patch(
-            "guild.tools.shell.run_in_sandbox",
-            new_callable=AsyncMock,
-            return_value=(0, "sandboxed output\n", ""),
-        ) as mock_sandbox:
+        with (
+            patch(
+                "guild.tools.shell.is_docker_available",
+                return_value=True,
+            ),
+            patch(
+                "guild.tools.shell.run_in_sandbox",
+                new_callable=AsyncMock,
+                return_value=(0, "sandboxed output\n", ""),
+            ) as mock_sandbox,
+        ):
             result = await execute_shell(
                 {"command": "echo hello"},
                 working_dir=str(tmp_path),
@@ -1500,13 +1553,17 @@ class TestNetworkRestrictedExecution:
         """Docker sandbox is invoked with network=False when sandbox_network=False."""
         from guild.tools.shell import execute_shell
 
-        with patch(
-            "guild.tools.shell.is_docker_available", return_value=True,
-        ), patch(
-            "guild.tools.shell.run_in_sandbox",
-            new_callable=AsyncMock,
-            return_value=(0, "no network\n", ""),
-        ) as mock_sandbox:
+        with (
+            patch(
+                "guild.tools.shell.is_docker_available",
+                return_value=True,
+            ),
+            patch(
+                "guild.tools.shell.run_in_sandbox",
+                new_callable=AsyncMock,
+                return_value=(0, "no network\n", ""),
+            ) as mock_sandbox,
+        ):
             result = await execute_shell(
                 {"command": "curl http://example.com"},
                 working_dir=str(tmp_path),
@@ -1535,9 +1592,7 @@ class TestValidateConfigAgentNoModel:
         """Agent profile with no model produces validation warning."""
         # Create an agents.toml with a profile missing model
         agents_toml = guild_dir / "agents.toml"
-        agents_toml.write_text(
-            '[coder]\nsystem_prompt = "Write code"\ntools = ["file_write"]\n'
-        )
+        agents_toml.write_text('[coder]\nsystem_prompt = "Write code"\ntools = ["file_write"]\n')
 
         config = GuildConfig()
         # validate_config checks for missing model in the config itself
@@ -1575,6 +1630,7 @@ class TestConfigHotReloadPermissionTier:
 
         # Modify the config to change permission profile
         import time
+
         time.sleep(0.05)
         config_file.write_text('[guild]\ndefault_permission = "autopilot"\n')
 
@@ -1633,6 +1689,7 @@ class TestNonReloadableConfigChange:
 
         # Change the model (non-reloadable field)
         import time
+
         time.sleep(0.05)
         config_file.write_text('[provider]\nmodel = "new-model"\n')
 
@@ -1660,14 +1717,16 @@ class TestNotifierChecksPresence:
             channels=[NotificationChannel.TERMINAL_BELL],
             presence_aware=True,
         )
-        with patch(
-            "guild.escalation.notify.get_platform_adapter",
-            return_value=mock_adapter,
+        with (
+            patch(
+                "guild.escalation.notify.get_platform_adapter",
+                return_value=mock_adapter,
+            ),
+            patch("sys.stdout") as mock_stdout,
         ):
-            with patch("sys.stdout") as mock_stdout:
-                mock_stdout.write = MagicMock()
-                mock_stdout.flush = MagicMock()
-                await notifier.notify("Test notification")
+            mock_stdout.write = MagicMock()
+            mock_stdout.flush = MagicMock()
+            await notifier.notify("Test notification")
 
         # User is idle, so notification should be queued (not dispatched)
         mock_adapter.is_user_idle.assert_called_once()
@@ -1681,14 +1740,16 @@ class TestNotifierChecksPresence:
             channels=[NotificationChannel.TERMINAL_BELL],
             presence_aware=True,
         )
-        with patch(
-            "guild.escalation.notify.get_platform_adapter",
-            return_value=mock_adapter_active,
+        with (
+            patch(
+                "guild.escalation.notify.get_platform_adapter",
+                return_value=mock_adapter_active,
+            ),
+            patch("sys.stdout") as mock_stdout2,
         ):
-            with patch("sys.stdout") as mock_stdout2:
-                mock_stdout2.write = MagicMock()
-                mock_stdout2.flush = MagicMock()
-                await notifier_active.notify("Active notification")
+            mock_stdout2.write = MagicMock()
+            mock_stdout2.flush = MagicMock()
+            await notifier_active.notify("Active notification")
 
         # User is active, so notification should be dispatched
         mock_adapter_active.is_user_idle.assert_called_once()
@@ -1705,7 +1766,7 @@ class TestBatchApproveAll:
 
     @pytest.mark.ac("AC-15.4.3")
     async def test_approve_all_command(self, tmp_path: Path) -> None:
-        """guild approve --all approves all pending questions."""
+        """Guild approve --all approves all pending questions."""
         from guild.cli.queries import approve_all_questions
 
         db_path = tmp_path / "guild.db"
@@ -1726,7 +1787,7 @@ class TestBatchApproveSelective:
 
     @pytest.mark.ac("AC-15.4.4")
     async def test_approve_selective_command(self, tmp_path: Path) -> None:
-        """guild approve <id1> <id3> approves only those two."""
+        """Guild approve <id1> <id3> approves only those two."""
         from guild.cli.queries import approve_selected_questions
 
         db_path = tmp_path / "guild.db"
@@ -1755,8 +1816,7 @@ class TestWebhookPayloadStructured:
     @pytest.mark.ac("AC-15.5.5")
     async def test_webhook_payload_has_structured_fields(self) -> None:
         """POST body contains JSON with task_id, question, and timestamp fields."""
-        import json
-        from unittest.mock import AsyncMock, patch
+        from unittest.mock import patch
 
         from guild.escalation.notify import NotificationChannel, Notifier
 
@@ -1766,11 +1826,14 @@ class TestWebhookPayloadStructured:
             captured.append(payload)
 
         notifier = Notifier(
-            channels=[NotificationChannel.WEBHOOK], webhook_url="http://example.com/hook",
+            channels=[NotificationChannel.WEBHOOK],
+            webhook_url="http://example.com/hook",
         )
         with patch("guild.escalation.notify._post_json", side_effect=mock_post):
             await notifier.notify(
-                "Need approval", task_id="task-42", question="Delete file?",
+                "Need approval",
+                task_id="task-42",
+                question="Delete file?",
             )
 
         assert len(captured) == 1
@@ -1792,7 +1855,7 @@ class TestEvalConfidenceDisplay:
 
     @pytest.mark.ac("AC-16.6.3")
     def test_eval_confidence_command(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        """guild eval confidence shows per-category confidence scores."""
+        """Guild eval confidence shows per-category confidence scores."""
         from typer.testing import CliRunner as _Runner
 
         from guild.cli.main import app as _app
@@ -1822,8 +1885,10 @@ class TestSelfDevBenchmarksGuildSpecific:
         names = [b.name for b in SELF_DEV_BENCHMARKS]
         # At least one should involve file creation, modification, or multi-step work
         has_code_task = any(
-            "create" in n.lower() or "modify" in n.lower()
-            or "multi" in n.lower() or "read" in n.lower()
+            "create" in n.lower()
+            or "modify" in n.lower()
+            or "multi" in n.lower()
+            or "read" in n.lower()
             for n in names
         )
         assert has_code_task, f"Expected code-related benchmarks, got: {names}"
@@ -1836,9 +1901,9 @@ class TestSelfDevTaskVerifiedByPytest:
     def test_self_dev_benchmarks_have_verification(self) -> None:
         """Self-development benchmarks include verification steps."""
         for bench in SELF_DEV_BENCHMARKS:
-            assert len(bench.verification) >= 1, (
-                f"Self-dev benchmark '{bench.name}' has no verification steps"
-            )
+            assert (
+                len(bench.verification) >= 1
+            ), f"Self-dev benchmark '{bench.name}' has no verification steps"
 
 
 # ===================================================================

@@ -129,7 +129,7 @@ class TestSetConfigValue:
         """Dotted keys create intermediate dict section if missing (line 58)."""
         path = tmp_path / "config.toml"
         # Start with no 'provider' section at all
-        path.write_text("[guild]\nname = \"test\"\n")
+        path.write_text('[guild]\nname = "test"\n')
 
         set_config_value(path, "provider.model=llama3")
 

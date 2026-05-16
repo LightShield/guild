@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from logger_python import get_logger
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
+
+from logger_python import get_logger
 
 from guild.agent.completion import (
     COMPLETION_NUDGE,
@@ -347,9 +348,7 @@ class AgentLoop:
         - Last assistant message content
         """
         tools_used = list(dict.fromkeys(self._attempted_tools))  # preserve order, dedup
-        turns_completed = len(
-            [m for m in self.messages if m.role == "assistant"]
-        )
+        turns_completed = len([m for m in self.messages if m.role == "assistant"])
         last_assistant = ""
         for msg in reversed(self.messages):
             if msg.role == "assistant" and msg.content:

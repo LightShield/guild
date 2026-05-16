@@ -3,6 +3,7 @@
 Provides a short tmp_path to avoid exceeding the 104-byte AF_UNIX socket path
 limit on macOS.
 """
+
 from __future__ import annotations
 
 import tempfile

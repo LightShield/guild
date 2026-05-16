@@ -12,13 +12,14 @@ blocking destructive/irreversible actions regardless of the active tier.
 
 from __future__ import annotations
 
-from logger_python import get_logger
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import PurePosixPath
 from typing import Any
+
+from logger_python import get_logger
 
 __all__ = [
     "AuditEntry",
@@ -148,27 +149,41 @@ class PermissionChecker:
         # REQ-03.7: hardcoded-never sits above all tiers
         allowed, reason = self.check_hardcoded_never(tool_name, args)
         if not allowed:
-            self._record_audit(AuditEntry(
-                action="tool_blocked", tool=tool_name,
-                agent_id=agent_id, status="hardcoded_never", reason=reason,
-            ))
+            self._record_audit(
+                AuditEntry(
+                    action="tool_blocked",
+                    tool=tool_name,
+                    agent_id=agent_id,
+                    status="hardcoded_never",
+                    reason=reason,
+                )
+            )
             self.last_denial_reason = reason
             return False
 
         if self._tier == PermissionTier.NOTHING:
             reason = "Tier 0 (NOTHING): all tool calls blocked"
-            self._record_audit(AuditEntry(
-                action="tool_blocked", tool=tool_name,
-                agent_id=agent_id, status="tier_0_blocked", reason=reason,
-            ))
+            self._record_audit(
+                AuditEntry(
+                    action="tool_blocked",
+                    tool=tool_name,
+                    agent_id=agent_id,
+                    status="tier_0_blocked",
+                    reason=reason,
+                )
+            )
             self.last_denial_reason = reason
             return False
 
         if self._tier == PermissionTier.AUTOPILOT:
-            self._record_audit(AuditEntry(
-                action="tool_call", tool=tool_name,
-                agent_id=agent_id, status="auto_permitted",
-            ))
+            self._record_audit(
+                AuditEntry(
+                    action="tool_call",
+                    tool=tool_name,
+                    agent_id=agent_id,
+                    status="auto_permitted",
+                )
+            )
             return True
 
         if self._tier == PermissionTier.ASK:
@@ -181,7 +196,10 @@ class PermissionChecker:
         self.audit_entries.append(entry)
         logger.debug(
             "Permission audit: %s %s %s -> %s",
-            entry.action, entry.tool, entry.agent_id, entry.status,
+            entry.action,
+            entry.tool,
+            entry.agent_id,
+            entry.status,
         )
 
     def check_hardcoded_never(

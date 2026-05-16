@@ -72,13 +72,17 @@ class Notifier:
             adapter = get_platform_adapter()
             if adapter.is_user_idle():
                 logger.info(
-                    "User idle — queuing notification: %s", message[:80],
+                    "User idle — queuing notification: %s",
+                    message[:80],
                 )
                 return
 
         for channel in self._channels:
             await self._dispatch_channel(
-                channel, message, task_id=task_id, question=question,
+                channel,
+                message,
+                task_id=task_id,
+                question=question,
             )
 
     async def _dispatch_channel(

@@ -2,6 +2,7 @@
 
 Black-box tests exercising multi-agent teams and the HTTP API.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -19,11 +20,15 @@ pytestmark = pytest.mark.integration
 
 def _mock_provider() -> AsyncMock:
     provider = AsyncMock()
-    provider.generate = AsyncMock(return_value=LLMResponse(
-        content="Step completed successfully.",
-        tool_calls=None,
-        input_tokens=50, output_tokens=30, model="mock",
-    ))
+    provider.generate = AsyncMock(
+        return_value=LLMResponse(
+            content="Step completed successfully.",
+            tool_calls=None,
+            input_tokens=50,
+            output_tokens=30,
+            model="mock",
+        )
+    )
     provider.health_check = AsyncMock(return_value=True)
     return provider
 
@@ -41,16 +46,16 @@ def project_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
     # Minimal planner block
     (blocks_dir / "planner.toml").write_text(
-        '[block]\n'
+        "[block]\n"
         'name = "planner"\n'
         'role = "planner"\n'
         'system_prompt = "You are a planner."\n'
-        'tools = []\n'
+        "tools = []\n"
     )
 
     # Minimal coder block
     (blocks_dir / "coder.toml").write_text(
-        '[block]\n'
+        "[block]\n"
         'name = "coder"\n'
         'role = "coder"\n'
         'system_prompt = "You are a coder."\n'
@@ -59,15 +64,15 @@ def project_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
     # Team definition: plan -> code
     (blocks_dir / "team_dev.toml").write_text(
-        '[team]\n'
+        "[team]\n"
         'name = "dev"\n'
         'entry_block = "plan"\n'
-        '\n'
-        '[team.blocks]\n'
+        "\n"
+        "[team.blocks]\n"
         'plan = "planner"\n'
         'code = "coder"\n'
-        '\n'
-        '[[team.connections]]\n'
+        "\n"
+        "[[team.connections]]\n"
         'source_block = "plan"\n'
         'source_port = "output"\n'
         'target_block = "code"\n'
@@ -82,7 +87,9 @@ class TestTeamExecution:
 
     @pytest.mark.ac("AC-04.1.2")
     def test_team_command_runs_pipeline(
-        self, project_dir: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        project_dir: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Guild team runs planner->coder pipeline."""
         monkeypatch.chdir(project_dir)
@@ -91,14 +98,17 @@ class TestTeamExecution:
             return_value=_mock_provider(),
         ):
             result = runner.invoke(
-                app, ["team", "Build hello world", "--team", "dev"],
+                app,
+                ["team", "Build hello world", "--team", "dev"],
             )
         assert result.exit_code == 0, f"team command failed: {result.output}"
         assert "Team done" in result.output
 
     @pytest.mark.ac("AC-04.1.1")
     def test_team_not_found_errors(
-        self, project_dir: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        project_dir: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Sad path: nonexistent team name."""
         monkeypatch.chdir(project_dir)
@@ -107,13 +117,16 @@ class TestTeamExecution:
             return_value=_mock_provider(),
         ):
             result = runner.invoke(
-                app, ["team", "Do something", "--team", "nonexistent"],
+                app,
+                ["team", "Do something", "--team", "nonexistent"],
             )
         assert result.exit_code != 0 or "not found" in result.output.lower()
 
     @pytest.mark.ac("AC-04.1.1")
     def test_team_no_project_errors(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Sad path: no guild project."""
         monkeypatch.chdir(tmp_path)
@@ -122,7 +135,9 @@ class TestTeamExecution:
 
     @pytest.mark.ac("AC-04.1.2")
     def test_team_subtasks_appear_in_history(
-        self, project_dir: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        project_dir: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """After team runs, sub-tasks are visible in guild history."""
         monkeypatch.chdir(project_dir)
@@ -144,7 +159,9 @@ class TestTeamExecution:
 
     @pytest.mark.ac("AC-04.1.1")
     def test_team_audit_trail_logged(
-        self, project_dir: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        project_dir: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """After team runs, audit trail contains task_created entries."""
         monkeypatch.chdir(project_dir)
@@ -187,7 +204,8 @@ class TestRestApi:
         api_app = create_app(guild_dir=guild_dir)
         with TestClient(api_app) as client:
             create_resp = client.post(
-                "/api/tasks", json={"description": "API task"},
+                "/api/tasks",
+                json={"description": "API task"},
             )
             assert create_resp.status_code == 200
 
@@ -226,31 +244,45 @@ class TestA2AGateway:
         api_app = create_app(guild_dir=guild_dir)
         with TestClient(api_app) as client:
             # Send
-            send_resp = client.post("/a2a", json={
-                "jsonrpc": "2.0", "method": "tasks/send",
-                "params": {
-                    "message": {
-                        "role": "user",
-                        "parts": [{"text": "Hello"}],
+            send_resp = client.post(
+                "/a2a",
+                json={
+                    "jsonrpc": "2.0",
+                    "method": "tasks/send",
+                    "params": {
+                        "message": {
+                            "role": "user",
+                            "parts": [{"text": "Hello"}],
+                        },
                     },
+                    "id": "1",
                 },
-                "id": "1",
-            })
+            )
             assert send_resp.status_code == 200
             task_id = send_resp.json()["result"]["id"]
 
             # Get
-            get_resp = client.post("/a2a", json={
-                "jsonrpc": "2.0", "method": "tasks/get",
-                "params": {"id": task_id}, "id": "2",
-            })
+            get_resp = client.post(
+                "/a2a",
+                json={
+                    "jsonrpc": "2.0",
+                    "method": "tasks/get",
+                    "params": {"id": task_id},
+                    "id": "2",
+                },
+            )
             assert get_resp.json()["result"]["id"] == task_id
 
             # Cancel
-            cancel_resp = client.post("/a2a", json={
-                "jsonrpc": "2.0", "method": "tasks/cancel",
-                "params": {"id": task_id}, "id": "3",
-            })
+            cancel_resp = client.post(
+                "/a2a",
+                json={
+                    "jsonrpc": "2.0",
+                    "method": "tasks/cancel",
+                    "params": {"id": task_id},
+                    "id": "3",
+                },
+            )
             assert cancel_resp.json()["result"]["status"]["state"] == "canceled"
 
     @pytest.mark.ac("AC-04.7a.3")
@@ -263,8 +295,13 @@ class TestA2AGateway:
         guild_dir = project_dir / ".guild"
         api_app = create_app(guild_dir=guild_dir)
         with TestClient(api_app) as client:
-            resp = client.post("/a2a", json={
-                "jsonrpc": "2.0", "method": "invalid/method",
-                "params": {}, "id": "99",
-            })
+            resp = client.post(
+                "/a2a",
+                json={
+                    "jsonrpc": "2.0",
+                    "method": "invalid/method",
+                    "params": {},
+                    "id": "99",
+                },
+            )
         assert resp.json()["error"]["code"] == -32601

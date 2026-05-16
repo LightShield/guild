@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from logger_python import get_logger
 import uuid
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
+
+from logger_python import get_logger
 
 from guild.agent.loop import AgentLoop
 from guild.config.constants import (
@@ -30,6 +31,7 @@ class SpawnerConfig:
 
     working_dir: str | None = None
     max_depth: int = MAX_SPAWN_DEPTH
+
 
 logger = get_logger(__name__)
 
@@ -90,10 +92,7 @@ class AgentSpawner:
             RuntimeError: If spawn depth exceeds the configured max_depth.
         """
         if self._current_depth >= self._max_depth:
-            msg = (
-                f"Spawn depth {self._current_depth} exceeds max_depth "
-                f"{self._max_depth}"
-            )
+            msg = f"Spawn depth {self._current_depth} exceeds max_depth " f"{self._max_depth}"
             raise RuntimeError(msg)
 
         agent_id = agent_id or f"agent-{uuid.uuid4().hex[:AGENT_ID_PREFIX_LEN]}"

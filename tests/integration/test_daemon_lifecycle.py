@@ -3,6 +3,7 @@
 Tests the full sequence: create task -> launch daemon -> check status ->
 send control command -> verify cleanup.
 """
+
 from __future__ import annotations
 
 import asyncio

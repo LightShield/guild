@@ -68,9 +68,7 @@ def Field(
 class _ConfigsLoaderMeta(type):
     """Metaclass that collects Field descriptors into _fields registry."""
 
-    def __new__(
-        mcs, name: str, bases: tuple[type, ...], namespace: dict[str, Any]
-    ) -> type:
+    def __new__(mcs, name: str, bases: tuple[type, ...], namespace: dict[str, Any]) -> type:
         cls = super().__new__(mcs, name, bases, namespace)
         # Collect all FieldDescriptor instances from all MRO classes
         fields: dict[str, FieldDescriptor] = {}
@@ -154,7 +152,7 @@ class ConfigsLoader(metaclass=_ConfigsLoaderMeta):
         file: Path | str | None = None,
         args: list[str] | None = None,
         **kwargs: Any,
-    ) -> "ConfigsLoader":
+    ) -> ConfigsLoader:
         """Load configuration from multiple sources.
 
         Resolution order (highest priority first):

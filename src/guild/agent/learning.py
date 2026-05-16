@@ -72,9 +72,7 @@ async def extract_learnings(
     return stored
 
 
-async def _fetch_task_messages(
-    task_id: str, storage: "Storage"
-) -> list[dict[str, Any]] | None:
+async def _fetch_task_messages(task_id: str, storage: Storage) -> list[dict[str, Any]] | None:
     """Fetch messages for a task's assigned agent, or None if unavailable."""
     task = await storage.get_task(task_id)
     if task is None:
@@ -95,7 +93,7 @@ async def _fetch_task_messages(
 
 
 async def _generate_learnings_response(
-    messages: list[dict[str, Any]], provider: "LLMProvider"
+    messages: list[dict[str, Any]], provider: LLMProvider
 ) -> Any:
     """Build the learner prompt and generate LLM response."""
     session_log = _format_session_log(messages)
@@ -107,7 +105,7 @@ async def _generate_learnings_response(
 
 
 async def _store_parsed_learnings(
-    raw_lines: list[str], task_id: str, storage: "Storage"
+    raw_lines: list[str], task_id: str, storage: Storage
 ) -> list[dict[str, Any]]:
     """Parse raw LLM output lines and store valid learnings."""
     stored: list[dict[str, Any]] = []

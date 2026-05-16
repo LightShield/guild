@@ -3,10 +3,10 @@
 These tests wire the actual AgentLoop with real tool executors and real
 SQLite storage. Only the LLM provider is mocked (external, non-deterministic).
 """
+
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest

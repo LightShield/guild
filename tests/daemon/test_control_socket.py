@@ -2,6 +2,7 @@
 
 Written BEFORE implementation (TDD red phase).
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -449,8 +450,6 @@ class TestControlSocketEdgeCases:
 
     async def test_handle_client_connection_error(self, tmp_path: Path) -> None:
         """Client handler catches ConnectionResetError during response write."""
-        from unittest.mock import AsyncMock, MagicMock, patch
-
         from guild.daemon.control_socket import ControlSocket
 
         sock_path = tmp_path / "test.sock"
@@ -495,9 +494,7 @@ class TestControlSocketEdgeCases:
         await cs._handle_client(mock_reader, mock_writer)
         await cs.stop()
 
-    async def test_handle_client_catches_connection_reset_on_write(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_handle_client_catches_connection_reset_on_write(self, tmp_path: Path) -> None:
         """ConnectionResetError during response write is caught (lines 111-112)."""
         from unittest.mock import AsyncMock, MagicMock
 

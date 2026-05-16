@@ -252,7 +252,9 @@ class TestTaskBackgroundFlag:
             mock_process.pid = 11111
             mock_popen.return_value = mock_process
 
-            with patch("guild.cli.task_commands._create_task_in_storage", return_value="task-xyz-123"):
+            with patch(
+                "guild.cli.task_commands._create_task_in_storage", return_value="task-xyz-123"
+            ):
                 result = runner.invoke(guild_app, ["task", "some work", "--background"])
 
         assert result.exit_code == 0
@@ -935,7 +937,7 @@ class TestInitAlreadyExists:
     def test_init_already_initialized(
         self, guild_app, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """init shows warning when .guild/ already exists."""
+        """Init shows warning when .guild/ already exists."""
         monkeypatch.chdir(tmp_path)
         (tmp_path / ".guild").mkdir()
 
@@ -967,60 +969,60 @@ class TestEmptyDataDisplays:
     """Commands show appropriate messages when no data exists."""
 
     def test_audit_shows_no_entries(self, guild_app, guild_project: Path) -> None:
-        """audit shows 'no entries' when DB is empty."""
+        """Audit shows 'no entries' when DB is empty."""
         result = runner.invoke(guild_app, ["audit"])
         assert result.exit_code == 0
         assert "no" in result.output.lower() or "audit" in result.output.lower()
 
     def test_decisions_shows_no_entries(self, guild_app, guild_project: Path) -> None:
-        """decisions shows 'no decisions' when DB is empty."""
+        """Decisions shows 'no decisions' when DB is empty."""
         result = runner.invoke(guild_app, ["decisions"])
         assert result.exit_code == 0
         assert "no" in result.output.lower()
 
     def test_learnings_shows_no_entries(self, guild_app, guild_project: Path) -> None:
-        """learnings shows 'no learnings' when DB is empty."""
+        """Learnings shows 'no learnings' when DB is empty."""
         result = runner.invoke(guild_app, ["learnings"])
         assert result.exit_code == 0
         assert "no" in result.output.lower()
 
     def test_history_shows_no_tasks(self, guild_app, guild_project: Path) -> None:
-        """history shows 'no tasks' when DB is empty."""
+        """History shows 'no tasks' when DB is empty."""
         result = runner.invoke(guild_app, ["history"])
         assert result.exit_code == 0
         assert "no" in result.output.lower()
 
     def test_usage_shows_table_with_zeros(self, guild_app, guild_project: Path) -> None:
-        """usage shows token table with zeros when no tasks exist."""
+        """Usage shows token table with zeros when no tasks exist."""
         result = runner.invoke(guild_app, ["usage"], terminal_width=200)
         assert result.exit_code == 0
         assert "token usage" in result.output.lower()
 
     def test_logs_shows_no_messages(self, guild_app, guild_project: Path) -> None:
-        """logs shows 'no messages' for unknown task."""
+        """Logs shows 'no messages' for unknown task."""
         result = runner.invoke(guild_app, ["logs", "nonexistent-task"])
         assert result.exit_code == 0
         assert "no" in result.output.lower()
 
     def test_attach_shows_no_socket(self, guild_app, guild_project: Path) -> None:
-        """attach shows 'not running' error for unknown task."""
+        """Attach shows 'not running' error for unknown task."""
         result = runner.invoke(guild_app, ["attach", "nonexistent-task"])
         assert result.exit_code == 1
         assert "not running" in result.output.lower()
 
     def test_ps_no_run_dir(self, guild_app, guild_project: Path) -> None:
-        """ps shows 'no running tasks' when run dir doesn't exist."""
+        """Ps shows 'no running tasks' when run dir doesn't exist."""
         result = runner.invoke(guild_app, ["ps"])
         assert result.exit_code == 0
         assert "no" in result.output.lower()
 
     def test_kill_no_task_id_no_all(self, guild_app, guild_project: Path) -> None:
-        """kill without task_id or --all shows error."""
+        """Kill without task_id or --all shows error."""
         result = runner.invoke(guild_app, ["kill"])
         assert result.exit_code != 0 or "provide" in result.output.lower()
 
     def test_kill_task_not_found(self, guild_app, guild_project: Path) -> None:
-        """kill with nonexistent task shows 'not found'."""
+        """Kill with nonexistent task shows 'not found'."""
         with patch("guild.cli.task_commands._kill_task") as mock_kill:
             mock_kill.return_value = False
             result = runner.invoke(guild_app, ["kill", "nonexistent"])
@@ -1028,7 +1030,7 @@ class TestEmptyDataDisplays:
         assert "not found" in result.output.lower() or "not running" in result.output.lower()
 
     def test_pause_failure(self, guild_app, guild_project: Path) -> None:
-        """pause failure shows 'cannot pause'."""
+        """Pause failure shows 'cannot pause'."""
         with patch("guild.cli.task_commands._pause_task") as mock_pause:
             mock_pause.return_value = False
             result = runner.invoke(guild_app, ["pause", "some-id"])
@@ -1036,7 +1038,7 @@ class TestEmptyDataDisplays:
         assert "cannot" in result.output.lower()
 
     def test_resume_failure(self, guild_app, guild_project: Path) -> None:
-        """resume failure shows 'cannot resume'."""
+        """Resume failure shows 'cannot resume'."""
         with patch("guild.cli.task_commands._resume_task") as mock_resume:
             mock_resume.return_value = False
             result = runner.invoke(guild_app, ["resume", "some-id"])
@@ -1054,7 +1056,7 @@ class TestConfigSetInvalidFormat:
     """config --set with invalid format shows error (lines 280-282)."""
 
     def test_config_set_invalid_format(self, guild_app, guild_project: Path) -> None:
-        """config --set without '=' raises ValueError and exits with code 1."""
+        """Config --set without '=' raises ValueError and exits with code 1."""
         result = runner.invoke(guild_app, ["config", "--set", "provider.model"])
         assert result.exit_code != 0
         assert "error" in result.output.lower()
@@ -1065,8 +1067,11 @@ class TestUsageNoData:
     """usage command when summary is None (lines 596-597)."""
 
     def test_usage_shows_no_data_when_summary_none(self, guild_app, guild_project: Path) -> None:
-        """usage shows 'no usage data' when token summary returns None."""
-        with patch("guild.cli.config_commands._fetch_token_summary", return_value=AsyncMock(return_value=None)):
+        """Usage shows 'no usage data' when token summary returns None."""
+        with patch(
+            "guild.cli.config_commands._fetch_token_summary",
+            return_value=AsyncMock(return_value=None),
+        ):
             # We need to mock the asyncio.run result
             with patch("guild.cli.config_commands.asyncio.run", return_value=None):
                 result = runner.invoke(guild_app, ["usage"])
@@ -1105,7 +1110,7 @@ class TestServeImportError:
     """serve command shows error when API deps missing (lines 706-712)."""
 
     def test_serve_fails_on_missing_api_deps(self, guild_app, guild_project: Path) -> None:
-        """serve shows install hint when uvicorn/fastapi are not available."""
+        """Serve shows install hint when uvicorn/fastapi are not available."""
         import builtins
 
         original_import = builtins.__import__
@@ -1158,7 +1163,10 @@ class TestTeamCommand:
 
         assert result.exit_code == 0
         assert "team" in result.output.lower()
-        assert "task description" in result.output.lower() or "task_description" in result.output.lower()
+        assert (
+            "task description" in result.output.lower()
+            or "task_description" in result.output.lower()
+        )
 
     def test_team_fails_without_guild_dir(
         self, guild_app, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -1192,12 +1200,8 @@ class TestApproveCommand:
             store = Storage(db_path)
             await store.connect()
             queue = QuestionQueue(store)
-            await queue.post_question(
-                question="Q1?", context="ctx1", agent_id="a1"
-            )
-            await queue.post_question(
-                question="Q2?", context="ctx2", agent_id="a2"
-            )
+            await queue.post_question(question="Q1?", context="ctx1", agent_id="a1")
+            await queue.post_question(question="Q2?", context="ctx2", agent_id="a2")
             await store.close()
 
         asyncio.run(_setup())
@@ -1219,9 +1223,7 @@ class TestApproveCommand:
             store = Storage(db_path)
             await store.connect()
             queue = QuestionQueue(store)
-            qid = await queue.post_question(
-                question="Proceed?", context="ctx", agent_id="a1"
-            )
+            qid = await queue.post_question(question="Proceed?", context="ctx", agent_id="a1")
             await store.close()
             return qid
 
@@ -1254,7 +1256,7 @@ class TestEvalConfidenceCommand:
     def test_eval_confidence_fails_without_guild_dir(
         self, guild_app, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """eval confidence fails gracefully without .guild/."""
+        """Eval confidence fails gracefully without .guild/."""
         monkeypatch.chdir(tmp_path)
         result = runner.invoke(guild_app, ["eval", "confidence"])
         assert result.exit_code != 0 or "not a guild project" in result.output.lower()
@@ -1286,9 +1288,7 @@ class TestHistoryTreeCommand:
 
     def test_history_tree_task_not_found(self, guild_app, guild_project: Path) -> None:
         """Verify history --tree with invalid task ID shows error."""
-        result = runner.invoke(
-            guild_app, ["history", "--task", "nonexistent-id", "--tree"]
-        )
+        result = runner.invoke(guild_app, ["history", "--task", "nonexistent-id", "--tree"])
 
         assert result.exit_code != 0
         assert "not found" in result.output.lower()

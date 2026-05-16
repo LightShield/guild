@@ -7,9 +7,10 @@ concerns.
 
 from __future__ import annotations
 
-from logger_python import get_logger
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
+
+from logger_python import get_logger
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -198,12 +199,18 @@ async def run_task(
     db_path = resolved_guild_dir / DB_FILENAME
     async with Storage(db_path) as store:
         loop = create_task_agent_loop(
-            task_run.config, task_run.working_dir, task_run.timeout,
+            task_run.config,
+            task_run.working_dir,
+            task_run.timeout,
         )
         system_prompt = await build_system_prompt_with_learnings(store)
         result = await loop.run(system_prompt, task_run.description)
         await persist_task_result(
-            store, loop, task_run.description, result, task_run.config,
+            store,
+            loop,
+            task_run.description,
+            result,
+            task_run.config,
         )
         await extract_post_task_learnings(store, loop, task_run.config)
 

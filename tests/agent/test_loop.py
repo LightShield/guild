@@ -1114,7 +1114,7 @@ class TestAgentLoopUncoveredBranches:
 
     def test_get_tool_schemas_skips_unknown_tools(self) -> None:
         """_get_tool_schemas skips tools not in TOOL_SCHEMAS (305->304)."""
-        from unittest.mock import MagicMock, AsyncMock
+        from unittest.mock import AsyncMock, MagicMock
 
         loop = AgentLoop(
             provider=MagicMock(),
@@ -1147,19 +1147,21 @@ class TestSmartRecoveryPromptSelection:
 
     def test_test_failure_error_selects_test_recovery_prompt(self) -> None:
         """When stuck reason mentions 'code 1', use test failure prompt."""
-        from guild.agent.loop import AgentLoop, _TEST_FAILURE_RECOVERY_PROMPT
+        from guild.agent.loop import _TEST_FAILURE_RECOVERY_PROMPT, AgentLoop
 
         loop = AgentLoop(
             provider=MagicMock(),
             tool_executors={},
             stuck_detector=None,
         )
-        prompt = loop._select_recovery_prompt("Repeated identical error 3 times: Command exited with code 1")
+        prompt = loop._select_recovery_prompt(
+            "Repeated identical error 3 times: Command exited with code 1"
+        )
         assert prompt == _TEST_FAILURE_RECOVERY_PROMPT
 
     def test_assertion_error_selects_test_recovery_prompt(self) -> None:
         """When stuck reason mentions 'assert', use test failure prompt."""
-        from guild.agent.loop import AgentLoop, _TEST_FAILURE_RECOVERY_PROMPT
+        from guild.agent.loop import _TEST_FAILURE_RECOVERY_PROMPT, AgentLoop
 
         loop = AgentLoop(
             provider=MagicMock(),
@@ -1171,7 +1173,7 @@ class TestSmartRecoveryPromptSelection:
 
     def test_generic_reason_selects_default_prompt(self) -> None:
         """When stuck reason is generic, use the default prompt."""
-        from guild.agent.loop import AgentLoop, STUCK_RECOVERY_PROMPT
+        from guild.agent.loop import STUCK_RECOVERY_PROMPT, AgentLoop
 
         loop = AgentLoop(
             provider=MagicMock(),
@@ -1183,7 +1185,7 @@ class TestSmartRecoveryPromptSelection:
 
     def test_no_progress_selects_default_prompt(self) -> None:
         """When stuck from no progress, use default prompt."""
-        from guild.agent.loop import AgentLoop, STUCK_RECOVERY_PROMPT
+        from guild.agent.loop import STUCK_RECOVERY_PROMPT, AgentLoop
 
         loop = AgentLoop(
             provider=MagicMock(),

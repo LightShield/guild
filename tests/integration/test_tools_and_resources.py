@@ -101,7 +101,8 @@ class TestToolContract:
 
         executors = build_tool_executors()
         result = await executors["file_read"](
-            {"path": str(test_file)}, str(tmp_path),
+            {"path": str(test_file)},
+            str(tmp_path),
         )
         assert isinstance(result, ToolResult)
         assert result.success is True
@@ -132,9 +133,7 @@ class TestTypedTools:
             assert len(props) >= 1, f"{tool_name} should have structured params"
             # Typed tools should NOT have a single 'command' param like shell
             if tool_name != "shell":
-                assert "command" not in props, (
-                    f"{tool_name} uses generic 'command' param"
-                )
+                assert "command" not in props, f"{tool_name} uses generic 'command' param"
 
 
 # ======================================================================
@@ -152,7 +151,8 @@ class TestBuiltInTools:
         test_file.write_text("hello world")
 
         result = await execute_file_read(
-            {"path": str(test_file)}, str(tmp_path),
+            {"path": str(test_file)},
+            str(tmp_path),
         )
         assert result.success is True
         assert "hello world" in result.output
@@ -161,7 +161,8 @@ class TestBuiltInTools:
     async def test_file_read_missing_file(self, tmp_path: Path) -> None:
         """file_read returns an error for a nonexistent file."""
         result = await execute_file_read(
-            {"path": str(tmp_path / "nonexistent.txt")}, str(tmp_path),
+            {"path": str(tmp_path / "nonexistent.txt")},
+            str(tmp_path),
         )
         assert result.success is False
         assert result.error is not None
@@ -194,7 +195,8 @@ class TestBuiltInTools:
     async def test_shell_runs_command(self, tmp_path: Path) -> None:
         """Shell executes a command and returns stdout."""
         result = await execute_shell(
-            {"command": "echo hello_from_shell"}, str(tmp_path),
+            {"command": "echo hello_from_shell"},
+            str(tmp_path),
         )
         assert result.success is True
         assert "hello_from_shell" in result.output
@@ -203,7 +205,8 @@ class TestBuiltInTools:
     async def test_shell_captures_exit_code(self, tmp_path: Path) -> None:
         """Shell reports non-zero exit codes as failures."""
         result = await execute_shell(
-            {"command": "exit 42"}, str(tmp_path),
+            {"command": "exit 42"},
+            str(tmp_path),
         )
         assert result.success is False
         assert "42" in result.output
@@ -279,7 +282,8 @@ class TestToolTimeoutAndLimits:
     async def test_shell_timeout_kills_long_command(self, tmp_path: Path) -> None:
         """Commands exceeding timeout are killed and return a timeout error."""
         result = await execute_shell(
-            {"command": "sleep 60", "timeout": 0.5}, str(tmp_path),
+            {"command": "sleep 60", "timeout": 0.5},
+            str(tmp_path),
         )
         assert result.success is False
         assert result.error is not None
@@ -289,7 +293,8 @@ class TestToolTimeoutAndLimits:
     async def test_shell_custom_timeout_respected(self, tmp_path: Path) -> None:
         """A short custom timeout terminates quickly."""
         result = await execute_shell(
-            {"command": "sleep 10", "timeout": 0.2}, str(tmp_path),
+            {"command": "sleep 10", "timeout": 0.2},
+            str(tmp_path),
         )
         assert result.success is False
         assert "timeout" in result.error.lower()
@@ -329,9 +334,9 @@ class TestToolSafetyDescriptions:
         desc = TOOL_SCHEMAS["shell"]["description"]
         dangerous = ["rm -rf", "fork bomb", "curl|bash"]
         for term in dangerous:
-            assert term in desc.lower() or term.replace("|", "|") in desc, (
-                f"Shell description should mention '{term}'"
-            )
+            assert (
+                term in desc.lower() or term.replace("|", "|") in desc
+            ), f"Shell description should mention '{term}'"
 
 
 # ======================================================================
@@ -346,7 +351,8 @@ class TestShellDenylist:
     async def test_rm_rf_root_blocked(self, tmp_path: Path) -> None:
         """Dangerous rm -rf / is blocked."""
         result = await execute_shell(
-            {"command": "rm -rf /"}, str(tmp_path),
+            {"command": "rm -rf /"},
+            str(tmp_path),
         )
         assert result.success is False
         assert result.error is not None
@@ -356,7 +362,8 @@ class TestShellDenylist:
     async def test_sudo_rm_blocked(self, tmp_path: Path) -> None:
         """Privileged sudo rm is blocked."""
         result = await execute_shell(
-            {"command": "sudo rm important_file"}, str(tmp_path),
+            {"command": "sudo rm important_file"},
+            str(tmp_path),
         )
         assert result.success is False
         assert "blocked" in result.error.lower()
@@ -365,7 +372,8 @@ class TestShellDenylist:
     async def test_git_push_force_blocked(self, tmp_path: Path) -> None:
         """Forced git push --force is blocked."""
         result = await execute_shell(
-            {"command": "git push --force origin main"}, str(tmp_path),
+            {"command": "git push --force origin main"},
+            str(tmp_path),
         )
         assert result.success is False
         assert "blocked" in result.error.lower()
@@ -374,7 +382,8 @@ class TestShellDenylist:
     async def test_git_reset_hard_blocked(self, tmp_path: Path) -> None:
         """Destructive git reset --hard is blocked."""
         result = await execute_shell(
-            {"command": "git reset --hard HEAD~1"}, str(tmp_path),
+            {"command": "git reset --hard HEAD~1"},
+            str(tmp_path),
         )
         assert result.success is False
         assert "blocked" in result.error.lower()
@@ -393,7 +402,8 @@ class TestShellDenylist:
     async def test_fork_bomb_blocked(self, tmp_path: Path) -> None:
         """Fork bombs are blocked."""
         result = await execute_shell(
-            {"command": ":(){ :|:& };:"}, str(tmp_path),
+            {"command": ":(){ :|:& };:"},
+            str(tmp_path),
         )
         assert result.success is False
         assert "blocked" in result.error.lower()
@@ -402,7 +412,8 @@ class TestShellDenylist:
     async def test_safe_command_allowed(self, tmp_path: Path) -> None:
         """Normal commands are not blocked by the denylist."""
         result = await execute_shell(
-            {"command": "echo safe"}, str(tmp_path),
+            {"command": "echo safe"},
+            str(tmp_path),
         )
         assert result.success is True
         assert "safe" in result.output
@@ -766,7 +777,9 @@ class TestResourceStatusCommand:
 
     @pytest.mark.ac("AC-24.8.1")
     def test_resource_status_no_project_errors(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """resource-status without a guild project shows error."""
         monkeypatch.chdir(tmp_path)
@@ -965,7 +978,7 @@ class TestPluginToolLoading:
     @pytest.mark.ac("AC-08.9.1")
     def test_load_tool_from_toml_file(self, tmp_path: Path) -> None:
         """A .toml file in the tools directory defines a loadable tool."""
-        from guild.tools.plugin import PluginLoader, ToolPlugin
+        from guild.tools.plugin import PluginLoader
 
         tool_file = tmp_path / "my_tool.toml"
         tool_file.write_text('[tool]\nname = "my_tool"\ndescription = "A test tool"\n')
@@ -977,7 +990,7 @@ class TestPluginToolLoading:
     @pytest.mark.ac("AC-08.9.2")
     def test_load_tools_from_directory(self, tmp_path: Path) -> None:
         """All .toml files in a directory are loaded as plugins."""
-        from guild.tools.plugin import PluginLoader, ToolPlugin
+        from guild.tools.plugin import PluginLoader
 
         (tmp_path / "a.toml").write_text('[tool]\nname = "tool_a"\ndescription = "A"\n')
         (tmp_path / "b.toml").write_text('[tool]\nname = "tool_b"\ndescription = "B"\n')
@@ -1006,12 +1019,12 @@ class TestToolBehavioralProperties:
     @pytest.mark.ac("AC-08.10.2")
     def test_plugin_tool_declares_properties(self, tmp_path: Path) -> None:
         """Plugin TOML can declare behavioral properties."""
-        from guild.tools.plugin import PluginLoader, ToolPlugin
+        from guild.tools.plugin import PluginLoader
 
         tool_file = tmp_path / "safe.toml"
         tool_file.write_text(
             '[tool]\nname = "safe"\ndescription = "Read-only"\n'
-            'is_read_only = true\nis_concurrency_safe = true\n'
+            "is_read_only = true\nis_concurrency_safe = true\n"
         )
         loader = PluginLoader([])
         plugin = loader.load_from_file(tool_file)
@@ -1025,7 +1038,7 @@ class TestToolResultCaching:
     @pytest.mark.ac("AC-08.11.1")
     def test_plugin_cache_flag(self, tmp_path: Path) -> None:
         """Plugin can declare caching enabled."""
-        from guild.tools.plugin import PluginLoader, ToolPlugin
+        from guild.tools.plugin import PluginLoader
 
         tool_file = tmp_path / "cached.toml"
         tool_file.write_text(
@@ -1039,6 +1052,7 @@ class TestToolResultCaching:
     def test_file_read_is_idempotent(self, tmp_path: Path) -> None:
         """file_read returns same result for same input (cacheable behavior)."""
         import asyncio
+
         from guild.tools.file_ops import execute_file_read
 
         test_file = tmp_path / "data.txt"
@@ -1070,7 +1084,8 @@ class TestAuditLogToolFailures:
     async def test_failed_shell_returns_error(self, tmp_path: Path) -> None:
         """Shell tool failure returns ToolResult with error details."""
         result = await execute_shell(
-            {"command": "false"}, str(tmp_path),
+            {"command": "false"},
+            str(tmp_path),
         )
         assert result.success is False
         # Error info is available for audit logging
@@ -1084,7 +1099,8 @@ class TestBlockedCommandsAuditTrail:
     async def test_blocked_command_returns_reason(self, tmp_path: Path) -> None:
         """Blocked command includes the matched denylist pattern in error."""
         result = await execute_shell(
-            {"command": "rm -rf /"}, str(tmp_path),
+            {"command": "rm -rf /"},
+            str(tmp_path),
         )
         assert result.success is False
         assert result.error is not None
@@ -1130,7 +1146,8 @@ class TestVramModelUnload:
         gpu_reader = lambda: {"gpu_percent": 95.0, "vram_used_mb": 7800, "vram_total_mb": 8192}
         thresholds = ResourceThresholds(vram_pressure_percent=85.0)
         monitor = ResourceMonitor(
-            mode=SchedulingMode.POLITE, thresholds=thresholds,
+            mode=SchedulingMode.POLITE,
+            thresholds=thresholds,
             gpu_reader=gpu_reader,
             activity_detector=lambda: ActivityState.IDLE,
         )
@@ -1208,7 +1225,7 @@ class TestMalformedPluginSkipped:
         valid = plugin_dir / "good.toml"
         valid.write_text(
             '[tool]\nname = "good_tool"\ndescription = "A good tool"\n'
-            "[tool.parameters]\ntype = \"object\"\n"
+            '[tool.parameters]\ntype = "object"\n'
         )
 
         # Invalid TOML

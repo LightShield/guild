@@ -252,9 +252,7 @@ class TestCreateWorktreeFailure:
         # branch_exists=True but the branch does not actually exist in git
         # This will cause `git worktree add <path> <branch>` to fail
         with pytest.raises(RuntimeError, match="Failed to create staging worktree"):
-            await manager._create_worktree(
-                worktree_path, "nonexistent-branch", branch_exists=True
-            )
+            await manager._create_worktree(worktree_path, "nonexistent-branch", branch_exists=True)
 
 
 # ======================================================================

@@ -312,7 +312,7 @@ class TestEscalatingProviderModelProperty:
     """EscalatingProvider exposes the current model name."""
 
     def test_model_property_reflects_current(self) -> None:
-        """model property returns the current provider's name."""
+        """Model property returns the current provider's name."""
         chain, _ = _make_chain(3)
         escalating = EscalatingProvider(chain)
 

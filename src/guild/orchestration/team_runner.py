@@ -7,10 +7,11 @@ and parallel branch failure isolation.
 from __future__ import annotations
 
 import json
-from logger_python import get_logger
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING, Any
+
+from logger_python import get_logger
 
 from guild.agent.loop import AgentLoop
 from guild.config.constants import (
@@ -461,13 +462,9 @@ class TeamRunner:
         agent_id = f"{block_def.name}-{task_id[:AGENT_ID_PREFIX_LEN]}"
 
         if self._storage:
-            await self._storage.create_task(
-                task_id, f"[{block_def.name}] {input_data[:100]}"
-            )
+            await self._storage.create_task(task_id, f"[{block_def.name}] {input_data[:100]}")
             await self._storage.register_agent(agent_id, block_def.name)
-            await self._storage.update_task(
-                task_id, assigned_agent=agent_id, status="running"
-            )
+            await self._storage.update_task(task_id, assigned_agent=agent_id, status="running")
             await self._storage.log_audit(
                 "task_created",
                 agent_id=agent_id,
@@ -476,9 +473,7 @@ class TeamRunner:
 
         system_prompt = block_def.system_prompt
         if self._storage:
-            learnings = await self._storage.list_learnings(
-                min_confidence=MIN_INJECTION_CONFIDENCE
-            )
+            learnings = await self._storage.list_learnings(min_confidence=MIN_INJECTION_CONFIDENCE)
             injection = format_learnings_for_injection(learnings)
             if injection:
                 system_prompt = f"{system_prompt}\n\n{injection}"
@@ -498,12 +493,8 @@ class TeamRunner:
         if self._storage:
             for msg in loop.messages:
                 if msg.role in ("user", "assistant"):
-                    await self._storage.append_message(
-                        agent_id, msg.role, msg.content
-                    )
-            await self._storage.update_task(
-                task_id, status="completed", result=result[:500]
-            )
+                    await self._storage.append_message(agent_id, msg.role, msg.content)
+            await self._storage.update_task(task_id, status="completed", result=result[:500])
             await self._storage.log_audit(
                 "task_completed",
                 agent_id=agent_id,

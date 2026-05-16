@@ -3,6 +3,7 @@
 Black-box tests that exercise the system as a user would.
 Only import the CLI app entry point -- no internal modules.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -30,7 +31,7 @@ class TestCliInterface:
 
     @pytest.mark.ac("AC-05.1.1")
     def test_help_shows_all_commands(self) -> None:
-        """guild --help lists every registered command."""
+        """Guild --help lists every registered command."""
         result = runner.invoke(app, ["--help"])
         assert result.exit_code == 0
         for cmd in ["init", "task", "chat", "status", "config", "team"]:
@@ -38,7 +39,7 @@ class TestCliInterface:
 
     @pytest.mark.ac("AC-05.1.3")
     def test_version_flag(self) -> None:
-        """guild --version prints the package version string."""
+        """Guild --version prints the package version string."""
         result = runner.invoke(app, ["--version"])
         assert result.exit_code == 0
         assert "guild" in result.output.lower()
@@ -58,7 +59,7 @@ class TestInit:
     def test_init_creates_guild_directory(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """guild init creates .guild/ with config.toml and guild.db."""
+        """Guild init creates .guild/ with config.toml and guild.db."""
         monkeypatch.chdir(tmp_path)
         result = runner.invoke(app, ["init"])
         assert result.exit_code == 0
@@ -88,7 +89,7 @@ class TestInit:
     def test_init_sad_path_no_permission(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """init in a read-only directory fails gracefully."""
+        """Init in a read-only directory fails gracefully."""
         readonly = tmp_path / "readonly"
         readonly.mkdir()
         readonly.chmod(0o555)  # r-x: can chdir but cannot create files
@@ -99,7 +100,7 @@ class TestInit:
 
     @pytest.mark.ac("AC-05.1.1")
     def test_init_explicit_path_argument(self, tmp_path: Path) -> None:
-        """guild init <path> creates .guild/ in the specified directory."""
+        """Guild init <path> creates .guild/ in the specified directory."""
         target = tmp_path / "myproject"
         target.mkdir()
         result = runner.invoke(app, ["init", str(target)])
@@ -113,7 +114,7 @@ class TestStatus:
 
     @pytest.mark.ac("AC-05.2.2")
     def test_status_shows_project_info(self, project_dir: Path) -> None:
-        """status displays Project, Provider, and Model fields."""
+        """Status displays Project, Provider, and Model fields."""
         result = runner.invoke(app, ["status"])
         assert result.exit_code == 0
         assert "Project:" in result.output
@@ -124,7 +125,7 @@ class TestStatus:
     def test_status_no_project_errors(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """status outside a guild project exits with code 1."""
+        """Status outside a guild project exits with code 1."""
         monkeypatch.chdir(tmp_path)
         result = runner.invoke(app, ["status"])
         assert result.exit_code == 1
@@ -136,7 +137,7 @@ class TestConfig:
 
     @pytest.mark.ac("AC-01.3.1")
     def test_config_show_displays_table(self, project_dir: Path) -> None:
-        """config without --set prints a configuration table."""
+        """Config without --set prints a configuration table."""
         result = runner.invoke(app, ["config"])
         assert result.exit_code == 0
         assert "Guild Configuration" in result.output
@@ -144,7 +145,7 @@ class TestConfig:
 
     @pytest.mark.ac("AC-01.3.2")
     def test_config_set_and_show(self, project_dir: Path) -> None:
-        """config --set updates a value that config then displays."""
+        """Config --set updates a value that config then displays."""
         result = runner.invoke(app, ["config", "--set", "provider.model=test-model"])
         assert result.exit_code == 0
         assert "Updated" in result.output
@@ -155,14 +156,14 @@ class TestConfig:
 
     @pytest.mark.ac("AC-01.3.1")
     def test_config_set_persists_to_file(self, project_dir: Path) -> None:
-        """config --set writes the value to config.toml on disk."""
+        """Config --set writes the value to config.toml on disk."""
         runner.invoke(app, ["config", "--set", "provider.model=persisted-model"])
         content = (project_dir / ".guild" / "config.toml").read_text()
         assert "persisted-model" in content
 
     @pytest.mark.ac("AC-01.3.4")
     def test_config_invalid_format_errors(self, project_dir: Path) -> None:
-        """config --set with no '=' exits with an error."""
+        """Config --set with no '=' exits with an error."""
         result = runner.invoke(app, ["config", "--set", "no-equals-sign"])
         assert result.exit_code != 0 or "Error" in result.output
 
@@ -172,14 +173,14 @@ class TestHistory:
 
     @pytest.mark.ac("AC-06.6.1")
     def test_history_empty_project(self, project_dir: Path) -> None:
-        """history on a fresh project shows 'No tasks found'."""
+        """History on a fresh project shows 'No tasks found'."""
         result = runner.invoke(app, ["history"])
         assert result.exit_code == 0
         assert "no" in result.output.lower() or "No tasks" in result.output
 
     @pytest.mark.ac("AC-06.6.2")
     def test_usage_empty_project(self, project_dir: Path) -> None:
-        """usage on a fresh project shows zero token counts."""
+        """Usage on a fresh project shows zero token counts."""
         result = runner.invoke(app, ["usage"], terminal_width=200)
         assert result.exit_code == 0
         assert "0" in result.output
@@ -209,7 +210,7 @@ class TestAudit:
 
     @pytest.mark.ac("AC-08.4.1")
     def test_audit_empty_project(self, project_dir: Path) -> None:
-        """audit on a fresh project shows 'No audit entries'."""
+        """Audit on a fresh project shows 'No audit entries'."""
         result = runner.invoke(app, ["audit"])
         assert result.exit_code == 0
         assert "no" in result.output.lower()
@@ -220,7 +221,7 @@ class TestDecisions:
 
     @pytest.mark.ac("AC-06.7.1")
     def test_decisions_empty_project(self, project_dir: Path) -> None:
-        """decisions on a fresh project shows 'No decisions found'."""
+        """Decisions on a fresh project shows 'No decisions found'."""
         result = runner.invoke(app, ["decisions"])
         assert result.exit_code == 0
         assert "no" in result.output.lower()
@@ -231,7 +232,7 @@ class TestLearnings:
 
     @pytest.mark.ac("AC-07.9.1")
     def test_learnings_empty_project(self, project_dir: Path) -> None:
-        """learnings on a fresh project shows 'No learnings found'."""
+        """Learnings on a fresh project shows 'No learnings found'."""
         result = runner.invoke(app, ["learnings"])
         assert result.exit_code == 0
         assert "no" in result.output.lower()
@@ -242,7 +243,7 @@ class TestQuestions:
 
     @pytest.mark.ac("AC-15.1.2")
     def test_questions_empty_project(self, project_dir: Path) -> None:
-        """questions on a fresh project shows 'No pending questions'."""
+        """Questions on a fresh project shows 'No pending questions'."""
         result = runner.invoke(app, ["questions"])
         assert result.exit_code == 0
         assert "no" in result.output.lower()
@@ -253,7 +254,7 @@ class TestPs:
 
     @pytest.mark.ac("AC-05.2.2")
     def test_ps_empty_project(self, project_dir: Path) -> None:
-        """ps on a fresh project shows 'No running tasks'."""
+        """Ps on a fresh project shows 'No running tasks'."""
         result = runner.invoke(app, ["ps"])
         assert result.exit_code == 0
         assert "no" in result.output.lower()
@@ -489,9 +490,10 @@ class TestGenerationParamsConfigurable:
 
     @pytest.mark.ac("AC-01.3.3")
     def test_config_set_temperature(self, project_dir: Path) -> None:
-        """config --set provider.temperature=0.2 persists the value."""
+        """Config --set provider.temperature=0.2 persists the value."""
         result = runner.invoke(
-            app, ["config", "--set", "provider.temperature=0.2"],
+            app,
+            ["config", "--set", "provider.temperature=0.2"],
         )
         assert result.exit_code == 0
         content = (project_dir / ".guild" / "config.toml").read_text()
@@ -511,8 +513,11 @@ class TestProviderSystemPrompt:
         mock = AsyncMock()
         mock.generate = AsyncMock(
             return_value=LLMResponse(
-                content="ok", tool_calls=None,
-                input_tokens=5, output_tokens=3, model="m",
+                content="ok",
+                tool_calls=None,
+                input_tokens=5,
+                output_tokens=3,
+                model="m",
             )
         )
         mock.health_check = AsyncMock(return_value=True)
@@ -536,8 +541,11 @@ class TestToolCallFormatting:
         mock = AsyncMock()
         mock.generate = AsyncMock(
             return_value=LLMResponse(
-                content="done", tool_calls=None,
-                input_tokens=5, output_tokens=3, model="m",
+                content="done",
+                tool_calls=None,
+                input_tokens=5,
+                output_tokens=3,
+                model="m",
             )
         )
         mock.health_check = AsyncMock(return_value=True)
@@ -597,10 +605,14 @@ class TestTransientRetry:
         from guild.provider.retry import RetryConfig, RetryProvider
 
         mock_provider = AsyncMock()
-        mock_provider.generate = AsyncMock(side_effect=[
-            ConnectionError("transient"),
-            LLMResponse(content="ok", tool_calls=None, input_tokens=5, output_tokens=3, model="m"),
-        ])
+        mock_provider.generate = AsyncMock(
+            side_effect=[
+                ConnectionError("transient"),
+                LLMResponse(
+                    content="ok", tool_calls=None, input_tokens=5, output_tokens=3, model="m"
+                ),
+            ]
+        )
         mock_provider.health_check = AsyncMock(return_value=True)
 
         config = RetryConfig(max_retries=1, initial_delay_seconds=0.01)
@@ -617,7 +629,6 @@ class TestUnitTestsPassOnCurrentPlatform:
     def test_unit_marker_exists(self) -> None:
         """The unit marker is registered in pytest so tests can be selected."""
         # Verifying the marker is usable (real cross-platform CI verified externally)
-        import _pytest.mark
 
         assert hasattr(pytest.mark, "unit")
 
@@ -722,8 +733,11 @@ class TestOllamaReportsActualModel:
         mock = AsyncMock()
         mock.generate = AsyncMock(
             return_value=LLMResponse(
-                content="hi", tool_calls=None,
-                input_tokens=5, output_tokens=3, model="gemma4:4b",
+                content="hi",
+                tool_calls=None,
+                input_tokens=5,
+                output_tokens=3,
+                model="gemma4:4b",
             )
         )
         result = await mock.generate([{"role": "user", "content": "test"}])
@@ -735,9 +749,10 @@ class TestConfigSetPersistsAndReloads:
 
     @pytest.mark.ac("AC-01.3.5")
     def test_config_set_persists_and_get_reads_back(self, project_dir: Path) -> None:
-        """guild config --set value persists and guild config --get reads it back."""
+        """Guild config --set value persists and guild config --get reads it back."""
         set_result = runner.invoke(
-            app, ["config", "--set", "provider.model=gemma4:1b"],
+            app,
+            ["config", "--set", "provider.model=gemma4:1b"],
         )
         assert set_result.exit_code == 0
 
@@ -753,7 +768,8 @@ class TestHealthCheckConfigurableTimeout:
     def test_health_check_timeout_configurable(self, project_dir: Path) -> None:
         """provider.health_check_timeout_seconds can be set in config."""
         result = runner.invoke(
-            app, ["config", "--set", "provider.health_check_timeout_seconds=2"],
+            app,
+            ["config", "--set", "provider.health_check_timeout_seconds=2"],
         )
         assert result.exit_code == 0
         content = (project_dir / ".guild" / "config.toml").read_text()
@@ -764,8 +780,10 @@ class TestPathsWithSpaces:
     """Paths with spaces and special characters work correctly."""
 
     @pytest.mark.ac("AC-02.3.3")
-    def test_init_in_path_with_spaces(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        """guild init operates correctly in a directory with spaces."""
+    def test_init_in_path_with_spaces(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Guild init operates correctly in a directory with spaces."""
         spaced_dir = tmp_path / "my project" / "guild test"
         spaced_dir.mkdir(parents=True)
         monkeypatch.chdir(spaced_dir)

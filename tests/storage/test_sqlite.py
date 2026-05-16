@@ -566,7 +566,24 @@ class TestStorageNotConnected:
             ("_remove_stale_memories", (30,)),
             ("_dedup_memories", ()),
             # Eval results
-            ("store_eval_result", ({"task_name": "t", "model": "m", "config_hash": "h", "task_completed": 1, "duration_seconds": 1.0, "input_tokens": 0, "output_tokens": 0, "tool_calls": 0, "turns": 0, "error": None, "timestamp": "2024-01-01T00:00:00"},)),
+            (
+                "store_eval_result",
+                (
+                    {
+                        "task_name": "t",
+                        "model": "m",
+                        "config_hash": "h",
+                        "task_completed": 1,
+                        "duration_seconds": 1.0,
+                        "input_tokens": 0,
+                        "output_tokens": 0,
+                        "tool_calls": 0,
+                        "turns": 0,
+                        "error": None,
+                        "timestamp": "2024-01-01T00:00:00",
+                    },
+                ),
+            ),
             ("list_eval_results", ()),
             # Internal helper
             ("_get_tables", ()),

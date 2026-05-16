@@ -43,21 +43,21 @@ class TestBuildToolExecutors:
         assert executors["file_write"] is execute_file_write
 
     def test_shell_executor_is_correct_function(self) -> None:
-        """shell maps to execute_shell."""
+        """Shell maps to execute_shell."""
         from guild.tools.shell import execute_shell
 
         executors = build_tool_executors()
         assert executors["shell"] is execute_shell
 
     def test_search_executor_is_correct_function(self) -> None:
-        """search maps to execute_search."""
+        """Search maps to execute_search."""
         from guild.tools.search import execute_search
 
         executors = build_tool_executors()
         assert executors["search"] is execute_search
 
     def test_glob_executor_is_correct_function(self) -> None:
-        """glob maps to execute_glob."""
+        """Glob maps to execute_glob."""
         from guild.tools.search import execute_glob
 
         executors = build_tool_executors()

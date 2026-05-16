@@ -3,18 +3,18 @@
 Covers REQ-04.2 through REQ-04.54 (38 requirements).
 Black-box tests: real components, mock only the LLM provider (external I/O).
 """
+
 from __future__ import annotations
 
 import asyncio
 import json
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 
 from guild.blocks.definition import BlockDef, Connection, LoopDef, PortDef, TeamDef
 from guild.blocks.port_types import (
-    PORT_TYPE_ANY,
     PORT_TYPE_REGISTRY,
     PORT_TYPES,
     check_port_compatibility,
@@ -27,14 +27,12 @@ from guild.blocks.skills import SkillDef, SkillRegistry
 from guild.git.policy import BranchPolicy, MergeApproval
 from guild.git.worktree import BRANCH_PREFIX, WorktreeManager
 from guild.mcp.client import MCPClient, MCPError, MCPServerConfig
-from guild.mcp.registry import MCPToolRegistry
 from guild.orchestration.bus import MessageBus, SharedContext
 from guild.orchestration.spawner import AgentSpawner
 from guild.orchestration.team_runner import (
     DECISION_ESCALATE,
     DECISION_SKIP,
     AgentStatus,
-    BlockError,
     EscalationError,
     EvaluatorResult,
     TeamRunner,
@@ -48,16 +46,19 @@ pytestmark = pytest.mark.integration
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _mock_provider(content: str = "done") -> AsyncMock:
     """Create a mock LLM provider that returns a fixed text response."""
     provider = AsyncMock()
-    provider.generate = AsyncMock(return_value=LLMResponse(
-        content=content,
-        tool_calls=None,
-        input_tokens=10,
-        output_tokens=10,
-        model="mock",
-    ))
+    provider.generate = AsyncMock(
+        return_value=LLMResponse(
+            content=content,
+            tool_calls=None,
+            input_tokens=10,
+            output_tokens=10,
+            model="mock",
+        )
+    )
     provider.health_check = AsyncMock(return_value=True)
     return provider
 
@@ -82,6 +83,7 @@ def _simple_team(entry: str = "entry", blocks: dict[str, str] | None = None) -> 
 # ---------------------------------------------------------------------------
 # REQ-04.2  Entry agent present in preset team compositions
 # ---------------------------------------------------------------------------
+
 
 class TestEntryAgentInPreset:
     """Entry agent is present even in preset team compositions."""
@@ -121,6 +123,7 @@ class TestEntryAgentInPreset:
 # REQ-04.3  Any agent can spawn other agents
 # ---------------------------------------------------------------------------
 
+
 class TestAgentSpawning:
     """Any agent can spawn other agents, including other orchestrators."""
 
@@ -149,6 +152,7 @@ class TestAgentSpawning:
 # REQ-04.4  Agent spawning is just another tool call
 # ---------------------------------------------------------------------------
 
+
 class TestSpawnAsToolCall:
     """Agent spawning is exposed as a tool call — flat architecture."""
 
@@ -176,6 +180,7 @@ class TestSpawnAsToolCall:
 # ---------------------------------------------------------------------------
 # REQ-04.5  Worker agents that execute specific subtasks
 # ---------------------------------------------------------------------------
+
 
 class TestWorkerAgents:
     """Worker agents are specialized and run specific subtasks."""
@@ -208,6 +213,7 @@ class TestWorkerAgents:
 # REQ-04.6  MCP for agent-to-tool communication
 # ---------------------------------------------------------------------------
 
+
 class TestMCPCommunication:
     """MCP client for agent-to-tool communication."""
 
@@ -231,6 +237,7 @@ class TestMCPCommunication:
 # ---------------------------------------------------------------------------
 # REQ-04.7  Simple internal message bus for agent-to-agent communication
 # ---------------------------------------------------------------------------
+
 
 class TestMessageBus:
     """Internal message bus for agent-to-agent send/receive."""
@@ -274,6 +281,7 @@ class TestMessageBus:
 # ---------------------------------------------------------------------------
 # REQ-04.8  Skills support — pluggable skill definitions
 # ---------------------------------------------------------------------------
+
 
 class TestSkillsSupport:
     """Agents can have pluggable skill definitions."""
@@ -326,6 +334,7 @@ class TestSkillsSupport:
 # REQ-04.9  Agent lifecycle management
 # ---------------------------------------------------------------------------
 
+
 class TestAgentLifecycle:
     """Agent lifecycle: spawn, monitor, track status."""
 
@@ -356,6 +365,7 @@ class TestAgentLifecycle:
 # ---------------------------------------------------------------------------
 # REQ-04.10  Shared context/workspace between team members
 # ---------------------------------------------------------------------------
+
 
 class TestSharedContext:
     """Shared key-value context accessible to all team agents."""
@@ -388,6 +398,7 @@ class TestSharedContext:
 # REQ-04.11  Dynamic worker spawning
 # ---------------------------------------------------------------------------
 
+
 class TestDynamicSpawning:
     """Workers can be spawned dynamically — not limited to pre-defined team size."""
 
@@ -417,6 +428,7 @@ class TestDynamicSpawning:
 # REQ-04.12  Git worktrees as isolation model
 # ---------------------------------------------------------------------------
 
+
 class TestGitWorktreeIsolation:
     """Each task gets its own git worktree for parallel file modification."""
 
@@ -425,8 +437,11 @@ class TestGitWorktreeIsolation:
         """WorktreeManager.create produces a separate working directory."""
         # Initialize a real git repo
         proc = await asyncio.create_subprocess_exec(
-            "git", "init", str(tmp_path),
-            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+            "git",
+            "init",
+            str(tmp_path),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
         )
         await proc.communicate()
         # Create an initial commit so branches work
@@ -447,8 +462,11 @@ class TestGitWorktreeIsolation:
     async def test_worktree_has_own_files(self, tmp_path: Path) -> None:
         """Files created in one worktree do not appear in the main repo."""
         proc = await asyncio.create_subprocess_exec(
-            "git", "init", str(tmp_path),
-            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+            "git",
+            "init",
+            str(tmp_path),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
         )
         await proc.communicate()
         (tmp_path / "README.md").write_text("init")
@@ -468,6 +486,7 @@ class TestGitWorktreeIsolation:
 # ---------------------------------------------------------------------------
 # REQ-04.13  Branching strategy
 # ---------------------------------------------------------------------------
+
 
 class TestBranchingStrategy:
     """Agents merge freely to staging; main is gated by user review."""
@@ -497,6 +516,7 @@ class TestBranchingStrategy:
 # REQ-04.14  Staging area
 # ---------------------------------------------------------------------------
 
+
 class TestStagingArea:
     """A shared staging branch agents can merge to without user approval."""
 
@@ -517,6 +537,7 @@ class TestStagingArea:
 # ---------------------------------------------------------------------------
 # REQ-04.15  Merge policy configurable per project
 # ---------------------------------------------------------------------------
+
 
 class TestMergePolicyConfigurable:
     """Merge policy is configurable per project."""
@@ -544,6 +565,7 @@ class TestMergePolicyConfigurable:
 # ---------------------------------------------------------------------------
 # REQ-04.20  Atomic blocks — single-agent building blocks
 # ---------------------------------------------------------------------------
+
 
 class TestAtomicBlocks:
     """Atomic blocks: single-agent building blocks with inputs/outputs/role."""
@@ -575,6 +597,7 @@ class TestAtomicBlocks:
 # REQ-04.21  Composite blocks — groups of connected blocks
 # ---------------------------------------------------------------------------
 
+
 class TestCompositeBlocks:
     """Composite blocks: groups of connected blocks as a single reusable unit."""
 
@@ -602,6 +625,7 @@ class TestCompositeBlocks:
 # ---------------------------------------------------------------------------
 # REQ-04.22  Block connectors — defined input/output ports
 # ---------------------------------------------------------------------------
+
 
 class TestBlockConnectors:
     """Connections wire output ports to input ports between blocks."""
@@ -633,6 +657,7 @@ class TestBlockConnectors:
 # REQ-04.23  Block library — local catalog of available blocks
 # ---------------------------------------------------------------------------
 
+
 class TestBlockLibrary:
     """Block library: local catalog of built-in + user-created blocks."""
 
@@ -656,6 +681,7 @@ class TestBlockLibrary:
 # REQ-04.24  CLI team composer — text-based composition via config files
 # ---------------------------------------------------------------------------
 
+
 class TestCLITeamComposer:
     """Teams are composed via TOML config files."""
 
@@ -663,15 +689,15 @@ class TestCLITeamComposer:
     def test_load_team_from_toml(self, tmp_path: Path) -> None:
         """BlockRegistry loads teams from TOML files."""
         toml_content = (
-            '[team]\n'
+            "[team]\n"
             'name = "dev-team"\n'
             'entry_block = "p"\n'
-            '\n'
-            '[team.blocks]\n'
+            "\n"
+            "[team.blocks]\n"
             'p = "planner"\n'
             'c = "coder"\n'
-            '\n'
-            '[[team.connections]]\n'
+            "\n"
+            "[[team.connections]]\n"
             'source_block = "p"\n'
             'source_port = "plan"\n'
             'target_block = "c"\n'
@@ -690,16 +716,16 @@ class TestCLITeamComposer:
     def test_load_block_from_toml(self, tmp_path: Path) -> None:
         """BlockRegistry loads custom blocks from TOML files."""
         toml_content = (
-            '[block]\n'
+            "[block]\n"
             'name = "formatter"\n'
             'role = "formatter"\n'
             'version = "2.0.0"\n'
             'system_prompt = "Format code neatly."\n'
             'tools = ["shell"]\n'
-            '[[block.inputs]]\n'
+            "[[block.inputs]]\n"
             'name = "code"\n'
             'type = "code-changes"\n'
-            '[[block.outputs]]\n'
+            "[[block.outputs]]\n"
             'name = "formatted"\n'
             'type = "code-changes"\n'
         )
@@ -716,6 +742,7 @@ class TestCLITeamComposer:
 # ---------------------------------------------------------------------------
 # REQ-04.25  Nesting — composite blocks can contain other composites
 # ---------------------------------------------------------------------------
+
 
 class TestNesting:
     """Composite blocks can contain other composite blocks."""
@@ -750,6 +777,7 @@ class TestNesting:
 # REQ-04.26  Block versioning
 # ---------------------------------------------------------------------------
 
+
 class TestBlockVersioning:
     """Blocks are versioned; references pin a version."""
 
@@ -775,6 +803,7 @@ class TestBlockVersioning:
 # ---------------------------------------------------------------------------
 # REQ-04.27  Loop/cycle support in block graphs
 # ---------------------------------------------------------------------------
+
 
 class TestLoopSupport:
     """Block graphs support loops: coder -> reviewer -> coder is valid."""
@@ -809,6 +838,7 @@ class TestLoopSupport:
 # REQ-04.30  Every port has a type tag and optional JSON schema
 # ---------------------------------------------------------------------------
 
+
 class TestPortTypeTags:
     """Every port has a type tag and optional JSON schema."""
 
@@ -835,6 +865,7 @@ class TestPortTypeTags:
 # ---------------------------------------------------------------------------
 # REQ-04.31  Port compatibility checked at composition time
 # ---------------------------------------------------------------------------
+
 
 class TestPortCompatibility:
     """Port type compatibility is checked at composition time."""
@@ -867,6 +898,7 @@ class TestPortCompatibility:
 # REQ-04.32  'any' type is the escape hatch
 # ---------------------------------------------------------------------------
 
+
 class TestAnyTypeEscapeHatch:
     """'any' type is compatible with all other types."""
 
@@ -891,6 +923,7 @@ class TestAnyTypeEscapeHatch:
 # ---------------------------------------------------------------------------
 # REQ-04.33  Composite blocks expose unconnected inner ports
 # ---------------------------------------------------------------------------
+
 
 class TestCompositePortExposure:
     """Composite blocks expose unconnected inner ports as their own ports."""
@@ -937,6 +970,7 @@ class TestCompositePortExposure:
 # REQ-04.34  New type tags can be registered by users
 # ---------------------------------------------------------------------------
 
+
 class TestUserTypeRegistration:
     """Users can register new port type tags."""
 
@@ -974,6 +1008,7 @@ class TestUserTypeRegistration:
 # REQ-04.35  Port data is always serializable (JSON)
 # ---------------------------------------------------------------------------
 
+
 class TestPortDataSerializable:
     """All port data must be JSON-serializable."""
 
@@ -1000,6 +1035,7 @@ class TestPortDataSerializable:
 # ---------------------------------------------------------------------------
 # REQ-04.40  Standard evaluator output
 # ---------------------------------------------------------------------------
+
 
 class TestEvaluatorOutput:
     """Standard evaluator output: {pass, score, feedback, details}."""
@@ -1041,6 +1077,7 @@ class TestEvaluatorOutput:
 # REQ-04.41  Each evaluator defines its own rubric/criteria
 # ---------------------------------------------------------------------------
 
+
 class TestEvaluatorCriteria:
     """Evaluators define their own rubric/criteria."""
 
@@ -1069,6 +1106,7 @@ class TestEvaluatorCriteria:
 # REQ-04.42  Loop exit checks 'pass'
 # ---------------------------------------------------------------------------
 
+
 class TestLoopExitOnPass:
     """Loop continues until evaluator says pass: true."""
 
@@ -1091,13 +1129,21 @@ class TestLoopExitOnPass:
             call_count += 1
             if call_count % 2 == 1:
                 # Generator
-                return LLMResponse(content="def hello(): pass", tool_calls=None,
-                                   input_tokens=10, output_tokens=10, model="mock")
+                return LLMResponse(
+                    content="def hello(): pass",
+                    tool_calls=None,
+                    input_tokens=10,
+                    output_tokens=10,
+                    model="mock",
+                )
             else:
                 # Evaluator — pass immediately
                 return LLMResponse(
                     content=json.dumps({"pass": True, "score": 95, "feedback": "Perfect"}),
-                    tool_calls=None, input_tokens=10, output_tokens=10, model="mock",
+                    tool_calls=None,
+                    input_tokens=10,
+                    output_tokens=10,
+                    model="mock",
                 )
 
         provider.generate = AsyncMock(side_effect=fake_generate)
@@ -1125,15 +1171,28 @@ class TestLoopExitOnPass:
             nonlocal call_count
             call_count += 1
             if call_count % 2 == 1:
-                return LLMResponse(content=f"attempt-{call_count // 2 + 1}", tool_calls=None,
-                                   input_tokens=10, output_tokens=10, model="mock")
+                return LLMResponse(
+                    content=f"attempt-{call_count // 2 + 1}",
+                    tool_calls=None,
+                    input_tokens=10,
+                    output_tokens=10,
+                    model="mock",
+                )
             else:
                 # Fail first two evaluations, pass on third
                 passed = call_count >= 6
                 return LLMResponse(
-                    content=json.dumps({"pass": passed, "score": 90 if passed else 30,
-                                        "feedback": "ok" if passed else "needs work"}),
-                    tool_calls=None, input_tokens=10, output_tokens=10, model="mock",
+                    content=json.dumps(
+                        {
+                            "pass": passed,
+                            "score": 90 if passed else 30,
+                            "feedback": "ok" if passed else "needs work",
+                        }
+                    ),
+                    tool_calls=None,
+                    input_tokens=10,
+                    output_tokens=10,
+                    model="mock",
                 )
 
         provider = AsyncMock()
@@ -1149,6 +1208,7 @@ class TestLoopExitOnPass:
 # ---------------------------------------------------------------------------
 # REQ-04.43  Max iteration safety limit per loop
 # ---------------------------------------------------------------------------
+
 
 class TestMaxIterationLimit:
     """Max iteration safety limit prevents infinite loops."""
@@ -1170,10 +1230,15 @@ class TestMaxIterationLimit:
             loops=[LoopDef(generator_block="gen", evaluator_block="eval", max_iterations=2)],
         )
         provider = AsyncMock()
-        provider.generate = AsyncMock(return_value=LLMResponse(
-            content=json.dumps({"pass": False, "score": 10, "feedback": "bad"}),
-            tool_calls=None, input_tokens=10, output_tokens=10, model="mock",
-        ))
+        provider.generate = AsyncMock(
+            return_value=LLMResponse(
+                content=json.dumps({"pass": False, "score": 10, "feedback": "bad"}),
+                tool_calls=None,
+                input_tokens=10,
+                output_tokens=10,
+                model="mock",
+            )
+        )
         provider.health_check = AsyncMock(return_value=True)
 
         runner = TeamRunner(team, reg, provider)
@@ -1198,6 +1263,7 @@ class TestMaxIterationLimit:
 # ---------------------------------------------------------------------------
 # REQ-04.44  Evaluator criteria are part of block config
 # ---------------------------------------------------------------------------
+
 
 class TestEvaluatorCriteriaConfig:
     """Evaluator criteria are editable per-instance in block config."""
@@ -1228,6 +1294,7 @@ class TestEvaluatorCriteriaConfig:
 # REQ-04.50  Block fails -> retry N times
 # ---------------------------------------------------------------------------
 
+
 class TestBlockRetry:
     """Block fails -> retry N times (configurable, default 1)."""
 
@@ -1239,11 +1306,18 @@ class TestBlockRetry:
         team = TeamDef(name="t", entry_block="w", blocks={"w": "flaky"})
 
         provider = AsyncMock()
-        provider.generate = AsyncMock(side_effect=[
-            RuntimeError("transient error"),
-            LLMResponse(content="success", tool_calls=None,
-                        input_tokens=10, output_tokens=10, model="mock"),
-        ])
+        provider.generate = AsyncMock(
+            side_effect=[
+                RuntimeError("transient error"),
+                LLMResponse(
+                    content="success",
+                    tool_calls=None,
+                    input_tokens=10,
+                    output_tokens=10,
+                    model="mock",
+                ),
+            ]
+        )
         provider.health_check = AsyncMock(return_value=True)
 
         runner = TeamRunner(team, reg, provider)
@@ -1278,13 +1352,20 @@ class TestBlockRetry:
         reg = _make_registry_with(block)
         team = TeamDef(name="t", entry_block="w", blocks={"w": "retrier"})
         provider = AsyncMock()
-        provider.generate = AsyncMock(side_effect=[
-            RuntimeError("fail-1"),
-            RuntimeError("fail-2"),
-            RuntimeError("fail-3"),
-            LLMResponse(content="finally", tool_calls=None,
-                        input_tokens=10, output_tokens=10, model="mock"),
-        ])
+        provider.generate = AsyncMock(
+            side_effect=[
+                RuntimeError("fail-1"),
+                RuntimeError("fail-2"),
+                RuntimeError("fail-3"),
+                LLMResponse(
+                    content="finally",
+                    tool_calls=None,
+                    input_tokens=10,
+                    output_tokens=10,
+                    model="mock",
+                ),
+            ]
+        )
         provider.health_check = AsyncMock(return_value=True)
         runner = TeamRunner(team, reg, provider)
         result = await runner.run("retry me")
@@ -1295,6 +1376,7 @@ class TestBlockRetry:
 # ---------------------------------------------------------------------------
 # REQ-04.51  Still failing -> escalate to caller
 # ---------------------------------------------------------------------------
+
 
 class TestEscalateToCaller:
     """After all retries exhausted, error escalates to caller."""
@@ -1331,6 +1413,7 @@ class TestEscalateToCaller:
 # ---------------------------------------------------------------------------
 # REQ-04.52  Caller decides: retry differently, skip, substitute, or escalate
 # ---------------------------------------------------------------------------
+
 
 class TestCallerDecision:
     """Caller decides how to handle failure: skip, escalate, etc."""
@@ -1381,6 +1464,7 @@ class TestCallerDecision:
 # REQ-04.53  Error reaches entry agent with no resolution -> escalate to human
 # ---------------------------------------------------------------------------
 
+
 class TestEscalateToHuman:
     """Unresolved errors at entry level escalate to human."""
 
@@ -1418,6 +1502,7 @@ class TestEscalateToHuman:
 # REQ-04.54  Partial failure in parallel branches — other branches continue
 # ---------------------------------------------------------------------------
 
+
 class TestPartialFailureIsolation:
     """Partial failure in parallel branches — other branches continue."""
 
@@ -1449,16 +1534,26 @@ class TestPartialFailureIsolation:
             call_idx += 1
             # First call is entry (planner), always succeeds
             if call_idx == 1:
-                return LLMResponse(content="plan output", tool_calls=None,
-                                   input_tokens=10, output_tokens=10, model="mock")
+                return LLMResponse(
+                    content="plan output",
+                    tool_calls=None,
+                    input_tokens=10,
+                    output_tokens=10,
+                    model="mock",
+                )
             # The fail branch raises
             # We need to distinguish which block is running by looking at message content
             # Since order is topological, entry runs first, then we have two branches.
             # We'll make the mock fail for every other call after the first
             if call_idx == 2:
                 raise RuntimeError("branch failed")
-            return LLMResponse(content="branch succeeded", tool_calls=None,
-                               input_tokens=10, output_tokens=10, model="mock")
+            return LLMResponse(
+                content="branch succeeded",
+                tool_calls=None,
+                input_tokens=10,
+                output_tokens=10,
+                model="mock",
+            )
 
         provider = AsyncMock()
         provider.generate = AsyncMock(side_effect=selective_generate)
@@ -1493,10 +1588,12 @@ class TestPartialFailureIsolation:
 # Helper for git tests
 # ---------------------------------------------------------------------------
 
+
 async def _git(cwd: Path, *args: str) -> None:
     """Run a git command in the given directory."""
     proc = await asyncio.create_subprocess_exec(
-        "git", *args,
+        "git",
+        *args,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
         cwd=str(cwd),
@@ -1516,8 +1613,11 @@ class TestWorktreeCleanup:
     async def test_worktree_removed_after_cleanup(self, tmp_path: Path) -> None:
         """WorktreeManager.remove cleans up the worktree directory."""
         proc = await asyncio.create_subprocess_exec(
-            "git", "init", str(tmp_path),
-            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+            "git",
+            "init",
+            str(tmp_path),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
         )
         await proc.communicate()
         (tmp_path / "README.md").write_text("init")
@@ -1567,9 +1667,7 @@ class TestEvaluatorOutputValidation:
         team = _simple_team()
         runner = TeamRunner(team, reg, _mock_provider())
         # JSON with pass=true but no score -> heuristic still works
-        parsed = runner._parse_evaluator_result(
-            json.dumps({"pass": True})
-        )
+        parsed = runner._parse_evaluator_result(json.dumps({"pass": True}))
         # Should still produce a result (fallback behavior)
         assert parsed.passed is True
         # Score defaults to a reasonable value
@@ -1735,9 +1833,11 @@ class TestA2AMissingParamsError:
     @pytest.mark.ac("AC-04.7a.4")
     def test_a2a_missing_params_returns_error(self) -> None:
         """POST /a2a with tasks/send but no message param returns -32602."""
-        from starlette.testclient import TestClient
-        from guild.api.server import create_app
         import tempfile
+
+        from starlette.testclient import TestClient
+
+        from guild.api.server import create_app
 
         with tempfile.TemporaryDirectory() as td:
             guild_dir = Path(td) / ".guild"
@@ -1746,19 +1846,26 @@ class TestA2AMissingParamsError:
                 '[provider]\nprovider_name = "ollama"\nmodel = "m"\n'
             )
             import asyncio as _aio
+
             from guild.storage.sqlite import Storage as _Storage
 
             async def _init() -> None:
                 async with _Storage(guild_dir / "guild.db"):
                     pass
+
             _aio.run(_init())
 
             api_app = create_app(guild_dir=guild_dir)
             with TestClient(api_app) as client:
-                resp = client.post("/a2a", json={
-                    "jsonrpc": "2.0", "id": 1,
-                    "method": "tasks/send", "params": {},
-                })
+                resp = client.post(
+                    "/a2a",
+                    json={
+                        "jsonrpc": "2.0",
+                        "id": 1,
+                        "method": "tasks/send",
+                        "params": {},
+                    },
+                )
                 data = resp.json()
                 assert "error" in data
                 assert data["error"]["code"] == -32602
@@ -1771,6 +1878,7 @@ class TestA2AOptionalStartup:
     def test_a2a_gateway_importable(self) -> None:
         """guild.api.server is importable without error."""
         from guild.api import server
+
         assert hasattr(server, "create_app")
 
 
@@ -1783,9 +1891,7 @@ class TestSkillInvalidFrontmatter:
         (tmp_path / "valid.md").write_text(
             "---\nname: good-skill\ndescription: Good\n---\nGood content."
         )
-        (tmp_path / "bad.md").write_text(
-            "---\nname: [invalid yaml\n---\nBad content."
-        )
+        (tmp_path / "bad.md").write_text("---\nname: [invalid yaml\n---\nBad content.")
         reg = SkillRegistry()
         count = reg.load_from_dir(tmp_path)
         assert count >= 1
@@ -1797,12 +1903,8 @@ class TestSkillDuplicateNames:
     @pytest.mark.ac("AC-04.8.6")
     def test_duplicate_skill_last_wins(self, tmp_path: Path) -> None:
         """Two files with same skill name: only one instance."""
-        (tmp_path / "a_skill.md").write_text(
-            "---\nname: deploy\ndescription: Deploy v1\n---\nV1."
-        )
-        (tmp_path / "b_skill.md").write_text(
-            "---\nname: deploy\ndescription: Deploy v2\n---\nV2."
-        )
+        (tmp_path / "a_skill.md").write_text("---\nname: deploy\ndescription: Deploy v1\n---\nV1.")
+        (tmp_path / "b_skill.md").write_text("---\nname: deploy\ndescription: Deploy v2\n---\nV2.")
         reg = SkillRegistry()
         reg.load_from_dir(tmp_path)
         assert len([s for s in reg.list_skills() if s.name == "deploy"]) == 1
@@ -1908,6 +2010,7 @@ class TestSpawnedAgentMaxTurns:
     async def test_sub_agent_max_turns(self) -> None:
         """SUB_AGENT_MAX_TURNS is 30."""
         from guild.orchestration.spawner import SUB_AGENT_MAX_TURNS
+
         assert SUB_AGENT_MAX_TURNS == 30
 
 
@@ -1942,8 +2045,11 @@ class TestWorktreeBranchNamingConvention:
     async def test_branch_name_convention(self, tmp_path: Path) -> None:
         """Branch name is guild/<task_id>."""
         proc = await asyncio.create_subprocess_exec(
-            "git", "init", str(tmp_path),
-            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+            "git",
+            "init",
+            str(tmp_path),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
         )
         await proc.communicate()
         (tmp_path / "README.md").write_text("init")
@@ -1964,8 +2070,11 @@ class TestListActiveOnlyGuildManaged:
     async def test_list_active_guild_only(self, tmp_path: Path) -> None:
         """list_active excludes user worktrees."""
         proc = await asyncio.create_subprocess_exec(
-            "git", "init", str(tmp_path),
-            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+            "git",
+            "init",
+            str(tmp_path),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
         )
         await proc.communicate()
         (tmp_path / "README.md").write_text("init")
@@ -2010,8 +2119,11 @@ class TestMergeConflictDetection:
         """Second merge with conflicting changes is detected."""
         # Initialize git repo with a commit
         proc = await asyncio.create_subprocess_exec(
-            "git", "init", str(tmp_path),
-            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+            "git",
+            "init",
+            str(tmp_path),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
         )
         await proc.communicate()
         (tmp_path / "file.txt").write_text("original")
@@ -2055,8 +2167,11 @@ class TestStagingBranchAutoCreated:
         """First merge_to_staging() auto-creates the branch."""
         # Initialize git repo with a commit
         proc = await asyncio.create_subprocess_exec(
-            "git", "init", str(tmp_path),
-            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+            "git",
+            "init",
+            str(tmp_path),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
         )
         await proc.communicate()
         (tmp_path / "file.txt").write_text("initial")
@@ -2266,11 +2381,14 @@ class TestNestedCompositeValidates:
     def test_nested_composite_validates(self) -> None:
         """Outer team referencing inner composite passes validation."""
         reg = BlockRegistry()
-        reg.register_block(BlockDef(
-            name="inner-comp", role="composite",
-            inputs=[PortDef(name="spec", type_tag="plan")],
-            outputs=[PortDef(name="result", type_tag="code-changes")],
-        ))
+        reg.register_block(
+            BlockDef(
+                name="inner-comp",
+                role="composite",
+                inputs=[PortDef(name="spec", type_tag="plan")],
+                outputs=[PortDef(name="result", type_tag="code-changes")],
+            )
+        )
         reg.register_team(TeamDef(name="inner-comp", entry_block="c", blocks={"c": "coder"}))
         outer = TeamDef(
             name="full",
@@ -2313,7 +2431,8 @@ class TestPortTypeCustomRegistration:
     def test_register_validate_custom_type(self) -> None:
         """Custom port type with schema validates data."""
         register_port_type(
-            "ac303-test", json_schema={"type": "object", "required": ["name"]},
+            "ac303-test",
+            json_schema={"type": "object", "required": ["name"]},
         )
         valid, _ = validate_port_data({"name": "test"}, "ac303-test")
         assert valid is True
@@ -2326,7 +2445,8 @@ class TestPortTypeSchemaValidationRejects:
     def test_schema_rejects_invalid(self) -> None:
         """Data not matching schema is rejected."""
         register_port_type(
-            "ac304-test", json_schema={"type": "object", "required": ["a", "b"]},
+            "ac304-test",
+            json_schema={"type": "object", "required": ["a", "b"]},
         )
         valid, err = validate_port_data({"a": "x"}, "ac304-test")
         assert valid is False

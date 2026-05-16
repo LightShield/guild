@@ -3,11 +3,11 @@
 Written BEFORE implementation (TDD red phase).
 Google A2A spec: HTTP JSON-RPC for agent discovery and task lifecycle.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -22,8 +22,7 @@ def a2a_app(tmp_path: Path) -> Any:
     guild_dir = tmp_path / ".guild"
     guild_dir.mkdir()
     (guild_dir / "config.toml").write_text(
-        '[provider]\nname = "ollama"\nmodel = "test"\n'
-        'base_url = "http://localhost:11434"\n'
+        '[provider]\nname = "ollama"\nmodel = "test"\n' 'base_url = "http://localhost:11434"\n'
     )
     return create_app(guild_dir=guild_dir)
 

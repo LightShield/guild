@@ -33,10 +33,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-import shutil
-import time
 from pathlib import Path
-from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
@@ -67,6 +64,7 @@ def _init_db(db_path: Path) -> None:
     async def _create() -> None:
         async with Storage(db_path):
             pass
+
     _aio.run(_create())
 
 
@@ -167,9 +165,7 @@ class TestInteractiveAttach:
         reader, writer = await asyncio.open_unix_connection(str(sock_path))
 
         # Subscribe
-        writer.write(
-            json.dumps({"type": "command", "action": "subscribe"}).encode() + b"\n"
-        )
+        writer.write(json.dumps({"type": "command", "action": "subscribe"}).encode() + b"\n")
         await writer.drain()
         ack = json.loads(await reader.readline())
         assert ack["status"] == "subscribed"
@@ -197,18 +193,14 @@ class TestInteractiveAttach:
         reader, writer = await asyncio.open_unix_connection(str(sock_path))
 
         # Pause
-        writer.write(
-            json.dumps({"type": "command", "action": "pause"}).encode() + b"\n"
-        )
+        writer.write(json.dumps({"type": "command", "action": "pause"}).encode() + b"\n")
         await writer.drain()
         resp = json.loads(await reader.readline())
         assert resp["status"] == "paused"
         assert cs.is_paused is True
 
         # Resume
-        writer.write(
-            json.dumps({"type": "command", "action": "resume"}).encode() + b"\n"
-        )
+        writer.write(json.dumps({"type": "command", "action": "resume"}).encode() + b"\n")
         await writer.drain()
         resp = json.loads(await reader.readline())
         assert resp["status"] == "running"
@@ -228,9 +220,7 @@ class TestInteractiveAttach:
         await cs.start()
 
         reader, writer = await asyncio.open_unix_connection(str(sock_path))
-        writer.write(
-            json.dumps({"type": "command", "action": "foobar"}).encode() + b"\n"
-        )
+        writer.write(json.dumps({"type": "command", "action": "foobar"}).encode() + b"\n")
         await writer.drain()
         resp = json.loads(await reader.readline())
         assert "error" in resp
@@ -288,9 +278,7 @@ class TestWebGUI:
         api_app = create_app(guild_dir=guild_dir)
         with TestClient(api_app) as client:
             # Create
-            resp = client.post(
-                "/api/tasks", json={"description": "E2E test task"}
-            )
+            resp = client.post("/api/tasks", json={"description": "E2E test task"})
             assert resp.status_code == 200
             task_id = resp.json()["id"]
 
@@ -622,7 +610,7 @@ class TestTemplateImportExport:
     @pytest.mark.ac("AC-19.3.2")
     def test_import_loads_template_from_file(self, tmp_path: Path) -> None:
         """Happy: import from a JSON file adds the template to the manager."""
-        from guild.templates.manager import Template, TemplateManager
+        from guild.templates.manager import TemplateManager
 
         # Create a source JSON file
         source_file = tmp_path / "imported.json"
@@ -1301,8 +1289,10 @@ class TestTemporalDecisions:
 
         for i in range(10):
             await storage.log_decision(
-                task_id="t1", agent_id="a1",
-                decision=f"Decision {i}", rationale=f"Reason {i}",
+                task_id="t1",
+                agent_id="a1",
+                decision=f"Decision {i}",
+                rationale=f"Reason {i}",
             )
 
         tk = TemporalKnowledge(Path("/tmp/fake_guild"), storage)
@@ -1317,8 +1307,10 @@ class TestTemporalDecisions:
         from guild.knowledge.temporal import TemporalKnowledge
 
         await storage.log_decision(
-            task_id="t1", agent_id="a1",
-            decision="Use dataclasses", rationale="Simpler than Pydantic",
+            task_id="t1",
+            agent_id="a1",
+            decision="Use dataclasses",
+            rationale="Simpler than Pydantic",
         )
 
         tk = TemporalKnowledge(tmp_path, storage)
@@ -1340,10 +1332,10 @@ class TestPresentState:
         self, storage: Storage, tmp_path: Path
     ) -> None:
         """Happy: get_present_state includes git status, log, and files sections."""
-        from guild.knowledge.temporal import TemporalKnowledge
-
         # Initialize a git repo for the test
         import subprocess
+
+        from guild.knowledge.temporal import TemporalKnowledge
 
         subprocess.run(["git", "init"], cwd=str(tmp_path), capture_output=True)
         (tmp_path / "README.md").write_text("Hello")
@@ -1368,9 +1360,7 @@ class TestPresentState:
         assert "Recent Commits" in state or "Top-Level Files" in state
 
     @pytest.mark.ac("AC-27.2.2")
-    async def test_present_state_no_git(
-        self, storage: Storage, tmp_path: Path
-    ) -> None:
+    async def test_present_state_no_git(self, storage: Storage, tmp_path: Path) -> None:
         """Sad: non-git directory still returns file listing."""
         from guild.knowledge.temporal import TemporalKnowledge
 
@@ -1382,18 +1372,20 @@ class TestPresentState:
         assert "Top-Level Files" in state or "No project state" in state
 
     @pytest.mark.ac("AC-27.2.1")
-    async def test_get_key_past_info_with_decisions(
-        self, storage: Storage, tmp_path: Path
-    ) -> None:
+    async def test_get_key_past_info_with_decisions(self, storage: Storage, tmp_path: Path) -> None:
         """Happy: get_key_past_info returns decisions and learnings."""
         from guild.knowledge.temporal import TemporalKnowledge
 
         await storage.log_decision(
-            task_id="t1", agent_id="a1",
-            decision="Use REST", rationale="Simpler than gRPC",
+            task_id="t1",
+            agent_id="a1",
+            decision="Use REST",
+            rationale="Simpler than gRPC",
         )
         await storage.add_learning(
-            category="pattern", content="Validate inputs early", confidence=0.8,
+            category="pattern",
+            content="Validate inputs early",
+            confidence=0.8,
         )
 
         tk = TemporalKnowledge(tmp_path / ".guild", storage)
@@ -1404,9 +1396,7 @@ class TestPresentState:
         assert "Validate inputs early" in past
 
     @pytest.mark.ac("AC-27.2.2")
-    async def test_get_key_past_info_empty(
-        self, storage: Storage, tmp_path: Path
-    ) -> None:
+    async def test_get_key_past_info_empty(self, storage: Storage, tmp_path: Path) -> None:
         """Edge: with no decisions or learnings, returns empty string."""
         from guild.knowledge.temporal import TemporalKnowledge
 
@@ -1441,9 +1431,7 @@ class TestProjectInstructions:
         assert "composition" in instructions
 
     @pytest.mark.ac("AC-27.3.2")
-    async def test_instructions_none_when_missing(
-        self, storage: Storage, tmp_path: Path
-    ) -> None:
+    async def test_instructions_none_when_missing(self, storage: Storage, tmp_path: Path) -> None:
         """Sad: no prompt.md returns None."""
         from guild.knowledge.temporal import TemporalKnowledge
 
@@ -1455,9 +1443,7 @@ class TestProjectInstructions:
         assert instructions is None
 
     @pytest.mark.ac("AC-27.3.3")
-    async def test_instructions_in_relevant_context(
-        self, storage: Storage, tmp_path: Path
-    ) -> None:
+    async def test_instructions_in_relevant_context(self, storage: Storage, tmp_path: Path) -> None:
         """Happy: get_relevant_context includes project instructions section."""
         from guild.knowledge.temporal import TemporalKnowledge
 
@@ -1481,9 +1467,7 @@ class TestRelevantLearningsContext:
     """Temporal context assembly includes relevant learnings."""
 
     @pytest.mark.ac("AC-27.4.1")
-    async def test_learnings_included_in_context(
-        self, storage: Storage, tmp_path: Path
-    ) -> None:
+    async def test_learnings_included_in_context(self, storage: Storage, tmp_path: Path) -> None:
         """Happy: high-confidence learnings appear in get_relevant_context."""
         from guild.knowledge.temporal import TemporalKnowledge
 
@@ -1523,9 +1507,7 @@ class TestRelevantLearningsContext:
         assert "Low confidence tip" not in context
 
     @pytest.mark.ac("AC-27.4.3")
-    async def test_empty_context_when_no_data(
-        self, storage: Storage, tmp_path: Path
-    ) -> None:
+    async def test_empty_context_when_no_data(self, storage: Storage, tmp_path: Path) -> None:
         """Edge: with no instructions, decisions, or learnings, context is empty."""
         from guild.knowledge.temporal import TemporalKnowledge
 
@@ -1605,11 +1587,15 @@ class TestTemplateImportOverwrite:
         mgr.save(Template(name="existing", task_template="old task"))
 
         source_file = tmp_path / "new.json"
-        source_file.write_text(json.dumps({
-            "name": "existing",
-            "task_template": "new task",
-            "parameters": [],
-        }))
+        source_file.write_text(
+            json.dumps(
+                {
+                    "name": "existing",
+                    "task_template": "new task",
+                    "parameters": [],
+                }
+            )
+        )
 
         tpl = mgr.import_template(source_file)
         assert tpl.task_template == "new task"
@@ -1695,7 +1681,7 @@ class TestAcceptArtifactAppliesContent:
 
     @pytest.mark.ac("AC-18.3.4")
     async def test_accept_artifact_writes_to_project(self, tmp_path: Path) -> None:
-        """guild accept writes artifact content to project directory."""
+        """Guild accept writes artifact content to project directory."""
         from guild.artifacts.manager import ArtifactManager
 
         artifacts_dir = tmp_path / ".guild" / "artifacts"
@@ -1744,12 +1730,14 @@ class TestCharacterSheetAbilitiesAndStats:
         from guild.ui.rpg import RPGMode
 
         rpg = RPGMode(enabled=True)
-        sheet = rpg.character_sheet({
-            "name": "Coder",
-            "role": "coder",
-            "level": "5",
-            "status": "running",
-        })
+        sheet = rpg.character_sheet(
+            {
+                "name": "Coder",
+                "role": "coder",
+                "level": "5",
+                "status": "running",
+            }
+        )
         assert "Class:" in sheet
         assert "Level:" in sheet
         assert "Status:" in sheet
@@ -1805,9 +1793,9 @@ class TestDecisionsSearchFilter:
 
         all_decisions = await storage.list_decisions(limit=50)
         db_decisions = [
-            d for d in all_decisions
-            if "sqlite" in d["decision"].lower()
-            or "database" in d["decision"].lower()
+            d
+            for d in all_decisions
+            if "sqlite" in d["decision"].lower() or "database" in d["decision"].lower()
         ]
         assert len(db_decisions) >= 1
         assert "SQLite" in db_decisions[0]["decision"]

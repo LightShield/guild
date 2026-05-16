@@ -43,6 +43,6 @@ class TestToolResult:
         assert "File not found" in str(result)
 
     def test_default_error_is_none(self) -> None:
-        """error defaults to None when not provided."""
+        """Error defaults to None when not provided."""
         result = ToolResult(success=True, output="ok")
         assert result.error is None

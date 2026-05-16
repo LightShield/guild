@@ -2,13 +2,14 @@
 
 Black-box tests exercising features from the outside.
 """
+
 from __future__ import annotations
 
 import asyncio
 import json
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from typer.testing import CliRunner
@@ -35,10 +36,15 @@ class TestPermissions:
     def test_task_runs_in_autopilot_by_default(self, project_dir: Path) -> None:
         """Default permission is autopilot — no prompts."""
         mock_provider = AsyncMock()
-        mock_provider.generate = AsyncMock(return_value=LLMResponse(
-            content="Done.", tool_calls=None,
-            input_tokens=10, output_tokens=5, model="mock",
-        ))
+        mock_provider.generate = AsyncMock(
+            return_value=LLMResponse(
+                content="Done.",
+                tool_calls=None,
+                input_tokens=10,
+                output_tokens=5,
+                model="mock",
+            )
+        )
         mock_provider.health_check = AsyncMock(return_value=True)
 
         with patch("guild.cli.task_runner.create_resilient_provider", return_value=mock_provider):
@@ -164,7 +170,9 @@ class TestResourceAwareness:
         gpu_reader = lambda: {"gpu_percent": 90.0, "vram_used_mb": 7500, "vram_total_mb": 8192}
         thresholds = ResourceThresholds(vram_pressure_percent=85.0)
         monitor = ResourceMonitor(
-            mode=SchedulingMode.POLITE, thresholds=thresholds, gpu_reader=gpu_reader,
+            mode=SchedulingMode.POLITE,
+            thresholds=thresholds,
+            gpu_reader=gpu_reader,
         )
         status = monitor.get_status()
         assert status.is_throttled
@@ -178,7 +186,9 @@ class TestResourceAwareness:
         gpu_reader = lambda: {"gpu_percent": 30.0, "vram_used_mb": 2000, "vram_total_mb": 8192}
         thresholds = ResourceThresholds(vram_pressure_percent=85.0)
         monitor = ResourceMonitor(
-            mode=SchedulingMode.POLITE, thresholds=thresholds, gpu_reader=gpu_reader,
+            mode=SchedulingMode.POLITE,
+            thresholds=thresholds,
+            gpu_reader=gpu_reader,
         )
         status = monitor.get_status()
         assert not status.is_throttled
@@ -192,19 +202,22 @@ class TestResourceAwareness:
 def _simple_response(content: str = "Done.") -> LLMResponse:
     """Shortcut for a text-only LLM response with no tool calls."""
     return LLMResponse(
-        content=content, tool_calls=None,
-        input_tokens=10, output_tokens=5, model="mock",
+        content=content,
+        tool_calls=None,
+        input_tokens=10,
+        output_tokens=5,
+        model="mock",
     )
 
 
-def _tool_response(
-    tool_name: str, args: dict[str, Any], content: str = ""
-) -> LLMResponse:
+def _tool_response(tool_name: str, args: dict[str, Any], content: str = "") -> LLMResponse:
     """Shortcut for an LLM response that requests a single tool call."""
     return LLMResponse(
         content=content,
         tool_calls=[{"function": {"name": tool_name, "arguments": args}}],
-        input_tokens=20, output_tokens=15, model="mock",
+        input_tokens=20,
+        output_tokens=15,
+        model="mock",
     )
 
 
@@ -327,9 +340,10 @@ class TestScopedTierE2E:
             allowed_tools=["file_write"],
             allowed_paths=[str(project_dir)],
         )
-        assert checker.check(
-            "file_write", "agent-e2e", {"path": "/etc/shadow", "content": "x"}
-        ) is False
+        assert (
+            checker.check("file_write", "agent-e2e", {"path": "/etc/shadow", "content": "x"})
+            is False
+        )
 
     @pytest.mark.ac("AC-03.3.3")
     def test_scoped_tool_with_no_path_arg_allowed(self, project_dir: Path) -> None:
@@ -359,9 +373,7 @@ class TestAutopilotTierE2E:
             _simple_response("Done. File written."),
         )
         with patch("guild.cli.task_runner.create_resilient_provider", return_value=provider):
-            result = runner.invoke(
-                app, ["task", "Write a file", "--permission", "autopilot"]
-            )
+            result = runner.invoke(app, ["task", "Write a file", "--permission", "autopilot"])
         assert result.exit_code == 0
         assert "Done" in result.output
 
@@ -381,9 +393,10 @@ class TestAutopilotTierE2E:
         from guild.permissions.checker import PermissionChecker, PermissionTier
 
         checker = PermissionChecker(tier=PermissionTier.AUTOPILOT)
-        assert checker.check(
-            "shell", "agent-e2e", {"command": "git push --force origin main"}
-        ) is False
+        assert (
+            checker.check("shell", "agent-e2e", {"command": "git push --force origin main"})
+            is False
+        )
 
 
 # ======================================================================
@@ -441,9 +454,7 @@ class TestPermissionSwitchingE2E:
     def test_cli_accepts_all_permission_tiers(self, project_dir: Path) -> None:
         """Edge: every tier value is accepted by the --permission flag."""
         for tier in ["nothing", "ask", "scoped", "autopilot"]:
-            result = runner.invoke(
-                app, ["task", "test", "--permission", tier, "--help"]
-            )
+            result = runner.invoke(app, ["task", "test", "--permission", tier, "--help"])
             # --help exits before running, just verifying flag is accepted
             assert result.exit_code == 0
 
@@ -484,9 +495,7 @@ class TestPermissionAuditE2E:
         from guild.permissions.checker import PermissionChecker, PermissionTier
 
         checker = PermissionChecker(tier=PermissionTier.AUTOPILOT)
-        allowed, reason = checker.check_hardcoded_never(
-            "shell", {"command": "rm -rf /"}
-        )
+        allowed, reason = checker.check_hardcoded_never("shell", {"command": "rm -rf /"})
         assert allowed is False
         assert "rm -rf /" in reason
         assert len(reason) > 10  # substantive description
@@ -500,13 +509,16 @@ class TestHardcodedNeverE2E:
     """Hardcoded-never layer blocks destructive/irreversible actions at every tier."""
 
     @pytest.mark.ac("AC-03.7.3")
-    @pytest.mark.parametrize("command,reason_fragment", [
-        ("git push --force origin main", "git push --force"),
-        ("rm -rf /", "rm -rf /"),
-        ("git reset --hard HEAD", "git reset --hard"),
-        ("sudo rm -rf /var/log", "sudo rm"),
-        ("dd if=/dev/zero of=/dev/sda", "dd"),
-    ])
+    @pytest.mark.parametrize(
+        "command,reason_fragment",
+        [
+            ("git push --force origin main", "git push --force"),
+            ("rm -rf /", "rm -rf /"),
+            ("git reset --hard HEAD", "git reset --hard"),
+            ("sudo rm -rf /var/log", "sudo rm"),
+            ("dd if=/dev/zero of=/dev/sda", "dd"),
+        ],
+    )
     def test_destructive_commands_blocked_in_autopilot(
         self, project_dir: Path, command: str, reason_fragment: str
     ) -> None:
@@ -550,9 +562,7 @@ class TestHardcodedNeverE2E:
                 allowed_tools=["shell"],
                 allowed_paths=["/"],
             )
-            assert checker.check(
-                "shell", "agent-e2e", {"command": "rm -rf /"}
-            ) is False
+            assert checker.check("shell", "agent-e2e", {"command": "rm -rf /"}) is False
 
 
 # ======================================================================
@@ -574,9 +584,9 @@ class TestReversibilityE2E:
                     allowed_tools=["shell"],
                     allowed_paths=["/"],
                 )
-                assert checker.check(
-                    "shell", "agent-e2e", {"command": command}
-                ) is True, f"'{command}' blocked in {tier.value}"
+                assert (
+                    checker.check("shell", "agent-e2e", {"command": command}) is True
+                ), f"'{command}' blocked in {tier.value}"
 
     @pytest.mark.ac("AC-03.8.2")
     def test_irreversible_command_blocked(self, project_dir: Path) -> None:
@@ -584,9 +594,7 @@ class TestReversibilityE2E:
         from guild.permissions.checker import PermissionChecker, PermissionTier
 
         checker = PermissionChecker(tier=PermissionTier.AUTOPILOT)
-        assert checker.check(
-            "shell", "agent-e2e", {"command": "mkfs.ext4 /dev/sda1"}
-        ) is False
+        assert checker.check("shell", "agent-e2e", {"command": "mkfs.ext4 /dev/sda1"}) is False
 
     @pytest.mark.ac("AC-03.8.1")
     def test_reversible_git_operations_pass(self, project_dir: Path) -> None:
@@ -595,16 +603,16 @@ class TestReversibilityE2E:
 
         checker = PermissionChecker(tier=PermissionTier.AUTOPILOT)
         # Safe git ops
-        assert checker.check(
-            "shell", "agent-e2e", {"command": "git push origin feature-branch"}
-        ) is True
-        assert checker.check(
-            "shell", "agent-e2e", {"command": "git diff HEAD"}
-        ) is True
+        assert (
+            checker.check("shell", "agent-e2e", {"command": "git push origin feature-branch"})
+            is True
+        )
+        assert checker.check("shell", "agent-e2e", {"command": "git diff HEAD"}) is True
         # Force-push is irreversible
-        assert checker.check(
-            "shell", "agent-e2e", {"command": "git push --force origin main"}
-        ) is False
+        assert (
+            checker.check("shell", "agent-e2e", {"command": "git push --force origin main"})
+            is False
+        )
 
 
 # ======================================================================
@@ -615,9 +623,7 @@ class TestAgentNoPauseE2E:
     """Agent continues autonomously without unnecessary pauses."""
 
     @pytest.mark.ac("AC-06.1.1")
-    def test_agent_runs_multiple_tools_without_pausing(
-        self, project_dir: Path
-    ) -> None:
+    def test_agent_runs_multiple_tools_without_pausing(self, project_dir: Path) -> None:
         """Happy: agent calls multiple tools in sequence without user interaction."""
         provider = _make_mock_provider(
             _tool_response("file_write", {"path": "a.txt", "content": "aaa"}),
@@ -625,9 +631,7 @@ class TestAgentNoPauseE2E:
             _simple_response("Created two files."),
         )
         with patch("guild.cli.task_runner.create_resilient_provider", return_value=provider):
-            result = runner.invoke(
-                app, ["task", "Create two files", "--permission", "autopilot"]
-            )
+            result = runner.invoke(app, ["task", "Create two files", "--permission", "autopilot"])
         assert result.exit_code == 0
         assert "Done" in result.output or "Created" in result.output
         assert (project_dir / "a.txt").exists()
@@ -644,9 +648,7 @@ class TestAgentNoPauseE2E:
         # the CLI accepts the flag and does not crash.
         provider = _make_mock_provider(_simple_response("Nothing to do."))
         with patch("guild.cli.task_runner.create_resilient_provider", return_value=provider):
-            result = runner.invoke(
-                app, ["task", "Describe the repo", "--permission", "nothing"]
-            )
+            result = runner.invoke(app, ["task", "Describe the repo", "--permission", "nothing"])
         assert result.exit_code == 0
 
     @pytest.mark.ac("AC-06.1.1")
@@ -660,9 +662,7 @@ class TestAgentNoPauseE2E:
             allowed_paths=[str(project_dir)],
         )
         # No prompt_fn installed, yet in-scope tools pass
-        assert checker.check(
-            "file_read", "agent-e2e", {"path": str(project_dir / "x.txt")}
-        ) is True
+        assert checker.check("file_read", "agent-e2e", {"path": str(project_dir / "x.txt")}) is True
 
 
 # ======================================================================
@@ -693,8 +693,7 @@ class TestSelfVerifyCompletionE2E:
         result = await loop.run("sys", "Write code", self_review=True)
 
         review_msgs = [
-            m for m in loop.messages
-            if m.role == "user" and SELF_REVIEW_PROMPT in m.content
+            m for m in loop.messages if m.role == "user" and SELF_REVIEW_PROMPT in m.content
         ]
         assert len(review_msgs) == 1
         assert "Reviewed" in result
@@ -703,15 +702,13 @@ class TestSelfVerifyCompletionE2E:
     async def test_self_review_not_run_when_disabled(self) -> None:
         """Sad: self_review=False (default) skips the review round."""
         from guild.agent.loop import SELF_REVIEW_PROMPT, AgentLoop
-        from guild.tools.base import ToolResult
 
         provider = _make_mock_provider(_simple_response("Task complete."))
         loop = AgentLoop(provider=provider, tool_executors={})
         result = await loop.run("sys", "Do task", self_review=False)
 
         review_msgs = [
-            m for m in loop.messages
-            if m.role == "user" and SELF_REVIEW_PROMPT in m.content
+            m for m in loop.messages if m.role == "user" and SELF_REVIEW_PROMPT in m.content
         ]
         assert len(review_msgs) == 0
         assert result == "Task complete."
@@ -758,7 +755,9 @@ class TestStuckDetectionE2E:
 
         same_call = _tool_response("file_read", {"path": "a.txt"})
         provider = _make_mock_provider(
-            same_call, same_call, same_call,
+            same_call,
+            same_call,
+            same_call,
             # After recovery injection
             _simple_response("I will try differently."),
         )
@@ -772,16 +771,15 @@ class TestStuckDetectionE2E:
         result = await loop.run("sys", "read a.txt")
 
         recovery_msgs = [
-            m for m in loop.messages
-            if m.role == "user" and STUCK_RECOVERY_PROMPT in m.content
+            m for m in loop.messages if m.role == "user" and STUCK_RECOVERY_PROMPT in m.content
         ]
         assert len(recovery_msgs) == 1
 
     @pytest.mark.ac("AC-06.3.2")
     async def test_double_stuck_escalates(self) -> None:
         """Sad: still stuck after recovery => structured escalation message."""
-        from guild.agent.stuck import StuckDetector
         from guild.agent.loop import AgentLoop
+        from guild.agent.stuck import StuckDetector
         from guild.tools.base import ToolResult
 
         async def mock_read(args: dict[str, Any], wd: str | None = None) -> ToolResult:
@@ -790,9 +788,13 @@ class TestStuckDetectionE2E:
         same_call = _tool_response("file_read", {"path": "a.txt"})
         provider = _make_mock_provider(
             # First stuck (3 identical calls)
-            same_call, same_call, same_call,
+            same_call,
+            same_call,
+            same_call,
             # After recovery prompt — still stuck (3 more identical)
-            same_call, same_call, same_call,
+            same_call,
+            same_call,
+            same_call,
         )
         detector = StuckDetector(max_repeated_calls=3)
         loop = AgentLoop(
@@ -808,8 +810,8 @@ class TestStuckDetectionE2E:
     @pytest.mark.ac("AC-06.3.1")
     async def test_stuck_not_triggered_with_varied_calls(self) -> None:
         """Edge: varied calls do not trigger stuck detection."""
-        from guild.agent.stuck import StuckDetector
         from guild.agent.loop import AgentLoop
+        from guild.agent.stuck import StuckDetector
         from guild.tools.base import ToolResult
 
         async def mock_read(args: dict[str, Any], wd: str | None = None) -> ToolResult:
@@ -1079,8 +1081,7 @@ class TestSelfReviewE2E:
         result = await loop.run("sys", "Write code", self_review=True)
 
         review_msgs = [
-            m for m in loop.messages
-            if m.role == "user" and SELF_REVIEW_PROMPT in m.content
+            m for m in loop.messages if m.role == "user" and SELF_REVIEW_PROMPT in m.content
         ]
         assert len(review_msgs) == 1
         assert "Reviewed" in result
@@ -1110,9 +1111,9 @@ class TestSelfReviewE2E:
         assert "stuck" in result.lower() or "need help" in result.lower()
         # Self-review prompt should NOT have been injected after escalation
         from guild.agent.loop import SELF_REVIEW_PROMPT
+
         review_msgs = [
-            m for m in loop.messages
-            if m.role == "user" and SELF_REVIEW_PROMPT in m.content
+            m for m in loop.messages if m.role == "user" and SELF_REVIEW_PROMPT in m.content
         ]
         assert len(review_msgs) == 0
 
@@ -1126,8 +1127,7 @@ class TestSelfReviewE2E:
         await loop.run("sys", "task")
 
         review_msgs = [
-            m for m in loop.messages
-            if m.role == "user" and SELF_REVIEW_PROMPT in m.content
+            m for m in loop.messages if m.role == "user" and SELF_REVIEW_PROMPT in m.content
         ]
         assert len(review_msgs) == 0
 
@@ -1161,9 +1161,7 @@ class TestTryTestRollbackE2E:
         assert target.read_text() == "original"
 
     @pytest.mark.ac("AC-06.11.1")
-    async def test_changes_kept_on_verification_success(
-        self, project_dir: Path
-    ) -> None:
+    async def test_changes_kept_on_verification_success(self, project_dir: Path) -> None:
         """Sad (reverse): verification succeeds => changes kept."""
         from guild.agent.rollback import try_with_rollback
 
@@ -1184,9 +1182,7 @@ class TestTryTestRollbackE2E:
         assert target.read_text() == "new content"
 
     @pytest.mark.ac("AC-06.11.2")
-    async def test_rollback_deletes_newly_created_files(
-        self, project_dir: Path
-    ) -> None:
+    async def test_rollback_deletes_newly_created_files(self, project_dir: Path) -> None:
         """Edge: file created during execute is deleted on rollback."""
         from guild.agent.rollback import try_with_rollback
 
@@ -1206,9 +1202,7 @@ class TestTryTestRollbackE2E:
         assert not new_file.exists()
 
     @pytest.mark.ac("AC-06.11.2")
-    async def test_rollback_handles_multiple_files(
-        self, project_dir: Path
-    ) -> None:
+    async def test_rollback_handles_multiple_files(self, project_dir: Path) -> None:
         """Edge: multiple files are all rolled back atomically."""
         from guild.agent.rollback import try_with_rollback
 
@@ -1225,9 +1219,7 @@ class TestTryTestRollbackE2E:
         async def verify() -> bool:
             return False
 
-        success, _ = await try_with_rollback(
-            execute, verify, [str(f1), str(f2)]
-        )
+        success, _ = await try_with_rollback(execute, verify, [str(f1), str(f2)])
 
         assert success is False
         assert f1.read_text() == "1"
@@ -1273,7 +1265,9 @@ class TestAskTierPerCallMode:
             return True
 
         checker = PermissionChecker(
-            tier=PermissionTier.ASK, prompt_fn=counting_prompt, per_call=True,
+            tier=PermissionTier.ASK,
+            prompt_fn=counting_prompt,
+            per_call=True,
         )
         checker.check("file_read", "agent-e2e", {"path": "/a"})
         checker.check("file_read", "agent-e2e", {"path": "/b"})
@@ -1296,7 +1290,8 @@ class TestScopedViolationReportsSpecificBoundary:
         )
         # Attempt outside scope should mention the boundary
         result = checker.check(
-            "file_write", "agent-e2e",
+            "file_write",
+            "agent-e2e",
             {"path": str(project_dir / "docs" / "readme.md"), "content": "x"},
         )
         assert result is False
@@ -1376,9 +1371,10 @@ class TestHardcodedNeverCannotBeWeakenedViaConfig:
             allowed_tools=["shell"],
             allowed_paths=["/"],
         )
-        assert checker.check(
-            "shell", "agent-e2e", {"command": "git push --force origin main"}
-        ) is False
+        assert (
+            checker.check("shell", "agent-e2e", {"command": "git push --force origin main"})
+            is False
+        )
 
 
 class TestToolsTaggedWithReversibility:
@@ -1391,9 +1387,9 @@ class TestToolsTaggedWithReversibility:
 
         # Future: each tool schema should include a reversibility field
         for tool_name, schema in TOOL_SCHEMAS.items():
-            assert "reversibility" in schema or "is_read_only" in schema, (
-                f"Tool {tool_name} missing reversibility metadata"
-            )
+            assert (
+                "reversibility" in schema or "is_read_only" in schema
+            ), f"Tool {tool_name} missing reversibility metadata"
 
 
 class TestInteractiveAttachStreamsExisting:
@@ -1412,9 +1408,7 @@ class TestInteractiveAttachStreamsExisting:
         reader, writer = await asyncio.open_unix_connection(str(sock_path))
 
         # Subscribe first
-        writer.write(
-            json.dumps({"type": "command", "action": "subscribe"}).encode() + b"\n"
-        )
+        writer.write(json.dumps({"type": "command", "action": "subscribe"}).encode() + b"\n")
         await writer.drain()
         ack = json.loads(await reader.readline())
         assert ack["status"] == "subscribed"
@@ -1507,11 +1501,16 @@ class TestTimeoutProgressReport:
                 return LLMResponse(
                     content="",
                     tool_calls=[{"function": {"name": "file_read", "arguments": {"path": "/x"}}}],
-                    input_tokens=10, output_tokens=5, model="mock",
+                    input_tokens=10,
+                    output_tokens=5,
+                    model="mock",
                 )
             return LLMResponse(
-                content="Done with task.", tool_calls=None,
-                input_tokens=10, output_tokens=5, model="mock",
+                content="Done with task.",
+                tool_calls=None,
+                input_tokens=10,
+                output_tokens=5,
+                model="mock",
             )
 
         async def mock_file_read(args: dict[str, Any], _cid: str | None = None) -> ToolResult:
@@ -1559,12 +1558,19 @@ class TestSendPreservesToolContext:
             if call_counter == 1:
                 return LLMResponse(
                     content="",
-                    tool_calls=[{"function": {"name": "file_read", "arguments": {"path": "/tmp/x"}}}],
-                    input_tokens=10, output_tokens=5, model="mock",
+                    tool_calls=[
+                        {"function": {"name": "file_read", "arguments": {"path": "/tmp/x"}}}
+                    ],
+                    input_tokens=10,
+                    output_tokens=5,
+                    model="mock",
                 )
             return LLMResponse(
-                content="Step done.", tool_calls=None,
-                input_tokens=10, output_tokens=5, model="mock",
+                content="Step done.",
+                tool_calls=None,
+                input_tokens=10,
+                output_tokens=5,
+                model="mock",
             )
 
         async def mock_file_read(args: dict[str, Any], _cid: str | None = None) -> ToolResult:
@@ -1600,13 +1606,18 @@ class TestSelfReviewConfigurable:
     @pytest.mark.ac("AC-06.10.3")
     async def test_self_review_disabled_skips_review(self) -> None:
         """Setting self_review=False skips the adversarial self-review prompt."""
-        from guild.agent.loop import AgentLoop, SELF_REVIEW_PROMPT
+        from guild.agent.loop import SELF_REVIEW_PROMPT, AgentLoop
 
         provider = AsyncMock()
-        provider.generate = AsyncMock(return_value=LLMResponse(
-            content="Implementation done.",
-            tool_calls=None, input_tokens=10, output_tokens=5, model="mock",
-        ))
+        provider.generate = AsyncMock(
+            return_value=LLMResponse(
+                content="Implementation done.",
+                tool_calls=None,
+                input_tokens=10,
+                output_tokens=5,
+                model="mock",
+            )
+        )
         loop = AgentLoop(provider=provider, tool_executors={})
 
         result = await loop.run("system prompt", "build a feature", self_review=False)
@@ -1617,13 +1628,18 @@ class TestSelfReviewConfigurable:
     @pytest.mark.ac("AC-06.10.3")
     async def test_self_review_enabled_injects_review(self) -> None:
         """Setting self_review=True injects the adversarial self-review prompt."""
-        from guild.agent.loop import AgentLoop, SELF_REVIEW_PROMPT
+        from guild.agent.loop import SELF_REVIEW_PROMPT, AgentLoop
 
         provider = AsyncMock()
-        provider.generate = AsyncMock(return_value=LLMResponse(
-            content="All looks good.",
-            tool_calls=None, input_tokens=10, output_tokens=5, model="mock",
-        ))
+        provider.generate = AsyncMock(
+            return_value=LLMResponse(
+                content="All looks good.",
+                tool_calls=None,
+                input_tokens=10,
+                output_tokens=5,
+                model="mock",
+            )
+        )
         loop = AgentLoop(provider=provider, tool_executors={})
 
         await loop.run("system prompt", "build a feature", self_review=True)

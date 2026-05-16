@@ -400,7 +400,8 @@ class TestGpuVramAwareness:
         from guild.daemon.resource import ResourceMonitor, SchedulingMode
 
         monitor = ResourceMonitor(
-            mode=SchedulingMode.POLITE, gpu_reader=_gpu_high,
+            mode=SchedulingMode.POLITE,
+            gpu_reader=_gpu_high,
         )
         expected = {
             "gpu_percent": 90.0,
@@ -456,7 +457,8 @@ class TestGpuVramAwareness:
         from guild.daemon.resource import ResourceMonitor, SchedulingMode
 
         monitor = ResourceMonitor(
-            mode=SchedulingMode.POLITE, gpu_reader=_gpu_mid,
+            mode=SchedulingMode.POLITE,
+            gpu_reader=_gpu_mid,
         )
         status = monitor.get_status()
         assert status.gpu_status is not None

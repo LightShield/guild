@@ -3,6 +3,7 @@
 Provides a Unix domain socket interface for controlling a running daemon task,
 injecting messages, and streaming agent responses to attached clients.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -62,9 +63,7 @@ class ControlSocket:
         else:
             sock.bind(sock_str)
         sock.setblocking(False)
-        self._server = await asyncio.start_unix_server(
-            self._handle_client, sock=sock
-        )
+        self._server = await asyncio.start_unix_server(self._handle_client, sock=sock)
 
     async def stop(self) -> None:
         """Stop the server and remove the socket file. Idempotent."""
@@ -120,9 +119,7 @@ class ControlSocket:
             except (OSError, ConnectionResetError):
                 pass
 
-    def _process_line(
-        self, line: bytes, writer: asyncio.StreamWriter
-    ) -> dict[str, str]:
+    def _process_line(self, line: bytes, writer: asyncio.StreamWriter) -> dict[str, str]:
         """Parse a single line and return the response dict."""
         try:
             data = json.loads(line)
@@ -140,9 +137,7 @@ class ControlSocket:
         else:
             return {"error": f"Unknown type: {msg_type}"}
 
-    def _handle_command(
-        self, data: dict[str, Any], writer: asyncio.StreamWriter
-    ) -> dict[str, str]:
+    def _handle_command(self, data: dict[str, Any], writer: asyncio.StreamWriter) -> dict[str, str]:
         """Dispatch a command action and return the response."""
         action: str = data.get("action", "")
 

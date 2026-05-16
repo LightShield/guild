@@ -5,7 +5,6 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from ollama import ResponseError
 
 from guild.provider.base import LLMResponse
@@ -304,9 +303,7 @@ class TestModelNotFound:
             model="test-model",
         )
         mock_client = AsyncMock()
-        mock_client.chat = AsyncMock(
-            side_effect=ResponseError("internal server error")
-        )
+        mock_client.chat = AsyncMock(side_effect=ResponseError("internal server error"))
         provider._client = mock_client
 
         messages = [{"role": "user", "content": "Hi"}]

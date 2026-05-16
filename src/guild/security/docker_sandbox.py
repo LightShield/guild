@@ -115,7 +115,8 @@ class DockerSandbox:
         total_timeout = self.timeout + DOCKER_TIMEOUT_BUFFER
         try:
             stdout_bytes, stderr_bytes = await asyncio.wait_for(
-                proc.communicate(), timeout=total_timeout,
+                proc.communicate(),
+                timeout=total_timeout,
             )
         except TimeoutError:
             proc.kill()
@@ -131,10 +132,13 @@ class DockerSandbox:
     def _build_docker_args(self, working_dir: str) -> list[str]:
         """Build the docker run command arguments."""
         args = [
-            "docker", "run",
+            "docker",
+            "run",
             "--rm",
-            "--volume", f"{working_dir}:/workspace:rw",
-            "--workdir", "/workspace",
+            "--volume",
+            f"{working_dir}:/workspace:rw",
+            "--workdir",
+            "/workspace",
         ]
 
         if not self.network:

@@ -1,0 +1,10 @@
+[provider]
+provider_name = "ollama"
+base_url = "http://localhost:11434"
+model = "gemma4-4b-dense-med"
+temperature = 0.7
+max_tokens = 4096
+
+[guild]
+default_permission = "autopilot"
+max_concurrent_agents = 1

@@ -33,9 +33,6 @@ import pytest
 
 from guild.agent.checkpoint import Checkpoint, load_checkpoint, save_checkpoint
 from guild.agent.context import (
-    CHARS_PER_TOKEN,
-    MIN_CONTENT_LEN,
-    TRUNCATION_MARKER,
     ContextManager,
 )
 from guild.agent.learning import (
@@ -398,9 +395,7 @@ class TestLightweightMemoryIndex:
     """Index holds summaries only; full content fetched on demand."""
 
     @pytest.mark.ac("AC-07.6.1")
-    async def test_index_contains_summaries_not_content(
-        self, memory_index: MemoryIndex
-    ) -> None:
+    async def test_index_contains_summaries_not_content(self, memory_index: MemoryIndex) -> None:
         """get_index returns summary strings without full content."""
         await memory_index.add(
             summary="Short summary here",
@@ -412,9 +407,7 @@ class TestLightweightMemoryIndex:
         assert "much longer detailed body" not in index[0]
 
     @pytest.mark.ac("AC-07.6.2")
-    async def test_fetch_detail_returns_full_content(
-        self, memory_index: MemoryIndex
-    ) -> None:
+    async def test_fetch_detail_returns_full_content(self, memory_index: MemoryIndex) -> None:
         """fetch_detail returns the complete MemoryEntry."""
         mid = await memory_index.add(
             summary="Summary",
@@ -654,9 +647,7 @@ class TestConfidenceScoring:
     @pytest.mark.ac("AC-09.3.1")
     async def test_initial_confidence(self, storage: Storage) -> None:
         """New learning starts at default confidence of 0.3."""
-        lid = await storage.add_learning(
-            category="pattern", content="Test", confidence=0.3
-        )
+        lid = await storage.add_learning(category="pattern", content="Test", confidence=0.3)
         learning = await storage.get_learning(lid)
         assert learning is not None
         assert learning["confidence"] == pytest.approx(0.3)
@@ -746,8 +737,8 @@ class TestConfidenceScoring:
         """Full lifecycle: add -> validate x2 -> invalidate -> verify final score."""
         lid = await storage.add_learning(category="tool_tip", content="Lifecycle", confidence=0.3)
 
-        await storage.validate_learning(lid)   # 0.3 + 0.1 = 0.4
-        await storage.validate_learning(lid)   # 0.4 + 0.1 = 0.5
+        await storage.validate_learning(lid)  # 0.3 + 0.1 = 0.4
+        await storage.validate_learning(lid)  # 0.4 + 0.1 = 0.5
 
         mid = await storage.get_learning(lid)
         assert mid is not None
@@ -773,9 +764,7 @@ class TestLearningInjection:
     """Learnings stored in session 1 are injected into session 2 prompts."""
 
     @pytest.mark.ac("AC-09.4.1")
-    async def test_high_confidence_learnings_appear_in_injection(
-        self, storage: Storage
-    ) -> None:
+    async def test_high_confidence_learnings_appear_in_injection(self, storage: Storage) -> None:
         """Learnings with confidence >= MIN_INJECTION_CONFIDENCE are injected."""
         await storage.add_learning(
             category="pattern", content="Always use guard clauses", confidence=0.8
@@ -792,16 +781,10 @@ class TestLearningInjection:
         assert "Run ruff before commit" in injection
 
     @pytest.mark.ac("AC-09.4.2")
-    async def test_low_confidence_learnings_excluded_from_injection(
-        self, storage: Storage
-    ) -> None:
+    async def test_low_confidence_learnings_excluded_from_injection(self, storage: Storage) -> None:
         """Learnings below the confidence threshold are not injected."""
-        await storage.add_learning(
-            category="pattern", content="Dubious pattern", confidence=0.2
-        )
-        await storage.add_learning(
-            category="pattern", content="Solid pattern", confidence=0.9
-        )
+        await storage.add_learning(category="pattern", content="Dubious pattern", confidence=0.2)
+        await storage.add_learning(category="pattern", content="Solid pattern", confidence=0.9)
 
         learnings = await storage.list_learnings()
         injection = format_learnings_for_injection(learnings)
@@ -810,13 +793,9 @@ class TestLearningInjection:
         assert "Solid pattern" in injection
 
     @pytest.mark.ac("AC-09.4.1")
-    async def test_injection_into_dynamic_prompt_section(
-        self, storage: Storage
-    ) -> None:
+    async def test_injection_into_dynamic_prompt_section(self, storage: Storage) -> None:
         """Injected learnings appear in the dynamic (not static) prompt section."""
-        await storage.add_learning(
-            category="pattern", content="Use early returns", confidence=0.8
-        )
+        await storage.add_learning(category="pattern", content="Use early returns", confidence=0.8)
         learnings = await storage.list_learnings(min_confidence=MIN_INJECTION_CONFIDENCE)
         injection = format_learnings_for_injection(learnings)
 
@@ -862,12 +841,8 @@ class TestHumanLearningManagement:
     @pytest.mark.ac("AC-09.5.1")
     async def test_browse_learnings(self, storage: Storage) -> None:
         """List learnings returns all stored items for human review."""
-        await storage.add_learning(
-            category="pattern", content="Pattern A", confidence=0.5
-        )
-        await storage.add_learning(
-            category="anti_pattern", content="Anti B", confidence=0.3
-        )
+        await storage.add_learning(category="pattern", content="Pattern A", confidence=0.5)
+        await storage.add_learning(category="anti_pattern", content="Anti B", confidence=0.3)
 
         all_learnings = await storage.list_learnings()
         assert len(all_learnings) == 2
@@ -877,23 +852,17 @@ class TestHumanLearningManagement:
     @pytest.mark.ac("AC-09.5.2")
     async def test_approve_learning_boosts_confidence(self, storage: Storage) -> None:
         """Approving (validating) a learning increases its confidence."""
-        lid = await storage.add_learning(
-            category="pattern", content="Use async", confidence=0.4
-        )
+        lid = await storage.add_learning(category="pattern", content="Use async", confidence=0.4)
         await storage.validate_learning(lid)
 
         learning = await storage.get_learning(lid)
         assert learning is not None
-        assert learning["confidence"] == pytest.approx(
-            0.4 + CONFIDENCE_VALIDATE_INCREMENT
-        )
+        assert learning["confidence"] == pytest.approx(0.4 + CONFIDENCE_VALIDATE_INCREMENT)
 
     @pytest.mark.ac("AC-09.5.3")
     async def test_reject_learning_deletes_it(self, storage: Storage) -> None:
         """Rejecting a learning removes it from storage entirely."""
-        lid = await storage.add_learning(
-            category="tool_tip", content="Bad tip", confidence=0.3
-        )
+        lid = await storage.add_learning(category="tool_tip", content="Bad tip", confidence=0.3)
         await storage.delete_learning(lid)
 
         learning = await storage.get_learning(lid)
@@ -902,12 +871,8 @@ class TestHumanLearningManagement:
     @pytest.mark.ac("AC-09.5.3")
     async def test_reject_removes_from_listing(self, storage: Storage) -> None:
         """After rejection, the learning no longer appears in list_learnings."""
-        lid = await storage.add_learning(
-            category="pattern", content="Reject me", confidence=0.5
-        )
-        await storage.add_learning(
-            category="pattern", content="Keep me", confidence=0.6
-        )
+        lid = await storage.add_learning(category="pattern", content="Reject me", confidence=0.5)
+        await storage.add_learning(category="pattern", content="Keep me", confidence=0.6)
         await storage.delete_learning(lid)
 
         remaining = await storage.list_learnings()
@@ -917,15 +882,9 @@ class TestHumanLearningManagement:
     @pytest.mark.ac("AC-09.5.1")
     async def test_filter_learnings_by_category(self, storage: Storage) -> None:
         """Browsing can be filtered by category for focused review."""
-        await storage.add_learning(
-            category="pattern", content="P1", confidence=0.5
-        )
-        await storage.add_learning(
-            category="anti_pattern", content="AP1", confidence=0.5
-        )
-        await storage.add_learning(
-            category="tool_tip", content="T1", confidence=0.5
-        )
+        await storage.add_learning(category="pattern", content="P1", confidence=0.5)
+        await storage.add_learning(category="anti_pattern", content="AP1", confidence=0.5)
+        await storage.add_learning(category="tool_tip", content="T1", confidence=0.5)
 
         patterns = await storage.list_learnings(category="pattern")
         assert len(patterns) == 1
@@ -941,9 +900,7 @@ class TestCrossTaskLearning:
     """Learnings extracted from one task are available to agents on other tasks."""
 
     @pytest.mark.ac("AC-09.6.1")
-    async def test_learning_from_task_a_visible_to_task_b(
-        self, storage: Storage
-    ) -> None:
+    async def test_learning_from_task_a_visible_to_task_b(self, storage: Storage) -> None:
         """A learning extracted from task-A is injectable for task-B."""
         await storage.create_task("task-A", "Build feature A")
         await storage.update_task("task-A", assigned_agent="agent-A")
@@ -961,9 +918,7 @@ class TestCrossTaskLearning:
         assert "Validate all inputs at boundary" in injection
 
     @pytest.mark.ac("AC-09.6.1")
-    async def test_cross_task_learnings_via_extract_and_inject(
-        self, storage: Storage
-    ) -> None:
+    async def test_cross_task_learnings_via_extract_and_inject(self, storage: Storage) -> None:
         """Full flow: extract from task-A, inject into task-B prompt."""
         # Setup task-A with messages
         await storage.create_task("task-X", "Refactor module")
@@ -1002,9 +957,7 @@ class TestBlockLevelScope:
     """Learnings can be scoped to a specific block and filtered accordingly."""
 
     @pytest.mark.ac("AC-09.7.1")
-    async def test_scoped_learning_stored_and_filtered(
-        self, storage: Storage
-    ) -> None:
+    async def test_scoped_learning_stored_and_filtered(self, storage: Storage) -> None:
         """Learning with scope='parser' only appears when filtered by that scope."""
         await storage.add_learning(
             category="pattern",
@@ -1028,17 +981,13 @@ class TestBlockLevelScope:
         await storage.add_learning(
             category="pattern", content="Scoped A", confidence=0.6, scope="block-a"
         )
-        await storage.add_learning(
-            category="pattern", content="Global B", confidence=0.6
-        )
+        await storage.add_learning(category="pattern", content="Global B", confidence=0.6)
 
         all_learnings = await storage.list_learnings()
         assert len(all_learnings) == 2
 
     @pytest.mark.ac("AC-09.7.2")
-    async def test_suggest_prompt_refinements_scoped(
-        self, storage: Storage
-    ) -> None:
+    async def test_suggest_prompt_refinements_scoped(self, storage: Storage) -> None:
         """suggest_prompt_refinements respects block_name scope."""
         await storage.add_learning(
             category="anti_pattern",
@@ -1066,9 +1015,7 @@ class TestLearningDecay:
     """Old unvalidated learnings lose confidence over time."""
 
     @pytest.mark.ac("AC-09.8.1")
-    async def test_decay_reduces_stale_learning_confidence(
-        self, storage: Storage
-    ) -> None:
+    async def test_decay_reduces_stale_learning_confidence(self, storage: Storage) -> None:
         """Learnings not validated within the decay window lose confidence."""
         lid = await storage.add_learning(
             category="pattern", content="Stale pattern", confidence=0.7
@@ -1107,9 +1054,7 @@ class TestLearningDecay:
     @pytest.mark.ac("AC-09.8.1")
     async def test_repeated_decay_floors_at_zero(self, storage: Storage) -> None:
         """Multiple decay cycles cannot push confidence below 0.0."""
-        lid = await storage.add_learning(
-            category="pattern", content="Fading", confidence=0.1
-        )
+        lid = await storage.add_learning(category="pattern", content="Fading", confidence=0.1)
         old_date = (datetime.now(UTC) - timedelta(days=60)).isoformat()
         assert storage._db is not None
         await storage._db.execute(
@@ -1126,9 +1071,7 @@ class TestLearningDecay:
         assert after["confidence"] >= 0.0
 
     @pytest.mark.ac("AC-09.8.3")
-    async def test_decayed_learning_drops_below_injection_threshold(
-        self, storage: Storage
-    ) -> None:
+    async def test_decayed_learning_drops_below_injection_threshold(self, storage: Storage) -> None:
         """After sufficient decay, a learning is no longer injected."""
         lid = await storage.add_learning(
             category="pattern", content="Was good once", confidence=0.55
@@ -1161,9 +1104,7 @@ class TestPromptRefinementSuggestions:
     """High-confidence anti-patterns and tool tips generate prompt suggestions."""
 
     @pytest.mark.ac("AC-09.9.1")
-    async def test_anti_pattern_generates_guard_suggestion(
-        self, storage: Storage
-    ) -> None:
+    async def test_anti_pattern_generates_guard_suggestion(self, storage: Storage) -> None:
         """Anti-patterns produce 'Add guard against: ...' suggestions."""
         await storage.add_learning(
             category="anti_pattern",
@@ -1175,9 +1116,7 @@ class TestPromptRefinementSuggestions:
         assert suggestions[0] == "Add guard against: Avoid busy waits in async code"
 
     @pytest.mark.ac("AC-09.9.1")
-    async def test_tool_tip_generates_include_suggestion(
-        self, storage: Storage
-    ) -> None:
+    async def test_tool_tip_generates_include_suggestion(self, storage: Storage) -> None:
         """Tool tips produce 'Include tip in prompt: ...' suggestions."""
         await storage.add_learning(
             category="tool_tip",
@@ -1189,13 +1128,9 @@ class TestPromptRefinementSuggestions:
         assert suggestions[0] == "Include tip in prompt: Use --dry-run for destructive commands"
 
     @pytest.mark.ac("AC-09.9.2")
-    async def test_patterns_and_domain_knowledge_not_suggested(
-        self, storage: Storage
-    ) -> None:
+    async def test_patterns_and_domain_knowledge_not_suggested(self, storage: Storage) -> None:
         """Only anti_pattern and tool_tip categories generate suggestions."""
-        await storage.add_learning(
-            category="pattern", content="Use guard clauses", confidence=0.9
-        )
+        await storage.add_learning(category="pattern", content="Use guard clauses", confidence=0.9)
         await storage.add_learning(
             category="domain_knowledge", content="API uses REST", confidence=0.9
         )
@@ -1203,9 +1138,7 @@ class TestPromptRefinementSuggestions:
         assert suggestions == []
 
     @pytest.mark.ac("AC-09.9.2")
-    async def test_low_confidence_learnings_not_suggested(
-        self, storage: Storage
-    ) -> None:
+    async def test_low_confidence_learnings_not_suggested(self, storage: Storage) -> None:
         """Learnings below MIN_INJECTION_CONFIDENCE are excluded from suggestions."""
         await storage.add_learning(
             category="anti_pattern",
@@ -1251,18 +1184,24 @@ class TestAutoCheckpointInterval:
     async def test_checkpoint_saves_at_interval(self, storage: Storage) -> None:
         """Checkpoint can be saved multiple times with increasing turn numbers."""
         cp1 = Checkpoint(
-            agent_id="agent-auto", task_id="t",
+            agent_id="agent-auto",
+            task_id="t",
             messages=[Message(role="user", content="turn 1")],
-            turn_number=5, total_input_tokens=500,
-            total_output_tokens=250, total_tool_calls=3,
+            turn_number=5,
+            total_input_tokens=500,
+            total_output_tokens=250,
+            total_tool_calls=3,
         )
         await save_checkpoint(storage, cp1)
 
         cp2 = Checkpoint(
-            agent_id="agent-auto", task_id="t",
+            agent_id="agent-auto",
+            task_id="t",
             messages=[Message(role="user", content="turn 2")],
-            turn_number=10, total_input_tokens=1000,
-            total_output_tokens=500, total_tool_calls=6,
+            turn_number=10,
+            total_input_tokens=1000,
+            total_output_tokens=500,
+            total_tool_calls=6,
         )
         await save_checkpoint(storage, cp2)
 
@@ -1330,7 +1269,8 @@ class TestLearningExtractionAutomatic:
 
     @pytest.mark.ac("AC-09.1.2")
     async def test_extract_learnings_runs_without_prompt(
-        self, storage: Storage,
+        self,
+        storage: Storage,
     ) -> None:
         """extract_learnings produces results without user interaction."""
         await storage.create_task("task-auto", "Auto extract test")
@@ -1357,7 +1297,8 @@ class TestScopedLearningNotInjectedElsewhere:
 
     @pytest.mark.ac("AC-09.6.2")
     async def test_scoped_learning_excluded_from_other_scope(
-        self, storage: Storage,
+        self,
+        storage: Storage,
     ) -> None:
         """Learning scoped to 'database' is not returned for 'cli' scope."""
         await storage.add_learning(
@@ -1464,7 +1405,9 @@ class TestConsolidationReturnsChangeCount:
     """Consolidation returns a count of changes made."""
 
     @pytest.mark.ac("AC-07.7.4")
-    async def test_consolidate_returns_count(self, memory_index: MemoryIndex, storage: Storage) -> None:
+    async def test_consolidate_returns_count(
+        self, memory_index: MemoryIndex, storage: Storage
+    ) -> None:
         """consolidate() returns a count >= 0 reflecting changes made."""
         # Add duplicate entries
         await storage.add_memory("Always commit early", "detail 1", "pattern")

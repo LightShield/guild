@@ -151,6 +151,7 @@ def chat(
     except (KeyboardInterrupt, EOFError):
         console.print("\n[dim]Goodbye.[/dim]")
 
+
 @app.command()
 def attach(
     task_id: str = typer.Argument(..., help="Task ID to attach to."),
@@ -165,15 +166,15 @@ def attach(
     sock_path = run_dir / f"{task_id}.sock"
 
     if not sock_path.exists():
-        console.print(
-            f"[red]Error:[/red] Task not running (no control socket at {sock_path})."
-        )
+        console.print(f"[red]Error:[/red] Task not running (no control socket at {sock_path}).")
         raise typer.Exit(code=1)
 
     asyncio.run(_attach_repl(sock_path, task_id))  # pragma: no cover — interactive I/O
 
 
-async def _attach_repl(sock_path: "Path", task_id: str) -> None:  # pragma: no cover — interactive I/O
+async def _attach_repl(
+    sock_path: "Path", task_id: str
+) -> None:  # pragma: no cover — interactive I/O
     """Connect to the task socket and run the interactive REPL."""
     reader, writer = await asyncio.open_unix_connection(str(sock_path))
     if not await _subscribe_to_task(reader, writer):
@@ -198,9 +199,7 @@ async def _subscribe_to_task(  # pragma: no cover — interactive I/O
     reader: asyncio.StreamReader, writer: asyncio.StreamWriter
 ) -> bool:
     """Send subscribe command and verify acknowledgement."""
-    writer.write(
-        json.dumps({"type": "command", "action": "subscribe"}).encode() + b"\n"
-    )
+    writer.write(json.dumps({"type": "command", "action": "subscribe"}).encode() + b"\n")
     await writer.drain()
     ack = await reader.readline()
     ack_data = json.loads(ack)
@@ -212,7 +211,9 @@ async def _subscribe_to_task(  # pragma: no cover — interactive I/O
     return True
 
 
-async def _read_task_responses(reader: asyncio.StreamReader) -> None:  # pragma: no cover — interactive I/O
+async def _read_task_responses(
+    reader: asyncio.StreamReader,
+) -> None:  # pragma: no cover — interactive I/O
     """Read and display responses from the agent."""
     while True:
         line = await reader.readline()
@@ -228,7 +229,9 @@ async def _read_task_responses(reader: asyncio.StreamReader) -> None:  # pragma:
             console.print(f"[dim]{data}[/dim]")
 
 
-async def _send_user_input(writer: asyncio.StreamWriter) -> None:  # pragma: no cover — interactive I/O
+async def _send_user_input(
+    writer: asyncio.StreamWriter,
+) -> None:  # pragma: no cover — interactive I/O
     """Read user input and send as messages."""
     import sys
 
@@ -243,6 +246,7 @@ async def _send_user_input(writer: asyncio.StreamWriter) -> None:  # pragma: no 
         msg = json.dumps({"type": "message", "content": line.strip()})
         writer.write(msg.encode() + b"\n")
         await writer.drain()
+
 
 # ------------------------------------------------------------------
 # Process lifecycle commands

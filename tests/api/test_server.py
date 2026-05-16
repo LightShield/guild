@@ -496,8 +496,7 @@ def test_static_file_served_directly(tmp_path: Path) -> None:
     guild_dir = tmp_path / ".guild"
     guild_dir.mkdir()
     (guild_dir / "config.toml").write_text(
-        '[provider]\nname = "ollama"\nmodel = "test"\n'
-        'base_url = "http://localhost:11434"\n'
+        '[provider]\nname = "ollama"\nmodel = "test"\n' 'base_url = "http://localhost:11434"\n'
     )
 
     # Create a mock ui/dist directory with a specific file
@@ -538,8 +537,6 @@ def test_no_static_files_when_ui_dist_missing(guild_api_dir: Path) -> None:
 @pytest.mark.unit
 def test_websocket_disconnect_path(guild_api_dir: Path) -> None:
     """WebSocket /ws handles client disconnect via WebSocketDisconnect (line 249)."""
-    import asyncio
-
     from starlette.testclient import TestClient
     from starlette.websockets import WebSocketDisconnect
 
@@ -570,8 +567,12 @@ def test_api_save_team(guild_api_dir: Path) -> None:
                 "name": "my-team",
                 "blocks": {"planner": "planner-block", "coder": "coder-block"},
                 "connections": [
-                    {"source_block": "planner", "target_block": "coder",
-                     "source_port": "plan", "target_port": "instructions"}
+                    {
+                        "source_block": "planner",
+                        "target_block": "coder",
+                        "source_port": "plan",
+                        "target_port": "instructions",
+                    }
                 ],
             },
         )

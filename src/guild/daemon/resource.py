@@ -9,10 +9,11 @@ Detects user activity and system load to throttle agent work:
 from __future__ import annotations
 
 import asyncio
-from logger_python import get_logger
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING, Any
+
+from logger_python import get_logger
 
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from collections.abc import Callable
@@ -171,10 +172,15 @@ class ResourceMonitor:
         gpu_status = self.get_gpu_status()
         thermal_status = self.get_thermal_status()
         is_throttled = self._should_throttle(
-            activity, gpu_status, thermal_status,
+            activity,
+            gpu_status,
+            thermal_status,
         )
         reason = self._throttle_reason(
-            activity, is_throttled, gpu_status, thermal_status,
+            activity,
+            is_throttled,
+            gpu_status,
+            thermal_status,
         )
         return ResourceStatus(
             mode=self.mode,
@@ -222,7 +228,8 @@ class ResourceMonitor:
             await asyncio.sleep(self.thresholds.poll_interval_seconds)
 
     def _is_vram_pressure(
-        self, gpu_status: dict[str, Any] | None,
+        self,
+        gpu_status: dict[str, Any] | None,
     ) -> bool:
         """Check if VRAM usage exceeds the configured threshold."""
         if gpu_status is None:
@@ -235,7 +242,8 @@ class ResourceMonitor:
         return usage_pct >= self.thresholds.vram_pressure_percent
 
     def _is_thermal_throttled(
-        self, thermal_status: dict[str, Any] | None,
+        self,
+        thermal_status: dict[str, Any] | None,
     ) -> bool:
         """Check if the system reports thermal throttling."""
         if thermal_status is None:

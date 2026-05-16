@@ -189,7 +189,7 @@ class ArtifactManager:
         if task_dir.exists():  # pragma: no branch — task_dir exists if status loaded
             prefix = f"{name}.v"
             for p in task_dir.iterdir():
-                if p.name.startswith(prefix) and p.name[len(prefix):].isdigit():
+                if p.name.startswith(prefix) and p.name[len(prefix) :].isdigit():
                     p.unlink()
         logger.debug("Rejected artifact %s/%s", task_id, name)
 
@@ -213,9 +213,7 @@ class ArtifactManager:
         """List accepted artifacts (status == 'accepted')."""
         return self._list_by_status(task_id, "accepted")
 
-    def _list_by_status(
-        self, task_id: str, target_status: str
-    ) -> list[Artifact]:
+    def _list_by_status(self, task_id: str, target_status: str) -> list[Artifact]:
         """Return artifacts matching the given status."""
         status = self._load_status(task_id)
         artifacts: list[Artifact] = []
@@ -224,7 +222,5 @@ class ArtifactManager:
                 continue
             version = self._latest_version(task_id, name)
             path = self._version_path(task_id, name, version)
-            artifacts.append(
-                Artifact(task_id=task_id, name=name, path=path, version=version)
-            )
+            artifacts.append(Artifact(task_id=task_id, name=name, path=path, version=version))
         return artifacts

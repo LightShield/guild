@@ -271,17 +271,23 @@ class TestTemporalKnowledgeEdgeCases:
         subprocess.run(["git", "init"], cwd=str(repo_dir), capture_output=True, check=True)
         subprocess.run(
             ["git", "config", "user.email", "test@test.com"],
-            cwd=str(repo_dir), capture_output=True, check=True,
+            cwd=str(repo_dir),
+            capture_output=True,
+            check=True,
         )
         subprocess.run(
             ["git", "config", "user.name", "Test"],
-            cwd=str(repo_dir), capture_output=True, check=True,
+            cwd=str(repo_dir),
+            capture_output=True,
+            check=True,
         )
         (repo_dir / "file.txt").write_text("hello")
         subprocess.run(["git", "add", "."], cwd=str(repo_dir), capture_output=True, check=True)
         subprocess.run(
             ["git", "commit", "-m", "init"],
-            cwd=str(repo_dir), capture_output=True, check=True,
+            cwd=str(repo_dir),
+            capture_output=True,
+            check=True,
         )
         result = await tk.get_present_state(str(repo_dir))
         assert "Present State" in result

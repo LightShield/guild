@@ -315,8 +315,6 @@ class TestRunTeamTask:
                 blocks={"entry": "planner"},
                 entry_block="entry",
             )
-            result = await run_team_task(
-                config, str(tmp_path), guild_dir, "test", "build feature"
-            )
+            result = await run_team_task(config, str(tmp_path), guild_dir, "test", "build feature")
 
         assert result == "team result"

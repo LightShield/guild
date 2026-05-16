@@ -11,12 +11,9 @@ from guild.blocks.registry import BlockRegistry
 from guild.orchestration.team_runner import (
     AgentStatus,
     BlockError,
-    DECISION_ESCALATE,
-    DECISION_SKIP,
     EscalationError,
     EvaluatorResult,
     TeamRunner,
-    _extract_embedded_json,
 )
 from guild.provider.base import LLMResponse
 
@@ -751,7 +748,8 @@ class TestTopologicalSortDiamondGraph:
 
     async def test_diamond_graph_orders_correctly(self) -> None:
         """A diamond graph (A->B, A->C, B->D, C->D) exercises in-degree decrement
-        where the neighbor's in-degree does not immediately reach zero."""
+        where the neighbor's in-degree does not immediately reach zero.
+        """
         team = TeamDef(
             name="diamond-team",
             blocks={
@@ -1210,13 +1208,15 @@ class TestInvokeAgentLearningInjection:
         registry = BlockRegistry()
 
         mock_storage = AsyncMock()
-        mock_storage.list_learnings = AsyncMock(return_value=[
-            {
-                "category": "pattern",
-                "content": "Always validate inputs",
-                "confidence": 0.9,
-            }
-        ])
+        mock_storage.list_learnings = AsyncMock(
+            return_value=[
+                {
+                    "category": "pattern",
+                    "content": "Always validate inputs",
+                    "confidence": 0.9,
+                }
+            ]
+        )
         mock_storage.create_task = AsyncMock()
         mock_storage.register_agent = AsyncMock()
         mock_storage.update_task = AsyncMock()

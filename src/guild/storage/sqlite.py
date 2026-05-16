@@ -8,12 +8,12 @@ single SQLite file.
 from __future__ import annotations
 
 import json
-from logger_python import get_logger
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 import aiosqlite
+from logger_python import get_logger
 
 from guild.config.constants import (
     CONFIDENCE_DECAY_DECREMENT,
@@ -71,6 +71,7 @@ class QuestionRecord:
     task_id: str | None = None
     agent_id: str | None = None
     priority: str = "normal"
+
 
 logger = get_logger(__name__)
 

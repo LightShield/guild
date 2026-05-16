@@ -1,4 +1,5 @@
 """E2E test configuration — shared fixtures for acceptance tests."""
+
 from __future__ import annotations
 
 import shutil

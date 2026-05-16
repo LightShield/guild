@@ -380,9 +380,7 @@ def _register_a2a_routes(app: Any) -> None:
 
         method = body.get("method")
         if not method:
-            return _jsonrpc_error(
-                body.get("id"), -32600, "Invalid request: missing method"
-            )
+            return _jsonrpc_error(body.get("id"), -32600, "Invalid request: missing method")
 
         req_id = body.get("id")
         params: dict[str, Any] = body.get("params", {})

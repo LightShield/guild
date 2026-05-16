@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import UTC, datetime
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import AsyncMock
 
@@ -37,7 +37,6 @@ from guild.agent.message import Message
 from guild.observability.logging_config import StructuredFormatter, configure_logging
 from guild.observability.replay import REPLAY_CONTENT_MAX_CHARS, SessionReplay
 from guild.observability.tracing import (
-    TraceEvent,
     Tracer,
     export_events_json,
     export_events_jsonl,
@@ -302,8 +301,15 @@ class TestCostEstimation:
     @pytest.mark.ac("AC-10.5.3")
     def test_cost_table_has_expected_providers(self) -> None:
         """Cost table includes entries for all documented providers."""
-        expected = {"ollama", "gemini-cli", "openai-gpt4", "openai-gpt4o",
-                    "claude-sonnet", "claude-opus", "claude-haiku"}
+        expected = {
+            "ollama",
+            "gemini-cli",
+            "openai-gpt4",
+            "openai-gpt4o",
+            "claude-sonnet",
+            "claude-opus",
+            "claude-haiku",
+        }
         assert expected == set(COST_TABLE.keys())
 
     @pytest.mark.ac("AC-10.5.1")
@@ -350,8 +356,7 @@ class TestReasoningChainTrace:
     def test_trace_events_capture_agent_and_task(self) -> None:
         """Events record agent_id and task_id for correlation."""
         tracer = Tracer()
-        tracer.trace("tool_call", agent_id="agent-7", task_id="task-42",
-                     details={"tool": "shell"})
+        tracer.trace("tool_call", agent_id="agent-7", task_id="task-42", details={"tool": "shell"})
 
         event = tracer.events[0]
         assert event.agent_id == "agent-7"
@@ -973,12 +978,8 @@ class TestTaskDecomposition:
         """Parent task can have children tracked via parent_id."""
         graph = TaskGraph()
         parent = TaskNode(task_id="parent-1", description="Build API")
-        child1 = TaskNode(
-            task_id="child-1", description="Define routes", parent_id="parent-1"
-        )
-        child2 = TaskNode(
-            task_id="child-2", description="Write handlers", parent_id="parent-1"
-        )
+        child1 = TaskNode(task_id="child-1", description="Define routes", parent_id="parent-1")
+        child2 = TaskNode(task_id="child-2", description="Write handlers", parent_id="parent-1")
 
         graph.add_task(parent)
         graph.add_task(child1)
@@ -1043,9 +1044,7 @@ class TestTaskDependencies:
         """A task with unmet dependencies is not in the ready list."""
         graph = TaskGraph()
         graph.add_task(TaskNode(task_id="dep", description="Dependency"))
-        graph.add_task(
-            TaskNode(task_id="blocked", description="Blocked task", depends_on=["dep"])
-        )
+        graph.add_task(TaskNode(task_id="blocked", description="Blocked task", depends_on=["dep"]))
 
         ready = graph.get_ready_tasks()
         ids = {t.task_id for t in ready}
@@ -1057,9 +1056,7 @@ class TestTaskDependencies:
         """Once a dependency is marked completed, the dependent task becomes ready."""
         graph = TaskGraph()
         graph.add_task(TaskNode(task_id="setup", description="Setup"))
-        graph.add_task(
-            TaskNode(task_id="run", description="Run", depends_on=["setup"])
-        )
+        graph.add_task(TaskNode(task_id="run", description="Run", depends_on=["setup"]))
 
         graph.mark_completed("setup")
 
@@ -1072,12 +1069,8 @@ class TestTaskDependencies:
         """A -> B -> C chain: only A is ready initially."""
         graph = TaskGraph()
         graph.add_task(TaskNode(task_id="a", description="A"))
-        graph.add_task(
-            TaskNode(task_id="b", description="B", depends_on=["a"])
-        )
-        graph.add_task(
-            TaskNode(task_id="c", description="C", depends_on=["b"])
-        )
+        graph.add_task(TaskNode(task_id="b", description="B", depends_on=["a"]))
+        graph.add_task(TaskNode(task_id="c", description="C", depends_on=["b"]))
 
         ready = graph.get_ready_tasks()
         assert [t.task_id for t in ready] == ["a"]
@@ -1096,9 +1089,7 @@ class TestTaskDependencies:
         graph = TaskGraph()
         graph.add_task(TaskNode(task_id="d1", description="Dep 1"))
         graph.add_task(TaskNode(task_id="d2", description="Dep 2"))
-        graph.add_task(
-            TaskNode(task_id="final", description="Final", depends_on=["d1", "d2"])
-        )
+        graph.add_task(TaskNode(task_id="final", description="Final", depends_on=["d1", "d2"]))
 
         # Only one dep completed -- final not ready
         graph.mark_completed("d1")
@@ -1117,9 +1108,7 @@ class TestTaskDependencies:
         graph.add_task(TaskNode(task_id="a", description="A"))
         graph.add_task(TaskNode(task_id="b", description="B", depends_on=["a"]))
         graph.add_task(TaskNode(task_id="c", description="C", depends_on=["a"]))
-        graph.add_task(
-            TaskNode(task_id="d", description="D", depends_on=["b", "c"])
-        )
+        graph.add_task(TaskNode(task_id="d", description="D", depends_on=["b", "c"]))
 
         # Initially only A is ready
         assert [t.task_id for t in graph.get_ready_tasks()] == ["a"]
@@ -1143,10 +1132,8 @@ class TestTaskStatusLifecycle:
     """Task status transitions follow a defined lifecycle with validation."""
 
     @pytest.mark.ac("AC-12.5.1")
-    async def test_valid_transition_pending_to_in_progress(
-        self, storage: Storage
-    ) -> None:
-        """pending -> in_progress is a valid transition."""
+    async def test_valid_transition_pending_to_in_progress(self, storage: Storage) -> None:
+        """Pending -> in_progress is a valid transition."""
         await storage.create_task("t-lc1", "Task lifecycle")
         ok = await transition_task(storage, "t-lc1", TaskStatus.IN_PROGRESS)
         assert ok is True
@@ -1156,9 +1143,7 @@ class TestTaskStatusLifecycle:
         assert task["status"] == TaskStatus.IN_PROGRESS
 
     @pytest.mark.ac("AC-12.5.1")
-    async def test_valid_transition_in_progress_to_verifying(
-        self, storage: Storage
-    ) -> None:
+    async def test_valid_transition_in_progress_to_verifying(self, storage: Storage) -> None:
         """in_progress -> verifying is a valid transition."""
         await storage.create_task("t-lc2", "Verify task")
         await transition_task(storage, "t-lc2", TaskStatus.IN_PROGRESS)
@@ -1166,10 +1151,8 @@ class TestTaskStatusLifecycle:
         assert ok is True
 
     @pytest.mark.ac("AC-12.5.1")
-    async def test_valid_transition_verifying_to_done(
-        self, storage: Storage
-    ) -> None:
-        """verifying -> done is a valid transition."""
+    async def test_valid_transition_verifying_to_done(self, storage: Storage) -> None:
+        """Verifying -> done is a valid transition."""
         await storage.create_task("t-lc3", "Complete task")
         await transition_task(storage, "t-lc3", TaskStatus.IN_PROGRESS)
         await transition_task(storage, "t-lc3", TaskStatus.VERIFYING)
@@ -1209,9 +1192,7 @@ class TestTaskStatusLifecycle:
         assert ok is True
 
     @pytest.mark.ac("AC-12.5.1")
-    async def test_blocked_can_unblock_to_pending(
-        self, storage: Storage
-    ) -> None:
+    async def test_blocked_can_unblock_to_pending(self, storage: Storage) -> None:
         """Blocked tasks can unblock by transitioning to pending."""
         await storage.create_task("t-lc7", "Blocked task")
         await transition_task(storage, "t-lc7", TaskStatus.IN_PROGRESS)
@@ -1221,9 +1202,7 @@ class TestTaskStatusLifecycle:
         assert ok is True
 
     @pytest.mark.ac("AC-12.5.2")
-    async def test_transition_nonexistent_task_returns_false(
-        self, storage: Storage
-    ) -> None:
+    async def test_transition_nonexistent_task_returns_false(self, storage: Storage) -> None:
         """Transitioning a non-existent task returns False."""
         ok = await transition_task(storage, "does-not-exist", TaskStatus.IN_PROGRESS)
         assert ok is False
@@ -1390,7 +1369,9 @@ class TestBudgetCheckBeforeEachLLMCall:
             return LLMResponse(
                 content="Working...",
                 tool_calls=None,
-                input_tokens=60, output_tokens=60, model="mock",
+                input_tokens=60,
+                output_tokens=60,
+                model="mock",
             )
 
         provider = AsyncMock()
@@ -1446,8 +1427,11 @@ class TestCustomPerTokenPricing:
 
         # Custom per-million pricing overrides the default
         custom_cost = estimate_cost(
-            1_000_000, 500_000, provider="ollama",
-            input_cost_per_million=10.0, output_cost_per_million=20.0,
+            1_000_000,
+            500_000,
+            provider="ollama",
+            input_cost_per_million=10.0,
+            output_cost_per_million=20.0,
         )
         assert custom_cost == pytest.approx(10.0 + 10.0)  # 10 + 0.5M * 20
 
@@ -1590,7 +1574,7 @@ class TestDecompositionTreeView:
 
     @pytest.mark.ac("AC-12.3.3")
     def test_history_tree_renders_subtasks(self) -> None:
-        """guild history --task <parent_id> --tree renders indented subtask tree."""
+        """Guild history --task <parent_id> --tree renders indented subtask tree."""
         from guild.task.spec import TaskGraph, TaskNode
 
         graph = TaskGraph()

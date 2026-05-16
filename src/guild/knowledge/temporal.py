@@ -80,9 +80,7 @@ class TemporalKnowledge:
             sections.append(f"## Recent Decisions\n\n{decision_lines}")
 
         # REQ-27.4: Relevant learnings
-        learnings = await self._storage.list_learnings(
-            min_confidence=MIN_INJECTION_CONFIDENCE
-        )
+        learnings = await self._storage.list_learnings(min_confidence=MIN_INJECTION_CONFIDENCE)
         if learnings:
             learning_lines = self._format_learnings(learnings)
             sections.append(f"## Learnings from Past Tasks\n\n{learning_lines}")
@@ -151,9 +149,7 @@ class TemporalKnowledge:
             formatted = self._format_decisions(decisions)
             sections.append(f"### Recent Decisions\n{formatted}")
 
-        learnings = await self._storage.list_learnings(
-            min_confidence=MIN_INJECTION_CONFIDENCE
-        )
+        learnings = await self._storage.list_learnings(min_confidence=MIN_INJECTION_CONFIDENCE)
         if learnings:
             formatted = self._format_learnings(learnings)
             sections.append(f"### Relevant Learnings\n{formatted}")

@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any
 
 from logger_python import get_logger
-
 from ollama import AsyncClient, RequestError, ResponseError
 
 from guild.provider.base import LLMProvider, LLMResponse

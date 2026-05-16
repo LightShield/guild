@@ -149,9 +149,7 @@ class TestDesktopNotification:
             return_value=mock_adapter,
         ):
             await notifier.notify("macOS test")
-            mock_adapter.send_desktop_notification.assert_called_once_with(
-                "Guild", "macOS test"
-            )
+            mock_adapter.send_desktop_notification.assert_called_once_with("Guild", "macOS test")
 
     async def test_desktop_notification_handles_adapter_failure(self) -> None:
         """Desktop notification handles adapter returning False gracefully."""

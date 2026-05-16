@@ -394,7 +394,7 @@ class TestTaskQueue:
     """TaskQueue manages concurrent background task execution."""
 
     async def test_task_queue_enqueue_dequeue(self, tmp_path: Path) -> None:
-        """enqueue adds task, dequeue retrieves it."""
+        """Enqueue adds task, dequeue retrieves it."""
         from guild.daemon.lifecycle import TaskQueue
 
         storage = await _make_storage(tmp_path)
@@ -418,7 +418,7 @@ class TestTaskQueue:
         await storage.close()
 
     async def test_queue_respects_max_concurrent(self, tmp_path: Path) -> None:
-        """dequeue returns None when max_concurrent active tasks reached."""
+        """Dequeue returns None when max_concurrent active tasks reached."""
         from guild.daemon.lifecycle import TaskQueue
 
         storage = await _make_storage(tmp_path)
