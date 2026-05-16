@@ -26,7 +26,7 @@ class MCPToolRegistry:
 
         try:
             tools = await client.list_tools()
-        except BaseException:
+        except Exception:
             await client.disconnect()
             raise
 

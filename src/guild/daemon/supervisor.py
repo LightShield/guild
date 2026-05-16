@@ -171,7 +171,7 @@ class DaemonSupervisor:
                 result = await current_coro
                 self._status = "completed"
                 return result
-            except Exception as exc:
+            except Exception as exc:  # Broad catch intentional: supervisor must recover from any agent crash
                 self._crash_count += 1
                 logger.warning(
                     "Agent crashed (attempt %d/%d): %s",

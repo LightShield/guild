@@ -304,7 +304,9 @@ class TeamRunner:
                 result = await self._invoke_agent(block_def, input_data)
                 self._agent_statuses[instance_name] = AgentStatus.COMPLETED
                 return result
-            except Exception as exc:
+            except (RuntimeError, OSError, TimeoutError) as exc:
+                # Agent crash recovery path: these are the exceptions
+                # that can surface from AgentLoop invocation failures.
                 last_exc = exc
                 last_error = str(exc)
                 logger.warning(

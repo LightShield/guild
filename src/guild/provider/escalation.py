@@ -202,7 +202,7 @@ class EscalatingProvider(LLMProvider):
         """
         try:
             return await self._chain.current.generate(messages, tools)
-        except Exception as exc:
+        except (RuntimeError, OSError, TimeoutError) as exc:
             logger.warning(
                 "Provider %s failed: %s. Attempting escalation.",
                 self._chain.current_name,
