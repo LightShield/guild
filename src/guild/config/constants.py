@@ -63,6 +63,18 @@ __all__ = [
     "RECOVERY_BACKOFF_BASE_SECONDS",
     # Daemon resource
     "DEFAULT_CPU_THRESHOLD",
+    "DEFAULT_POLITE_DELAY_SECONDS",
+    "DEFAULT_POLL_INTERVAL_SECONDS",
+    "DEFAULT_VRAM_PRESSURE_PERCENT",
+    # Provider
+    "OLLAMA_CLIENT_TIMEOUT_SECONDS",
+    "PROVIDER_CHAIN_MAX_DEPTH",
+    # Block execution
+    "BLOCK_RETRY_MAX",
+    "BLOCK_RETRY_DELAY_SECONDS",
+    "TASK_DESC_PREVIEW_CHARS",
+    "TASK_RESULT_PREVIEW_CHARS",
+    "LOOP_ESCALATION_THRESHOLD",
     # Knowledge/memory
     "STALE_DAYS",
     "MAX_INDEX_LINES",
@@ -241,6 +253,24 @@ RECOVERY_BACKOFF_BASE_SECONDS: int = 5
 # Daemon resource
 # ---------------------------------------------------------------------------
 DEFAULT_CPU_THRESHOLD: float = 80.0
+DEFAULT_POLITE_DELAY_SECONDS: float = 10.0
+DEFAULT_POLL_INTERVAL_SECONDS: float = 5.0
+DEFAULT_VRAM_PRESSURE_PERCENT: float = 85.0
+
+# ---------------------------------------------------------------------------
+# Provider
+# ---------------------------------------------------------------------------
+OLLAMA_CLIENT_TIMEOUT_SECONDS: float = 120.0
+PROVIDER_CHAIN_MAX_DEPTH: int = 10
+
+# ---------------------------------------------------------------------------
+# Block execution (team runner)
+# ---------------------------------------------------------------------------
+BLOCK_RETRY_MAX: int = 5
+BLOCK_RETRY_DELAY_SECONDS: float = 5.0
+TASK_DESC_PREVIEW_CHARS: int = 100
+TASK_RESULT_PREVIEW_CHARS: int = 500
+LOOP_ESCALATION_THRESHOLD: int = 2
 
 # ---------------------------------------------------------------------------
 # Knowledge/memory

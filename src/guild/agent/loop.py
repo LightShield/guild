@@ -14,7 +14,11 @@ from guild.agent.completion import (
     should_nudge_completion,
 )
 from guild.agent.message import Message
-from guild.config.constants import DEFAULT_MAX_TURNS, LOOP_CONTENT_PREVIEW_CHARS
+from guild.config.constants import (
+    DEFAULT_MAX_TURNS,
+    LOOP_CONTENT_PREVIEW_CHARS,
+    PROVIDER_CHAIN_MAX_DEPTH,
+)
 from guild.tools.base import TOOL_SCHEMAS, ToolResult
 from logger_python import get_logger
 
@@ -306,7 +310,7 @@ class AgentLoop:
         from guild.provider.escalation import EscalatingProvider
 
         candidate: Any = self.provider
-        for _ in range(5):
+        for _ in range(PROVIDER_CHAIN_MAX_DEPTH):
             if isinstance(candidate, EscalatingProvider):
                 return candidate
             candidate = getattr(candidate, "_provider", None)

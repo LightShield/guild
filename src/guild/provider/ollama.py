@@ -6,6 +6,7 @@ from typing import Any
 
 from ollama import AsyncClient, RequestError, ResponseError
 
+from guild.config.constants import OLLAMA_CLIENT_TIMEOUT_SECONDS
 from guild.provider.base import LLMProvider, LLMResponse
 from logger_python import get_logger
 
@@ -21,7 +22,7 @@ class OllamaProvider(LLMProvider):
         """Initialize OllamaProvider."""
         self.base_url = base_url
         self.model = model
-        self._client = AsyncClient(host=base_url, timeout=120.0)
+        self._client = AsyncClient(host=base_url, timeout=OLLAMA_CLIENT_TIMEOUT_SECONDS)
         self._options: dict[str, Any] = {}
 
     def set_throttle(self, active: bool) -> None:

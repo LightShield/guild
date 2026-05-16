@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from guild.agent.rollback import RollbackContext, try_with_rollback

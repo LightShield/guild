@@ -14,10 +14,16 @@ from typing import TYPE_CHECKING, Any
 from guild.agent.loop import AgentLoop
 from guild.config.constants import (
     AGENT_ID_PREFIX_LEN,
+    BLOCK_RETRY_DELAY_SECONDS,
+    BLOCK_RETRY_MAX,
     DEFAULT_LOOP_MAX_ITERATIONS,
     HEURISTIC_FAIL_SCORE,
     HEURISTIC_PASS_SCORE,
+    LOOP_ESCALATION_THRESHOLD,
+    PROVIDER_CHAIN_MAX_DEPTH,
     SUB_AGENT_MAX_TURNS,
+    TASK_DESC_PREVIEW_CHARS,
+    TASK_RESULT_PREVIEW_CHARS,
 )
 from guild.task.spec import TaskStatus
 from logger_python import get_logger
@@ -43,7 +49,7 @@ logger = get_logger(__name__)
 
 DECISION_SKIP = "skip"
 DECISION_ESCALATE = "escalate"
-_LOOP_ESCALATION_THRESHOLD = 2
+_LOOP_ESCALATION_THRESHOLD = LOOP_ESCALATION_THRESHOLD
 
 _EVAL_PASS_KEY = "pass"
 _EVAL_PASSED_KEY = "passed"
@@ -321,7 +327,14 @@ class TeamRunner:
                 result = await self._invoke_agent(block_def, input_data)
                 self._agent_statuses[instance_name] = AgentStatus.COMPLETED
                 return result
-            except Exception as exc:
+            except (
+                BlockError,
+                OSError,
+                RuntimeError,
+                ConnectionError,
+                TimeoutError,
+                ValueError,
+            ) as exc:
                 last_exc = exc
                 last_error = str(exc)
                 logger.warning(
@@ -413,7 +426,7 @@ class TeamRunner:
                     )
                     block_def.model = candidate
                     return
-        except Exception:
+        except (AttributeError, KeyError, ValueError, FileNotFoundError, OSError):
             logger.debug("Block escalation skipped (no config)", exc_info=True)
 
     def _get_escalation_chain(self) -> list[str]:
@@ -509,7 +522,8 @@ class TeamRunner:
         agent_id = f"{block_def.name}-{task_id[:AGENT_ID_PREFIX_LEN]}"
 
         if self._storage:
-            await self._storage.create_task(task_id, f"[{block_def.name}] {input_data[:100]}")
+            desc = f"[{block_def.name}] {input_data[:TASK_DESC_PREVIEW_CHARS]}"
+            await self._storage.create_task(task_id, desc)
             await self._storage.register_agent(agent_id, block_def.name)
             await self._storage.update_task(
                 task_id, assigned_agent=agent_id, status=TaskStatus.RUNNING.value
@@ -547,7 +561,7 @@ class TeamRunner:
             if msg.role and msg.content:
                 await self._storage.append_message(agent_id, msg.role, msg.content)
         await self._storage.update_task(
-            task_id, status=TaskStatus.COMPLETED.value, result=result[:500]
+            task_id, status=TaskStatus.COMPLETED.value, result=result[:TASK_RESULT_PREVIEW_CHARS]
         )
         await self._storage.log_audit(
             "task_completed",
@@ -592,13 +606,16 @@ class TeamRunner:
 
         base_url = self._resolve_base_url()
         raw = create_provider_for_backend("ollama", base_url, block_def.model)
-        config = RetryConfig(max_retries=5, initial_delay_seconds=5.0)
+        config = RetryConfig(
+            max_retries=BLOCK_RETRY_MAX,
+            initial_delay_seconds=BLOCK_RETRY_DELAY_SECONDS,
+        )
         return RetryProvider(raw, config=config)
 
     def _resolve_base_url(self) -> str:
         """Walk the provider chain to find the actual base_url."""
         candidate: Any = self._provider
-        for _ in range(10):
+        for _ in range(PROVIDER_CHAIN_MAX_DEPTH):
             url = getattr(candidate, "base_url", None)
             if url:
                 return str(url)
