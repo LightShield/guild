@@ -1,70 +1,81 @@
-# Music Player PoC — Team Composition Demo
+# Tinnitus Notch Therapy Player — Built by Guild
 
-This example demonstrates Guild's multi-agent team composition with a generator-evaluator loop.
+## Motivation
 
-## Task
+My father has **tinnitus** — a condition where the brain perceives a constant phantom tone. One evidence-based treatment is **Tailor-Made Notched Music Training (TMNMT)**: you identify the patient's tinnitus frequency, then remove (notch out) that exact frequency from music they listen to daily. Over time, this suppresses the phantom tone through lateral inhibition in the auditory cortex.
 
-> Create a Python music player with real-time notch filter capability using sounddevice and scipy.
+I needed a player that could do this in real-time with adjustable frequency. Instead of building it myself, I had Guild do it — as a proof of concept that an autonomous agent team can produce working, verified software.
 
-## Team Configuration
+## What Guild Built
 
-Two agents in a loop (max 3 iterations):
+A Python music player that:
+- Loads any WAV file
+- Applies a real-time IIR notch filter via `scipy.signal.iirnotch` + `lfilter`
+- Maintains filter state (`zi`) across audio chunks for glitch-free playback
+- Uses `sounddevice.OutputStream` callback for real-time processing
+- Accepts keyboard input to change the notch frequency during playback
 
-- **Coder** (`gemma4-4b-dense-med`) — fast model, writes code using file_write tool
-- **Verifier** (`gemma4-26b-moe-agent`) — strong model, runs shell commands to test the code
+## How Guild Built It
 
-See `team_music.toml`, `coder.toml`, and `verifier.toml` for the block definitions.
-
-## What Happened
+**Team composition:** fast coder (Gemma 4 4B) + strict e2e verifier (Gemma 4 26B)
 
 ```
 Iteration 1:
-  Coder (4B)    → wrote music_player.py, requirements.txt, README.md
-  Verifier (26B) → ran python3 exec check → FAIL (runtime error at line 72)
+  Coder (4B)      → wrote all files
+  E2E Runner (26B) → ran DSP unit test + live 3s playback test → FAIL (runtime error)
   
 Iteration 2:
-  Coder (4B)    → rewrote music_player.py with fix
-  Verifier (26B) → ran checks → FAIL (code tries to read nonexistent test file at import time)
-
-Iteration 3:
-  Coder (4B)    → rewrote with proper error handling
-  Verifier (26B) → all checks pass (compile OK, exec OK, no crash) → PASS
+  Coder (4B)      → rewrote with fix based on error feedback
+  E2E Runner (26B) → all checks pass, no stderr errors → PASS
 ```
 
-Total time: ~15 minutes (dominated by 26B model inference speed on Q4 quantization).
+The e2e runner verifies:
+1. Filter math correctness (FFT analysis confirms target frequency attenuation)
+2. App runs 3 seconds without crashes or callback errors
+3. No tracebacks in stderr (catches sounddevice callback failures)
 
-## Key Findings
+## Running the Player
 
-1. **Error output matters** — the verifier's shell commands produce stderr tracebacks. Guild now includes the full error output (not just "exit code 1") in the feedback to the coder, enabling targeted fixes.
+```bash
+pip install numpy scipy sounddevice soundfile
 
-2. **The loop works** — the generator-evaluator pattern correctly rejects broken code and feeds back specific errors.
+# Create a test tone (440Hz + your tinnitus frequency)
+python3 -c "
+import numpy as np, soundfile as sf
+sr = 44100; t = np.linspace(0, 30, sr*30, endpoint=False).astype('float32')
+audio = 0.3*np.sin(2*3.14159*440*t) + 0.3*np.sin(2*3.14159*1000*t)
+sf.write('test.wav', audio, sr)
+"
 
-3. **Per-block model assignment** — the coder runs on the fast 4B model (writes in ~30s), while the verifier uses the stronger 26B model (takes ~2min but catches real errors).
-
-4. **Limitation: logical bugs** — the verifier catches crashes but not wrong argument order. A dedicated unit-test-runner block would improve this.
+# Play with notch filter (removes 1000Hz)
+python3 music_player.py test.wav
+# Then type: n 1000  (to notch out 1000Hz)
+```
 
 ## Files
 
 | File | Description |
 |------|-------------|
-| `team_music.toml` | Team composition with loop definition |
-| `coder.toml` | Coder block — fast model, tool-use enforced |
-| `verifier.toml` | Verifier block — strong model, runs shell checks |
-| `output_music_player.py` | Final code produced by the team |
-| `output_requirements.txt` | Dependencies file |
-| `output_README.md` | User-facing README (generated) |
-| `execution_trace.json` | Full conversation trace (6 agents, 57 messages) |
+| `team_music.toml` | Team: coder → e2e_runner loop (max 5 iterations) |
+| `coder.toml` | Coder block — 4B model, tool-use enforced |
+| `e2e_runner.toml` | Verifier — 26B model, runs DSP test + live playback check |
+| `output_music_player.py` | Final code produced by Guild |
+| `output_requirements.txt` | Dependencies |
+| `output_README.md` | Generated user documentation |
+| `execution_trace.json` | Full agent conversation trace |
 
-## Running It
+## Reproducing
 
 ```bash
 cd your-project/
 guild init
 guild config --set provider.base_url=http://<ollama-host>:11434
+guild config --set escalation.escalation_chain=gemma4-26b-moe-agent
 
 # Copy block definitions
-cp examples/music-player-poc/{coder,verifier,team_music}.toml .guild/blocks/
+mkdir -p .guild/blocks
+cp examples/music-player-poc/{coder,e2e_runner,team_music}.toml .guild/blocks/
 
 # Run the team
-guild team -t music-builder "Create a Python music player with notch filter..."
+guild team -t music-builder "Create a Python music player with real-time notch filter..."
 ```

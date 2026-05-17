@@ -88,6 +88,20 @@ guild config --set provider.base_url=http://<ollama-host-ip>:11434
 [guild] Task completed. Learning extracted: "JWT migration requires updating middleware chain first"
 ```
 
+## Real-World Example: Tinnitus Notch Therapy Player
+
+My father has tinnitus — a condition causing a constant phantom tone. The treatment ([Tailor-Made Notched Music Training](https://en.wikipedia.org/wiki/Tinnitus#Sound-based_interventions)) removes the tinnitus frequency from music to suppress the phantom perception over time.
+
+I had Guild build the player autonomously using a **coder + e2e verifier team**:
+
+```bash
+guild team -t music-builder "Create a Python music player with real-time notch filter..."
+```
+
+Guild's team (Gemma 4 4B coder + 26B verifier) iterated until the code passed both a DSP unit test and a live 3-second playback test — producing a working player that correctly attenuates a target frequency by 99% while preserving the rest of the audio.
+
+See [`examples/music-player-poc/`](examples/music-player-poc/) for the full execution trace, block definitions, and generated code.
+
 ## Architecture
 
 Three-layer design:
@@ -121,7 +135,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed design decisions and [REQUIR
 **v0.2.0** — Core implementation complete.
 
 - **108 source modules** across 20 domain-grouped packages
-- **2307 tests** passing (unit + integration + E2E)
+- **2308 tests** passing (unit + integration + E2E)
 - **100% branch coverage**
 - **213/213 requirements** with linked acceptance-criteria tests (100% traceability)
 - `mypy --strict` — 0 errors
