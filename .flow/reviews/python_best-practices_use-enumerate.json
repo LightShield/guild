@@ -1,0 +1,6 @@
+{
+  "rule_id": "python_best-practices_use-enumerate",
+  "status": "PASS",
+  "verification": "tool_check",
+  "tool": "ruff:SIM118"
+}

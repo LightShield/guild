@@ -1,0 +1,6 @@
+{
+  "rule_id": "common_git-strategy_delete-merged-branches",
+  "status": "PASS",
+  "verification": "process_gate",
+  "detail": "No stale merged branches"
+}

@@ -92,6 +92,22 @@ def load_permission_profiles(guild_dir: Path) -> dict[str, PermissionProfile]:
     return profiles
 
 
+def _validate_escalation_chain(
+    config: GuildConfig,
+    known_models: list[str] | None,
+    errors: list[str],
+) -> None:
+    """Check escalation chain model names against known models."""
+    if not config.escalation_chain or known_models is None:
+        return
+    chain_models = [m.strip() for m in config.escalation_chain.split(",") if m.strip()]
+    for model_name in chain_models:
+        if model_name not in known_models:
+            warning = f"Unknown model in escalation chain: '{model_name}'"
+            errors.append(warning)
+            logger.warning(warning)
+
+
 def validate_config(
     config: GuildConfig,
     guild_dir: Path,
@@ -133,13 +149,7 @@ def validate_config(
                 f"Agent profile '{name}' has invalid permission: " f"'{profile.permission}'"
             )
 
-    if config.escalation_chain and known_models is not None:
-        chain_models = [m.strip() for m in config.escalation_chain.split(",") if m.strip()]
-        for model_name in chain_models:
-            if model_name not in known_models:
-                warning = f"Unknown model in escalation chain: '{model_name}'"
-                errors.append(warning)
-                logger.warning(warning)
+    _validate_escalation_chain(config, known_models, errors)
 
     return errors
 

@@ -17,7 +17,6 @@ from typer.testing import CliRunner
 
 from guild.agent.loop import AgentLoopConfig
 from guild.cli.main import app
-from guild.daemon.resource import ResourceConfig
 from guild.permissions.checker import PermissionConfig
 from guild.provider.base import LLMResponse
 

@@ -1,0 +1,12 @@
+{
+  "rule_id": "python_style_line-length-100",
+  "status": "PASS",
+  "verification": "tool_check",
+  "tool": [
+    "ruff:E501",
+    "black:--check --line-length 100"
+  ],
+  "exceptions_applied": [
+    "tests/*"
+  ]
+}

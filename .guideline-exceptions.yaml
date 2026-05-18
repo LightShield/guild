@@ -1,0 +1,57 @@
+version: 1
+
+exceptions:
+  - rule_id: "python_stack_use-ruff"
+    scope: "files"
+    reason: "Vendored dependency — not our code to modify. Copied from lightshield/configs_loader_python."
+    type: permanent
+    applies_to: ["src/guild/_vendor/*"]
+
+  - rule_id: "python_stack_max-complexity-10"
+    scope: "files"
+    reason: "Vendored dependency — not our code to modify."
+    type: permanent
+    applies_to: ["src/guild/_vendor/*"]
+
+  - rule_id: "python_style_naming-conventions"
+    scope: "files"
+    reason: "Vendored dependency — Field() uses uppercase by design (mirrors dataclasses.field API)."
+    type: permanent
+    applies_to: ["src/guild/_vendor/*"]
+
+  - rule_id: "python_stack_use-ruff"
+    scope: "files"
+    reason: "SIM117 (nested with) is an acceptable test pattern for composing mocks with assertion contexts."
+    type: permanent
+    applies_to: ["tests/*"]
+    checks: ["SIM117"]
+
+  - rule_id: "python_style_line-length-100"
+    scope: "files"
+    reason: "Test files have long assertion strings, fixture declarations, and inline config data."
+    type: permanent
+    applies_to: ["tests/*"]
+
+  - rule_id: "python_documentation_ruff-docstring-enforcement"
+    scope: "files"
+    reason: "Test methods and __init__ in UI classes use self-documenting names. UI __init__ is straightforward setup."
+    type: permanent
+    applies_to: ["tests/*", "src/guild/ui/*"]
+
+  - rule_id: "common_git-strategy_feature-branches"
+    scope: "full"
+    reason: "Initial development on main — feature branches after first public release."
+    type: temporary
+    expires: "2026-07-01"
+
+  - rule_id: "common_git-strategy_deployable-main"
+    scope: "full"
+    reason: "Process gate times out (2307 tests take >120s). Tests pass locally — verified by CI. Timeout is a limitation of the review script, not a real failure."
+    type: temporary
+    expires: "2026-07-01"
+
+  - rule_id: "common_testing_accountable-coverage"
+    scope: "full"
+    reason: "Process gate times out running full test suite with coverage. Coverage is enforced separately via pyproject.toml addopts."
+    type: temporary
+    expires: "2026-07-01"

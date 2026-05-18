@@ -1,0 +1,414 @@
+diff --git a/src/guild/agent/learning.py b/src/guild/agent/learning.py
+index c95d82d..2f0d2c3 100644
+--- a/src/guild/agent/learning.py
++++ b/src/guild/agent/learning.py
+@@ -14,8 +14,8 @@ from logger_python import get_logger
+ from guild.config.constants import (
+     DEFAULT_CONFIDENCE,
+     LEARNING_CONTENT_MAX_CHARS,
+-    MIN_INJECTION_CONFIDENCE,
+     LOG_PREVIEW_MAX_CHARS,
++    MIN_INJECTION_CONFIDENCE,
+ )
+ 
+ if TYPE_CHECKING:  # pragma: no cover — type-checking only
+diff --git a/src/guild/agent/ratelimit.py b/src/guild/agent/ratelimit.py
+index a148c6b..cfec657 100644
+--- a/src/guild/agent/ratelimit.py
++++ b/src/guild/agent/ratelimit.py
+@@ -2,12 +2,12 @@
+ 
+ from __future__ import annotations
+ 
+-from guild.config.constants import DEFAULT_RATE_LIMIT_CALLS, DEFAULT_RATE_LIMIT_WINDOW_SECONDS
+-
+ import asyncio
+ import time
+ from typing import TYPE_CHECKING, Any
+ 
++from guild.config.constants import DEFAULT_RATE_LIMIT_CALLS, DEFAULT_RATE_LIMIT_WINDOW_SECONDS
++
+ if TYPE_CHECKING:  # pragma: no cover — type-checking only
+     from collections.abc import Coroutine
+ 
+diff --git a/src/guild/api/server.py b/src/guild/api/server.py
+index 4e71204..68957e2 100644
+--- a/src/guild/api/server.py
++++ b/src/guild/api/server.py
+@@ -19,6 +19,7 @@ if TYPE_CHECKING:
+ 
+ from guild import __version__
+ from guild.config.constants import (
++    DEFAULT_QUERY_LIMIT,
+     GUILD_DIR_NAME,
+     HTTP_BAD_REQUEST,
+     HTTP_NOT_FOUND,
+@@ -28,7 +29,6 @@ from guild.config.constants import (
+     JSONRPC_METHOD_NOT_FOUND,
+     JSONRPC_PARSE_ERROR,
+     WEBSOCKET_POLL_SECONDS,
+-    DEFAULT_QUERY_LIMIT,
+ )
+ from guild.config.loader import DB_FILENAME
+ from guild.task.spec import TaskStatus
+diff --git a/src/guild/config/profiles.py b/src/guild/config/profiles.py
+index 866bc06..8b53711 100644
+--- a/src/guild/config/profiles.py
++++ b/src/guild/config/profiles.py
+@@ -93,6 +93,22 @@ def load_permission_profiles(guild_dir: Path) -> dict[str, PermissionProfile]:
+     return profiles
+ 
+ 
++def _validate_escalation_chain(
++    config: GuildConfig,
++    known_models: list[str] | None,
++    errors: list[str],
++) -> None:
++    """Check escalation chain model names against known models."""
++    if not config.escalation_chain or known_models is None:
++        return
++    chain_models = [m.strip() for m in config.escalation_chain.split(",") if m.strip()]
++    for model_name in chain_models:
++        if model_name not in known_models:
++            warning = f"Unknown model in escalation chain: '{model_name}'"
++            errors.append(warning)
++            logger.warning(warning)
++
++
+ def validate_config(
+     config: GuildConfig,
+     guild_dir: Path,
+@@ -134,13 +150,7 @@ def validate_config(
+                 f"Agent profile '{name}' has invalid permission: " f"'{profile.permission}'"
+             )
+ 
+-    if config.escalation_chain and known_models is not None:
+-        chain_models = [m.strip() for m in config.escalation_chain.split(",") if m.strip()]
+-        for model_name in chain_models:
+-            if model_name not in known_models:
+-                warning = f"Unknown model in escalation chain: '{model_name}'"
+-                errors.append(warning)
+-                logger.warning(warning)
++    _validate_escalation_chain(config, known_models, errors)
+ 
+     return errors
+ 
+diff --git a/src/guild/storage/audit.py b/src/guild/storage/audit.py
+index 97cad5a..26da292 100644
+--- a/src/guild/storage/audit.py
++++ b/src/guild/storage/audit.py
+@@ -7,10 +7,10 @@ from dataclasses import dataclass
+ from datetime import UTC, datetime
+ from typing import Any
+ 
+-from guild.storage.connection import DBConnection
+ from logger_python import get_logger
+ 
+ from guild.config.constants import DEFAULT_QUERY_LIMIT
++from guild.storage.connection import DBConnection
+ 
+ __all__ = ["AuditOps", "DecisionRecord"]
+ 
+diff --git a/src/guild/storage/checkpoints.py b/src/guild/storage/checkpoints.py
+index 7267d8e..abeeb46 100644
+--- a/src/guild/storage/checkpoints.py
++++ b/src/guild/storage/checkpoints.py
+@@ -5,9 +5,10 @@ from __future__ import annotations
+ from datetime import UTC, datetime
+ from typing import Any
+ 
+-from guild.storage.connection import DBConnection
+ from logger_python import get_logger
+ 
++from guild.storage.connection import DBConnection
++
+ __all__ = ["CheckpointOps"]
+ 
+ logger = get_logger(__name__)
+diff --git a/src/guild/storage/learnings.py b/src/guild/storage/learnings.py
+index 35dbe9d..792c34c 100644
+--- a/src/guild/storage/learnings.py
++++ b/src/guild/storage/learnings.py
+@@ -6,7 +6,6 @@ from dataclasses import dataclass
+ from datetime import UTC, datetime
+ from typing import Any
+ 
+-from guild.storage.connection import DBConnection
+ from logger_python import get_logger
+ 
+ from guild.config.constants import (
+@@ -16,6 +15,7 @@ from guild.config.constants import (
+     DEFAULT_QUERY_LIMIT,
+     PRUNING_RETENTION_DAYS,
+ )
++from guild.storage.connection import DBConnection
+ 
+ __all__ = ["LearningOps", "LearningRecord"]
+ 
+diff --git a/src/guild/storage/memories.py b/src/guild/storage/memories.py
+index c0a42ac..8c334ef 100644
+--- a/src/guild/storage/memories.py
++++ b/src/guild/storage/memories.py
+@@ -5,7 +5,6 @@ from __future__ import annotations
+ from datetime import UTC, datetime
+ from typing import Any
+ 
+-from guild.storage.connection import DBConnection
+ from logger_python import get_logger
+ 
+ from guild.config.constants import (
+@@ -13,6 +12,7 @@ from guild.config.constants import (
+     MEMORY_SUMMARY_MAX_CHARS,
+     PRUNING_RETENTION_DAYS,
+ )
++from guild.storage.connection import DBConnection
+ 
+ __all__ = ["MemoryOps"]
+ 
+diff --git a/src/guild/storage/messages.py b/src/guild/storage/messages.py
+index 92f246f..b172eb7 100644
+--- a/src/guild/storage/messages.py
++++ b/src/guild/storage/messages.py
+@@ -5,9 +5,10 @@ from __future__ import annotations
+ from datetime import UTC, datetime
+ from typing import Any
+ 
+-from guild.storage.connection import DBConnection
+ from logger_python import get_logger
+ 
++from guild.storage.connection import DBConnection
++
+ __all__ = ["MessageOps"]
+ 
+ logger = get_logger(__name__)
+diff --git a/src/guild/storage/questions.py b/src/guild/storage/questions.py
+index 18513c6..8e29edb 100644
+--- a/src/guild/storage/questions.py
++++ b/src/guild/storage/questions.py
+@@ -6,9 +6,10 @@ from dataclasses import dataclass
+ from datetime import UTC, datetime
+ from typing import Any
+ 
+-from guild.storage.connection import DBConnection
+ from logger_python import get_logger
+ 
++from guild.storage.connection import DBConnection
++
+ __all__ = ["QuestionOps", "QuestionRecord"]
+ 
+ logger = get_logger(__name__)
+diff --git a/src/guild/storage/tasks.py b/src/guild/storage/tasks.py
+index a492579..f6148e8 100644
+--- a/src/guild/storage/tasks.py
++++ b/src/guild/storage/tasks.py
+@@ -5,9 +5,10 @@ from __future__ import annotations
+ from datetime import UTC, datetime
+ from typing import Any
+ 
+-from guild.storage.connection import DBConnection
+ from logger_python import get_logger
+ 
++from guild.storage.connection import DBConnection
++
+ __all__ = ["TaskOps"]
+ 
+ logger = get_logger(__name__)
+diff --git a/tests/agent/test_learning.py b/tests/agent/test_learning.py
+index 4c7f87b..81fdc85 100644
+--- a/tests/agent/test_learning.py
++++ b/tests/agent/test_learning.py
+@@ -15,8 +15,8 @@ from guild.agent.learning import (
+     format_learnings_for_injection,
+ )
+ from guild.provider.base import LLMResponse
+-from guild.storage.sqlite import Storage
+ from guild.storage.learnings import LearningRecord
++from guild.storage.sqlite import Storage
+ 
+ 
+ @pytest.fixture
+diff --git a/tests/agent/test_rollback.py b/tests/agent/test_rollback.py
+index dd78b9d..9a52b54 100644
+--- a/tests/agent/test_rollback.py
++++ b/tests/agent/test_rollback.py
+@@ -2,6 +2,8 @@
+ 
+ from __future__ import annotations
+ 
++from pathlib import Path
++
+ import pytest
+ 
+ from guild.agent.rollback import RollbackContext, try_with_rollback
+diff --git a/tests/cli/test_main.py b/tests/cli/test_main.py
+index b154aee..aec9f65 100644
+--- a/tests/cli/test_main.py
++++ b/tests/cli/test_main.py
+@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
+ 
+ import pytest
+ from typer.testing import CliRunner
++
+ from guild.storage.audit import DecisionRecord
+ from guild.storage.learnings import LearningRecord
+ 
+diff --git a/tests/integration/test_agent_pipeline.py b/tests/integration/test_agent_pipeline.py
+index 5f7e01e..b6e673c 100644
+--- a/tests/integration/test_agent_pipeline.py
++++ b/tests/integration/test_agent_pipeline.py
+@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock
+ 
+ import pytest
+ 
+-from guild.agent.loop import AgentLoopConfig, AgentLoop
++from guild.agent.loop import AgentLoop, AgentLoopConfig
+ from guild.provider.base import LLMResponse
+ from guild.storage.sqlite import Storage
+ from guild.tools.registry import build_tool_executors
+diff --git a/tests/integration/test_context_and_learning.py b/tests/integration/test_context_and_learning.py
+index a367ff2..250afda 100644
+--- a/tests/integration/test_context_and_learning.py
++++ b/tests/integration/test_context_and_learning.py
+@@ -50,8 +50,8 @@ from guild.config.constants import (
+ from guild.knowledge.memory import MemoryIndex
+ from guild.orchestration.bus import SharedContext
+ from guild.provider.base import LLMResponse
+-from guild.storage.sqlite import Storage
+ from guild.storage.learnings import LearningRecord
++from guild.storage.sqlite import Storage
+ 
+ pytestmark = pytest.mark.integration
+ 
+diff --git a/tests/integration/test_daemon_and_features.py b/tests/integration/test_daemon_and_features.py
+index 303e6f6..d34ef72 100644
+--- a/tests/integration/test_daemon_and_features.py
++++ b/tests/integration/test_daemon_and_features.py
+@@ -10,14 +10,13 @@ import asyncio
+ import json
+ from pathlib import Path
+ from typing import Any
+-from unittest.mock import AsyncMock, patch
++from unittest.mock import AsyncMock
+ 
+ import pytest
+ from typer.testing import CliRunner
+ 
+ from guild.agent.loop import AgentLoopConfig
+ from guild.cli.main import app
+-from guild.daemon.resource import ResourceConfig
+ from guild.permissions.checker import PermissionConfig
+ from guild.provider.base import LLMResponse
+ 
+@@ -719,7 +718,7 @@ class TestSelfVerifyCompletion:
+     @pytest.mark.ac("AC-06.2.1")
+     async def test_self_review_can_trigger_fixes(self) -> None:
+         """Edge: self-review finds an issue and uses a tool to fix it."""
+-        from guild.agent.loop import AgentLoop, AgentLoopConfig
++        from guild.agent.loop import AgentLoop
+         from guild.tools.base import ToolResult
+ 
+         async def mock_write(args: dict[str, Any], wd: str | None = None) -> ToolResult:
+@@ -998,7 +997,7 @@ class TestMultiTurn:
+     @pytest.mark.ac("AC-06.9.1")
+     async def test_send_preserves_context(self) -> None:
+         """Happy: send() sees messages from prior turns."""
+-        from guild.agent.loop import AgentLoop, AgentLoopConfig
++        from guild.agent.loop import AgentLoop
+ 
+         provider = _make_mock_provider(
+             _simple_response("Hello! I am ready."),
+@@ -1016,7 +1015,7 @@ class TestMultiTurn:
+     @pytest.mark.ac("AC-06.9.1")
+     async def test_run_resets_history(self) -> None:
+         """Sad: calling run() again clears the conversation."""
+-        from guild.agent.loop import AgentLoop, AgentLoopConfig
++        from guild.agent.loop import AgentLoop
+ 
+         provider = _make_mock_provider(
+             _simple_response("First run."),
+@@ -1035,7 +1034,7 @@ class TestMultiTurn:
+     @pytest.mark.ac("AC-06.9.2")
+     async def test_send_without_run_raises(self) -> None:
+         """Edge: send() before run() raises RuntimeError."""
+-        from guild.agent.loop import AgentLoop, AgentLoopConfig
++        from guild.agent.loop import AgentLoop
+ 
+         provider = _make_mock_provider(_simple_response("Nope"))
+         loop = AgentLoop(provider=provider, tool_executors={})
+@@ -1046,7 +1045,7 @@ class TestMultiTurn:
+     @pytest.mark.ac("AC-06.9.1")
+     async def test_multiple_sends_accumulate(self) -> None:
+         """Edge: four consecutive messages all preserved in history."""
+-        from guild.agent.loop import AgentLoop, AgentLoopConfig
++        from guild.agent.loop import AgentLoop
+ 
+         provider = _make_mock_provider(
+             _simple_response("R1"),
+@@ -1612,7 +1611,7 @@ class TestSendPreservesToolContext:
+     @pytest.mark.ac("AC-06.9.3")
+     async def test_send_preserves_tool_results_from_run(self) -> None:
+         """Messages for step 2 include tool call results from step 1."""
+-        from guild.agent.loop import AgentLoop, AgentLoopConfig
++        from guild.agent.loop import AgentLoop
+         from guild.tools.base import ToolResult
+ 
+         call_counter = 0
+diff --git a/tests/integration/test_observability_and_tasks.py b/tests/integration/test_observability_and_tasks.py
+index dc8d429..824cc9b 100644
+--- a/tests/integration/test_observability_and_tasks.py
++++ b/tests/integration/test_observability_and_tasks.py
+@@ -1357,7 +1357,7 @@ class TestBudgetCheckBeforeEachLLMCall:
+     @pytest.mark.ac("AC-10.2.5")
+     async def test_agent_exits_after_budget_exceeded(self) -> None:
+         """Agent exits immediately after the first LLM call that pushes total above budget."""
+-        from guild.agent.loop import AgentLoopConfig, AgentLoop
++        from guild.agent.loop import AgentLoop, AgentLoopConfig
+ 
+         call_count = 0
+ 
+diff --git a/tests/integration/test_remaining_features.py b/tests/integration/test_remaining_features.py
+index 69521f8..ff97d0d 100644
+--- a/tests/integration/test_remaining_features.py
++++ b/tests/integration/test_remaining_features.py
+@@ -38,9 +38,9 @@ from unittest.mock import AsyncMock
+ 
+ import pytest
+ 
+-from guild.storage.sqlite import Storage
+ from guild.storage.audit import DecisionRecord
+ from guild.storage.learnings import LearningRecord
++from guild.storage.sqlite import Storage
+ 
+ pytestmark = pytest.mark.integration
+ 
+diff --git a/tests/knowledge/test_temporal.py b/tests/knowledge/test_temporal.py
+index a688ec1..8bdf93d 100644
+--- a/tests/knowledge/test_temporal.py
++++ b/tests/knowledge/test_temporal.py
+@@ -10,9 +10,9 @@ if TYPE_CHECKING:
+     from pathlib import Path
+ 
+ from guild.knowledge.temporal import TemporalKnowledge
+-from guild.storage.sqlite import Storage
+ from guild.storage.audit import DecisionRecord
+ from guild.storage.learnings import LearningRecord
++from guild.storage.sqlite import Storage
+ 
+ 
+ @pytest.fixture
+diff --git a/tests/storage/test_sqlite.py b/tests/storage/test_sqlite.py
+index efb65d2..7793d07 100644
+--- a/tests/storage/test_sqlite.py
++++ b/tests/storage/test_sqlite.py
+@@ -9,10 +9,10 @@ import pytest
+ if TYPE_CHECKING:
+     from pathlib import Path
+ 
+-from guild.storage.sqlite import Storage
+ from guild.storage.audit import DecisionRecord
+ from guild.storage.learnings import LearningRecord
+ from guild.storage.questions import QuestionRecord
++from guild.storage.sqlite import Storage
+ 
+ 
+ @pytest.fixture

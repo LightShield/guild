@@ -1,0 +1,6 @@
+{
+  "rule_id": "common_testing_requirements-coverage",
+  "status": "PASS",
+  "verification": "process_gate",
+  "detail": "Requirement-linked tests found in 16 files"
+}

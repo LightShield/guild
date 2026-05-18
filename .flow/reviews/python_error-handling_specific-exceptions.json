@@ -1,0 +1,6 @@
+{
+  "rule_id": "python_error-handling_specific-exceptions",
+  "status": "PASS",
+  "verification": "tool_check",
+  "tool": "ruff:E722"
+}

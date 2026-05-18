@@ -1,0 +1,6 @@
+{
+  "rule_id": "python_best-practices_context-managers",
+  "status": "PASS",
+  "verification": "tool_check",
+  "tool": "ruff:SIM115"
+}

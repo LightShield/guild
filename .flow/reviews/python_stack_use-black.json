@@ -1,0 +1,6 @@
+{
+  "rule_id": "python_stack_use-black",
+  "status": "PASS",
+  "verification": "tool_check",
+  "tool": "black:--check"
+}

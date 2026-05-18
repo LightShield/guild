@@ -1,0 +1,6 @@
+{
+  "rule_id": "common_code-review_guidelines-based-review",
+  "status": "PASS",
+  "verification": "process_gate",
+  "detail": "Review artifacts exist in /home/ormagen/workspace/private_stash/guild/.flow/reviews"
+}
