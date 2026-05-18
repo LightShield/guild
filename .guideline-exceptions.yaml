@@ -55,3 +55,15 @@ exceptions:
     reason: "Process gate times out running full test suite with coverage. Coverage is enforced separately via pyproject.toml addopts."
     type: temporary
     expires: "2026-07-01"
+
+  - rule_id: "python_style_short-functions"
+    scope: "files"
+    reason: "AgentLoop._execute_turns (67 lines) is the core turn loop — splitting it would scatter tightly-coupled state machine logic across helpers without readability benefit."
+    type: permanent
+    applies_to: ["src/guild/agent/loop.py"]
+
+  - rule_id: "python_style_max-five-params"
+    scope: "files"
+    reason: "TeamRunner._persist_block_result (6 params) and EvalFramework.run_ab_test (6 params) have one extra param each for necessary context. Grouping into a dataclass would add indirection for minimal benefit."
+    type: permanent
+    applies_to: ["src/guild/orchestration/*", "src/guild/agent/eval.py"]

@@ -81,6 +81,7 @@ branch = true
 source = ["src/guild"]
 
 [tool.coverage.report]
+fail_under = 100
 exclude_also = [
     "class .*\\bProtocol\\b",
     "if TYPE_CHECKING:",
