@@ -1,7 +1,7 @@
 <script>
   import { Handle, Position } from '@xyflow/svelte';
 
-  /** @type {{ data: { label: string, role: string, blockName: string, verifier: string|null, loopUntil: string|null, maxIterations: number|null } }} */
+  /** @type {{ data: { blockName: string, role: string, model: string, instructions: string, verifier: string|null, loopUntil: string|null, maxIterations: number|null, children: Array|null, expanded: boolean, onToggle: Function|null } }} */
   let { data } = $props();
 
   const roleConfig = {
@@ -19,9 +19,12 @@
   const role = $derived(data.role || 'agent');
   const config = $derived(roleConfig[role] || roleConfig.agent);
   const hasVerifier = $derived(!!data.verifier);
+  const hasChildren = $derived(data.children && data.children.length > 0);
+  const expanded = $derived(data.expanded || false);
 </script>
 
 <div class="group relative">
+  <!-- Verifier decorator ring -->
   {#if hasVerifier}
     <div class="absolute -top-1 -right-1 -bottom-1 -left-1 rounded-[14px] border-2 border-dashed border-orange-500/40
                 bg-orange-950/10"></div>
@@ -34,26 +37,76 @@
     </div>
   {/if}
 
-  <div class="rounded-xl border {config.border} bg-gray-900/95 backdrop-blur-sm
+  <div class="rounded-xl border {hasChildren ? 'border-purple-500/60' : config.border} bg-gray-900/95 backdrop-blur-sm
               px-4 py-3.5 min-w-[180px] shadow-xl shadow-black/20
-              transition-all duration-200 hover:shadow-2xl hover:shadow-black/30 hover:scale-[1.02]">
+              transition-all duration-200 hover:shadow-2xl hover:shadow-black/30 hover:scale-[1.02]
+              {expanded ? 'min-w-[260px]' : ''}">
     <Handle type="target" position={Position.Left}
       class="!w-2.5 !h-2.5 !bg-gray-500 !border-2 !border-gray-800 !rounded-full
              group-hover:!bg-guild-400 !transition-colors" />
 
+    <!-- Header row -->
     <div class="flex items-center gap-2">
-      <span class="text-xs {config.accent} opacity-70">{@html config.icon}</span>
-      <div class="text-sm font-medium text-gray-100 truncate">
-        {data.blockName || data.label}
+      {#if hasChildren}
+        <span class="text-xs text-purple-400">&#9646;&#9646;</span>
+      {:else}
+        <span class="text-xs {config.accent} opacity-70">{@html config.icon}</span>
+      {/if}
+      <div class="text-sm font-medium text-gray-100 truncate flex-1">
+        {data.blockName || 'agent'}
       </div>
+      {#if hasChildren}
+        <button
+          onclick={(e) => { e.stopPropagation(); data.onToggle?.(); }}
+          class="p-0.5 rounded hover:bg-purple-900/30 text-purple-400 hover:text-purple-200 transition-colors text-[10px]"
+          title="{expanded ? 'Collapse' : 'Expand'}"
+        >
+          {expanded ? '&#9660;' : '&#9654;'}
+        </button>
+      {/if}
     </div>
+
+    <!-- Role badge -->
     <div class="flex items-center gap-1.5 mt-1.5">
-      <span class="w-1.5 h-1.5 rounded-full {config.dot}"></span>
-      <span class="text-[11px] {config.accent} font-medium uppercase tracking-wider">{role}</span>
+      <span class="w-1.5 h-1.5 rounded-full {hasChildren ? 'bg-purple-400' : config.dot}"></span>
+      <span class="text-[11px] {hasChildren ? 'text-purple-300' : config.accent} font-medium uppercase tracking-wider">
+        {hasChildren ? 'block' : role}
+      </span>
+      {#if hasChildren}
+        <span class="text-[9px] text-gray-600 ml-1">{data.children.length} agents</span>
+      {/if}
     </div>
-    {#if data.loopUntil}
+
+    <!-- Loop condition -->
+    {#if data.loopUntil && !hasChildren}
       <div class="mt-2 pt-2 border-t border-gray-800 text-[10px] text-gray-500 truncate max-w-[160px]">
         until: {data.loopUntil}
+      </div>
+    {/if}
+
+    <!-- Expanded children list -->
+    {#if hasChildren && expanded}
+      <div class="mt-3 pt-2 border-t border-purple-900/30 space-y-1.5 max-h-[250px] overflow-y-auto">
+        {#each data.children as child, i}
+          <div class="flex items-center gap-2 px-2.5 py-2 rounded-lg bg-gray-800/60 border border-gray-700/40
+                      hover:border-gray-600/60 transition-colors cursor-default">
+            {#if child.children && child.children.length > 0}
+              <span class="text-[9px] text-purple-400">&#9646;&#9646;</span>
+            {:else}
+              <span class="w-1.5 h-1.5 rounded-full bg-guild-400/60"></span>
+            {/if}
+            <span class="text-xs font-medium text-gray-200 flex-1 truncate">{child.data?.blockName || child.blockName || 'agent'}</span>
+            <span class="text-[9px] text-gray-500 uppercase">{child.data?.role || child.role || 'agent'}</span>
+            {#if child.children && child.children.length > 0}
+              <span class="text-[8px] text-purple-600">{child.children.length}x</span>
+            {/if}
+          </div>
+          {#if i < data.children.length - 1}
+            <div class="flex justify-center">
+              <span class="text-[8px] text-gray-800">&#8595;</span>
+            </div>
+          {/if}
+        {/each}
       </div>
     {/if}
 

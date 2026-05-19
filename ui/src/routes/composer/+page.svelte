@@ -4,7 +4,6 @@
   import '@xyflow/svelte/dist/style.css';
   import { fetchBlocks, fetchTeams, saveTeam } from '$lib/api.js';
   import BlockNode from '$lib/components/BlockNode.svelte';
-  import PhaseNode from '$lib/components/PhaseNode.svelte';
 
   let nodes = $state([]);
   let edges = $state([]);
@@ -40,19 +39,19 @@
   let blockName = $state('');
   let blockDescription = $state('');
 
-  const nodeTypes = { block: BlockNode, phase: PhaseNode };
+  const nodeTypes = { block: BlockNode };
 
   const roles = ['agent', 'planner', 'architect', 'implementer', 'coder', 'tester', 'reviewer', 'verifier', 'orchestrator'];
   const models = ['gemma4-2b-edge-fast', 'gemma4-4b-dense-med', 'gemma4-26b-moe-agent'];
 
   const builtinRoles = [
-    { name: 'requirements', role: 'planner', description: 'Gather and document requirements' },
-    { name: 'architect', role: 'architect', description: 'Design system architecture' },
-    { name: 'implementer', role: 'implementer', description: 'Write implementation code' },
-    { name: 'tester', role: 'tester', description: 'Write tests (TDD)' },
-    { name: 'test_runner', role: 'tester', description: 'Execute test suites' },
-    { name: 'code_reviewer', role: 'reviewer', description: 'Review code quality' },
-    { name: 'verificator', role: 'verifier', description: 'Final verification gate' },
+    { name: 'requirements', role: 'planner', description: 'Gather and document requirements', instructions: 'You are a requirements analyst. Given a feature request:\n1. Ask clarifying questions about scope and constraints\n2. Document functional and non-functional requirements\n3. Define acceptance criteria for each requirement\n4. Identify dependencies and risks' },
+    { name: 'architect', role: 'architect', description: 'Design system architecture', instructions: 'You are a senior technical architect. Given requirements:\n1. Design the system architecture and component boundaries\n2. Choose appropriate patterns and technologies\n3. Define interfaces between components\n4. Document trade-offs and decisions made' },
+    { name: 'implementer', role: 'implementer', description: 'Write implementation code', instructions: 'You are a senior developer. Given a plan:\n1. Implement each step using the available tools\n2. Write clean, well-structured code\n3. Create tests for your implementation\n4. Run the tests to verify they pass' },
+    { name: 'tester', role: 'tester', description: 'Write tests (TDD)', instructions: 'You are a test engineer. Given requirements and architecture:\n1. Write comprehensive test cases covering happy path and edge cases\n2. Follow TDD: write tests before implementation exists\n3. Include unit, integration, and E2E tests as appropriate\n4. Ensure 100% branch coverage of critical paths' },
+    { name: 'test_runner', role: 'tester', description: 'Execute test suites', instructions: 'You are a CI agent. Your job:\n1. Run the full test suite\n2. Report pass/fail status with details\n3. If tests fail, provide clear error context\n4. Confirm all tests pass before approving' },
+    { name: 'code_reviewer', role: 'reviewer', description: 'Review code quality', instructions: 'You are a code reviewer. Given completed work:\n1. Read all created/modified files\n2. Run the tests (shell tool)\n3. Check for bugs, edge cases, security issues\n4. If issues found, explain what needs fixing\n5. If everything passes, confirm with APPROVED' },
+    { name: 'verificator', role: 'verifier', description: 'Final verification gate', instructions: 'You are the final verification gate. Check:\n1. All requirements have been implemented\n2. All tests pass\n3. Code follows project conventions\n4. No security vulnerabilities introduced\n5. Documentation is complete\nIf any check fails, route back to the relevant phase.' },
   ];
 
   onMount(async () => {
@@ -98,6 +97,8 @@
 
   function createBlockNode(block, position) {
     const id = `${block.name}-${Date.now()}-${nodes.length}`;
+    const children = block.composite ? (block.nodes || []).map(n => n.data || n) : null;
+
     const newNode = {
       id,
       type: 'block',
@@ -110,26 +111,21 @@
         verifier: null,
         loopUntil: null,
         maxIterations: null,
+        children: children,
+        expanded: false,
+        onToggle: children ? () => toggleBlockExpand(id) : null,
       },
     };
     nodes = [...nodes, newNode];
+  }
 
-    // If it's a composite block, also add its internal nodes
-    if (block.composite && block.nodes) {
-      for (const subNode of block.nodes) {
-        const subId = `${subNode.data.blockName}-${Date.now()}-${nodes.length}`;
-        nodes = [...nodes, {
-          ...subNode,
-          id: subId,
-          position: { x: position.x + subNode.position.x, y: position.y + subNode.position.y },
-        }];
+  function toggleBlockExpand(nodeId) {
+    nodes = nodes.map(n => {
+      if (n.id === nodeId) {
+        return { ...n, data: { ...n.data, expanded: !n.data.expanded, onToggle: () => toggleBlockExpand(nodeId) } };
       }
-      if (block.edges) {
-        for (const edge of block.edges) {
-          edges = [...edges, { ...edge, id: `${edge.id}-${Date.now()}` }];
-        }
-      }
-    }
+      return n;
+    });
   }
 
   function addBlock(block) {
@@ -164,17 +160,24 @@
 
   function onNodeClick(event) {
     const node = event.detail?.node || event.node;
-    if (node && node.type === 'block') {
-      selectedNode = node;
-      editName = node.data.blockName || '';
-      editRole = node.data.role || 'agent';
-      editModel = node.data.model || 'gemma4-4b-dense-med';
-      editInstructions = node.data.instructions || '';
-      editVerifier = node.data.verifier || '';
-      editLoopUntil = node.data.loopUntil || '';
-      editMaxIterations = node.data.maxIterations || 5;
-      panelMode = 'edit';
+    if (!node || node.type !== 'block') return;
+
+    // If it's a composite block (has children), toggle expand on click
+    if (node.data.children && node.data.children.length > 0) {
+      toggleBlockExpand(node.id);
+      return;
     }
+
+    // Regular block — open edit panel
+    selectedNode = node;
+    editName = node.data.blockName || '';
+    editRole = node.data.role || 'agent';
+    editModel = node.data.model || 'gemma4-4b-dense-med';
+    editInstructions = node.data.instructions || '';
+    editVerifier = node.data.verifier || '';
+    editLoopUntil = node.data.loopUntil || '';
+    editMaxIterations = node.data.maxIterations || 5;
+    panelMode = 'edit';
   }
 
   function applyEdit() {
