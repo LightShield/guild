@@ -20,6 +20,7 @@
   let selectedNode = $state(null);
   let showHelp = $state(false);
   let selectedNodeIds = $state(new Set());
+  let shouldFitView = $state(false);
 
   // Create agent form
   let newAgentName = $state('');
@@ -98,8 +99,11 @@
 
   function createBlockNode(block, position) {
     const id = `${block.name}-${Date.now()}-${nodes.length}`;
-    const children = block.composite ? (block.nodes || []).map(n => n.data || n) : null;
-    const childEdges = block.composite ? (block.edges || []) : null;
+    const isComposite = block.composite && block.nodes;
+    const children = isComposite ? (block.nodes || []).map(n => n.data || n) : null;
+    const childEdges = isComposite ? (block.edges || []) : null;
+    // Keep original nodes with positions for the inspect mini-canvas
+    const originalNodes = isComposite ? (block.nodes || []) : null;
 
     const newNode = {
       id,
@@ -115,6 +119,7 @@
         maxIterations: null,
         children: children,
         childEdges: childEdges,
+        _originalNodes: originalNodes,
         expanded: false,
         onToggle: children ? () => toggleBlockExpand(id) : null,
       },
@@ -132,7 +137,10 @@
   }
 
   function addBlock(block) {
-    createBlockNode(block, { x: 100 + nodes.length * 220, y: 150 + (nodes.length % 3) * 150 });
+    // Place in a grid-like pattern that stays within a reasonable area
+    const col = nodes.length % 4;
+    const row = Math.floor(nodes.length / 4);
+    createBlockNode(block, { x: 80 + col * 240, y: 80 + row * 180 });
   }
 
   // --- Create new agent ---
@@ -336,6 +344,8 @@
     ];
     teamName = 'full-development';
     selectedTeam = { name: 'full-development' };
+    shouldFitView = true;
+    setTimeout(() => { shouldFitView = false; }, 100);
   }
 
   // --- Load team ---
@@ -367,6 +377,8 @@
     }
     nodes = teamNodes;
     edges = teamEdges;
+    shouldFitView = true;
+    setTimeout(() => { shouldFitView = false; }, 100);
   }
 
   // --- Save flow ---
@@ -612,7 +624,7 @@
       {nodes}
       {edges}
       {nodeTypes}
-      fitView
+      fitView={shouldFitView}
       onconnect={onConnect}
       onnodeclick={onNodeClick}
       onselectionchange={onSelectionChange}
@@ -893,92 +905,60 @@
         </div>
       {/if}
 
-      <!-- Inspect Block -->
+      <!-- Inspect Block — mini canvas view -->
       {#if panelMode === 'inspect' && selectedNode}
+        {@const originalNodes = selectedNode.data._originalNodes || []}
         {@const children = selectedNode.data.children || []}
-        {@const childEdges = selectedNode.data.childEdges || []}
-        <div class="p-5 space-y-4 flex flex-col h-full">
-          <div>
+        {@const inspectNodes = originalNodes.length > 0
+          ? originalNodes.map(n => ({
+              ...n,
+              type: 'block',
+              data: { ...n.data, children: null, childEdges: null, expanded: false, onToggle: null },
+            }))
+          : children.map((c, i) => ({
+              id: c.id || c.blockName || `child-${i}`,
+              type: 'block',
+              position: { x: 50 + i * 220, y: 100 + (i % 2) * 130 },
+              data: { blockName: c.data?.blockName || c.blockName || 'agent', role: c.data?.role || c.role || 'agent', model: '', instructions: '', verifier: null, loopUntil: null, maxIterations: null, children: null, childEdges: null, expanded: false, onToggle: null },
+            }))}
+        {@const inspectEdges = (selectedNode.data.childEdges || []).map(e => ({
+          ...e,
+          id: e.id || `${e.source}-${e.target}`,
+          animated: true,
+          style: 'stroke: #38bdf8; stroke-width: 2px;',
+        }))}
+        <div class="flex flex-col h-full">
+          <div class="px-5 pt-5 pb-3">
             <h3 class="text-sm font-semibold text-gray-100 flex items-center gap-2">
               <span class="text-purple-400">&#9646;&#9646;</span>
               {selectedNode.data.blockName}
             </h3>
-            <p class="text-xs text-gray-500 mt-0.5">{children.length} agents &middot; {childEdges.length} connections</p>
+            <p class="text-xs text-gray-500 mt-0.5">{inspectNodes.length} agents &middot; {inspectEdges.length} connections</p>
           </div>
 
-          <!-- Flow visualization -->
-          <div class="flex-1 overflow-y-auto space-y-2">
-            {#each children as child}
-              {@const name = child.data?.blockName || child.blockName || 'agent'}
-              {@const childRole = child.data?.role || child.role || 'agent'}
-              {@const childInstructions = child.data?.instructions || child.instructions || ''}
-              {@const isNested = child.children && child.children.length > 0}
-              {@const outgoing = childEdges.filter(e => e.source === name || e.source === child.id).map(e => {
-                const t = children.find(c => (c.data?.blockName || c.blockName || c.id) === e.target || c.id === e.target);
-                return t?.data?.blockName || t?.blockName || e.target;
-              })}
-              {@const incoming = childEdges.filter(e => e.target === name || e.target === child.id).map(e => {
-                const s = children.find(c => (c.data?.blockName || c.blockName || c.id) === e.source || c.id === e.source);
-                return s?.data?.blockName || s?.blockName || e.source;
-              })}
-
-              <div class="rounded-xl bg-gray-800/60 border border-gray-700/50 p-3 space-y-2
-                          hover:border-gray-600/60 transition-colors">
-                <!-- Agent header -->
-                <div class="flex items-center gap-2">
-                  {#if isNested}
-                    <span class="text-[10px] text-purple-400">&#9646;&#9646;</span>
-                  {:else}
-                    <span class="w-2 h-2 rounded-full bg-guild-400/60"></span>
-                  {/if}
-                  <span class="text-sm font-medium text-gray-100 flex-1">{name}</span>
-                  <span class="text-[9px] px-1.5 py-0.5 rounded bg-gray-700 text-gray-400 uppercase font-medium">{childRole}</span>
-                </div>
-
-                <!-- Instructions preview -->
-                {#if childInstructions}
-                  <p class="text-[11px] text-gray-500 leading-relaxed line-clamp-2 ml-4">{childInstructions}</p>
-                {/if}
-
-                <!-- Connections -->
-                {#if incoming.length > 0 || outgoing.length > 0}
-                  <div class="ml-4 flex flex-wrap items-center gap-1.5 text-[10px]">
-                    {#if incoming.length > 0}
-                      <span class="text-gray-600">from:</span>
-                      {#each incoming as src}
-                        <span class="px-1.5 py-0.5 rounded bg-gray-700/60 text-gray-400 border border-gray-700/40">{src}</span>
-                      {/each}
-                    {/if}
-                    {#if outgoing.length > 0}
-                      {#if incoming.length > 0}<span class="text-gray-700 mx-1">|</span>{/if}
-                      <span class="text-gray-600">to:</span>
-                      {#each outgoing as tgt}
-                        <span class="px-1.5 py-0.5 rounded bg-guild-900/40 text-guild-400 border border-guild-800/40">{tgt}</span>
-                      {/each}
-                    {/if}
-                  </div>
-                {/if}
-
-                <!-- Nested block indicator -->
-                {#if isNested}
-                  <div class="ml-4 text-[10px] text-purple-500">Contains {child.children.length} sub-agents</div>
-                {/if}
-              </div>
-            {/each}
+          <!-- Mini flow canvas -->
+          <div class="flex-1 border-t border-gray-800 relative">
+            <SvelteFlow
+              nodes={rawNodes}
+              edges={inspectEdges}
+              nodeTypes={nodeTypes}
+              fitView
+              nodesDraggable={false}
+              nodesConnectable={false}
+              elementsSelectable={false}
+              panOnDrag={true}
+              zoomOnScroll={true}
+              colorMode="dark"
+            >
+              <Background gap={16} size={1} />
+            </SvelteFlow>
           </div>
 
           <!-- Actions -->
-          <div class="flex gap-2 pt-2 border-t border-gray-800 mt-auto">
-            <button
-              onclick={() => { toggleBlockExpand(selectedNode.id); }}
-              class="flex-1 px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-xs text-gray-300
-                     border border-gray-700 transition-all duration-150"
-            >
-              {selectedNode.data.expanded ? 'Collapse on Canvas' : 'Expand on Canvas'}
-            </button>
+          <div class="flex gap-2 p-4 border-t border-gray-800">
             <button onclick={() => { panelMode = 'none'; selectedNode = null; }}
-              class="px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-xs text-gray-400
-                     border border-gray-700 transition-all duration-150">
+              class="flex-1 px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-xs text-gray-300
+                     border border-gray-700 transition-all duration-150 text-center">
               Close
             </button>
           </div>
