@@ -379,8 +379,11 @@
 
   // ===== Node Click Handler =====
 
-  function onNodeClick({ node }) {
+  function onNodeClick({ node, event }) {
     if (!node || node.type !== 'block') return;
+
+    // If Shift is held, user is multi-selecting — don't expand/collapse/edit
+    if (event?.shiftKey) return;
 
     if (node.data.isComposite) {
       const blockId = node.id;
