@@ -123,10 +123,8 @@
         verifier: null,
         loopUntil: null,
         maxIterations: null,
-        // Composite block metadata (stored but not rendered in node)
         isComposite,
-        agentCount: isComposite ? block.nodes.length : 0,
-        // Store full child data for expansion
+        agentCount: isComposite ? (block.agentCount || block.nodes.length) : 0,
         _childNodes: isComposite ? block.nodes : null,
         _childEdges: isComposite ? (block.edges || []) : null,
       },
@@ -194,7 +192,7 @@
           loopUntil: childData.loopUntil || null,
           maxIterations: childData.maxIterations || null,
           isComposite: isChildComposite,
-          agentCount: isChildComposite ? (childData._childNodes || childData.nodes || []).length : 0,
+          agentCount: isChildComposite ? (childData.agentCount || (childData._childNodes || childData.nodes || []).length) : 0,
           _childNodes: childData._childNodes || (child.composite ? child.nodes : null) || null,
           _childEdges: childData._childEdges || (child.composite ? child.edges : null) || null,
           _parentBlockId: blockId,
@@ -211,8 +209,8 @@
       maxX = Math.max(maxX, child.position.x + childWidth);
       maxY = Math.max(maxY, child.position.y + childHeight);
     }
-    const containerWidth = Math.max(maxX + CONTAINER_PADDING_X, 320);
-    const containerHeight = Math.max(maxY + CONTAINER_PADDING_BOTTOM, 180);
+    const containerWidth = Math.max(maxX + CONTAINER_PADDING_X + 20, 350);
+    const containerHeight = Math.max(maxY + CONTAINER_PADDING_BOTTOM + 20, 200);
 
     // Create internal edges with dashed purple styling
     const internalEdgeIds = [];
