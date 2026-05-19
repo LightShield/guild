@@ -139,6 +139,39 @@ When given autonomous work (user says "go", "continue", "don't stop"):
 - **Commit and push frequently** — don't accumulate large uncommitted diffs.
 - **If blocked** (needs user input, external service down): state the blocker clearly and stop. Otherwise keep going.
 
+## Guidelines System
+
+This project follows the LightShield Guidelines system.
+
+**Guidelines repo:** /Users/ormagen/workspace/private/Guidelines
+**Languages:** python, common
+
+### Development Flows
+
+When developing features, follow the flows at `Guidelines/guidelines/flows/`:
+
+| Flow | Purpose |
+|------|---------|
+| `/develop` | Full lifecycle: requirements → architecture → TDD → review → compliance |
+| `/review` | Review-only pass on existing code |
+| `/three-amigos` | Requirements refinement from 3 perspectives (user/dev/tester) |
+| `/add-tests` | Add tests to existing code |
+| `/verify` | Sanity check an existing project |
+
+### Agents
+
+Agent personas: `/Users/ormagen/workspace/private/Guidelines/guidelines/agents/`
+All agents inherit: `agents_base.md`
+Per-agent rules: `Guidelines/guidelines/generated/agent_rules/`
+
+### Mechanical Review
+
+```bash
+python3 /Users/ormagen/workspace/private/Guidelines/src/scripts/review_rules.py \
+  --languages python,common \
+  --project-dir .
+```
+
 ## Remote Ollama Setup
 
 Development uses a remote Ollama instance on the LAN:

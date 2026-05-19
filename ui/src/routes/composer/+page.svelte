@@ -76,7 +76,7 @@
   });
 
   function persistCustomBlocks() {
-    localStorage.setItem('guild-custom-blocks', JSON.stringify(customBlocks));
+    try { localStorage.setItem('guild-custom-blocks', JSON.stringify(customBlocks)); } catch { /* quota exceeded */ }
   }
 
   // ===== Drag and Drop =====
@@ -434,10 +434,6 @@
   // ===== Keyboard Handling =====
 
   function onKeyDown(event) {
-    if (event.key === 'Backspace' || event.key === 'Delete') {
-      if (panelMode !== 'none') return;
-      deleteSelected();
-    }
     if (event.key === 'Escape') {
       panelMode = 'none';
       selectedNode = null;
@@ -457,8 +453,8 @@
     nodes = [
       { id: 'req', type: 'block', position: { x: 50, y: 150 }, data: { blockName: 'requirements', role: 'planner', model: 'gemma4-4b-dense-med', instructions: builtinRoles[0].instructions, verifier: 'requirements_verifier', loopUntil: 'verifier approves', maxIterations: 5, isComposite: false, agentCount: 0, _childNodes: null, _childEdges: null } },
       { id: 'arch', type: 'block', position: { x: 300, y: 150 }, data: { blockName: 'architect', role: 'architect', model: 'gemma4-4b-dense-med', instructions: builtinRoles[1].instructions, verifier: 'architect_verifier', loopUntil: 'verifier approves', maxIterations: 5, isComposite: false, agentCount: 0, _childNodes: null, _childEdges: null } },
-      { id: 'tester', type: 'block', position: { x: 550, y: 80 }, data: { blockName: 'tester', role: 'tester', model: 'gemma4-4b-dense-med', instructions: builtinRoles[3].instructions, verifier: 'tester_verifier', loopUntil: 'verifier approves', maxIterations: 5, isComposite: false, agentCount: 0, _childNodes: null, _childEdges: null } },
-      { id: 'impl', type: 'block', position: { x: 550, y: 250 }, data: { blockName: 'implementer', role: 'implementer', model: 'gemma4-4b-dense-med', instructions: builtinRoles[2].instructions, verifier: 'test_runner', loopUntil: 'tests pass', maxIterations: 5, isComposite: false, agentCount: 0, _childNodes: null, _childEdges: null } },
+      { id: 'tester', type: 'block', position: { x: 550, y: 100 }, data: { blockName: 'tester', role: 'tester', model: 'gemma4-4b-dense-med', instructions: builtinRoles[3].instructions, verifier: 'tester_verifier', loopUntil: 'verifier approves', maxIterations: 5, isComposite: false, agentCount: 0, _childNodes: null, _childEdges: null } },
+      { id: 'impl', type: 'block', position: { x: 550, y: 200 }, data: { blockName: 'implementer', role: 'implementer', model: 'gemma4-4b-dense-med', instructions: builtinRoles[2].instructions, verifier: 'test_runner', loopUntil: 'tests pass', maxIterations: 5, isComposite: false, agentCount: 0, _childNodes: null, _childEdges: null } },
       { id: 'review', type: 'block', position: { x: 800, y: 150 }, data: { blockName: 'code_reviewer', role: 'reviewer', model: 'gemma4-26b-moe-agent', instructions: builtinRoles[5].instructions, verifier: null, loopUntil: 'reviewer approves', maxIterations: 3, isComposite: false, agentCount: 0, _childNodes: null, _childEdges: null } },
       { id: 'verif', type: 'block', position: { x: 1050, y: 150 }, data: { blockName: 'verificator', role: 'verifier', model: 'gemma4-26b-moe-agent', instructions: builtinRoles[6].instructions, verifier: null, loopUntil: 'all checks pass', maxIterations: null, isComposite: false, agentCount: 0, _childNodes: null, _childEdges: null } },
     ];
@@ -473,7 +469,7 @@
     teamName = 'full-development';
     selectedTeam = { name: 'full-development' };
     shouldFitView = true;
-    setTimeout(() => { shouldFitView = false; }, 100);
+    requestAnimationFrame(() => { shouldFitView = false; });
   }
 
   // ===== Load Team =====
@@ -506,7 +502,7 @@
     nodes = teamNodes;
     edges = teamEdges;
     shouldFitView = true;
-    setTimeout(() => { shouldFitView = false; }, 100);
+    requestAnimationFrame(() => { shouldFitView = false; });
   }
 
   // ===== Save Flow =====
@@ -750,8 +746,8 @@
     {/if}
 
     <SvelteFlow
-      {nodes}
-      {edges}
+      bind:nodes
+      bind:edges
       {nodeTypes}
       fitView={shouldFitView}
       onconnect={onConnect}
