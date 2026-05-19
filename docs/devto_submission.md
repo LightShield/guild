@@ -21,7 +21,8 @@ Guild solves this with an **escalation-first architecture**: start with the chea
 
 ### Key Features
 
-- **Escalation chain**: Gemma 4 4B (fast/cheap) → Gemma 4 31B Dense (heavy reasoning) → CLI tools → human (last resort)
+- **Escalation chain**: Gemma 4 4B Dense (`gemma4-4b-dense-med`) → Gemma 4 26B MoE (`gemma4-26b-moe-agent`) → CLI tools → human (last resort)
+- **Visual flow composer**: drag-and-drop web UI to design multi-agent workflows, save reusable blocks, expand to inspect internals
 - **"Good neighbor" mode**: detects user activity via CPU/input monitoring, throttles to zero when you're working, runs full-speed when idle
 - **Truly autonomous**: survives reboots, sleep/wake cycles, crashes — picks up where it left off
 - **Self-improving**: extracts learnings from completed tasks, injects them into future sessions
@@ -30,8 +31,8 @@ Guild solves this with an **escalation-first architecture**: start with the chea
 
 ## Demo
 
-<!-- TODO: Replace with actual demo video/link -->
-[Demo video showing Guild completing a coding task with Gemma 4 escalation]
+<!-- TODO: Replace with actual demo video/asciinema link -->
+> Demo showing Guild completing a coding task with automatic escalation from gemma4-4b-dense-med to gemma4-26b-moe-agent when stuck.
 
 ```bash
 # Install and initialize
@@ -39,8 +40,8 @@ pip install -e ".[dev]"
 guild init
 
 # Configure Gemma 4 escalation chain
-guild config --set provider.model=gemma-4-4b
-guild config --set escalation.escalation_chain=gemma-4-31b
+guild config --set provider.model=gemma4-4b-dense-med
+guild config --set escalation.escalation_chain=gemma4-26b-moe-agent
 
 # Run a task — watch it escalate when needed
 guild task "Refactor the auth module to use JWT tokens instead of sessions"
@@ -53,11 +54,11 @@ guild ps  # check progress anytime
 ### The Escalation in Action
 
 ```
-[guild] Starting task with gemma-4-4b...
+[guild] Starting task with gemma4-4b-dense-med...
 [guild] Turn 1: Reading auth module...
 [guild] Turn 2: Planning refactor approach...
 [guild] Turn 5: Stuck — repeated error in generated code
-[guild] Escalating to gemma-4-31b (reason: stuck_loop)
+[guild] Escalating to gemma4-26b-moe-agent (reason: stuck_loop)
 [guild] Turn 6: Analyzing error pattern...
 [guild] Turn 7: Applying corrected implementation...
 [guild] Turn 9: Running tests... all pass
@@ -92,12 +93,22 @@ Layer 3 — Orchestration
 └── Block definitions (TOML-based composable roles)
 ```
 
+### Web UI — Visual Flow Composer
+
+Guild includes a web-based flow composer (`guild serve`) for designing multi-agent teams visually:
+
+- **Dark-mode canvas** powered by xyflow — drag agents from palette, connect with edges
+- **Reusable blocks** — multi-select agents, save as a named block, drag it back as a single node
+- **Inline expansion** — click a block to expand it on the canvas showing internal nodes and dashed connection lines
+- **Verifier decorators** — attach approval loops to any agent (loop until verifier passes, max N iterations)
+- **Preset flows** — one-click "Full Development" loads a complete requirements→architecture→TDD→review→verification pipeline
+
 ### Stats
 
-- **92 source modules** across 20 domain-grouped packages
-- **2200+ tests** (unit, integration, E2E)
+- **108 source modules** across 20 domain-grouped packages
+- **2307 tests** (unit, integration, E2E + Playwright)
 - **100% branch coverage**
-- **30 requirements** with full acceptance criteria traceability
+- **213 requirements** with full acceptance criteria traceability
 - Pure Python 3.11+, async throughout, zero cloud dependency
 
 ## How I Used Gemma 4
@@ -108,8 +119,8 @@ Gemma 4 is the ideal model family for Guild because:
 
 1. **Runs locally via Ollama** — zero API cost, complete privacy
 2. **Multiple size tiers** — enables the escalation architecture
-3. **128K context window (31B)** — can hold entire codebases in context
-4. **Strong code reasoning** — particularly the 31B Dense variant
+3. **128K context window** — can hold entire codebases in context
+4. **Strong code reasoning** — particularly the 26B MoE agent variant
 
 ### The Escalation Architecture
 
@@ -119,28 +130,28 @@ The core insight: **most agent turns don't need a 31B model**. Reading a file, r
 - Complex multi-file reasoning
 - Architectural decisions requiring broad context
 
-...it automatically escalates to Gemma 4 31B Dense, which has the reasoning depth to break through. This gives you:
+...it automatically escalates to Gemma 4 26B MoE, which has the reasoning depth to break through. This gives you:
 
 - **80% of turns** at 4B speed (fast, low resource usage)
-- **20% of turns** at 31B quality (when it actually matters)
+- **20% of turns** at 26B quality (when it actually matters)
 - **Near-zero cost** compared to cloud API pricing
 
 ### Model Variants Used
 
-| Tier | Model | Role |
-|------|-------|------|
-| Fast | `gemma-4-4b` | Default execution — file ops, shell commands, simple code generation |
-| Smart | `gemma-4-31b` | Escalation target — complex reasoning, architecture decisions, debugging stuck states |
-| Routing | `gemma-4-4b` | Permission checks, safety screening (cheap decisions stay cheap) |
+| Tier | Ollama Model | Params | Role |
+|------|-------------|--------|------|
+| Edge | `gemma4-2b-edge-fast` | 5.1B (Q4) | Ultra-light routing, permission checks |
+| Fast | `gemma4-4b-dense-med` | 8.0B (Q4) | Default execution — file ops, shell commands, simple code generation |
+| Smart | `gemma4-26b-moe-agent` | 25.8B (Q4) | Escalation target — complex reasoning, architecture decisions, debugging stuck states |
 
 ### Why Not Just Use the Big Model?
 
 Three reasons:
-1. **Resource contention** — 31B uses significant RAM/VRAM. The "good neighbor" philosophy means minimizing resource usage.
-2. **Speed** — 4B responds in 1-2 seconds; 31B takes 10-15 seconds. For simple file reads, that latency is wasted.
+1. **Resource contention** — 26B MoE uses significant RAM/VRAM. The "good neighbor" philosophy means minimizing resource usage.
+2. **Speed** — 4B responds in 1-2 seconds; 26B takes 10-15 seconds. For simple file reads, that latency is wasted.
 3. **Autonomy duration** — when running overnight on a coding task, token efficiency means more work done per charge cycle.
 
-The escalation chain is configurable. If you have the hardware, run 31B all the time. If you're on a laptop, start at 4B and let Guild decide when to bring in the heavy model.
+The escalation chain is configurable. If you have the hardware, run 26B all the time. If you're on a laptop, start at 4B and let Guild decide when to bring in the heavy model.
 
 ---
 
