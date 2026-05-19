@@ -65,8 +65,8 @@
   ];
 
   onMount(async () => {
-    availableBlocks = await fetchBlocks();
-    teams = await fetchTeams();
+    try { availableBlocks = await fetchBlocks(); } catch { availableBlocks = []; }
+    try { teams = await fetchTeams(); } catch { teams = []; }
     if (availableBlocks.length === 0) {
       availableBlocks = builtinRoles;
     }
