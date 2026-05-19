@@ -5,8 +5,12 @@
   import { fetchBlocks, fetchTeams, saveTeam } from '$lib/api.js';
   import BlockNode from '$lib/components/BlockNode.svelte';
 
+  // --- Core flow state ---
   let nodes = $state([]);
   let edges = $state([]);
+  let shouldFitView = $state(false);
+
+  // --- Sidebar data ---
   let availableBlocks = $state([]);
   let customBlocks = $state([]);
   let teams = $state([]);
@@ -15,20 +19,19 @@
   let saveMessage = $state('');
   let draggedBlock = $state(null);
 
-  // Right panel state
-  let panelMode = $state('none'); // 'none' | 'create' | 'edit' | 'save-block' | 'inspect'
+  // --- Right panel state ---
+  let panelMode = $state('none'); // 'none' | 'create' | 'edit' | 'save-block'
   let selectedNode = $state(null);
   let showHelp = $state(false);
   let selectedNodeIds = $state(new Set());
-  let shouldFitView = $state(false);
 
-  // Create agent form
+  // --- Create agent form ---
   let newAgentName = $state('');
   let newAgentRole = $state('agent');
   let newAgentModel = $state('gemma4-4b-dense-med');
   let newAgentInstructions = $state('');
 
-  // Edit agent form
+  // --- Edit agent form ---
   let editName = $state('');
   let editRole = $state('');
   let editModel = $state('');
@@ -37,9 +40,13 @@
   let editLoopUntil = $state('');
   let editMaxIterations = $state(5);
 
-  // Save as block
+  // --- Save as block form ---
   let blockName = $state('');
   let blockDescription = $state('');
+
+  // --- Block expand/collapse state ---
+  // Maps blockNodeId -> { originalNode, childNodeIds, internalEdgeIds, hiddenEdgeIds }
+  let expandedBlocks = $state(new Map());
 
   const nodeTypes = { block: BlockNode };
 
@@ -62,7 +69,6 @@
     if (availableBlocks.length === 0) {
       availableBlocks = builtinRoles;
     }
-    // Load custom blocks from localStorage
     const stored = localStorage.getItem('guild-custom-blocks');
     if (stored) {
       try { customBlocks = JSON.parse(stored); } catch { /* ignore */ }
@@ -73,7 +79,7 @@
     localStorage.setItem('guild-custom-blocks', JSON.stringify(customBlocks));
   }
 
-  // --- Drag and drop ---
+  // ===== Drag and Drop =====
 
   function onDragStart(event, block) {
     draggedBlock = block;
@@ -93,17 +99,16 @@
       try { block = JSON.parse(event.dataTransfer.getData('application/guild-block')); } catch { return; }
     }
     const bounds = event.currentTarget.getBoundingClientRect();
-    createBlockNode(block, { x: event.clientX - bounds.left, y: event.clientY - bounds.top });
+    const position = { x: event.clientX - bounds.left, y: event.clientY - bounds.top };
+    placeBlockOnCanvas(block, position);
     draggedBlock = null;
   }
 
-  function createBlockNode(block, position) {
-    const id = `${block.name}-${Date.now()}-${nodes.length}`;
-    const isComposite = block.composite && block.nodes;
-    const children = isComposite ? (block.nodes || []).map(n => n.data || n) : null;
-    const childEdges = isComposite ? (block.edges || []) : null;
-    // Keep original nodes with positions for the inspect mini-canvas
-    const originalNodes = isComposite ? (block.nodes || []) : null;
+  // ===== Node Creation =====
+
+  function placeBlockOnCanvas(block, position) {
+    const id = `${block.name}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const isComposite = !!(block.composite && block.nodes && block.nodes.length > 0);
 
     const newNode = {
       id,
@@ -117,33 +122,183 @@
         verifier: null,
         loopUntil: null,
         maxIterations: null,
-        children: children,
-        childEdges: childEdges,
-        _originalNodes: originalNodes,
-        expanded: false,
-        onToggle: children ? () => toggleBlockExpand(id) : null,
+        // Composite block metadata (stored but not rendered in node)
+        isComposite,
+        agentCount: isComposite ? block.nodes.length : 0,
+        // Store full child data for expansion
+        _childNodes: isComposite ? block.nodes : null,
+        _childEdges: isComposite ? (block.edges || []) : null,
       },
     };
     nodes = [...nodes, newNode];
   }
 
-  function toggleBlockExpand(nodeId) {
-    nodes = nodes.map(n => {
-      if (n.id === nodeId) {
-        return { ...n, data: { ...n.data, expanded: !n.data.expanded, onToggle: () => toggleBlockExpand(nodeId) } };
-      }
-      return n;
-    });
-  }
-
-  function addBlock(block) {
-    // Place in a grid-like pattern that stays within a reasonable area
+  function addBlockFromSidebar(block) {
     const col = nodes.length % 4;
     const row = Math.floor(nodes.length / 4);
-    createBlockNode(block, { x: 80 + col * 240, y: 80 + row * 180 });
+    placeBlockOnCanvas(block, { x: 80 + col * 240, y: 80 + row * 180 });
   }
 
-  // --- Create new agent ---
+  // ===== Block Expand / Collapse (REQ-UI-04.4 - 04.7) =====
+
+  function expandBlock(blockNode) {
+    const blockId = blockNode.id;
+    const childNodesData = blockNode.data._childNodes || [];
+    const childEdgesData = blockNode.data._childEdges || [];
+    const baseX = blockNode.position.x;
+    const baseY = blockNode.position.y;
+
+    // Build ID mapping: original child id -> new canvas id
+    const idMap = {};
+    const childNodeIds = [];
+
+    const newChildNodes = childNodesData.map((child) => {
+      const origId = child.id || child.data?.blockName || `child-${Math.random().toString(36).slice(2, 6)}`;
+      const canvasId = `${blockId}__${origId}`;
+      idMap[origId] = canvasId;
+      // Also map by blockName for edge resolution
+      if (child.data?.blockName) {
+        idMap[child.data.blockName] = canvasId;
+      }
+      if (child.blockName) {
+        idMap[child.blockName] = canvasId;
+      }
+      childNodeIds.push(canvasId);
+
+      const childData = child.data || {};
+      const isChildComposite = !!(childData.isComposite || (childData._childNodes && childData._childNodes.length > 0));
+
+      return {
+        id: canvasId,
+        type: 'block',
+        position: {
+          x: baseX + (child.position?.x || 0),
+          y: baseY + (child.position?.y || 0),
+        },
+        data: {
+          blockName: childData.blockName || child.blockName || 'agent',
+          role: childData.role || child.role || 'agent',
+          model: childData.model || child.model || 'gemma4-4b-dense-med',
+          instructions: childData.instructions || child.instructions || '',
+          verifier: childData.verifier || null,
+          loopUntil: childData.loopUntil || null,
+          maxIterations: childData.maxIterations || null,
+          isComposite: isChildComposite,
+          agentCount: isChildComposite ? (childData._childNodes || childData.nodes || []).length : 0,
+          _childNodes: childData._childNodes || (child.composite ? child.nodes : null) || null,
+          _childEdges: childData._childEdges || (child.composite ? child.edges : null) || null,
+          _parentBlockId: blockId,
+        },
+      };
+    });
+
+    // Create internal edges with dashed purple styling
+    const internalEdgeIds = [];
+    const newInternalEdges = childEdgesData.map((edge) => {
+      const edgeId = `${blockId}__edge__${edge.id || edge.source + '-' + edge.target}`;
+      internalEdgeIds.push(edgeId);
+      const resolvedSource = idMap[edge.source] || edge.source;
+      const resolvedTarget = idMap[edge.target] || edge.target;
+      return {
+        id: edgeId,
+        source: resolvedSource,
+        target: resolvedTarget,
+        animated: true,
+        style: 'stroke: #a78bfa; stroke-width: 2px; stroke-dasharray: 5 3; opacity: 0.7;',
+      };
+    });
+
+    // Hide top-level edges connected to this block (store them to restore on collapse)
+    const hiddenEdgeIds = [];
+    const remainingEdges = edges.filter((e) => {
+      if (e.source === blockId || e.target === blockId) {
+        hiddenEdgeIds.push(e.id);
+        return false;
+      }
+      return true;
+    });
+
+    // Store expansion state
+    const newExpandedBlocks = new Map(expandedBlocks);
+    newExpandedBlocks.set(blockId, {
+      originalNode: blockNode,
+      childNodeIds,
+      internalEdgeIds,
+      hiddenEdgeIds,
+      hiddenEdges: edges.filter((e) => hiddenEdgeIds.includes(e.id)),
+    });
+    expandedBlocks = newExpandedBlocks;
+
+    // Remove block node, add children + internal edges
+    nodes = [...nodes.filter((n) => n.id !== blockId), ...newChildNodes];
+    edges = [...remainingEdges, ...newInternalEdges];
+  }
+
+  function collapseBlock(blockId) {
+    const state = expandedBlocks.get(blockId);
+    if (!state) return;
+
+    const { originalNode, childNodeIds, internalEdgeIds, hiddenEdges } = state;
+    const childIdSet = new Set(childNodeIds);
+    const internalEdgeIdSet = new Set(internalEdgeIds);
+
+    // First, recursively collapse any expanded child blocks
+    for (const childId of childNodeIds) {
+      if (expandedBlocks.has(childId)) {
+        collapseBlock(childId);
+      }
+    }
+
+    // Remove child nodes and internal edges, restore the block node + hidden edges
+    nodes = [...nodes.filter((n) => !childIdSet.has(n.id)), originalNode];
+    edges = [
+      ...edges.filter((e) => !internalEdgeIdSet.has(e.id)),
+      ...(hiddenEdges || []),
+    ];
+
+    // Remove from expanded map
+    const newExpandedBlocks = new Map(expandedBlocks);
+    newExpandedBlocks.delete(blockId);
+    expandedBlocks = newExpandedBlocks;
+  }
+
+  // ===== Node Click Handler =====
+
+  function onNodeClick({ node }) {
+    if (!node || node.type !== 'block') return;
+
+    // Check if this node is an expanded block's child that is itself a composite
+    // or if this node IS a composite block on the canvas
+    if (node.data.isComposite) {
+      const blockId = node.id;
+      // If already expanded, collapse it
+      if (expandedBlocks.has(blockId)) {
+        collapseBlock(blockId);
+      } else {
+        expandBlock(node);
+      }
+      return;
+    }
+
+    // Regular node: open edit panel
+    selectedNode = node;
+    editName = node.data.blockName || '';
+    editRole = node.data.role || 'agent';
+    editModel = node.data.model || 'gemma4-4b-dense-med';
+    editInstructions = node.data.instructions || '';
+    editVerifier = node.data.verifier || '';
+    editLoopUntil = node.data.loopUntil || '';
+    editMaxIterations = node.data.maxIterations || 5;
+    panelMode = 'edit';
+  }
+
+  // ===== Selection Tracking =====
+
+  function onSelectionChange({ nodes: selectedNodes }) {
+    selectedNodeIds = new Set((selectedNodes || []).map((n) => n.id));
+  }
+
+  // ===== Create Agent =====
 
   function openCreatePanel() {
     panelMode = 'create';
@@ -161,128 +316,16 @@
       model: newAgentModel,
       instructions: newAgentInstructions,
     };
-    addBlock(block);
-    // Also add to available blocks for reuse
+    addBlockFromSidebar(block);
     availableBlocks = [...availableBlocks, block];
     panelMode = 'none';
   }
 
-  // --- Edit node ---
-
-  function onNodeClick({ node, event: _event }) {
-    if (!node || node.type !== 'block') return;
-
-    // Composite block — expand inline on canvas
-    if (node.data.children && node.data.children.length > 0) {
-      expandBlockInline(node);
-      return;
-    }
-
-    // Regular block — open edit panel
-    selectedNode = node;
-    editName = node.data.blockName || '';
-    editRole = node.data.role || 'agent';
-    editModel = node.data.model || 'gemma4-4b-dense-med';
-    editInstructions = node.data.instructions || '';
-    editVerifier = node.data.verifier || '';
-    editLoopUntil = node.data.loopUntil || '';
-    editMaxIterations = node.data.maxIterations || 5;
-    panelMode = 'edit';
-  }
-
-  // Track which blocks are expanded inline
-  let expandedBlocks = $state(new Map()); // blockNodeId -> { originalNode, childIds, edgeIds }
-
-  function expandBlockInline(blockNode) {
-    const blockId = blockNode.id;
-
-    // If already expanded, collapse it
-    if (expandedBlocks.has(blockId)) {
-      collapseBlockInline(blockId);
-      return;
-    }
-
-    const origNodes = blockNode.data._originalNodes || [];
-    const origEdges = blockNode.data.childEdges || [];
-    const baseX = blockNode.position.x;
-    const baseY = blockNode.position.y;
-
-    // Create child nodes at offset positions
-    const childIds = [];
-    const newNodes = origNodes.map(n => {
-      const childId = `${blockId}__${n.id || n.data?.blockName || Math.random()}`;
-      childIds.push(childId);
-      return {
-        ...n,
-        id: childId,
-        type: 'block',
-        position: { x: baseX + (n.position?.x || 0), y: baseY + (n.position?.y || 0) },
-        data: {
-          ...(n.data || {}),
-          blockName: n.data?.blockName || n.blockName || 'agent',
-          role: n.data?.role || n.role || 'agent',
-          model: n.data?.model || '',
-          instructions: n.data?.instructions || '',
-          verifier: n.data?.verifier || null,
-          loopUntil: n.data?.loopUntil || null,
-          maxIterations: n.data?.maxIterations || null,
-          children: null,
-          childEdges: null,
-          _originalNodes: null,
-          expanded: false,
-          onToggle: null,
-          _parentBlock: blockId,
-        },
-      };
-    });
-
-    // Create internal edges (semi-transparent, dashed)
-    const idMap = {};
-    origNodes.forEach((n, i) => {
-      idMap[n.id || n.data?.blockName || i] = childIds[i];
-    });
-
-    const edgeIds = [];
-    const newEdges = origEdges.map(e => {
-      const edgeId = `${blockId}__edge__${e.id || `${e.source}-${e.target}`}`;
-      edgeIds.push(edgeId);
-      return {
-        id: edgeId,
-        source: idMap[e.source] || e.source,
-        target: idMap[e.target] || e.target,
-        animated: true,
-        style: 'stroke: #a78bfa; stroke-width: 2px; stroke-dasharray: 5 3; opacity: 0.7;',
-      };
-    });
-
-    // Store expansion state
-    expandedBlocks = new Map(expandedBlocks);
-    expandedBlocks.set(blockId, { originalNode: blockNode, childIds, edgeIds });
-
-    // Remove the block node, add child nodes + edges
-    nodes = [...nodes.filter(n => n.id !== blockId), ...newNodes];
-    edges = [...edges, ...newEdges];
-  }
-
-  function collapseBlockInline(blockId) {
-    const state = expandedBlocks.get(blockId);
-    if (!state) return;
-
-    const { originalNode, childIds, edgeIds } = state;
-    const childIdSet = new Set(childIds);
-    const edgeIdSet = new Set(edgeIds);
-
-    // Remove child nodes and their edges, restore block node
-    nodes = [...nodes.filter(n => !childIdSet.has(n.id)), originalNode];
-    edges = edges.filter(e => !edgeIdSet.has(e.id) && !childIdSet.has(e.source) && !childIdSet.has(e.target));
-
-    expandedBlocks = new Map(expandedBlocks);
-    expandedBlocks.delete(blockId);
-  }
+  // ===== Edit Agent =====
 
   function applyEdit() {
     if (!selectedNode) return;
-    nodes = nodes.map(n => {
+    nodes = nodes.map((n) => {
       if (n.id === selectedNode.id) {
         return {
           ...n,
@@ -295,7 +338,7 @@
             verifier: editVerifier || null,
             loopUntil: editLoopUntil || null,
             maxIterations: editMaxIterations || null,
-          }
+          },
         };
       }
       return n;
@@ -306,22 +349,16 @@
 
   function deleteNode() {
     if (!selectedNode) return;
-    edges = edges.filter(e => e.source !== selectedNode.id && e.target !== selectedNode.id);
-    nodes = nodes.filter(n => n.id !== selectedNode.id);
+    edges = edges.filter((e) => e.source !== selectedNode.id && e.target !== selectedNode.id);
+    nodes = nodes.filter((n) => n.id !== selectedNode.id);
     panelMode = 'none';
     selectedNode = null;
   }
 
-  // --- Selection tracking ---
-
-  function onSelectionChange({ nodes: selectedNodes }) {
-    selectedNodeIds = new Set((selectedNodes || []).map(n => n.id));
-  }
-
-  // --- Multi-select and save as block ---
+  // ===== Save as Block (REQ-UI-04.2) =====
 
   function getSelectedNodes() {
-    return nodes.filter(n => selectedNodeIds.has(n.id));
+    return nodes.filter((n) => selectedNodeIds.has(n.id));
   }
 
   function openSaveBlockPanel() {
@@ -342,22 +379,25 @@
     if (selected.length < 2) return;
 
     // Normalize positions relative to the top-left of the selection
-    const minX = Math.min(...selected.map(n => n.position.x));
-    const minY = Math.min(...selected.map(n => n.position.y));
+    const minX = Math.min(...selected.map((n) => n.position.x));
+    const minY = Math.min(...selected.map((n) => n.position.y));
 
-    const blockNodes = selected.map(n => ({
-      ...n,
+    const blockNodes = selected.map((n) => ({
+      id: n.id,
       position: { x: n.position.x - minX, y: n.position.y - minY },
+      data: { ...n.data },
     }));
 
-    // Capture internal edges (both source and target in selection)
-    const selectedIds = new Set(selected.map(n => n.id));
-    const blockEdges = edges.filter(e => selectedIds.has(e.source) && selectedIds.has(e.target));
+    // Capture internal edges (both source and target in the selection)
+    const selectedIds = new Set(selected.map((n) => n.id));
+    const blockEdges = edges
+      .filter((e) => selectedIds.has(e.source) && selectedIds.has(e.target))
+      .map((e) => ({ id: e.id, source: e.source, target: e.target }));
 
     const compositeBlock = {
       name: blockName.trim(),
       role: 'orchestrator',
-      description: blockDescription || `Composite: ${selected.map(n => n.data.blockName).join(' → ')}`,
+      description: blockDescription || `Composite: ${selected.map((n) => n.data.blockName).join(' + ')}`,
       composite: true,
       nodes: blockNodes,
       edges: blockEdges,
@@ -376,11 +416,11 @@
     persistCustomBlocks();
   }
 
-  // --- Connection drawing ---
+  // ===== Connection Drawing =====
 
   function onConnect(connection) {
     const newEdge = {
-      id: `e-${connection.source}-${connection.target}-${edges.length}`,
+      id: `e-${connection.source}-${connection.target}-${Date.now()}`,
       source: connection.source,
       target: connection.target,
       sourceHandle: connection.sourceHandle,
@@ -391,11 +431,11 @@
     edges = [...edges, newEdge];
   }
 
-  // --- Keyboard ---
+  // ===== Keyboard Handling =====
 
   function onKeyDown(event) {
     if (event.key === 'Backspace' || event.key === 'Delete') {
-      if (panelMode !== 'none') return; // don't delete when editing inputs
+      if (panelMode !== 'none') return;
       deleteSelected();
     }
     if (event.key === 'Escape') {
@@ -406,21 +446,21 @@
 
   function deleteSelected() {
     if (selectedNodeIds.size === 0) return;
-    edges = edges.filter(e => !selectedNodeIds.has(e.source) && !selectedNodeIds.has(e.target));
-    nodes = nodes.filter(n => !selectedNodeIds.has(n.id));
+    edges = edges.filter((e) => !selectedNodeIds.has(e.source) && !selectedNodeIds.has(e.target));
+    nodes = nodes.filter((n) => !selectedNodeIds.has(n.id));
     selectedNodeIds = new Set();
   }
 
-  // --- Load preset flow ---
+  // ===== Preset Flow (REQ-UI-05) =====
 
   function loadPresetFlow() {
     nodes = [
-      { id: 'req', type: 'block', position: { x: 50, y: 150 }, data: { blockName: 'requirements', role: 'planner', model: 'gemma4-4b-dense-med', instructions: '', verifier: 'requirements_verifier', loopUntil: 'verifier approves', maxIterations: 5 } },
-      { id: 'arch', type: 'block', position: { x: 300, y: 150 }, data: { blockName: 'architect', role: 'architect', model: 'gemma4-4b-dense-med', instructions: '', verifier: 'architect_verifier', loopUntil: 'verifier approves', maxIterations: 5 } },
-      { id: 'tester', type: 'block', position: { x: 550, y: 80 }, data: { blockName: 'tester', role: 'tester', model: 'gemma4-4b-dense-med', instructions: '', verifier: 'tester_verifier', loopUntil: 'verifier approves', maxIterations: 5 } },
-      { id: 'impl', type: 'block', position: { x: 550, y: 250 }, data: { blockName: 'implementer', role: 'implementer', model: 'gemma4-4b-dense-med', instructions: '', verifier: 'test_runner', loopUntil: 'tests pass', maxIterations: 5 } },
-      { id: 'review', type: 'block', position: { x: 800, y: 150 }, data: { blockName: 'code_reviewer', role: 'reviewer', model: 'gemma4-26b-moe-agent', instructions: '', verifier: null, loopUntil: 'reviewer approves', maxIterations: 3 } },
-      { id: 'verif', type: 'block', position: { x: 1050, y: 150 }, data: { blockName: 'verificator', role: 'verifier', model: 'gemma4-26b-moe-agent', instructions: '', verifier: null, loopUntil: 'all checks pass', maxIterations: null } },
+      { id: 'req', type: 'block', position: { x: 50, y: 150 }, data: { blockName: 'requirements', role: 'planner', model: 'gemma4-4b-dense-med', instructions: builtinRoles[0].instructions, verifier: 'requirements_verifier', loopUntil: 'verifier approves', maxIterations: 5, isComposite: false, agentCount: 0, _childNodes: null, _childEdges: null } },
+      { id: 'arch', type: 'block', position: { x: 300, y: 150 }, data: { blockName: 'architect', role: 'architect', model: 'gemma4-4b-dense-med', instructions: builtinRoles[1].instructions, verifier: 'architect_verifier', loopUntil: 'verifier approves', maxIterations: 5, isComposite: false, agentCount: 0, _childNodes: null, _childEdges: null } },
+      { id: 'tester', type: 'block', position: { x: 550, y: 80 }, data: { blockName: 'tester', role: 'tester', model: 'gemma4-4b-dense-med', instructions: builtinRoles[3].instructions, verifier: 'tester_verifier', loopUntil: 'verifier approves', maxIterations: 5, isComposite: false, agentCount: 0, _childNodes: null, _childEdges: null } },
+      { id: 'impl', type: 'block', position: { x: 550, y: 250 }, data: { blockName: 'implementer', role: 'implementer', model: 'gemma4-4b-dense-med', instructions: builtinRoles[2].instructions, verifier: 'test_runner', loopUntil: 'tests pass', maxIterations: 5, isComposite: false, agentCount: 0, _childNodes: null, _childEdges: null } },
+      { id: 'review', type: 'block', position: { x: 800, y: 150 }, data: { blockName: 'code_reviewer', role: 'reviewer', model: 'gemma4-26b-moe-agent', instructions: builtinRoles[5].instructions, verifier: null, loopUntil: 'reviewer approves', maxIterations: 3, isComposite: false, agentCount: 0, _childNodes: null, _childEdges: null } },
+      { id: 'verif', type: 'block', position: { x: 1050, y: 150 }, data: { blockName: 'verificator', role: 'verifier', model: 'gemma4-26b-moe-agent', instructions: builtinRoles[6].instructions, verifier: null, loopUntil: 'all checks pass', maxIterations: null, isComposite: false, agentCount: 0, _childNodes: null, _childEdges: null } },
     ];
     edges = [
       { id: 'e-req-arch', source: 'req', target: 'arch', animated: true, style: 'stroke: #38bdf8; stroke-width: 2px;' },
@@ -436,7 +476,7 @@
     setTimeout(() => { shouldFitView = false; }, 100);
   }
 
-  // --- Load team ---
+  // ===== Load Team =====
 
   function loadTeam(team) {
     selectedTeam = team;
@@ -450,7 +490,7 @@
         id: instance,
         type: 'block',
         position: { x, y: 150 + (teamNodes.length % 3) * 150 },
-        data: { blockName: instance, role, model: 'gemma4-4b-dense-med', instructions: '', verifier: null, loopUntil: null, maxIterations: null },
+        data: { blockName: instance, role, model: 'gemma4-4b-dense-med', instructions: '', verifier: null, loopUntil: null, maxIterations: null, isComposite: false, agentCount: 0, _childNodes: null, _childEdges: null },
       });
       x += 250;
     }
@@ -469,7 +509,7 @@
     setTimeout(() => { shouldFitView = false; }, 100);
   }
 
-  // --- Save flow ---
+  // ===== Save Flow =====
 
   async function handleSave() {
     if (!teamName.trim()) { saveMessage = 'Enter a flow name'; return; }
@@ -486,6 +526,7 @@
   function clearCanvas() {
     nodes = [];
     edges = [];
+    expandedBlocks = new Map();
     selectedTeam = null;
     teamName = '';
     saveMessage = '';
@@ -529,8 +570,8 @@
             ondragstart={(e) => onDragStart(e, block)}
             role="button"
             tabindex="0"
-            onclick={() => addBlock(block)}
-            onkeydown={(e) => e.key === 'Enter' && addBlock(block)}
+            onclick={() => addBlockFromSidebar(block)}
+            onkeydown={(e) => e.key === 'Enter' && addBlockFromSidebar(block)}
             class="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-gray-800/60
                    hover:bg-gray-800 text-sm text-gray-200 cursor-grab active:cursor-grabbing
                    select-none border border-gray-700/50 hover:border-gray-600
@@ -557,8 +598,8 @@
                 ondragstart={(e) => onDragStart(e, block)}
                 role="button"
                 tabindex="0"
-                onclick={() => addBlock(block)}
-                onkeydown={(e) => e.key === 'Enter' && addBlock(block)}
+                onclick={() => addBlockFromSidebar(block)}
+                onkeydown={(e) => e.key === 'Enter' && addBlockFromSidebar(block)}
                 class="flex-1 flex items-center gap-2 px-3 py-2 rounded-lg
                        bg-purple-900/20 hover:bg-purple-900/40 text-sm text-purple-300
                        cursor-grab active:cursor-grabbing select-none
@@ -771,6 +812,7 @@
             <p>2. Connect them by dragging between handles</p>
             <p>3. Click a node to edit or attach a verifier</p>
             <p>4. <span class="text-purple-400">Shift+Drag</span> to select multiple, then "Save as Block"</p>
+            <p>5. Click a <span class="text-purple-400">block</span> to expand/collapse inline</p>
           </div>
         </div>
       {/if}
