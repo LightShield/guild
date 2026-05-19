@@ -130,6 +130,23 @@ Layer 3 — Orchestration
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed design decisions and [REQUIREMENTS.md](REQUIREMENTS.md) for the full specification.
 
+## Web UI — Flow Composer
+
+Guild includes a web-based visual flow composer for designing multi-agent teams:
+
+```bash
+guild serve              # starts API + serves UI at http://localhost:8585
+cd ui && npm run dev     # or run the dev server with hot reload at :5173
+```
+
+Features:
+- Drag agents from a palette onto a dark-mode canvas
+- Connect agents by dragging between handles
+- Save selections as reusable **blocks** (composites)
+- Click a block to expand in-place (shows internal agents and connections)
+- Attach verifier decorators (loop-until gates) to any agent
+- Preset "Full Development" flow matching the Guidelines workflow
+
 ## Status
 
 **v0.2.0** — Core implementation complete.
