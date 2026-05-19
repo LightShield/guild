@@ -9,8 +9,9 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path  # noqa: TC003
 
-from guild.task.spec import TaskStatus
 from logger_python import get_logger
+
+from guild.task.spec import TaskStatus
 
 __all__ = ["Artifact", "ArtifactManager"]
 

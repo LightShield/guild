@@ -14,8 +14,9 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from guild.config.constants import SECURITY_FILENAME
 from logger_python import get_logger
+
+from guild.config.constants import SECURITY_FILENAME
 
 __all__ = ["SandboxPolicy", "load_sandbox_policy"]
 

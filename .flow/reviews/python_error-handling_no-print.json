@@ -1,0 +1,6 @@
+{
+  "rule_id": "python_error-handling_no-print",
+  "status": "PASS",
+  "verification": "tool_check",
+  "tool": "ruff:T201"
+}

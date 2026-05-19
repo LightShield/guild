@@ -1,0 +1,6 @@
+{
+  "rule_id": "python_style_naming-conventions",
+  "status": "PASS",
+  "verification": "tool_check",
+  "tool": "ruff:N801,N802,N806,N815,N816"
+}

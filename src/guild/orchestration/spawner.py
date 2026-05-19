@@ -6,6 +6,8 @@ import uuid
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from logger_python import get_logger
+
 from guild.agent.loop import AgentLoop
 from guild.config.constants import (
     AGENT_ID_PREFIX_LEN,
@@ -14,7 +16,6 @@ from guild.config.constants import (
     TASK_LOG_PREVIEW_CHARS,
 )
 from guild.tools.base import ToolResult
-from logger_python import get_logger
 
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from guild.orchestration.bus import MessageBus

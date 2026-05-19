@@ -1,0 +1,6 @@
+{
+  "rule_id": "python_performance_sets-for-membership",
+  "status": "PASS",
+  "verification": "tool_check",
+  "tool": "ruff:C405"
+}

@@ -1,0 +1,6 @@
+{
+  "rule_id": "python_best-practices_use-isinstance",
+  "status": "PASS",
+  "verification": "tool_check",
+  "tool": "ruff:E721"
+}

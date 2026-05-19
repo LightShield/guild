@@ -9,13 +9,14 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING, Any
 
+from logger_python import get_logger
+
 from guild.config.constants import (
     DEFAULT_CONFIDENCE,
     LEARNING_CONTENT_MAX_CHARS,
     LOG_PREVIEW_MAX_CHARS,
     MIN_INJECTION_CONFIDENCE,
 )
-from logger_python import get_logger
 
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from guild.provider.base import LLMProvider

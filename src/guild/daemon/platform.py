@@ -8,8 +8,9 @@ from __future__ import annotations
 import sys
 from typing import Protocol, runtime_checkable
 
-from guild.config.constants import DEFAULT_IDLE_THRESHOLD_SECONDS, PLATFORM_SUBPROCESS_TIMEOUT
 from logger_python import get_logger
+
+from guild.config.constants import DEFAULT_IDLE_THRESHOLD_SECONDS, PLATFORM_SUBPROCESS_TIMEOUT
 
 __all__ = [
     "PlatformAdapter",

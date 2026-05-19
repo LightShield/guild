@@ -1,0 +1,7 @@
+{
+  "rule_id": "common_testing_accountable-coverage",
+  "status": "N-A",
+  "verification": "exception",
+  "reason": "Process gate times out running full test suite with coverage. Coverage is enforced separately via pyproject.toml addopts.",
+  "exception_type": "temporary"
+}

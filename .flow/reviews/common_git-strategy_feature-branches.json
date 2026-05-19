@@ -1,0 +1,7 @@
+{
+  "rule_id": "common_git-strategy_feature-branches",
+  "status": "N-A",
+  "verification": "exception",
+  "reason": "Initial development on main \u2014 feature branches after first public release.",
+  "exception_type": "temporary"
+}

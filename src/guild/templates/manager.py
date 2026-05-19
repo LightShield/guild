@@ -7,8 +7,9 @@ import shutil
 from dataclasses import asdict, dataclass, field
 from pathlib import Path  # noqa: TC003
 
-from guild.permissions.checker import PermissionTier
 from logger_python import get_logger
+
+from guild.permissions.checker import PermissionTier
 
 __all__ = ["Template", "TemplateManager"]
 

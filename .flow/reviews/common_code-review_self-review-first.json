@@ -1,0 +1,6 @@
+{
+  "rule_id": "common_code-review_self-review-first",
+  "status": "PASS",
+  "verification": "process_gate",
+  "detail": "Review process is active (artifacts present)"
+}

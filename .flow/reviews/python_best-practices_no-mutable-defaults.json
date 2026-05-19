@@ -1,0 +1,6 @@
+{
+  "rule_id": "python_best-practices_no-mutable-defaults",
+  "status": "PASS",
+  "verification": "tool_check",
+  "tool": "ruff:B006"
+}

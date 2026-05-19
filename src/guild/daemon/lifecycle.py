@@ -11,8 +11,9 @@ import signal
 from enum import IntEnum
 from typing import TYPE_CHECKING, Any
 
-from guild.task.spec import TaskStatus
 from logger_python import get_logger
+
+from guild.task.spec import TaskStatus
 
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from pathlib import Path

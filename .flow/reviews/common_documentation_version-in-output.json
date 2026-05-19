@@ -1,0 +1,6 @@
+{
+  "rule_id": "common_documentation_version-in-output",
+  "status": "PASS",
+  "verification": "process_gate",
+  "detail": "Version found: 0.2.0"
+}

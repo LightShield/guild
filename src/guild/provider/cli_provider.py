@@ -10,9 +10,10 @@ import asyncio
 import shutil
 from typing import Any
 
+from logger_python import get_logger
+
 from guild.config.constants import CLI_PROVIDER_TIMEOUT_SECONDS
 from guild.provider.base import LLMProvider, LLMResponse
-from logger_python import get_logger
 
 __all__ = ["CLIToolProvider"]
 

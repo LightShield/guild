@@ -7,9 +7,10 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
+from logger_python import get_logger
+
 from guild.config.constants import DEFAULT_QUERY_LIMIT
 from guild.storage.connection import DBConnection
-from logger_python import get_logger
 
 __all__ = ["AuditOps", "DecisionRecord"]
 

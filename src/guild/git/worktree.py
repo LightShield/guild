@@ -5,13 +5,14 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+from logger_python import get_logger
+
 from guild.config.constants import (
     BRANCH_PREFIX,
     GUILD_DIR_NAME,
     STAGING_BRANCH_SUFFIX,
     STAGING_DIR_NAME,
 )
-from logger_python import get_logger
 
 __all__ = [
     "BRANCH_PREFIX",

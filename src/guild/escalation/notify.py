@@ -12,10 +12,11 @@ from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
+from logger_python import get_logger
+
 from guild.config.constants import LOG_PREVIEW_MAX_CHARS, NOTIFICATION_TITLE
 from guild.daemon.platform import get_platform_adapter
 from guild.escalation.queue import QuestionPriority
-from logger_python import get_logger
 
 __all__ = ["NOTIFICATION_TITLE", "NotificationChannel", "Notifier"]
 

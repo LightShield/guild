@@ -1,0 +1,6 @@
+{
+  "rule_id": "python_performance_prefer-builtins",
+  "status": "PASS",
+  "verification": "tool_check",
+  "tool": "ruff:SIM110,SIM111"
+}

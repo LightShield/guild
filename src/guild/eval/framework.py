@@ -13,6 +13,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from logger_python import get_logger
+
 from guild.agent.message import Message
 from guild.config.constants import (
     DEFAULT_QUERY_LIMIT,
@@ -21,7 +23,6 @@ from guild.config.constants import (
     TOKEN_REGRESSION_FACTOR,
     TOOL_CALL_REGRESSION_FACTOR,
 )
-from logger_python import get_logger
 
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from guild.provider.base import LLMProvider, LLMResponse

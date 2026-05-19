@@ -5,13 +5,14 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
+from logger_python import get_logger
+
 from guild.config.constants import (
     DEFAULT_MEMORY_LIST_LIMIT,
     MEMORY_SUMMARY_MAX_CHARS,
     PRUNING_RETENTION_DAYS,
 )
 from guild.storage.connection import DBConnection
-from logger_python import get_logger
 
 __all__ = ["MemoryOps"]
 

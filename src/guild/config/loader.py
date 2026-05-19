@@ -10,9 +10,10 @@ import tomllib
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from logger_python import get_logger
+
 from guild.config.constants import CONFIG_FILENAME, DB_FILENAME, GUILD_DIR_NAME
 from guild.config.models import GuildConfig
-from logger_python import get_logger
 
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from collections.abc import Callable

@@ -7,6 +7,7 @@ and TOML file support.
 from __future__ import annotations
 
 from configsloader import ConfigsLoader, Field
+
 from guild.config.constants import (
     CLI_PROVIDER_TIMEOUT_SECONDS,
     DEFAULT_COMPACT_THRESHOLD,

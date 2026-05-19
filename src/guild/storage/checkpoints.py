@@ -5,8 +5,9 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
-from guild.storage.connection import DBConnection
 from logger_python import get_logger
+
+from guild.storage.connection import DBConnection
 
 __all__ = ["CheckpointOps"]
 

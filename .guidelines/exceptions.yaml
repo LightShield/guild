@@ -3,30 +3,6 @@ version: 1
 exceptions:
   - rule_id: "python_stack_use-ruff"
     scope: "files"
-    reason: "Vendored dependency — not our code to modify. Copied from lightshield/configs_loader_python."
-    type: permanent
-    applies_to: ["src/guild/_vendor/*", "src/configsloader/*"]
-
-  - rule_id: "python_stack_max-complexity-10"
-    scope: "files"
-    reason: "Vendored dependency — not our code to modify."
-    type: permanent
-    applies_to: ["src/guild/_vendor/*", "src/configsloader/*"]
-
-  - rule_id: "python_style_naming-conventions"
-    scope: "files"
-    reason: "Vendored dependency — Field() uses uppercase by design (mirrors dataclasses.field API)."
-    type: permanent
-    applies_to: ["src/guild/_vendor/*", "src/configsloader/*"]
-
-  - rule_id: "python_documentation_ruff-docstring-enforcement"
-    scope: "files"
-    reason: "Vendored dependency — not our code to modify."
-    type: permanent
-    applies_to: ["src/configsloader/*"]
-
-  - rule_id: "python_stack_use-ruff"
-    scope: "files"
     reason: "SIM117 (nested with) is an acceptable test pattern for composing mocks with assertion contexts."
     type: permanent
     applies_to: ["tests/*"]

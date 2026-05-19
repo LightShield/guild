@@ -10,8 +10,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from guild.config.constants import MAX_INDEX_LINES, STALE_DAYS
 from logger_python import get_logger
+
+from guild.config.constants import MAX_INDEX_LINES, STALE_DAYS
 
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from guild.storage.sqlite import Storage

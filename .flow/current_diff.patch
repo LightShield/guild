@@ -1,1387 +1,1346 @@
 diff --git a/.flow/current_diff.patch b/.flow/current_diff.patch
-index 021e93b..a8c3792 100644
+deleted file mode 100644
+index 18f78c9..0000000
 --- a/.flow/current_diff.patch
-+++ b/.flow/current_diff.patch
-@@ -1,414 +1,1407 @@
--diff --git a/src/guild/agent/learning.py b/src/guild/agent/learning.py
--index c95d82d..2f0d2c3 100644
----- a/src/guild/agent/learning.py
--+++ b/src/guild/agent/learning.py
--@@ -14,8 +14,8 @@ from logger_python import get_logger
-- from guild.config.constants import (
--     DEFAULT_CONFIDENCE,
--     LEARNING_CONTENT_MAX_CHARS,
---    MIN_INJECTION_CONFIDENCE,
--     LOG_PREVIEW_MAX_CHARS,
--+    MIN_INJECTION_CONFIDENCE,
-- )
-- 
-- if TYPE_CHECKING:  # pragma: no cover — type-checking only
--diff --git a/src/guild/agent/ratelimit.py b/src/guild/agent/ratelimit.py
--index a148c6b..cfec657 100644
----- a/src/guild/agent/ratelimit.py
--+++ b/src/guild/agent/ratelimit.py
--@@ -2,12 +2,12 @@
-- 
-- from __future__ import annotations
-- 
---from guild.config.constants import DEFAULT_RATE_LIMIT_CALLS, DEFAULT_RATE_LIMIT_WINDOW_SECONDS
---
-- import asyncio
-- import time
-- from typing import TYPE_CHECKING, Any
-- 
--+from guild.config.constants import DEFAULT_RATE_LIMIT_CALLS, DEFAULT_RATE_LIMIT_WINDOW_SECONDS
--+
-- if TYPE_CHECKING:  # pragma: no cover — type-checking only
--     from collections.abc import Coroutine
-- 
--diff --git a/src/guild/api/server.py b/src/guild/api/server.py
--index 4e71204..68957e2 100644
----- a/src/guild/api/server.py
--+++ b/src/guild/api/server.py
--@@ -19,6 +19,7 @@ if TYPE_CHECKING:
-- 
-- from guild import __version__
-- from guild.config.constants import (
--+    DEFAULT_QUERY_LIMIT,
--     GUILD_DIR_NAME,
--     HTTP_BAD_REQUEST,
--     HTTP_NOT_FOUND,
--@@ -28,7 +29,6 @@ from guild.config.constants import (
--     JSONRPC_METHOD_NOT_FOUND,
--     JSONRPC_PARSE_ERROR,
--     WEBSOCKET_POLL_SECONDS,
---    DEFAULT_QUERY_LIMIT,
-- )
-- from guild.config.loader import DB_FILENAME
-- from guild.task.spec import TaskStatus
--diff --git a/src/guild/config/profiles.py b/src/guild/config/profiles.py
--index 866bc06..8b53711 100644
----- a/src/guild/config/profiles.py
--+++ b/src/guild/config/profiles.py
--@@ -93,6 +93,22 @@ def load_permission_profiles(guild_dir: Path) -> dict[str, PermissionProfile]:
--     return profiles
-- 
-- 
--+def _validate_escalation_chain(
--+    config: GuildConfig,
--+    known_models: list[str] | None,
--+    errors: list[str],
--+) -> None:
--+    """Check escalation chain model names against known models."""
--+    if not config.escalation_chain or known_models is None:
--+        return
--+    chain_models = [m.strip() for m in config.escalation_chain.split(",") if m.strip()]
--+    for model_name in chain_models:
--+        if model_name not in known_models:
--+            warning = f"Unknown model in escalation chain: '{model_name}'"
--+            errors.append(warning)
--+            logger.warning(warning)
--+
--+
-- def validate_config(
--     config: GuildConfig,
--     guild_dir: Path,
--@@ -134,13 +150,7 @@ def validate_config(
--                 f"Agent profile '{name}' has invalid permission: " f"'{profile.permission}'"
--             )
-- 
---    if config.escalation_chain and known_models is not None:
---        chain_models = [m.strip() for m in config.escalation_chain.split(",") if m.strip()]
---        for model_name in chain_models:
---            if model_name not in known_models:
---                warning = f"Unknown model in escalation chain: '{model_name}'"
---                errors.append(warning)
---                logger.warning(warning)
--+    _validate_escalation_chain(config, known_models, errors)
-- 
--     return errors
-- 
--diff --git a/src/guild/storage/audit.py b/src/guild/storage/audit.py
--index 97cad5a..26da292 100644
----- a/src/guild/storage/audit.py
--+++ b/src/guild/storage/audit.py
--@@ -7,10 +7,10 @@ from dataclasses import dataclass
-- from datetime import UTC, datetime
-- from typing import Any
-- 
---from guild.storage.connection import DBConnection
-- from logger_python import get_logger
-- 
-- from guild.config.constants import DEFAULT_QUERY_LIMIT
--+from guild.storage.connection import DBConnection
-- 
-- __all__ = ["AuditOps", "DecisionRecord"]
-- 
--diff --git a/src/guild/storage/checkpoints.py b/src/guild/storage/checkpoints.py
--index 7267d8e..abeeb46 100644
----- a/src/guild/storage/checkpoints.py
--+++ b/src/guild/storage/checkpoints.py
--@@ -5,9 +5,10 @@ from __future__ import annotations
-- from datetime import UTC, datetime
-- from typing import Any
-- 
---from guild.storage.connection import DBConnection
-- from logger_python import get_logger
-- 
--+from guild.storage.connection import DBConnection
--+
-- __all__ = ["CheckpointOps"]
-- 
-- logger = get_logger(__name__)
--diff --git a/src/guild/storage/learnings.py b/src/guild/storage/learnings.py
--index 35dbe9d..792c34c 100644
----- a/src/guild/storage/learnings.py
--+++ b/src/guild/storage/learnings.py
--@@ -6,7 +6,6 @@ from dataclasses import dataclass
-- from datetime import UTC, datetime
-- from typing import Any
-- 
---from guild.storage.connection import DBConnection
-- from logger_python import get_logger
-- 
-- from guild.config.constants import (
--@@ -16,6 +15,7 @@ from guild.config.constants import (
--     DEFAULT_QUERY_LIMIT,
--     PRUNING_RETENTION_DAYS,
-- )
--+from guild.storage.connection import DBConnection
-- 
-- __all__ = ["LearningOps", "LearningRecord"]
-- 
--diff --git a/src/guild/storage/memories.py b/src/guild/storage/memories.py
--index c0a42ac..8c334ef 100644
----- a/src/guild/storage/memories.py
--+++ b/src/guild/storage/memories.py
--@@ -5,7 +5,6 @@ from __future__ import annotations
-- from datetime import UTC, datetime
-- from typing import Any
-- 
---from guild.storage.connection import DBConnection
-- from logger_python import get_logger
-- 
-- from guild.config.constants import (
--@@ -13,6 +12,7 @@ from guild.config.constants import (
--     MEMORY_SUMMARY_MAX_CHARS,
--     PRUNING_RETENTION_DAYS,
-- )
--+from guild.storage.connection import DBConnection
-- 
-- __all__ = ["MemoryOps"]
-- 
--diff --git a/src/guild/storage/messages.py b/src/guild/storage/messages.py
--index 92f246f..b172eb7 100644
----- a/src/guild/storage/messages.py
--+++ b/src/guild/storage/messages.py
--@@ -5,9 +5,10 @@ from __future__ import annotations
-- from datetime import UTC, datetime
-- from typing import Any
-- 
---from guild.storage.connection import DBConnection
-- from logger_python import get_logger
-- 
--+from guild.storage.connection import DBConnection
--+
-- __all__ = ["MessageOps"]
-- 
-- logger = get_logger(__name__)
--diff --git a/src/guild/storage/questions.py b/src/guild/storage/questions.py
--index 18513c6..8e29edb 100644
----- a/src/guild/storage/questions.py
--+++ b/src/guild/storage/questions.py
--@@ -6,9 +6,10 @@ from dataclasses import dataclass
-- from datetime import UTC, datetime
-- from typing import Any
-- 
---from guild.storage.connection import DBConnection
-- from logger_python import get_logger
-- 
--+from guild.storage.connection import DBConnection
--+
-- __all__ = ["QuestionOps", "QuestionRecord"]
-- 
-- logger = get_logger(__name__)
--diff --git a/src/guild/storage/tasks.py b/src/guild/storage/tasks.py
--index a492579..f6148e8 100644
----- a/src/guild/storage/tasks.py
--+++ b/src/guild/storage/tasks.py
--@@ -5,9 +5,10 @@ from __future__ import annotations
-- from datetime import UTC, datetime
-- from typing import Any
-- 
---from guild.storage.connection import DBConnection
-- from logger_python import get_logger
-- 
--+from guild.storage.connection import DBConnection
--+
-- __all__ = ["TaskOps"]
-- 
-- logger = get_logger(__name__)
--diff --git a/tests/agent/test_learning.py b/tests/agent/test_learning.py
--index 4c7f87b..81fdc85 100644
----- a/tests/agent/test_learning.py
--+++ b/tests/agent/test_learning.py
--@@ -15,8 +15,8 @@ from guild.agent.learning import (
--     format_learnings_for_injection,
-- )
-- from guild.provider.base import LLMResponse
---from guild.storage.sqlite import Storage
-- from guild.storage.learnings import LearningRecord
--+from guild.storage.sqlite import Storage
-- 
-- 
-- @pytest.fixture
--diff --git a/tests/agent/test_rollback.py b/tests/agent/test_rollback.py
--index dd78b9d..9a52b54 100644
----- a/tests/agent/test_rollback.py
--+++ b/tests/agent/test_rollback.py
--@@ -2,6 +2,8 @@
-- 
-- from __future__ import annotations
-- 
--+from pathlib import Path
--+
-- import pytest
-- 
-- from guild.agent.rollback import RollbackContext, try_with_rollback
--diff --git a/tests/cli/test_main.py b/tests/cli/test_main.py
--index b154aee..aec9f65 100644
----- a/tests/cli/test_main.py
--+++ b/tests/cli/test_main.py
--@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
-- 
-- import pytest
-- from typer.testing import CliRunner
--+
-- from guild.storage.audit import DecisionRecord
-- from guild.storage.learnings import LearningRecord
-- 
--diff --git a/tests/integration/test_agent_pipeline.py b/tests/integration/test_agent_pipeline.py
--index 5f7e01e..b6e673c 100644
----- a/tests/integration/test_agent_pipeline.py
--+++ b/tests/integration/test_agent_pipeline.py
--@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock
-- 
-- import pytest
-- 
---from guild.agent.loop import AgentLoopConfig, AgentLoop
--+from guild.agent.loop import AgentLoop, AgentLoopConfig
-- from guild.provider.base import LLMResponse
-- from guild.storage.sqlite import Storage
-- from guild.tools.registry import build_tool_executors
--diff --git a/tests/integration/test_context_and_learning.py b/tests/integration/test_context_and_learning.py
--index a367ff2..250afda 100644
----- a/tests/integration/test_context_and_learning.py
--+++ b/tests/integration/test_context_and_learning.py
--@@ -50,8 +50,8 @@ from guild.config.constants import (
-- from guild.knowledge.memory import MemoryIndex
-- from guild.orchestration.bus import SharedContext
-- from guild.provider.base import LLMResponse
---from guild.storage.sqlite import Storage
-- from guild.storage.learnings import LearningRecord
--+from guild.storage.sqlite import Storage
-- 
-- pytestmark = pytest.mark.integration
-- 
--diff --git a/tests/integration/test_daemon_and_features.py b/tests/integration/test_daemon_and_features.py
--index 303e6f6..d34ef72 100644
----- a/tests/integration/test_daemon_and_features.py
--+++ b/tests/integration/test_daemon_and_features.py
--@@ -10,14 +10,13 @@ import asyncio
-- import json
-- from pathlib import Path
-- from typing import Any
---from unittest.mock import AsyncMock, patch
--+from unittest.mock import AsyncMock
-- 
-- import pytest
-- from typer.testing import CliRunner
-- 
-- from guild.agent.loop import AgentLoopConfig
-- from guild.cli.main import app
---from guild.daemon.resource import ResourceConfig
-- from guild.permissions.checker import PermissionConfig
-- from guild.provider.base import LLMResponse
-- 
--@@ -719,7 +718,7 @@ class TestSelfVerifyCompletion:
--     @pytest.mark.ac("AC-06.2.1")
--     async def test_self_review_can_trigger_fixes(self) -> None:
--         """Edge: self-review finds an issue and uses a tool to fix it."""
---        from guild.agent.loop import AgentLoop, AgentLoopConfig
--+        from guild.agent.loop import AgentLoop
--         from guild.tools.base import ToolResult
-- 
--         async def mock_write(args: dict[str, Any], wd: str | None = None) -> ToolResult:
--@@ -998,7 +997,7 @@ class TestMultiTurn:
--     @pytest.mark.ac("AC-06.9.1")
--     async def test_send_preserves_context(self) -> None:
--         """Happy: send() sees messages from prior turns."""
---        from guild.agent.loop import AgentLoop, AgentLoopConfig
--+        from guild.agent.loop import AgentLoop
-- 
--         provider = _make_mock_provider(
--             _simple_response("Hello! I am ready."),
--@@ -1016,7 +1015,7 @@ class TestMultiTurn:
--     @pytest.mark.ac("AC-06.9.1")
--     async def test_run_resets_history(self) -> None:
--         """Sad: calling run() again clears the conversation."""
---        from guild.agent.loop import AgentLoop, AgentLoopConfig
--+        from guild.agent.loop import AgentLoop
-- 
--         provider = _make_mock_provider(
--             _simple_response("First run."),
--@@ -1035,7 +1034,7 @@ class TestMultiTurn:
--     @pytest.mark.ac("AC-06.9.2")
--     async def test_send_without_run_raises(self) -> None:
--         """Edge: send() before run() raises RuntimeError."""
---        from guild.agent.loop import AgentLoop, AgentLoopConfig
--+        from guild.agent.loop import AgentLoop
-- 
--         provider = _make_mock_provider(_simple_response("Nope"))
--         loop = AgentLoop(provider=provider, tool_executors={})
--@@ -1046,7 +1045,7 @@ class TestMultiTurn:
--     @pytest.mark.ac("AC-06.9.1")
--     async def test_multiple_sends_accumulate(self) -> None:
--         """Edge: four consecutive messages all preserved in history."""
---        from guild.agent.loop import AgentLoop, AgentLoopConfig
--+        from guild.agent.loop import AgentLoop
-- 
--         provider = _make_mock_provider(
--             _simple_response("R1"),
--@@ -1612,7 +1611,7 @@ class TestSendPreservesToolContext:
--     @pytest.mark.ac("AC-06.9.3")
--     async def test_send_preserves_tool_results_from_run(self) -> None:
--         """Messages for step 2 include tool call results from step 1."""
---        from guild.agent.loop import AgentLoop, AgentLoopConfig
--+        from guild.agent.loop import AgentLoop
--         from guild.tools.base import ToolResult
-- 
--         call_counter = 0
--diff --git a/tests/integration/test_observability_and_tasks.py b/tests/integration/test_observability_and_tasks.py
--index dc8d429..824cc9b 100644
----- a/tests/integration/test_observability_and_tasks.py
--+++ b/tests/integration/test_observability_and_tasks.py
--@@ -1357,7 +1357,7 @@ class TestBudgetCheckBeforeEachLLMCall:
--     @pytest.mark.ac("AC-10.2.5")
--     async def test_agent_exits_after_budget_exceeded(self) -> None:
--         """Agent exits immediately after the first LLM call that pushes total above budget."""
---        from guild.agent.loop import AgentLoopConfig, AgentLoop
--+        from guild.agent.loop import AgentLoop, AgentLoopConfig
-- 
--         call_count = 0
-- 
--diff --git a/tests/integration/test_remaining_features.py b/tests/integration/test_remaining_features.py
--index 69521f8..ff97d0d 100644
----- a/tests/integration/test_remaining_features.py
--+++ b/tests/integration/test_remaining_features.py
--@@ -38,9 +38,9 @@ from unittest.mock import AsyncMock
-- 
-- import pytest
-- 
---from guild.storage.sqlite import Storage
-- from guild.storage.audit import DecisionRecord
-- from guild.storage.learnings import LearningRecord
--+from guild.storage.sqlite import Storage
-- 
-- pytestmark = pytest.mark.integration
-- 
--diff --git a/tests/knowledge/test_temporal.py b/tests/knowledge/test_temporal.py
--index a688ec1..8bdf93d 100644
----- a/tests/knowledge/test_temporal.py
--+++ b/tests/knowledge/test_temporal.py
--@@ -10,9 +10,9 @@ if TYPE_CHECKING:
--     from pathlib import Path
-- 
-- from guild.knowledge.temporal import TemporalKnowledge
---from guild.storage.sqlite import Storage
-- from guild.storage.audit import DecisionRecord
-- from guild.storage.learnings import LearningRecord
--+from guild.storage.sqlite import Storage
-- 
-- 
-- @pytest.fixture
--diff --git a/tests/storage/test_sqlite.py b/tests/storage/test_sqlite.py
--index efb65d2..7793d07 100644
----- a/tests/storage/test_sqlite.py
--+++ b/tests/storage/test_sqlite.py
--@@ -9,10 +9,10 @@ import pytest
-- if TYPE_CHECKING:
--     from pathlib import Path
-- 
---from guild.storage.sqlite import Storage
-- from guild.storage.audit import DecisionRecord
-- from guild.storage.learnings import LearningRecord
-- from guild.storage.questions import QuestionRecord
--+from guild.storage.sqlite import Storage
-- 
-- 
-- @pytest.fixture
-+diff --git a/.flow/current_diff.patch b/.flow/current_diff.patch
-+index 021e93b..60a93e9 100644
-+--- a/.flow/current_diff.patch
-++++ b/.flow/current_diff.patch
-+@@ -1,414 +1,1408 @@
-+-diff --git a/src/guild/agent/learning.py b/src/guild/agent/learning.py
-+-index c95d82d..2f0d2c3 100644
-+---- a/src/guild/agent/learning.py
-+-+++ b/src/guild/agent/learning.py
-+-@@ -14,8 +14,8 @@ from logger_python import get_logger
-+- from guild.config.constants import (
-+-     DEFAULT_CONFIDENCE,
-+-     LEARNING_CONTENT_MAX_CHARS,
-+--    MIN_INJECTION_CONFIDENCE,
-+-     LOG_PREVIEW_MAX_CHARS,
-+-+    MIN_INJECTION_CONFIDENCE,
-+- )
-+- 
-+- if TYPE_CHECKING:  # pragma: no cover — type-checking only
-+-diff --git a/src/guild/agent/ratelimit.py b/src/guild/agent/ratelimit.py
-+-index a148c6b..cfec657 100644
-+---- a/src/guild/agent/ratelimit.py
-+-+++ b/src/guild/agent/ratelimit.py
-+-@@ -2,12 +2,12 @@
-+- 
-+- from __future__ import annotations
-+- 
-+--from guild.config.constants import DEFAULT_RATE_LIMIT_CALLS, DEFAULT_RATE_LIMIT_WINDOW_SECONDS
-+--
-+- import asyncio
-+- import time
-+- from typing import TYPE_CHECKING, Any
-+- 
-+-+from guild.config.constants import DEFAULT_RATE_LIMIT_CALLS, DEFAULT_RATE_LIMIT_WINDOW_SECONDS
-+-+
-+- if TYPE_CHECKING:  # pragma: no cover — type-checking only
-+-     from collections.abc import Coroutine
-+- 
-+-diff --git a/src/guild/api/server.py b/src/guild/api/server.py
-+-index 4e71204..68957e2 100644
-+---- a/src/guild/api/server.py
-+-+++ b/src/guild/api/server.py
-+-@@ -19,6 +19,7 @@ if TYPE_CHECKING:
-+- 
-+- from guild import __version__
-+- from guild.config.constants import (
-+-+    DEFAULT_QUERY_LIMIT,
-+-     GUILD_DIR_NAME,
-+-     HTTP_BAD_REQUEST,
-+-     HTTP_NOT_FOUND,
-+-@@ -28,7 +29,6 @@ from guild.config.constants import (
-+-     JSONRPC_METHOD_NOT_FOUND,
-+-     JSONRPC_PARSE_ERROR,
-+-     WEBSOCKET_POLL_SECONDS,
-+--    DEFAULT_QUERY_LIMIT,
-+- )
-+- from guild.config.loader import DB_FILENAME
-+- from guild.task.spec import TaskStatus
-+-diff --git a/src/guild/config/profiles.py b/src/guild/config/profiles.py
-+-index 866bc06..8b53711 100644
-+---- a/src/guild/config/profiles.py
-+-+++ b/src/guild/config/profiles.py
-+-@@ -93,6 +93,22 @@ def load_permission_profiles(guild_dir: Path) -> dict[str, PermissionProfile]:
-+-     return profiles
-+- 
-+- 
-+-+def _validate_escalation_chain(
-+-+    config: GuildConfig,
-+-+    known_models: list[str] | None,
-+-+    errors: list[str],
-+-+) -> None:
-+-+    """Check escalation chain model names against known models."""
-+-+    if not config.escalation_chain or known_models is None:
-+-+        return
-+-+    chain_models = [m.strip() for m in config.escalation_chain.split(",") if m.strip()]
-+-+    for model_name in chain_models:
-+-+        if model_name not in known_models:
-+-+            warning = f"Unknown model in escalation chain: '{model_name}'"
-+-+            errors.append(warning)
-+-+            logger.warning(warning)
-+-+
-+-+
-+- def validate_config(
-+-     config: GuildConfig,
-+-     guild_dir: Path,
-+-@@ -134,13 +150,7 @@ def validate_config(
-+-                 f"Agent profile '{name}' has invalid permission: " f"'{profile.permission}'"
-+-             )
-+- 
-+--    if config.escalation_chain and known_models is not None:
-+--        chain_models = [m.strip() for m in config.escalation_chain.split(",") if m.strip()]
-+--        for model_name in chain_models:
-+--            if model_name not in known_models:
-+--                warning = f"Unknown model in escalation chain: '{model_name}'"
-+--                errors.append(warning)
-+--                logger.warning(warning)
-+-+    _validate_escalation_chain(config, known_models, errors)
-+- 
-+-     return errors
-+- 
-+-diff --git a/src/guild/storage/audit.py b/src/guild/storage/audit.py
-+-index 97cad5a..26da292 100644
-+---- a/src/guild/storage/audit.py
-+-+++ b/src/guild/storage/audit.py
-+-@@ -7,10 +7,10 @@ from dataclasses import dataclass
-+- from datetime import UTC, datetime
-+- from typing import Any
-+- 
-+--from guild.storage.connection import DBConnection
-+- from logger_python import get_logger
-+- 
-+- from guild.config.constants import DEFAULT_QUERY_LIMIT
-+-+from guild.storage.connection import DBConnection
-+- 
-+- __all__ = ["AuditOps", "DecisionRecord"]
-+- 
-+-diff --git a/src/guild/storage/checkpoints.py b/src/guild/storage/checkpoints.py
-+-index 7267d8e..abeeb46 100644
-+---- a/src/guild/storage/checkpoints.py
-+-+++ b/src/guild/storage/checkpoints.py
-+-@@ -5,9 +5,10 @@ from __future__ import annotations
-+- from datetime import UTC, datetime
-+- from typing import Any
-+- 
-+--from guild.storage.connection import DBConnection
-+- from logger_python import get_logger
-+- 
-+-+from guild.storage.connection import DBConnection
-+-+
-+- __all__ = ["CheckpointOps"]
-+- 
-+- logger = get_logger(__name__)
-+-diff --git a/src/guild/storage/learnings.py b/src/guild/storage/learnings.py
-+-index 35dbe9d..792c34c 100644
-+---- a/src/guild/storage/learnings.py
-+-+++ b/src/guild/storage/learnings.py
-+-@@ -6,7 +6,6 @@ from dataclasses import dataclass
-+- from datetime import UTC, datetime
-+- from typing import Any
-+- 
-+--from guild.storage.connection import DBConnection
-+- from logger_python import get_logger
-+- 
-+- from guild.config.constants import (
-+-@@ -16,6 +15,7 @@ from guild.config.constants import (
-+-     DEFAULT_QUERY_LIMIT,
-+-     PRUNING_RETENTION_DAYS,
-+- )
-+-+from guild.storage.connection import DBConnection
-+- 
-+- __all__ = ["LearningOps", "LearningRecord"]
-+- 
-+-diff --git a/src/guild/storage/memories.py b/src/guild/storage/memories.py
-+-index c0a42ac..8c334ef 100644
-+---- a/src/guild/storage/memories.py
-+-+++ b/src/guild/storage/memories.py
-+-@@ -5,7 +5,6 @@ from __future__ import annotations
-+- from datetime import UTC, datetime
-+- from typing import Any
-+- 
-+--from guild.storage.connection import DBConnection
-+- from logger_python import get_logger
-+- 
-+- from guild.config.constants import (
-+-@@ -13,6 +12,7 @@ from guild.config.constants import (
-+-     MEMORY_SUMMARY_MAX_CHARS,
-+-     PRUNING_RETENTION_DAYS,
-+- )
-+-+from guild.storage.connection import DBConnection
-+- 
-+- __all__ = ["MemoryOps"]
-+- 
-+-diff --git a/src/guild/storage/messages.py b/src/guild/storage/messages.py
-+-index 92f246f..b172eb7 100644
-+---- a/src/guild/storage/messages.py
-+-+++ b/src/guild/storage/messages.py
-+-@@ -5,9 +5,10 @@ from __future__ import annotations
-+- from datetime import UTC, datetime
-+- from typing import Any
-+- 
-+--from guild.storage.connection import DBConnection
-+- from logger_python import get_logger
-+- 
-+-+from guild.storage.connection import DBConnection
-+-+
-+- __all__ = ["MessageOps"]
-+- 
-+- logger = get_logger(__name__)
-+-diff --git a/src/guild/storage/questions.py b/src/guild/storage/questions.py
-+-index 18513c6..8e29edb 100644
-+---- a/src/guild/storage/questions.py
-+-+++ b/src/guild/storage/questions.py
-+-@@ -6,9 +6,10 @@ from dataclasses import dataclass
-+- from datetime import UTC, datetime
-+- from typing import Any
-+- 
-+--from guild.storage.connection import DBConnection
-+- from logger_python import get_logger
-+- 
-+-+from guild.storage.connection import DBConnection
-+-+
-+- __all__ = ["QuestionOps", "QuestionRecord"]
-+- 
-+- logger = get_logger(__name__)
-+-diff --git a/src/guild/storage/tasks.py b/src/guild/storage/tasks.py
-+-index a492579..f6148e8 100644
-+---- a/src/guild/storage/tasks.py
-+-+++ b/src/guild/storage/tasks.py
-+-@@ -5,9 +5,10 @@ from __future__ import annotations
-+- from datetime import UTC, datetime
-+- from typing import Any
-+- 
-+--from guild.storage.connection import DBConnection
-+- from logger_python import get_logger
-+- 
-+-+from guild.storage.connection import DBConnection
-+-+
-+- __all__ = ["TaskOps"]
-+- 
-+- logger = get_logger(__name__)
-+-diff --git a/tests/agent/test_learning.py b/tests/agent/test_learning.py
-+-index 4c7f87b..81fdc85 100644
-+---- a/tests/agent/test_learning.py
-+-+++ b/tests/agent/test_learning.py
-+-@@ -15,8 +15,8 @@ from guild.agent.learning import (
-+-     format_learnings_for_injection,
-+- )
-+- from guild.provider.base import LLMResponse
-+--from guild.storage.sqlite import Storage
-+- from guild.storage.learnings import LearningRecord
-+-+from guild.storage.sqlite import Storage
-+- 
-+- 
-+- @pytest.fixture
-+-diff --git a/tests/agent/test_rollback.py b/tests/agent/test_rollback.py
-+-index dd78b9d..9a52b54 100644
-+---- a/tests/agent/test_rollback.py
-+-+++ b/tests/agent/test_rollback.py
-+-@@ -2,6 +2,8 @@
-+- 
-+- from __future__ import annotations
-+- 
-+-+from pathlib import Path
-+-+
-+- import pytest
-+- 
-+- from guild.agent.rollback import RollbackContext, try_with_rollback
-+-diff --git a/tests/cli/test_main.py b/tests/cli/test_main.py
-+-index b154aee..aec9f65 100644
-+---- a/tests/cli/test_main.py
-+-+++ b/tests/cli/test_main.py
-+-@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
-+- 
-+- import pytest
-+- from typer.testing import CliRunner
-+-+
-+- from guild.storage.audit import DecisionRecord
-+- from guild.storage.learnings import LearningRecord
-+- 
-+-diff --git a/tests/integration/test_agent_pipeline.py b/tests/integration/test_agent_pipeline.py
-+-index 5f7e01e..b6e673c 100644
-+---- a/tests/integration/test_agent_pipeline.py
-+-+++ b/tests/integration/test_agent_pipeline.py
-+-@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock
-+- 
-+- import pytest
-+- 
-+--from guild.agent.loop import AgentLoopConfig, AgentLoop
-+-+from guild.agent.loop import AgentLoop, AgentLoopConfig
-+- from guild.provider.base import LLMResponse
-+- from guild.storage.sqlite import Storage
-+- from guild.tools.registry import build_tool_executors
-+-diff --git a/tests/integration/test_context_and_learning.py b/tests/integration/test_context_and_learning.py
-+-index a367ff2..250afda 100644
-+---- a/tests/integration/test_context_and_learning.py
-+-+++ b/tests/integration/test_context_and_learning.py
-+-@@ -50,8 +50,8 @@ from guild.config.constants import (
-+- from guild.knowledge.memory import MemoryIndex
-+- from guild.orchestration.bus import SharedContext
-+- from guild.provider.base import LLMResponse
-+--from guild.storage.sqlite import Storage
-+- from guild.storage.learnings import LearningRecord
-+-+from guild.storage.sqlite import Storage
-+- 
-+- pytestmark = pytest.mark.integration
-+- 
-+-diff --git a/tests/integration/test_daemon_and_features.py b/tests/integration/test_daemon_and_features.py
-+-index 303e6f6..d34ef72 100644
-+---- a/tests/integration/test_daemon_and_features.py
-+-+++ b/tests/integration/test_daemon_and_features.py
-+-@@ -10,14 +10,13 @@ import asyncio
-+- import json
-+- from pathlib import Path
-+- from typing import Any
-+--from unittest.mock import AsyncMock, patch
-+-+from unittest.mock import AsyncMock
-+- 
-+- import pytest
-+- from typer.testing import CliRunner
-+- 
-+- from guild.agent.loop import AgentLoopConfig
-+- from guild.cli.main import app
-+--from guild.daemon.resource import ResourceConfig
-+- from guild.permissions.checker import PermissionConfig
-+- from guild.provider.base import LLMResponse
-+- 
-+-@@ -719,7 +718,7 @@ class TestSelfVerifyCompletion:
-+-     @pytest.mark.ac("AC-06.2.1")
-+-     async def test_self_review_can_trigger_fixes(self) -> None:
-+-         """Edge: self-review finds an issue and uses a tool to fix it."""
-+--        from guild.agent.loop import AgentLoop, AgentLoopConfig
-+-+        from guild.agent.loop import AgentLoop
-+-         from guild.tools.base import ToolResult
-+- 
-+-         async def mock_write(args: dict[str, Any], wd: str | None = None) -> ToolResult:
-+-@@ -998,7 +997,7 @@ class TestMultiTurn:
-+-     @pytest.mark.ac("AC-06.9.1")
-+-     async def test_send_preserves_context(self) -> None:
-+-         """Happy: send() sees messages from prior turns."""
-+--        from guild.agent.loop import AgentLoop, AgentLoopConfig
-+-+        from guild.agent.loop import AgentLoop
-+- 
-+-         provider = _make_mock_provider(
-+-             _simple_response("Hello! I am ready."),
-+-@@ -1016,7 +1015,7 @@ class TestMultiTurn:
-+-     @pytest.mark.ac("AC-06.9.1")
-+-     async def test_run_resets_history(self) -> None:
-+-         """Sad: calling run() again clears the conversation."""
-+--        from guild.agent.loop import AgentLoop, AgentLoopConfig
-+-+        from guild.agent.loop import AgentLoop
-+- 
-+-         provider = _make_mock_provider(
-+-             _simple_response("First run."),
-+-@@ -1035,7 +1034,7 @@ class TestMultiTurn:
-+-     @pytest.mark.ac("AC-06.9.2")
-+-     async def test_send_without_run_raises(self) -> None:
-+-         """Edge: send() before run() raises RuntimeError."""
-+--        from guild.agent.loop import AgentLoop, AgentLoopConfig
-+-+        from guild.agent.loop import AgentLoop
-+- 
-+-         provider = _make_mock_provider(_simple_response("Nope"))
-+-         loop = AgentLoop(provider=provider, tool_executors={})
-+-@@ -1046,7 +1045,7 @@ class TestMultiTurn:
-+-     @pytest.mark.ac("AC-06.9.1")
-+-     async def test_multiple_sends_accumulate(self) -> None:
-+-         """Edge: four consecutive messages all preserved in history."""
-+--        from guild.agent.loop import AgentLoop, AgentLoopConfig
-+-+        from guild.agent.loop import AgentLoop
-+- 
-+-         provider = _make_mock_provider(
-+-             _simple_response("R1"),
-+-@@ -1612,7 +1611,7 @@ class TestSendPreservesToolContext:
-+-     @pytest.mark.ac("AC-06.9.3")
-+-     async def test_send_preserves_tool_results_from_run(self) -> None:
-+-         """Messages for step 2 include tool call results from step 1."""
-+--        from guild.agent.loop import AgentLoop, AgentLoopConfig
-+-+        from guild.agent.loop import AgentLoop
-+-         from guild.tools.base import ToolResult
-+- 
-+-         call_counter = 0
-+-diff --git a/tests/integration/test_observability_and_tasks.py b/tests/integration/test_observability_and_tasks.py
-+-index dc8d429..824cc9b 100644
-+---- a/tests/integration/test_observability_and_tasks.py
-+-+++ b/tests/integration/test_observability_and_tasks.py
-+-@@ -1357,7 +1357,7 @@ class TestBudgetCheckBeforeEachLLMCall:
-+-     @pytest.mark.ac("AC-10.2.5")
-+-     async def test_agent_exits_after_budget_exceeded(self) -> None:
-+-         """Agent exits immediately after the first LLM call that pushes total above budget."""
-+--        from guild.agent.loop import AgentLoopConfig, AgentLoop
-+-+        from guild.agent.loop import AgentLoop, AgentLoopConfig
-+- 
-+-         call_count = 0
-+- 
-+-diff --git a/tests/integration/test_remaining_features.py b/tests/integration/test_remaining_features.py
-+-index 69521f8..ff97d0d 100644
-+---- a/tests/integration/test_remaining_features.py
-+-+++ b/tests/integration/test_remaining_features.py
-+-@@ -38,9 +38,9 @@ from unittest.mock import AsyncMock
-+- 
-+- import pytest
-+- 
-+--from guild.storage.sqlite import Storage
-+- from guild.storage.audit import DecisionRecord
-+- from guild.storage.learnings import LearningRecord
-+-+from guild.storage.sqlite import Storage
-+- 
-+- pytestmark = pytest.mark.integration
-+- 
-+-diff --git a/tests/knowledge/test_temporal.py b/tests/knowledge/test_temporal.py
-+-index a688ec1..8bdf93d 100644
-+---- a/tests/knowledge/test_temporal.py
-+-+++ b/tests/knowledge/test_temporal.py
-+-@@ -10,9 +10,9 @@ if TYPE_CHECKING:
-+-     from pathlib import Path
-+- 
-+- from guild.knowledge.temporal import TemporalKnowledge
-+--from guild.storage.sqlite import Storage
-+- from guild.storage.audit import DecisionRecord
-+- from guild.storage.learnings import LearningRecord
-+-+from guild.storage.sqlite import Storage
-+- 
-+- 
-+- @pytest.fixture
-+-diff --git a/tests/storage/test_sqlite.py b/tests/storage/test_sqlite.py
-+-index efb65d2..7793d07 100644
-+---- a/tests/storage/test_sqlite.py
-+-+++ b/tests/storage/test_sqlite.py
-+-@@ -9,10 +9,10 @@ import pytest
-+- if TYPE_CHECKING:
-+-     from pathlib import Path
-+- 
-+--from guild.storage.sqlite import Storage
-+- from guild.storage.audit import DecisionRecord
-+- from guild.storage.learnings import LearningRecord
-+- from guild.storage.questions import QuestionRecord
-+-+from guild.storage.sqlite import Storage
-+- 
-+- 
-+- @pytest.fixture
-++diff --git a/.flow/pending_reviews.json b/.flow/pending_reviews.json
-++deleted file mode 100644
-++index 6397529..0000000
-++--- a/.flow/pending_reviews.json
-+++++ /dev/null
-++@@ -1,1169 +0,0 @@
-++-[
-++-  {
-++-    "rule_id": "python_best-practices_use-dataclasses",
-++-    "rule": "Dataclasses for simple data containers (not plain classes with only __init__)",
-++-    "verify": "Classes that only store data use @dataclass or similar (Pydantic, NamedTuple).",
-++-    "severity": "recommended",
-++-    "tags": [
-++-      "TYPES",
-++-      "STRUCTURE"
-++-    ],
-++-    "examples": null,
-++-    "exceptions": null,
-++-    "tool_assist": null,
-++-    "tool_output": null,
-++-    "candidates_found": null
-++-  },
-++-  {
-++-    "rule_id": "python_best-practices_prefer-comprehensions",
-++-    "rule": "Comprehensions over loops when readable (ruff C401/C402)",
-++-    "verify": "Simple transformations use comprehensions; complex logic uses loops.",
-++-    "severity": "recommended",
-++-    "tags": [
-++-      "PERFORMANCE",
-++-      "LOGIC"
-++-    ],
-++-    "examples": null,
-++-    "exceptions": null,
-++-    "tool_assist": null,
-++-    "tool_output": null,
-++-    "candidates_found": null
-++-  },
-++-  {
-++-    "rule_id": "python_best-practices_use-pathlib",
-++-    "rule": "pathlib.Path over os.path (ruff PTH)",
-++-    "verify": "No os.path usage where pathlib would work.",
-++-    "severity": "recommended",
-++-    "tags": [
-++-      "LOGIC"
-++-    ],
-++-    "examples": null,
-++-    "exceptions": null,
-++-    "tool_assist": null,
-++-    "tool_output": null,
-++-    "candidates_found": null
-++-  },
-++-  {
-++-    "rule_id": "python_best-practices_composition-over-inheritance",
-++-    "rule": "Prefer composition over inheritance (>2 levels of inheritance is suspect)",
-++-    "verify": "No deep inheritance hierarchies without strong justification.",
-++-    "severity": "recommended",
-++-    "tags": [
-++-      "DESIGN"
-++-    ],
-++-    "examples": null,
-++-    "exceptions": null,
-++-    "tool_assist": null,
-++-    "tool_output": null,
-++-    "candidates_found": null
-++-  },
-++-  {
-++-    "rule_id": "python_best-practices_use-property",
-++-    "rule": "@property over get_/set_ methods (unless expensive operations)",
-++-    "verify": "No get_x()/set_x() methods where @property would be appropriate.",
-++-    "severity": "advisory",
-++-    "tags": [
-++-      "NAMING",
-++-      "DESIGN"
-++-    ],
-++-    "examples": null,
-++-    "exceptions": [
-++-      "Operations that are expensive or have side effects (network calls, heavy computation) should use methods to signal cost"
-++-    ],
-++-    "tool_assist": null,
-++-    "tool_output": null,
-++-    "candidates_found": null
-++-  },
-++-  {
-++-    "rule_id": "python_dependencies_pyproject-toml-only",
-++-    "rule": "pyproject.toml is the single source of truth (no setup.py/setup.cfg)",
-++-    "verify": "No setup.py or setup.cfg exists in the project.",
-++-    "severity": "hard",
-++-    "tags": [
-++-      "DEPENDENCIES"
-++-    ],
-++-    "examples": null,
-++-    "exceptions": null,
-++-    "tool_assist": null,
-++-    "tool_output": null,
-++-    "candidates_found": null
-++-  },
-++-  {
-++-    "rule_id": "python_dependencies_lock-file-required",
-++-    "rule": "Lock file for reproducible deploys (pip-compile or uv lock)",
-++-    "verify": "A lock file exists and is committed to the repository.",
-++-    "severity": "hard",
-++-    "tags": [
-++-      "DEPENDENCIES"
-++-    ],
-++-    "examples": null,
-++-    "exceptions": null,
-++-    "tool_assist": null,
-++-    "tool_output": null,
-++-    "candidates_found": null
-++-  },
-++-  {
-++-    "rule_id": "python_dependencies_version-ranges",
-++-    "rule": "Ranges in pyproject.toml (>=1.2,<2.0), exact pins in lock file only",
-++-    "verify": "pyproject.toml uses version ranges, not exact pins.",
-++-    "severity": "recommended",
-++-    "tags": [
-++-      "DEPENDENCIES"
-++-    ],
-++-    "examples": null,
-++-    "exceptions": null,
-++-    "tool_assist": null,
-++-    "tool_output": null,
-++-    "candidates_found": null
-++-  },
-++-  {
-++-    "rule_id": "python_dependencies_editable-installs",
-++-    "rule": "Editable installs for development: pip install -e \".[dev]\"",
-++-    "verify": "Development setup uses editable install.",
-++-    "severity": "recommended",
-++-    "tags": [
-++-      "DEPENDENCIES",
-++-      "TOOLING"
-++-    ],
-++-    "examples": null,
-++-    "exceptions": null,
-++-    "tool_assist": null,
-++-    "tool_output": null,
-++-    "candidates_found": null
-++-  },
-++-  {
-++-    "rule_id": "python_dependencies_minimal-dependencies",
-++-    "rule": "Minimal dependencies \u2014 each must be imported somewhere in src/",
-++-    "verify": "Every declared dependency is actually imported in the source code.",
-++-    "severity": "recommended",
-++-    "tags": [
-++-      "DEPENDENCIES",
-++-      "SECURITY"
-++-    ],
-++-    "examples": null,
-++-    "exceptions": null,
-++-    "tool_assist": null,
-++-    "tool_output": null,
-++-    "candidates_found": null
-++-  },
-++-  {
-++-    "rule_id": "python_dependencies_document-dependencies",
-++-    "rule": "Document why each dependency is needed (inline comments in pyproject.toml)",
-++-    "verify": "Each dependency in pyproject.toml has a comment explaining its purpose.",
-++-    "severity": "advisory",
-++-    "tags": [
-++-      "DEPENDENCIES",
-++-      "DOCUMENTATION"
-++-    ],
-++-    "examples": null,
-++-    "exceptions": null,
-++-    "tool_assist": null,
-++-    "tool_output": null,
-++-    "candidates_found": null
-++-  },
-++-  {
-++-    "rule_id": "python_documentation_docstring-format",
-++-    "rule": "Consistent format: Google style or NumPy style (not both in one project)",
-++-    "verify": "All docstrings use the same format.",
-++-    "severity": "recommended",
-++-    "tags": [
-++-      "DOCUMENTATION"
-++-    ],
-++-    "examples": null,
-++-    "exceptions": null,
-++-    "tool_assist": null,
-++-    "tool_output": null,
-++-    "candidates_found": null
-++-  },
-++-  {
-++-    "rule_id": "python_documentation_document-args-returns",
-++-    "rule": "Include Args, Returns, Raises sections where applicable (ruff D417)",
-++-    "verify": "Functions with parameters document all args; functions that raise document exceptions.",
-++-    "severity": "recommended",
-++-    "tags": [
-++-      "DOCUMENTATION"
-++-    ],
-++-    "examples": null,
-++-    "exceptions": null,
-++-    "tool_assist": null,
-++-    "tool_output": null,
-++-    "candidates_found": null
-++-  },
-++-  {
-++-    "rule_id": "python_organization_module-structure",
-++-    "rule": "Module structure: docstring -> imports -> constants -> classes -> functions -> if __name__",
-++-    "verify": "Out-of-order elements are violations.",
-++-    "severity": "recommended",
-++-    "tags": [
-++-      "STRUCTURE"
-++-    ],
-++-    "examples": null,
-++-    "exceptions": null,
-++-    "tool_assist": null,
-++-    "tool_output": null,
-++-    "candidates_found": null
-++-  },
-++-  {
-++-    "rule_id": "python_organization_one-class-per-file",
-++-    "rule": "One class per file for large classes (>200 lines). Small related classes can share.",
-++-    "verify": "No file contains multiple large unrelated classes.",
-++-    "severity": "advisory",
-++-    "tags": [
-++-      "STRUCTURE"
-++-    ],
-++-    "examples": null,
-++-    "exceptions": null,
-++-    "tool_assist": null,
-++-    "tool_output": null,
-++-    "candidates_found": null
-++-  },
-++-  {
-++-    "rule_id": "python_performance_use-generators",
-++-    "rule": "Generators for large datasets iterated once (yield over return list)",
-++-    "verify": "Functions producing large sequences use yield unless the caller needs random access.",
-++-    "severity": "recommended",
-++-    "tags": [
-++-      "PERFORMANCE"
-++-    ],
-++-    "examples": null,
-++-    "exceptions": null,
-++-    "tool_assist": null,
-++-    "tool_output": null,
-++-    "candidates_found": null
-++-  },
-++-  {
-++-    "rule_id": "python_performance_use-slots",
-++-    "rule": "__slots__ for classes with many instances",
-++-    "verify": "High-instance-count classes define __slots__.",
-++-    "severity": "advisory",
-++-    "tags": [
-++-      "PERFORMANCE"
-++-    ],
-++-    "examples": null,
-++-    "exceptions": null,
-++-    "tool_assist": null,
-++-    "tool_output": null,
-++-    "candidates_found": null
-++-  },
-++-  {
-++-    "rule_id": "python_performance_cache-pure-functions",
-++-    "rule": "@lru_cache/@cache for pure functions called repeatedly with same args",
-++-    "verify": "Repeatedly-called pure functions with same inputs use caching.",
-++-    "severity": "recommended",
-++-    "tags": [
-++-      "PERFORMANCE"
-++-    ],
-++-    "examples": null,
-++-    "exceptions": null,
-++-    "tool_assist": null,
-++-    "tool_output": null,
-++-    "candidates_found": null
-++-  },
-++-  {
-++-    "rule_id": "python_stack_use-pytest",
-++-    "rule": "Testing: pytest + pytest-cov (--cov-branch --cov-fail-under=100) + pytest-asyncio. Exclusions: # pragma: no cover \u2014 <reason>",
-++-    "verify": "pytest --cov=<pkg> --cov-branch --cov-fail-under=100 passes. Every pragma has a reason.",
-++-    "severity": "hard",
-++-    "tags": [
-++-      "TOOLING",
-++-      "TESTING"
-++-    ],
-++-    "examples": null,
-++-    "exceptions": null,
-++-    "tool_assist": null,
-++-    "tool_output": null,
-++-    "candidates_found": null
-++-  },
-++-  {
-++-    "rule_id": "python_stack_use-configsloader",
-++-    "rule": "Configuration: lightshield/configs_loader_python for all config needs",
-++-    "verify": "No hand-rolled argparse or config file parsing. Use ConfigsLoader with Field() declarations.",
-++-    "severity": "recommended",
-++-    "tags": [
-++-      "TOOLING",
-++-      "DEPENDENCIES"
-++-    ],
-++-    "examples": null,
-++-    "exceptions": null,
-++-    "tool_assist": null,
-++-    "tool_output": null,
-++-    "candidates_found": null
-++-  },
-++-  {
-++-    "rule_id": "python_stack_use-logger",
-++-    "rule": "Logging: lightshield/logger_python",
-++-    "verify": "No print() for runtime logging. All logging through lightshield logger.",
-++-    "severity": "hard",
-++-    "tags": [
-++-      "TOOLING",
-++-      "ERRORS"
-++-    ],
-++-    "examples": null,
-++-    "exceptions": null,
-++-    "tool_assist": null,
-++-    "tool_output": null,
-++-    "candidates_found": null
-++-  },
-++-  {
-++-    "rule_id": "python_style_underscore-private",
-++-    "rule": "Prefix private members with underscore (_private_member)",
-++-    "verify": "Non-public members used only internally are underscore-prefixed.",
-++-    "severity": "recommended",
-++-    "tags": [
-++-      "NAMING"
-++-    ],
-++-    "examples": null,
-++-    "exceptions": null,
-++-    "tool_assist": null,
-++-    "tool_output": null,
-++-    "candidates_found": null
-++-  },
-++-  {
-++-    "rule_id": "python_testing_test-file-naming",
-++-    "rule": "File naming: test_<module>.py",
-++-    "verify": "All test files follow the naming convention.",
-++-    "severity": "hard",
-++-    "tags": [
-++-      "TESTING",
-++-      "NAMING"
-++-    ],
-++-    "examples": null,
-++-    "exceptions": null,
-++-    "tool_assist": null,
-++-    "tool_output": null,
-++-    "candidates_found": null
-++-  },
-++-  {
-++-    "rule_id": "python_testing_use-fixtures",
-++-    "rule": "Fixtures for setup (no setUp/tearDown)",
-++-    "verify": "No setUp/tearDown methods \u2014 use @pytest.fixture instead.",
-++-    "severity": "recommended",
-++-    "tags": [
-++-      "TESTING"
-++-    ],
-++-    "examples": null,
-++-    "exceptions": null,
-++-    "tool_assist": null,
-++-    "tool_output": null,
-++-    "candidates_found": null
-++-  },
-++-  {
-++-    "rule_id": "python_testing_use-parametrize",
-++-    "rule": "@pytest.mark.parametrize for repetitive test patterns",
-++-    "verify": "Repetitive test cases with same logic but different inputs use parametrize.",
-++-    "severity": "recommended",
-++-    "tags": [
-++-      "TESTING"
-++-    ],
-++-    "examples": null,
-++-    "exceptions": null,
-++-    "tool_assist": null,
-++-    "tool_output": null,
-++-    "candidates_found": null
-++-  },
-++-  {
-++-    "rule_id": "python_testing_required-markers",
-++-    "rule": "Every test has a type marker: @pytest.mark.e2e / .integration / .unit / .learning. E2E tests also require @pytest.mark.req('REQ-XX.X').",
-++-    "verify": "pytest --strict-markers passes. No test exists without a type marker. All e2e tests have a req marker. Unit/integration tests may optionally have req markers for navigation.",
-++-    "severity": "hard",
-++-    "tags": [
-++-      "TESTING",
-++-      "TOOLING"
-++-    ],
-++-    "examples": null,
-++-    "exceptions": null,
-++-    "tool_assist": null,
-++-    "tool_output": null,
-++-    "candidates_found": null
-++-  },
-++-  {
-++-    "rule_id": "python_testing_use-import-linter",
-++-    "rule": "Architecture enforcement: import-linter or pytest-archon to define and verify component boundaries.",
-++-    "verify": "lint-imports passes in CI. Boundary contracts are defined in config (layers, independence, forbidden imports). New cross-package imports without a corresponding integration test are flagged.",
-++-    "severity": "recommended",
-++-    "tags": [
-++-      "TOOLING",
-++-      "DESIGN"
-++-    ],
-++-    "examples": null,
-++-    "exceptions": null,
-++-    "tool_assist": null,
-++-    "tool_output": null,
-++-    "candidates_found": null
-++-  },
-++-  {
-++-    "rule_id": "common_code-quality_early-exit",
-++-    "rule": "Prefer early exit (guard clauses) to reduce nesting",
-++-    "verify": "For each nested if/else, ask: could this be an early return? tool_assist narrows candidates but does not verify: PLR5501 only flags collapsible-if (if inside if with no else) \u2014 it misses deeply nested code that could use guard clauses, and cannot judge whether refactoring is appropriate for the specific logic.",
-++-    "severity": "recommended",
-++-    "tags": [
-++-      "LOGIC"
-++-    ],
-++-    "examples": {
-++-      "bad": [
-++-        {
-++-          "code": "def process(item):\n    if item is not None:\n        if item.is_valid():\n            # ... deep logic\n            return result\n    return None\n",
-++-          "why": "Unnecessary nesting obscures the main logic"
-++-        }
-++-      ],
-++-      "good": [
-++-        {
-++-          "code": "def process(item):\n    if item is None:\n        return None\n    if not item.is_valid():\n        return None\n    # ... main logic at top level\n    return result\n"
-++-        }
-++-      ]
-++-    },
-++-    "exceptions": null,
-++-    "tool_assist": "ruff:PLR5501",
-++-    "tool_output": null,
-++-    "candidates_found": false
-++-  },
-++-  {
-++-    "rule_id": "common_code-quality_no-magic-strings",
-++-    "rule": "No magic strings \u2014 extract to named constants for identity/matching values",
-++-    "verify": "Strings used as identity values, matching patterns, keys, or repeated in multiple locations need named constants even if used once.",
-++-    "severity": "hard",
-++-    "tags": [
-++-      "VALUES"
-++-    ],
-++-    "examples": {
-++-      "bad": [
-++-        {
-++-          "code": "prefix='guild_config_'  # used in two places",
-++-          "why": "Duplication caused a real bug when one was typo'd"
-++-        },
-++-        {
-++-          "code": "if status == \"pending\":",
-++-          "why": "String identity check \u2014 should be a constant"
-++-        }
-++-      ],
-++-      "good": [
-++-        {
-++-          "code": "_TEMP_FILE_PREFIX = 'guild_config_'"
-++-        },
-++-        {
-++-          "code": "STATUS_PENDING = \"pending\""
-++-        }
-++-      ]
-++-    },
-++-    "exceptions": null,
-++-    "tool_assist": null,
-++-    "tool_output": null,
-++-    "candidates_found": null
-++-  },
-++-  {
-++-    "rule_id": "common_code-quality_no-what-comments",
-++-    "rule": "No WHAT comments \u2014 extract to functions with meaningful names instead. WHY comments are acceptable when non-obvious, but rare.",
-++-    "verify": "Every comment answers 'why', not restates the code.",
-++-    "severity": "recommended",
-++-    "tags": [
-++-      "DOCUMENTATION",
-++-      "NAMING"
-++-    ],
-++-    "examples": {
-++-      "bad": [
-++-        {
-++-          "code": "# increment counter\ncounter += 1",
-++-          "why": "Comment restates what the code already says"
-++-        }
-++-      ],
-++-      "good": [
-++-        {
-++-          "code": "# Retry needed because upstream API returns stale cache for ~2s after write\nretry_with_backoff(fetch_latest)"
-++-        }
-++-      ]
-++-    },
-++-    "exceptions": null,
-++-    "tool_assist": null,
-++-    "tool_output": null,
-++-    "candidates_found": null
-++-  },
-++-  {
-++-    "rule_id": "common_code-quality_fail-fast",
-++-    "rule": "Fail fast \u2014 validate inputs early",
-++-    "verify": "Validation happens before main logic begins, not after side effects.",
-++-    "severity": "hard",
-++-    "tags": [
-++-      "ERRORS",
-++-      "LOGIC"
-++-    ],
-++-    "examples": null,
-++-    "exceptions": null,
-++-    "tool_assist": null,
-++-    "tool_output": null,
-++-    "candidates_found": null
-++-  },
-++-  {
-++-    "rule_id": "common_code-quality_descriptive-names",
-++-    "rule": "Function names describe WHAT, not HOW",
-++-    "verify": "Read call sites \u2014 does the name make calling code read like a story? Generic verbs (process, handle, resolve) without a specific object are suspect.",
-++-    "severity": "recommended",
-++-    "tags": [
-++-      "NAMING"
-++-    ],
-++-    "examples": {
-++-      "bad": [
-++-        {
-++-          "code": "process_data, handle_request, resolve_prompt",
-++-          "why": "Generic verbs that tell you nothing about the domain"
-++-        }
-++-      ],
-++-      "good": [
-++-        {
-++-          "code": "extract_review_intent, consolidate_findings, post_to_gerrit"
-++-        }
-++-      ]
-++-    },
-++-    "exceptions": null,
-++-    "tool_assist": null,
-++-    "tool_output": null,
-++-    "candidates_found": null
-++-  },
-++-  {
-++-    "rule_id": "common_code-quality_one-abstraction-level",
-++-    "rule": "Functions stay at one abstraction level",
-++-    "verify": "Are all statements at the same level of detail?",
-++-    "severity": "recommended",
-++-    "tags": [
-++-      "DESIGN",
-++-      "STRUCTURE"
-++-    ],
-++-    "examples": {
-++-      "bad": [
-++-        {
-++-          "code": "Mixing 'decide what to review' with 'construct SSH command string'",
-++-          "why": "Strategic decision and low-level string building in same function"
-++-        }
-++-      ],
-++-      "good": [
-++-        {
-++-          "code": "Top-level reads as a story, details one level down in helpers"
-++-        }
-++-      ]
-++-    },
-++- 
++++ /dev/null
+@@ -1,1387 +0,0 @@
+-diff --git a/.flow/current_diff.patch b/.flow/current_diff.patch
+-index 021e93b..a8c3792 100644
+---- a/.flow/current_diff.patch
+-+++ b/.flow/current_diff.patch
+-@@ -1,414 +1,1407 @@
+--diff --git a/src/guild/agent/learning.py b/src/guild/agent/learning.py
+--index c95d82d..2f0d2c3 100644
+----- a/src/guild/agent/learning.py
+--+++ b/src/guild/agent/learning.py
+--@@ -14,8 +14,8 @@ from logger_python import get_logger
+-- from guild.config.constants import (
+--     DEFAULT_CONFIDENCE,
+--     LEARNING_CONTENT_MAX_CHARS,
+---    MIN_INJECTION_CONFIDENCE,
+--     LOG_PREVIEW_MAX_CHARS,
+--+    MIN_INJECTION_CONFIDENCE,
+-- )
+-- 
+-- if TYPE_CHECKING:  # pragma: no cover — type-checking only
+--diff --git a/src/guild/agent/ratelimit.py b/src/guild/agent/ratelimit.py
+--index a148c6b..cfec657 100644
+----- a/src/guild/agent/ratelimit.py
+--+++ b/src/guild/agent/ratelimit.py
+--@@ -2,12 +2,12 @@
+-- 
+-- from __future__ import annotations
+-- 
+---from guild.config.constants import DEFAULT_RATE_LIMIT_CALLS, DEFAULT_RATE_LIMIT_WINDOW_SECONDS
+---
+-- import asyncio
+-- import time
+-- from typing import TYPE_CHECKING, Any
+-- 
+--+from guild.config.constants import DEFAULT_RATE_LIMIT_CALLS, DEFAULT_RATE_LIMIT_WINDOW_SECONDS
+--+
+-- if TYPE_CHECKING:  # pragma: no cover — type-checking only
+--     from collections.abc import Coroutine
+-- 
+--diff --git a/src/guild/api/server.py b/src/guild/api/server.py
+--index 4e71204..68957e2 100644
+----- a/src/guild/api/server.py
+--+++ b/src/guild/api/server.py
+--@@ -19,6 +19,7 @@ if TYPE_CHECKING:
+-- 
+-- from guild import __version__
+-- from guild.config.constants import (
+--+    DEFAULT_QUERY_LIMIT,
+--     GUILD_DIR_NAME,
+--     HTTP_BAD_REQUEST,
+--     HTTP_NOT_FOUND,
+--@@ -28,7 +29,6 @@ from guild.config.constants import (
+--     JSONRPC_METHOD_NOT_FOUND,
+--     JSONRPC_PARSE_ERROR,
+--     WEBSOCKET_POLL_SECONDS,
+---    DEFAULT_QUERY_LIMIT,
+-- )
+-- from guild.config.loader import DB_FILENAME
+-- from guild.task.spec import TaskStatus
+--diff --git a/src/guild/config/profiles.py b/src/guild/config/profiles.py
+--index 866bc06..8b53711 100644
+----- a/src/guild/config/profiles.py
+--+++ b/src/guild/config/profiles.py
+--@@ -93,6 +93,22 @@ def load_permission_profiles(guild_dir: Path) -> dict[str, PermissionProfile]:
+--     return profiles
+-- 
+-- 
+--+def _validate_escalation_chain(
+--+    config: GuildConfig,
+--+    known_models: list[str] | None,
+--+    errors: list[str],
+--+) -> None:
+--+    """Check escalation chain model names against known models."""
+--+    if not config.escalation_chain or known_models is None:
+--+        return
+--+    chain_models = [m.strip() for m in config.escalation_chain.split(",") if m.strip()]
+--+    for model_name in chain_models:
+--+        if model_name not in known_models:
+--+            warning = f"Unknown model in escalation chain: '{model_name}'"
+--+            errors.append(warning)
+--+            logger.warning(warning)
+--+
+--+
+-- def validate_config(
+--     config: GuildConfig,
+--     guild_dir: Path,
+--@@ -134,13 +150,7 @@ def validate_config(
+--                 f"Agent profile '{name}' has invalid permission: " f"'{profile.permission}'"
+--             )
+-- 
+---    if config.escalation_chain and known_models is not None:
+---        chain_models = [m.strip() for m in config.escalation_chain.split(",") if m.strip()]
+---        for model_name in chain_models:
+---            if model_name not in known_models:
+---                warning = f"Unknown model in escalation chain: '{model_name}'"
+---                errors.append(warning)
+---                logger.warning(warning)
+--+    _validate_escalation_chain(config, known_models, errors)
+-- 
+--     return errors
+-- 
+--diff --git a/src/guild/storage/audit.py b/src/guild/storage/audit.py
+--index 97cad5a..26da292 100644
+----- a/src/guild/storage/audit.py
+--+++ b/src/guild/storage/audit.py
+--@@ -7,10 +7,10 @@ from dataclasses import dataclass
+-- from datetime import UTC, datetime
+-- from typing import Any
+-- 
+---from guild.storage.connection import DBConnection
+-- from logger_python import get_logger
+-- 
+-- from guild.config.constants import DEFAULT_QUERY_LIMIT
+--+from guild.storage.connection import DBConnection
+-- 
+-- __all__ = ["AuditOps", "DecisionRecord"]
+-- 
+--diff --git a/src/guild/storage/checkpoints.py b/src/guild/storage/checkpoints.py
+--index 7267d8e..abeeb46 100644
+----- a/src/guild/storage/checkpoints.py
+--+++ b/src/guild/storage/checkpoints.py
+--@@ -5,9 +5,10 @@ from __future__ import annotations
+-- from datetime import UTC, datetime
+-- from typing import Any
+-- 
+---from guild.storage.connection import DBConnection
+-- from logger_python import get_logger
+-- 
+--+from guild.storage.connection import DBConnection
+--+
+-- __all__ = ["CheckpointOps"]
+-- 
+-- logger = get_logger(__name__)
+--diff --git a/src/guild/storage/learnings.py b/src/guild/storage/learnings.py
+--index 35dbe9d..792c34c 100644
+----- a/src/guild/storage/learnings.py
+--+++ b/src/guild/storage/learnings.py
+--@@ -6,7 +6,6 @@ from dataclasses import dataclass
+-- from datetime import UTC, datetime
+-- from typing import Any
+-- 
+---from guild.storage.connection import DBConnection
+-- from logger_python import get_logger
+-- 
+-- from guild.config.constants import (
+--@@ -16,6 +15,7 @@ from guild.config.constants import (
+--     DEFAULT_QUERY_LIMIT,
+--     PRUNING_RETENTION_DAYS,
+-- )
+--+from guild.storage.connection import DBConnection
+-- 
+-- __all__ = ["LearningOps", "LearningRecord"]
+-- 
+--diff --git a/src/guild/storage/memories.py b/src/guild/storage/memories.py
+--index c0a42ac..8c334ef 100644
+----- a/src/guild/storage/memories.py
+--+++ b/src/guild/storage/memories.py
+--@@ -5,7 +5,6 @@ from __future__ import annotations
+-- from datetime import UTC, datetime
+-- from typing import Any
+-- 
+---from guild.storage.connection import DBConnection
+-- from logger_python import get_logger
+-- 
+-- from guild.config.constants import (
+--@@ -13,6 +12,7 @@ from guild.config.constants import (
+--     MEMORY_SUMMARY_MAX_CHARS,
+--     PRUNING_RETENTION_DAYS,
+-- )
+--+from guild.storage.connection import DBConnection
+-- 
+-- __all__ = ["MemoryOps"]
+-- 
+--diff --git a/src/guild/storage/messages.py b/src/guild/storage/messages.py
+--index 92f246f..b172eb7 100644
+----- a/src/guild/storage/messages.py
+--+++ b/src/guild/storage/messages.py
+--@@ -5,9 +5,10 @@ from __future__ import annotations
+-- from datetime import UTC, datetime
+-- from typing import Any
+-- 
+---from guild.storage.connection import DBConnection
+-- from logger_python import get_logger
+-- 
+--+from guild.storage.connection import DBConnection
+--+
+-- __all__ = ["MessageOps"]
+-- 
+-- logger = get_logger(__name__)
+--diff --git a/src/guild/storage/questions.py b/src/guild/storage/questions.py
+--index 18513c6..8e29edb 100644
+----- a/src/guild/storage/questions.py
+--+++ b/src/guild/storage/questions.py
+--@@ -6,9 +6,10 @@ from dataclasses import dataclass
+-- from datetime import UTC, datetime
+-- from typing import Any
+-- 
+---from guild.storage.connection import DBConnection
+-- from logger_python import get_logger
+-- 
+--+from guild.storage.connection import DBConnection
+--+
+-- __all__ = ["QuestionOps", "QuestionRecord"]
+-- 
+-- logger = get_logger(__name__)
+--diff --git a/src/guild/storage/tasks.py b/src/guild/storage/tasks.py
+--index a492579..f6148e8 100644
+----- a/src/guild/storage/tasks.py
+--+++ b/src/guild/storage/tasks.py
+--@@ -5,9 +5,10 @@ from __future__ import annotations
+-- from datetime import UTC, datetime
+-- from typing import Any
+-- 
+---from guild.storage.connection import DBConnection
+-- from logger_python import get_logger
+-- 
+--+from guild.storage.connection import DBConnection
+--+
+-- __all__ = ["TaskOps"]
+-- 
+-- logger = get_logger(__name__)
+--diff --git a/tests/agent/test_learning.py b/tests/agent/test_learning.py
+--index 4c7f87b..81fdc85 100644
+----- a/tests/agent/test_learning.py
+--+++ b/tests/agent/test_learning.py
+--@@ -15,8 +15,8 @@ from guild.agent.learning import (
+--     format_learnings_for_injection,
+-- )
+-- from guild.provider.base import LLMResponse
+---from guild.storage.sqlite import Storage
+-- from guild.storage.learnings import LearningRecord
+--+from guild.storage.sqlite import Storage
+-- 
+-- 
+-- @pytest.fixture
+--diff --git a/tests/agent/test_rollback.py b/tests/agent/test_rollback.py
+--index dd78b9d..9a52b54 100644
+----- a/tests/agent/test_rollback.py
+--+++ b/tests/agent/test_rollback.py
+--@@ -2,6 +2,8 @@
+-- 
+-- from __future__ import annotations
+-- 
+--+from pathlib import Path
+--+
+-- import pytest
+-- 
+-- from guild.agent.rollback import RollbackContext, try_with_rollback
+--diff --git a/tests/cli/test_main.py b/tests/cli/test_main.py
+--index b154aee..aec9f65 100644
+----- a/tests/cli/test_main.py
+--+++ b/tests/cli/test_main.py
+--@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
+-- 
+-- import pytest
+-- from typer.testing import CliRunner
+--+
+-- from guild.storage.audit import DecisionRecord
+-- from guild.storage.learnings import LearningRecord
+-- 
+--diff --git a/tests/integration/test_agent_pipeline.py b/tests/integration/test_agent_pipeline.py
+--index 5f7e01e..b6e673c 100644
+----- a/tests/integration/test_agent_pipeline.py
+--+++ b/tests/integration/test_agent_pipeline.py
+--@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock
+-- 
+-- import pytest
+-- 
+---from guild.agent.loop import AgentLoopConfig, AgentLoop
+--+from guild.agent.loop import AgentLoop, AgentLoopConfig
+-- from guild.provider.base import LLMResponse
+-- from guild.storage.sqlite import Storage
+-- from guild.tools.registry import build_tool_executors
+--diff --git a/tests/integration/test_context_and_learning.py b/tests/integration/test_context_and_learning.py
+--index a367ff2..250afda 100644
+----- a/tests/integration/test_context_and_learning.py
+--+++ b/tests/integration/test_context_and_learning.py
+--@@ -50,8 +50,8 @@ from guild.config.constants import (
+-- from guild.knowledge.memory import MemoryIndex
+-- from guild.orchestration.bus import SharedContext
+-- from guild.provider.base import LLMResponse
+---from guild.storage.sqlite import Storage
+-- from guild.storage.learnings import LearningRecord
+--+from guild.storage.sqlite import Storage
+-- 
+-- pytestmark = pytest.mark.integration
+-- 
+--diff --git a/tests/integration/test_daemon_and_features.py b/tests/integration/test_daemon_and_features.py
+--index 303e6f6..d34ef72 100644
+----- a/tests/integration/test_daemon_and_features.py
+--+++ b/tests/integration/test_daemon_and_features.py
+--@@ -10,14 +10,13 @@ import asyncio
+-- import json
+-- from pathlib import Path
+-- from typing import Any
+---from unittest.mock import AsyncMock, patch
+--+from unittest.mock import AsyncMock
+-- 
+-- import pytest
+-- from typer.testing import CliRunner
+-- 
+-- from guild.agent.loop import AgentLoopConfig
+-- from guild.cli.main import app
+---from guild.daemon.resource import ResourceConfig
+-- from guild.permissions.checker import PermissionConfig
+-- from guild.provider.base import LLMResponse
+-- 
+--@@ -719,7 +718,7 @@ class TestSelfVerifyCompletion:
+--     @pytest.mark.ac("AC-06.2.1")
+--     async def test_self_review_can_trigger_fixes(self) -> None:
+--         """Edge: self-review finds an issue and uses a tool to fix it."""
+---        from guild.agent.loop import AgentLoop, AgentLoopConfig
+--+        from guild.agent.loop import AgentLoop
+--         from guild.tools.base import ToolResult
+-- 
+--         async def mock_write(args: dict[str, Any], wd: str | None = None) -> ToolResult:
+--@@ -998,7 +997,7 @@ class TestMultiTurn:
+--     @pytest.mark.ac("AC-06.9.1")
+--     async def test_send_preserves_context(self) -> None:
+--         """Happy: send() sees messages from prior turns."""
+---        from guild.agent.loop import AgentLoop, AgentLoopConfig
+--+        from guild.agent.loop import AgentLoop
+-- 
+--         provider = _make_mock_provider(
+--             _simple_response("Hello! I am ready."),
+--@@ -1016,7 +1015,7 @@ class TestMultiTurn:
+--     @pytest.mark.ac("AC-06.9.1")
+--     async def test_run_resets_history(self) -> None:
+--         """Sad: calling run() again clears the conversation."""
+---        from guild.agent.loop import AgentLoop, AgentLoopConfig
+--+        from guild.agent.loop import AgentLoop
+-- 
+--         provider = _make_mock_provider(
+--             _simple_response("First run."),
+--@@ -1035,7 +1034,7 @@ class TestMultiTurn:
+--     @pytest.mark.ac("AC-06.9.2")
+--     async def test_send_without_run_raises(self) -> None:
+--         """Edge: send() before run() raises RuntimeError."""
+---        from guild.agent.loop import AgentLoop, AgentLoopConfig
+--+        from guild.agent.loop import AgentLoop
+-- 
+--         provider = _make_mock_provider(_simple_response("Nope"))
+--         loop = AgentLoop(provider=provider, tool_executors={})
+--@@ -1046,7 +1045,7 @@ class TestMultiTurn:
+--     @pytest.mark.ac("AC-06.9.1")
+--     async def test_multiple_sends_accumulate(self) -> None:
+--         """Edge: four consecutive messages all preserved in history."""
+---        from guild.agent.loop import AgentLoop, AgentLoopConfig
+--+        from guild.agent.loop import AgentLoop
+-- 
+--         provider = _make_mock_provider(
+--             _simple_response("R1"),
+--@@ -1612,7 +1611,7 @@ class TestSendPreservesToolContext:
+--     @pytest.mark.ac("AC-06.9.3")
+--     async def test_send_preserves_tool_results_from_run(self) -> None:
+--         """Messages for step 2 include tool call results from step 1."""
+---        from guild.agent.loop import AgentLoop, AgentLoopConfig
+--+        from guild.agent.loop import AgentLoop
+--         from guild.tools.base import ToolResult
+-- 
+--         call_counter = 0
+--diff --git a/tests/integration/test_observability_and_tasks.py b/tests/integration/test_observability_and_tasks.py
+--index dc8d429..824cc9b 100644
+----- a/tests/integration/test_observability_and_tasks.py
+--+++ b/tests/integration/test_observability_and_tasks.py
+--@@ -1357,7 +1357,7 @@ class TestBudgetCheckBeforeEachLLMCall:
+--     @pytest.mark.ac("AC-10.2.5")
+--     async def test_agent_exits_after_budget_exceeded(self) -> None:
+--         """Agent exits immediately after the first LLM call that pushes total above budget."""
+---        from guild.agent.loop import AgentLoopConfig, AgentLoop
+--+        from guild.agent.loop import AgentLoop, AgentLoopConfig
+-- 
+--         call_count = 0
+-- 
+--diff --git a/tests/integration/test_remaining_features.py b/tests/integration/test_remaining_features.py
+--index 69521f8..ff97d0d 100644
+----- a/tests/integration/test_remaining_features.py
+--+++ b/tests/integration/test_remaining_features.py
+--@@ -38,9 +38,9 @@ from unittest.mock import AsyncMock
+-- 
+-- import pytest
+-- 
+---from guild.storage.sqlite import Storage
+-- from guild.storage.audit import DecisionRecord
+-- from guild.storage.learnings import LearningRecord
+--+from guild.storage.sqlite import Storage
+-- 
+-- pytestmark = pytest.mark.integration
+-- 
+--diff --git a/tests/knowledge/test_temporal.py b/tests/knowledge/test_temporal.py
+--index a688ec1..8bdf93d 100644
+----- a/tests/knowledge/test_temporal.py
+--+++ b/tests/knowledge/test_temporal.py
+--@@ -10,9 +10,9 @@ if TYPE_CHECKING:
+--     from pathlib import Path
+-- 
+-- from guild.knowledge.temporal import TemporalKnowledge
+---from guild.storage.sqlite import Storage
+-- from guild.storage.audit import DecisionRecord
+-- from guild.storage.learnings import LearningRecord
+--+from guild.storage.sqlite import Storage
+-- 
+-- 
+-- @pytest.fixture
+--diff --git a/tests/storage/test_sqlite.py b/tests/storage/test_sqlite.py
+--index efb65d2..7793d07 100644
+----- a/tests/storage/test_sqlite.py
+--+++ b/tests/storage/test_sqlite.py
+--@@ -9,10 +9,10 @@ import pytest
+-- if TYPE_CHECKING:
+--     from pathlib import Path
+-- 
+---from guild.storage.sqlite import Storage
+-- from guild.storage.audit import DecisionRecord
+-- from guild.storage.learnings import LearningRecord
+-- from guild.storage.questions import QuestionRecord
+--+from guild.storage.sqlite import Storage
+-- 
+-- 
+-- @pytest.fixture
+-+diff --git a/.flow/current_diff.patch b/.flow/current_diff.patch
+-+index 021e93b..60a93e9 100644
+-+--- a/.flow/current_diff.patch
+-++++ b/.flow/current_diff.patch
+-+@@ -1,414 +1,1408 @@
+-+-diff --git a/src/guild/agent/learning.py b/src/guild/agent/learning.py
+-+-index c95d82d..2f0d2c3 100644
+-+---- a/src/guild/agent/learning.py
+-+-+++ b/src/guild/agent/learning.py
+-+-@@ -14,8 +14,8 @@ from logger_python import get_logger
+-+- from guild.config.constants import (
+-+-     DEFAULT_CONFIDENCE,
+-+-     LEARNING_CONTENT_MAX_CHARS,
+-+--    MIN_INJECTION_CONFIDENCE,
+-+-     LOG_PREVIEW_MAX_CHARS,
+-+-+    MIN_INJECTION_CONFIDENCE,
+-+- )
+-+- 
+-+- if TYPE_CHECKING:  # pragma: no cover — type-checking only
+-+-diff --git a/src/guild/agent/ratelimit.py b/src/guild/agent/ratelimit.py
+-+-index a148c6b..cfec657 100644
+-+---- a/src/guild/agent/ratelimit.py
+-+-+++ b/src/guild/agent/ratelimit.py
+-+-@@ -2,12 +2,12 @@
+-+- 
+-+- from __future__ import annotations
+-+- 
+-+--from guild.config.constants import DEFAULT_RATE_LIMIT_CALLS, DEFAULT_RATE_LIMIT_WINDOW_SECONDS
+-+--
+-+- import asyncio
+-+- import time
+-+- from typing import TYPE_CHECKING, Any
+-+- 
+-+-+from guild.config.constants import DEFAULT_RATE_LIMIT_CALLS, DEFAULT_RATE_LIMIT_WINDOW_SECONDS
+-+-+
+-+- if TYPE_CHECKING:  # pragma: no cover — type-checking only
+-+-     from collections.abc import Coroutine
+-+- 
+-+-diff --git a/src/guild/api/server.py b/src/guild/api/server.py
+-+-index 4e71204..68957e2 100644
+-+---- a/src/guild/api/server.py
+-+-+++ b/src/guild/api/server.py
+-+-@@ -19,6 +19,7 @@ if TYPE_CHECKING:
+-+- 
+-+- from guild import __version__
+-+- from guild.config.constants import (
+-+-+    DEFAULT_QUERY_LIMIT,
+-+-     GUILD_DIR_NAME,
+-+-     HTTP_BAD_REQUEST,
+-+-     HTTP_NOT_FOUND,
+-+-@@ -28,7 +29,6 @@ from guild.config.constants import (
+-+-     JSONRPC_METHOD_NOT_FOUND,
+-+-     JSONRPC_PARSE_ERROR,
+-+-     WEBSOCKET_POLL_SECONDS,
+-+--    DEFAULT_QUERY_LIMIT,
+-+- )
+-+- from guild.config.loader import DB_FILENAME
+-+- from guild.task.spec import TaskStatus
+-+-diff --git a/src/guild/config/profiles.py b/src/guild/config/profiles.py
+-+-index 866bc06..8b53711 100644
+-+---- a/src/guild/config/profiles.py
+-+-+++ b/src/guild/config/profiles.py
+-+-@@ -93,6 +93,22 @@ def load_permission_profiles(guild_dir: Path) -> dict[str, PermissionProfile]:
+-+-     return profiles
+-+- 
+-+- 
+-+-+def _validate_escalation_chain(
+-+-+    config: GuildConfig,
+-+-+    known_models: list[str] | None,
+-+-+    errors: list[str],
+-+-+) -> None:
+-+-+    """Check escalation chain model names against known models."""
+-+-+    if not config.escalation_chain or known_models is None:
+-+-+        return
+-+-+    chain_models = [m.strip() for m in config.escalation_chain.split(",") if m.strip()]
+-+-+    for model_name in chain_models:
+-+-+        if model_name not in known_models:
+-+-+            warning = f"Unknown model in escalation chain: '{model_name}'"
+-+-+            errors.append(warning)
+-+-+            logger.warning(warning)
+-+-+
+-+-+
+-+- def validate_config(
+-+-     config: GuildConfig,
+-+-     guild_dir: Path,
+-+-@@ -134,13 +150,7 @@ def validate_config(
+-+-                 f"Agent profile '{name}' has invalid permission: " f"'{profile.permission}'"
+-+-             )
+-+- 
+-+--    if config.escalation_chain and known_models is not None:
+-+--        chain_models = [m.strip() for m in config.escalation_chain.split(",") if m.strip()]
+-+--        for model_name in chain_models:
+-+--            if model_name not in known_models:
+-+--                warning = f"Unknown model in escalation chain: '{model_name}'"
+-+--                errors.append(warning)
+-+--                logger.warning(warning)
+-+-+    _validate_escalation_chain(config, known_models, errors)
+-+- 
+-+-     return errors
+-+- 
+-+-diff --git a/src/guild/storage/audit.py b/src/guild/storage/audit.py
+-+-index 97cad5a..26da292 100644
+-+---- a/src/guild/storage/audit.py
+-+-+++ b/src/guild/storage/audit.py
+-+-@@ -7,10 +7,10 @@ from dataclasses import dataclass
+-+- from datetime import UTC, datetime
+-+- from typing import Any
+-+- 
+-+--from guild.storage.connection import DBConnection
+-+- from logger_python import get_logger
+-+- 
+-+- from guild.config.constants import DEFAULT_QUERY_LIMIT
+-+-+from guild.storage.connection import DBConnection
+-+- 
+-+- __all__ = ["AuditOps", "DecisionRecord"]
+-+- 
+-+-diff --git a/src/guild/storage/checkpoints.py b/src/guild/storage/checkpoints.py
+-+-index 7267d8e..abeeb46 100644
+-+---- a/src/guild/storage/checkpoints.py
+-+-+++ b/src/guild/storage/checkpoints.py
+-+-@@ -5,9 +5,10 @@ from __future__ import annotations
+-+- from datetime import UTC, datetime
+-+- from typing import Any
+-+- 
+-+--from guild.storage.connection import DBConnection
+-+- from logger_python import get_logger
+-+- 
+-+-+from guild.storage.connection import DBConnection
+-+-+
+-+- __all__ = ["CheckpointOps"]
+-+- 
+-+- logger = get_logger(__name__)
+-+-diff --git a/src/guild/storage/learnings.py b/src/guild/storage/learnings.py
+-+-index 35dbe9d..792c34c 100644
+-+---- a/src/guild/storage/learnings.py
+-+-+++ b/src/guild/storage/learnings.py
+-+-@@ -6,7 +6,6 @@ from dataclasses import dataclass
+-+- from datetime import UTC, datetime
+-+- from typing import Any
+-+- 
+-+--from guild.storage.connection import DBConnection
+-+- from logger_python import get_logger
+-+- 
+-+- from guild.config.constants import (
+-+-@@ -16,6 +15,7 @@ from guild.config.constants import (
+-+-     DEFAULT_QUERY_LIMIT,
+-+-     PRUNING_RETENTION_DAYS,
+-+- )
+-+-+from guild.storage.connection import DBConnection
+-+- 
+-+- __all__ = ["LearningOps", "LearningRecord"]
+-+- 
+-+-diff --git a/src/guild/storage/memories.py b/src/guild/storage/memories.py
+-+-index c0a42ac..8c334ef 100644
+-+---- a/src/guild/storage/memories.py
+-+-+++ b/src/guild/storage/memories.py
+-+-@@ -5,7 +5,6 @@ from __future__ import annotations
+-+- from datetime import UTC, datetime
+-+- from typing import Any
+-+- 
+-+--from guild.storage.connection import DBConnection
+-+- from logger_python import get_logger
+-+- 
+-+- from guild.config.constants import (
+-+-@@ -13,6 +12,7 @@ from guild.config.constants import (
+-+-     MEMORY_SUMMARY_MAX_CHARS,
+-+-     PRUNING_RETENTION_DAYS,
+-+- )
+-+-+from guild.storage.connection import DBConnection
+-+- 
+-+- __all__ = ["MemoryOps"]
+-+- 
+-+-diff --git a/src/guild/storage/messages.py b/src/guild/storage/messages.py
+-+-index 92f246f..b172eb7 100644
+-+---- a/src/guild/storage/messages.py
+-+-+++ b/src/guild/storage/messages.py
+-+-@@ -5,9 +5,10 @@ from __future__ import annotations
+-+- from datetime import UTC, datetime
+-+- from typing import Any
+-+- 
+-+--from guild.storage.connection import DBConnection
+-+- from logger_python import get_logger
+-+- 
+-+-+from guild.storage.connection import DBConnection
+-+-+
+-+- __all__ = ["MessageOps"]
+-+- 
+-+- logger = get_logger(__name__)
+-+-diff --git a/src/guild/storage/questions.py b/src/guild/storage/questions.py
+-+-index 18513c6..8e29edb 100644
+-+---- a/src/guild/storage/questions.py
+-+-+++ b/src/guild/storage/questions.py
+-+-@@ -6,9 +6,10 @@ from dataclasses import dataclass
+-+- from datetime import UTC, datetime
+-+- from typing import Any
+-+- 
+-+--from guild.storage.connection import DBConnection
+-+- from logger_python import get_logger
+-+- 
+-+-+from guild.storage.connection import DBConnection
+-+-+
+-+- __all__ = ["QuestionOps", "QuestionRecord"]
+-+- 
+-+- logger = get_logger(__name__)
+-+-diff --git a/src/guild/storage/tasks.py b/src/guild/storage/tasks.py
+-+-index a492579..f6148e8 100644
+-+---- a/src/guild/storage/tasks.py
+-+-+++ b/src/guild/storage/tasks.py
+-+-@@ -5,9 +5,10 @@ from __future__ import annotations
+-+- from datetime import UTC, datetime
+-+- from typing import Any
+-+- 
+-+--from guild.storage.connection import DBConnection
+-+- from logger_python import get_logger
+-+- 
+-+-+from guild.storage.connection import DBConnection
+-+-+
+-+- __all__ = ["TaskOps"]
+-+- 
+-+- logger = get_logger(__name__)
+-+-diff --git a/tests/agent/test_learning.py b/tests/agent/test_learning.py
+-+-index 4c7f87b..81fdc85 100644
+-+---- a/tests/agent/test_learning.py
+-+-+++ b/tests/agent/test_learning.py
+-+-@@ -15,8 +15,8 @@ from guild.agent.learning import (
+-+-     format_learnings_for_injection,
+-+- )
+-+- from guild.provider.base import LLMResponse
+-+--from guild.storage.sqlite import Storage
+-+- from guild.storage.learnings import LearningRecord
+-+-+from guild.storage.sqlite import Storage
+-+- 
+-+- 
+-+- @pytest.fixture
+-+-diff --git a/tests/agent/test_rollback.py b/tests/agent/test_rollback.py
+-+-index dd78b9d..9a52b54 100644
+-+---- a/tests/agent/test_rollback.py
+-+-+++ b/tests/agent/test_rollback.py
+-+-@@ -2,6 +2,8 @@
+-+- 
+-+- from __future__ import annotations
+-+- 
+-+-+from pathlib import Path
+-+-+
+-+- import pytest
+-+- 
+-+- from guild.agent.rollback import RollbackContext, try_with_rollback
+-+-diff --git a/tests/cli/test_main.py b/tests/cli/test_main.py
+-+-index b154aee..aec9f65 100644
+-+---- a/tests/cli/test_main.py
+-+-+++ b/tests/cli/test_main.py
+-+-@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
+-+- 
+-+- import pytest
+-+- from typer.testing import CliRunner
+-+-+
+-+- from guild.storage.audit import DecisionRecord
+-+- from guild.storage.learnings import LearningRecord
+-+- 
+-+-diff --git a/tests/integration/test_agent_pipeline.py b/tests/integration/test_agent_pipeline.py
+-+-index 5f7e01e..b6e673c 100644
+-+---- a/tests/integration/test_agent_pipeline.py
+-+-+++ b/tests/integration/test_agent_pipeline.py
+-+-@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock
+-+- 
+-+- import pytest
+-+- 
+-+--from guild.agent.loop import AgentLoopConfig, AgentLoop
+-+-+from guild.agent.loop import AgentLoop, AgentLoopConfig
+-+- from guild.provider.base import LLMResponse
+-+- from guild.storage.sqlite import Storage
+-+- from guild.tools.registry import build_tool_executors
+-+-diff --git a/tests/integration/test_context_and_learning.py b/tests/integration/test_context_and_learning.py
+-+-index a367ff2..250afda 100644
+-+---- a/tests/integration/test_context_and_learning.py
+-+-+++ b/tests/integration/test_context_and_learning.py
+-+-@@ -50,8 +50,8 @@ from guild.config.constants import (
+-+- from guild.knowledge.memory import MemoryIndex
+-+- from guild.orchestration.bus import SharedContext
+-+- from guild.provider.base import LLMResponse
+-+--from guild.storage.sqlite import Storage
+-+- from guild.storage.learnings import LearningRecord
+-+-+from guild.storage.sqlite import Storage
+-+- 
+-+- pytestmark = pytest.mark.integration
+-+- 
+-+-diff --git a/tests/integration/test_daemon_and_features.py b/tests/integration/test_daemon_and_features.py
+-+-index 303e6f6..d34ef72 100644
+-+---- a/tests/integration/test_daemon_and_features.py
+-+-+++ b/tests/integration/test_daemon_and_features.py
+-+-@@ -10,14 +10,13 @@ import asyncio
+-+- import json
+-+- from pathlib import Path
+-+- from typing import Any
+-+--from unittest.mock import AsyncMock, patch
+-+-+from unittest.mock import AsyncMock
+-+- 
+-+- import pytest
+-+- from typer.testing import CliRunner
+-+- 
+-+- from guild.agent.loop import AgentLoopConfig
+-+- from guild.cli.main import app
+-+--from guild.daemon.resource import ResourceConfig
+-+- from guild.permissions.checker import PermissionConfig
+-+- from guild.provider.base import LLMResponse
+-+- 
+-+-@@ -719,7 +718,7 @@ class TestSelfVerifyCompletion:
+-+-     @pytest.mark.ac("AC-06.2.1")
+-+-     async def test_self_review_can_trigger_fixes(self) -> None:
+-+-         """Edge: self-review finds an issue and uses a tool to fix it."""
+-+--        from guild.agent.loop import AgentLoop, AgentLoopConfig
+-+-+        from guild.agent.loop import AgentLoop
+-+-         from guild.tools.base import ToolResult
+-+- 
+-+-         async def mock_write(args: dict[str, Any], wd: str | None = None) -> ToolResult:
+-+-@@ -998,7 +997,7 @@ class TestMultiTurn:
+-+-     @pytest.mark.ac("AC-06.9.1")
+-+-     async def test_send_preserves_context(self) -> None:
+-+-         """Happy: send() sees messages from prior turns."""
+-+--        from guild.agent.loop import AgentLoop, AgentLoopConfig
+-+-+        from guild.agent.loop import AgentLoop
+-+- 
+-+-         provider = _make_mock_provider(
+-+-             _simple_response("Hello! I am ready."),
+-+-@@ -1016,7 +1015,7 @@ class TestMultiTurn:
+-+-     @pytest.mark.ac("AC-06.9.1")
+-+-     async def test_run_resets_history(self) -> None:
+-+-         """Sad: calling run() again clears the conversation."""
+-+--        from guild.agent.loop import AgentLoop, AgentLoopConfig
+-+-+        from guild.agent.loop import AgentLoop
+-+- 
+-+-         provider = _make_mock_provider(
+-+-             _simple_response("First run."),
+-+-@@ -1035,7 +1034,7 @@ class TestMultiTurn:
+-+-     @pytest.mark.ac("AC-06.9.2")
+-+-     async def test_send_without_run_raises(self) -> None:
+-+-         """Edge: send() before run() raises RuntimeError."""
+-+--        from guild.agent.loop import AgentLoop, AgentLoopConfig
+-+-+        from guild.agent.loop import AgentLoop
+-+- 
+-+-         provider = _make_mock_provider(_simple_response("Nope"))
+-+-         loop = AgentLoop(provider=provider, tool_executors={})
+-+-@@ -1046,7 +1045,7 @@ class TestMultiTurn:
+-+-     @pytest.mark.ac("AC-06.9.1")
+-+-     async def test_multiple_sends_accumulate(self) -> None:
+-+-         """Edge: four consecutive messages all preserved in history."""
+-+--        from guild.agent.loop import AgentLoop, AgentLoopConfig
+-+-+        from guild.agent.loop import AgentLoop
+-+- 
+-+-         provider = _make_mock_provider(
+-+-             _simple_response("R1"),
+-+-@@ -1612,7 +1611,7 @@ class TestSendPreservesToolContext:
+-+-     @pytest.mark.ac("AC-06.9.3")
+-+-     async def test_send_preserves_tool_results_from_run(self) -> None:
+-+-         """Messages for step 2 include tool call results from step 1."""
+-+--        from guild.agent.loop import AgentLoop, AgentLoopConfig
+-+-+        from guild.agent.loop import AgentLoop
+-+-         from guild.tools.base import ToolResult
+-+- 
+-+-         call_counter = 0
+-+-diff --git a/tests/integration/test_observability_and_tasks.py b/tests/integration/test_observability_and_tasks.py
+-+-index dc8d429..824cc9b 100644
+-+---- a/tests/integration/test_observability_and_tasks.py
+-+-+++ b/tests/integration/test_observability_and_tasks.py
+-+-@@ -1357,7 +1357,7 @@ class TestBudgetCheckBeforeEachLLMCall:
+-+-     @pytest.mark.ac("AC-10.2.5")
+-+-     async def test_agent_exits_after_budget_exceeded(self) -> None:
+-+-         """Agent exits immediately after the first LLM call that pushes total above budget."""
+-+--        from guild.agent.loop import AgentLoopConfig, AgentLoop
+-+-+        from guild.agent.loop import AgentLoop, AgentLoopConfig
+-+- 
+-+-         call_count = 0
+-+- 
+-+-diff --git a/tests/integration/test_remaining_features.py b/tests/integration/test_remaining_features.py
+-+-index 69521f8..ff97d0d 100644
+-+---- a/tests/integration/test_remaining_features.py
+-+-+++ b/tests/integration/test_remaining_features.py
+-+-@@ -38,9 +38,9 @@ from unittest.mock import AsyncMock
+-+- 
+-+- import pytest
+-+- 
+-+--from guild.storage.sqlite import Storage
+-+- from guild.storage.audit import DecisionRecord
+-+- from guild.storage.learnings import LearningRecord
+-+-+from guild.storage.sqlite import Storage
+-+- 
+-+- pytestmark = pytest.mark.integration
+-+- 
+-+-diff --git a/tests/knowledge/test_temporal.py b/tests/knowledge/test_temporal.py
+-+-index a688ec1..8bdf93d 100644
+-+---- a/tests/knowledge/test_temporal.py
+-+-+++ b/tests/knowledge/test_temporal.py
+-+-@@ -10,9 +10,9 @@ if TYPE_CHECKING:
+-+-     from pathlib import Path
+-+- 
+-+- from guild.knowledge.temporal import TemporalKnowledge
+-+--from guild.storage.sqlite import Storage
+-+- from guild.storage.audit import DecisionRecord
+-+- from guild.storage.learnings import LearningRecord
+-+-+from guild.storage.sqlite import Storage
+-+- 
+-+- 
+-+- @pytest.fixture
+-+-diff --git a/tests/storage/test_sqlite.py b/tests/storage/test_sqlite.py
+-+-index efb65d2..7793d07 100644
+-+---- a/tests/storage/test_sqlite.py
+-+-+++ b/tests/storage/test_sqlite.py
+-+-@@ -9,10 +9,10 @@ import pytest
+-+- if TYPE_CHECKING:
+-+-     from pathlib import Path
+-+- 
+-+--from guild.storage.sqlite import Storage
+-+- from guild.storage.audit import DecisionRecord
+-+- from guild.storage.learnings import LearningRecord
+-+- from guild.storage.questions import QuestionRecord
+-+-+from guild.storage.sqlite import Storage
+-+- 
+-+- 
+-+- @pytest.fixture
+-++diff --git a/.flow/pending_reviews.json b/.flow/pending_reviews.json
+-++deleted file mode 100644
+-++index 6397529..0000000
+-++--- a/.flow/pending_reviews.json
+-+++++ /dev/null
+-++@@ -1,1169 +0,0 @@
+-++-[
+-++-  {
+-++-    "rule_id": "python_best-practices_use-dataclasses",
+-++-    "rule": "Dataclasses for simple data containers (not plain classes with only __init__)",
+-++-    "verify": "Classes that only store data use @dataclass or similar (Pydantic, NamedTuple).",
+-++-    "severity": "recommended",
+-++-    "tags": [
+-++-      "TYPES",
+-++-      "STRUCTURE"
+-++-    ],
+-++-    "examples": null,
+-++-    "exceptions": null,
+-++-    "tool_assist": null,
+-++-    "tool_output": null,
+-++-    "candidates_found": null
+-++-  },
+-++-  {
+-++-    "rule_id": "python_best-practices_prefer-comprehensions",
+-++-    "rule": "Comprehensions over loops when readable (ruff C401/C402)",
+-++-    "verify": "Simple transformations use comprehensions; complex logic uses loops.",
+-++-    "severity": "recommended",
+-++-    "tags": [
+-++-      "PERFORMANCE",
+-++-      "LOGIC"
+-++-    ],
+-++-    "examples": null,
+-++-    "exceptions": null,
+-++-    "tool_assist": null,
+-++-    "tool_output": null,
+-++-    "candidates_found": null
+-++-  },
+-++-  {
+-++-    "rule_id": "python_best-practices_use-pathlib",
+-++-    "rule": "pathlib.Path over os.path (ruff PTH)",
+-++-    "verify": "No os.path usage where pathlib would work.",
+-++-    "severity": "recommended",
+-++-    "tags": [
+-++-      "LOGIC"
+-++-    ],
+-++-    "examples": null,
+-++-    "exceptions": null,
+-++-    "tool_assist": null,
+-++-    "tool_output": null,
+-++-    "candidates_found": null
+-++-  },
+-++-  {
+-++-    "rule_id": "python_best-practices_composition-over-inheritance",
+-++-    "rule": "Prefer composition over inheritance (>2 levels of inheritance is suspect)",
+-++-    "verify": "No deep inheritance hierarchies without strong justification.",
+-++-    "severity": "recommended",
+-++-    "tags": [
+-++-      "DESIGN"
+-++-    ],
+-++-    "examples": null,
+-++-    "exceptions": null,
+-++-    "tool_assist": null,
+-++-    "tool_output": null,
+-++-    "candidates_found": null
+-++-  },
+-++-  {
+-++-    "rule_id": "python_best-practices_use-property",
+-++-    "rule": "@property over get_/set_ methods (unless expensive operations)",
+-++-    "verify": "No get_x()/set_x() methods where @property would be appropriate.",
+-++-    "severity": "advisory",
+-++-    "tags": [
+-++-      "NAMING",
+-++-      "DESIGN"
+-++-    ],
+-++-    "examples": null,
+-++-    "exceptions": [
+-++-      "Operations that are expensive or have side effects (network calls, heavy computation) should use methods to signal cost"
+-++-    ],
+-++-    "tool_assist": null,
+-++-    "tool_output": null,
+-++-    "candidates_found": null
+-++-  },
+-++-  {
+-++-    "rule_id": "python_dependencies_pyproject-toml-only",
+-++-    "rule": "pyproject.toml is the single source of truth (no setup.py/setup.cfg)",
+-++-    "verify": "No setup.py or setup.cfg exists in the project.",
+-++-    "severity": "hard",
+-++-    "tags": [
+-++-      "DEPENDENCIES"
+-++-    ],
+-++-    "examples": null,
+-++-    "exceptions": null,
+-++-    "tool_assist": null,
+-++-    "tool_output": null,
+-++-    "candidates_found": null
+-++-  },
+-++-  {
+-++-    "rule_id": "python_dependencies_lock-file-required",
+-++-    "rule": "Lock file for reproducible deploys (pip-compile or uv lock)",
+-++-    "verify": "A lock file exists and is committed to the repository.",
+-++-    "severity": "hard",
+-++-    "tags": [
+-++-      "DEPENDENCIES"
+-++-    ],
+-++-    "examples": null,
+-++-    "exceptions": null,
+-++-    "tool_assist": null,
+-++-    "tool_output": null,
+-++-    "candidates_found": null
+-++-  },
+-++-  {
+-++-    "rule_id": "python_dependencies_version-ranges",
+-++-    "rule": "Ranges in pyproject.toml (>=1.2,<2.0), exact pins in lock file only",
+-++-    "verify": "pyproject.toml uses version ranges, not exact pins.",
+-++-    "severity": "recommended",
+-++-    "tags": [
+-++-      "DEPENDENCIES"
+-++-    ],
+-++-    "examples": null,
+-++-    "exceptions": null,
+-++-    "tool_assist": null,
+-++-    "tool_output": null,
+-++-    "candidates_found": null
+-++-  },
+-++-  {
+-++-    "rule_id": "python_dependencies_editable-installs",
+-++-    "rule": "Editable installs for development: pip install -e \".[dev]\"",
+-++-    "verify": "Development setup uses editable install.",
+-++-    "severity": "recommended",
+-++-    "tags": [
+-++-      "DEPENDENCIES",
+-++-      "TOOLING"
+-++-    ],
+-++-    "examples": null,
+-++-    "exceptions": null,
+-++-    "tool_assist": null,
+-++-    "tool_output": null,
+-++-    "candidates_found": null
+-++-  },
+-++-  {
+-++-    "rule_id": "python_dependencies_minimal-dependencies",
+-++-    "rule": "Minimal dependencies \u2014 each must be imported somewhere in src/",
+-++-    "verify": "Every declared dependency is actually imported in the source code.",
+-++-    "severity": "recommended",
+-++-    "tags": [
+-++-      "DEPENDENCIES",
+-++-      "SECURITY"
+-++-    ],
+-++-    "examples": null,
+-++-    "exceptions": null,
+-++-    "tool_assist": null,
+-++-    "tool_output": null,
+-++-    "candidates_found": null
+-++-  },
+-++-  {
+-++-    "rule_id": "python_dependencies_document-dependencies",
+-++-    "rule": "Document why each dependency is needed (inline comments in pyproject.toml)",
+-++-    "verify": "Each dependency in pyproject.toml has a comment explaining its purpose.",
+-++-    "severity": "advisory",
+-++-    "tags": [
+-++-      "DEPENDENCIES",
+-++-      "DOCUMENTATION"
+-++-    ],
+-++-    "examples": null,
+-++-    "exceptions": null,
+-++-    "tool_assist": null,
+-++-    "tool_output": null,
+-++-    "candidates_found": null
+-++-  },
+-++-  {
+-++-    "rule_id": "python_documentation_docstring-format",
+-++-    "rule": "Consistent format: Google style or NumPy style (not both in one project)",
+-++-    "verify": "All docstrings use the same format.",
+-++-    "severity": "recommended",
+-++-    "tags": [
+-++-      "DOCUMENTATION"
+-++-    ],
+-++-    "examples": null,
+-++-    "exceptions": null,
+-++-    "tool_assist": null,
+-++-    "tool_output": null,
+-++-    "candidates_found": null
+-++-  },
+-++-  {
+-++-    "rule_id": "python_documentation_document-args-returns",
+-++-    "rule": "Include Args, Returns, Raises sections where applicable (ruff D417)",
+-++-    "verify": "Functions with parameters document all args; functions that raise document exceptions.",
+-++-    "severity": "recommended",
+-++-    "tags": [
+-++-      "DOCUMENTATION"
+-++-    ],
+-++-    "examples": null,
+-++-    "exceptions": null,
+-++-    "tool_assist": null,
+-++-    "tool_output": null,
+-++-    "candidates_found": null
+-++-  },
+-++-  {
+-++-    "rule_id": "python_organization_module-structure",
+-++-    "rule": "Module structure: docstring -> imports -> constants -> classes -> functions -> if __name__",
+-++-    "verify": "Out-of-order elements are violations.",
+-++-    "severity": "recommended",
+-++-    "tags": [
+-++-      "STRUCTURE"
+-++-    ],
+-++-    "examples": null,
+-++-    "exceptions": null,
+-++-    "tool_assist": null,
+-++-    "tool_output": null,
+-++-    "candidates_found": null
+-++-  },
+-++-  {
+-++-    "rule_id": "python_organization_one-class-per-file",
+-++-    "rule": "One class per file for large classes (>200 lines). Small related classes can share.",
+-++-    "verify": "No file contains multiple large unrelated classes.",
+-++-    "severity": "advisory",
+-++-    "tags": [
+-++-      "STRUCTURE"
+-++-    ],
+-++-    "examples": null,
+-++-    "exceptions": null,
+-++-    "tool_assist": null,
+-++-    "tool_output": null,
+-++-    "candidates_found": null
+-++-  },
+-++-  {
+-++-    "rule_id": "python_performance_use-generators",
+-++-    "rule": "Generators for large datasets iterated once (yield over return list)",
+-++-    "verify": "Functions producing large sequences use yield unless the caller needs random access.",
+-++-    "severity": "recommended",
+-++-    "tags": [
+-++-      "PERFORMANCE"
+-++-    ],
+-++-    "examples": null,
+-++-    "exceptions": null,
+-++-    "tool_assist": null,
+-++-    "tool_output": null,
+-++-    "candidates_found": null
+-++-  },
+-++-  {
+-++-    "rule_id": "python_performance_use-slots",
+-++-    "rule": "__slots__ for classes with many instances",
+-++-    "verify": "High-instance-count classes define __slots__.",
+-++-    "severity": "advisory",
+-++-    "tags": [
+-++-      "PERFORMANCE"
+-++-    ],
+-++-    "examples": null,
+-++-    "exceptions": null,
+-++-    "tool_assist": null,
+-++-    "tool_output": null,
+-++-    "candidates_found": null
+-++-  },
+-++-  {
+-++-    "rule_id": "python_performance_cache-pure-functions",
+-++-    "rule": "@lru_cache/@cache for pure functions called repeatedly with same args",
+-++-    "verify": "Repeatedly-called pure functions with same inputs use caching.",
+-++-    "severity": "recommended",
+-++-    "tags": [
+-++-      "PERFORMANCE"
+-++-    ],
+-++-    "examples": null,
+-++-    "exceptions": null,
+-++-    "tool_assist": null,
+-++-    "tool_output": null,
+-++-    "candidates_found": null
+-++-  },
+-++-  {
+-++-    "rule_id": "python_stack_use-pytest",
+-++-    "rule": "Testing: pytest + pytest-cov (--cov-branch --cov-fail-under=100) + pytest-asyncio. Exclusions: # pragma: no cover \u2014 <reason>",
+-++-    "verify": "pytest --cov=<pkg> --cov-branch --cov-fail-under=100 passes. Every pragma has a reason.",
+-++-    "severity": "hard",
+-++-    "tags": [
+-++-      "TOOLING",
+-++-      "TESTING"
+-++-    ],
+-++-    "examples": null,
+-++-    "exceptions": null,
+-++-    "tool_assist": null,
+-++-    "tool_output": null,
+-++-    "candidates_found": null
+-++-  },
+-++-  {
+-++-    "rule_id": "python_stack_use-configsloader",
+-++-    "rule": "Configuration: lightshield/configs_loader_python for all config needs",
+-++-    "verify": "No hand-rolled argparse or config file parsing. Use ConfigsLoader with Field() declarations.",
+-++-    "severity": "recommended",
+-++-    "tags": [
+-++-      "TOOLING",
+-++-      "DEPENDENCIES"
+-++-    ],
+-++-    "examples": null,
+-++-    "exceptions": null,
+-++-    "tool_assist": null,
+-++-    "tool_output": null,
+-++-    "candidates_found": null
+-++-  },
+-++-  {
+-++-    "rule_id": "python_stack_use-logger",
+-++-    "rule": "Logging: lightshield/logger_python",
+-++-    "verify": "No print() for runtime logging. All logging through lightshield logger.",
+-++-    "severity": "hard",
+-++-    "tags": [
+-++-      "TOOLING",
+-++-      "ERRORS"
+-++-    ],
+-++-    "examples": null,
+-++-    "exceptions": null,
+-++-    "tool_assist": null,
+-++-    "tool_output": null,
+-++-    "candidates_found": null
+-++-  },
+-++-  {
+-++-    "rule_id": "python_style_underscore-private",
+-++-    "rule": "Prefix private members with underscore (_private_member)",
+-++-    "verify": "Non-public members used only internally are underscore-prefixed.",
+-++-    "severity": "recommended",
+-++-    "tags": [
+-++-      "NAMING"
+-++-    ],
+-++-    "examples": null,
+-++-    "exceptions": null,
+-++-    "tool_assist": null,
+-++-    "tool_output": null,
+-++-    "candidates_found": null
+-++-  },
+-++-  {
+-++-    "rule_id": "python_testing_test-file-naming",
+-++-    "rule": "File naming: test_<module>.py",
+-++-    "verify": "All test files follow the naming convention.",
+-++-    "severity": "hard",
+-++-    "tags": [
+-++-      "TESTING",
+-++-      "NAMING"
+-++-    ],
+-++-    "examples": null,
+-++-    "exceptions": null,
+-++-    "tool_assist": null,
+-++-    "tool_output": null,
+-++-    "candidates_found": null
+-++-  },
+-++-  {
+-++-    "rule_id": "python_testing_use-fixtures",
+-++-    "rule": "Fixtures for setup (no setUp/tearDown)",
+-++-    "verify": "No setUp/tearDown methods \u2014 use @pytest.fixture instead.",
+-++-    "severity": "recommended",
+-++-    "tags": [
+-++-      "TESTING"
+-++-    ],
+-++-    "examples": null,
+-++-    "exceptions": null,
+-++-    "tool_assist": null,
+-++-    "tool_output": null,
+-++-    "candidates_found": null
+-++-  },
+-++-  {
+-++-    "rule_id": "python_testing_use-parametrize",
+-++-    "rule": "@pytest.mark.parametrize for repetitive test patterns",
+-++-    "verify": "Repetitive test cases with same logic but different inputs use parametrize.",
+-++-    "severity": "recommended",
+-++-    "tags": [
+-++-      "TESTING"
+-++-    ],
+-++-    "examples": null,
+-++-    "exceptions": null,
+-++-    "tool_assist": null,
+-++-    "tool_output": null,
+-++-    "candidates_found": null
+-++-  },
+-++-  {
+-++-    "rule_id": "python_testing_required-markers",
+-++-    "rule": "Every test has a type marker: @pytest.mark.e2e / .integration / .unit / .learning. E2E tests also require @pytest.mark.req('REQ-XX.X').",
+-++-    "verify": "pytest --strict-markers passes. No test exists without a type marker. All e2e tests have a req marker. Unit/integration tests may optionally have req markers for navigation.",
+-++-    "severity": "hard",
+-++-    "tags": [
+-++-      "TESTING",
+-++-      "TOOLING"
+-++-    ],
+-++-    "examples": null,
+-++-    "exceptions": null,
+-++-    "tool_assist": null,
+-++-    "tool_output": null,
+-++-    "candidates_found": null
+-++-  },
+-++-  {
+-++-    "rule_id": "python_testing_use-import-linter",
+-++-    "rule": "Architecture enforcement: import-linter or pytest-archon to define and verify component boundaries.",
+-++-    "verify": "lint-imports passes in CI. Boundary contracts are defined in config (layers, independence, forbidden imports). New cross-package imports without a corresponding integration test are flagged.",
+-++-    "severity": "recommended",
+-++-    "tags": [
+-++-      "TOOLING",
+-++-      "DESIGN"
+-++-    ],
+-++-    "examples": null,
+-++-    "exceptions": null,
+-++-    "tool_assist": null,
+-++-    "tool_output": null,
+-++-    "candidates_found": null
+-++-  },
+-++-  {
+-++-    "rule_id": "common_code-quality_early-exit",
+-++-    "rule": "Prefer early exit (guard clauses) to reduce nesting",
+-++-    "verify": "For each nested if/else, ask: could this be an early return? tool_assist narrows candidates but does not verify: PLR5501 only flags collapsible-if (if inside if with no else) \u2014 it misses deeply nested code that could use guard clauses, and cannot judge whether refactoring is appropriate for the specific logic.",
+-++-    "severity": "recommended",
+-++-    "tags": [
+-++-      "LOGIC"
+-++-    ],
+-++-    "examples": {
+-++-      "bad": [
+-++-        {
+-++-          "code": "def process(item):\n    if item is not None:\n        if item.is_valid():\n            # ... deep logic\n            return result\n    return None\n",
+-++-          "why": "Unnecessary nesting obscures the main logic"
+-++-        }
+-++-      ],
+-++-      "good": [
+-++-        {
+-++-          "code": "def process(item):\n    if item is None:\n        return None\n    if not item.is_valid():\n        return None\n    # ... main logic at top level\n    return result\n"
+-++-        }
+-++-      ]
+-++-    },
+-++-    "exceptions": null,
+-++-    "tool_assist": "ruff:PLR5501",
+-++-    "tool_output": null,
+-++-    "candidates_found": false
+-++-  },
+-++-  {
+-++-    "rule_id": "common_code-quality_no-magic-strings",
+-++-    "rule": "No magic strings \u2014 extract to named constants for identity/matching values",
+-++-    "verify": "Strings used as identity values, matching patterns, keys, or repeated in multiple locations need named constants even if used once.",
+-++-    "severity": "hard",
+-++-    "tags": [
+-++-      "VALUES"
+-++-    ],
+-++-    "examples": {
+-++-      "bad": [
+-++-        {
+-++-          "code": "prefix='guild_config_'  # used in two places",
+-++-          "why": "Duplication caused a real bug when one was typo'd"
+-++-        },
+-++-        {
+-++-          "code": "if status == \"pending\":",
+-++-          "why": "String identity check \u2014 should be a constant"
+-++-        }
+-++-      ],
+-++-      "good": [
+-++-        {
+-++-          "code": "_TEMP_FILE_PREFIX = 'guild_config_'"
+-++-        },
+-++-        {
+-++-          "code": "STATUS_PENDING = \"pending\""
+-++-        }
+-++-      ]
+-++-    },
+-++-    "exceptions": null,
+-++-    "tool_assist": null,
+-++-    "tool_output": null,
+-++-    "candidates_found": null
+-++-  },
+-++-  {
+-++-    "rule_id": "common_code-quality_no-what-comments",
+-++-    "rule": "No WHAT comments \u2014 extract to functions with meaningful names instead. WHY comments are acceptable when non-obvious, but rare.",
+-++-    "verify": "Every comment answers 'why', not restates the code.",
+-++-    "severity": "recommended",
+-++-    "tags": [
+-++-      "DOCUMENTATION",
+-++-      "NAMING"
+-++-    ],
+-++-    "examples": {
+-++-      "bad": [
+-++-        {
+-++-          "code": "# increment counter\ncounter += 1",
+-++-          "why": "Comment restates what the code already says"
+-++-        }
+-++-      ],
+-++-      "good": [
+-++-        {
+-++-          "code": "# Retry needed because upstream API returns stale cache for ~2s after write\nretry_with_backoff(fetch_latest)"
+-++-        }
+-++-      ]
+-++-    },
+-++-    "exceptions": null,
+-++-    "tool_assist": null,
+-++-    "tool_output": null,
+-++-    "candidates_found": null
+-++-  },
+-++-  {
+-++-    "rule_id": "common_code-quality_fail-fast",
+-++-    "rule": "Fail fast \u2014 validate inputs early",
+-++-    "verify": "Validation happens before main logic begins, not after side effects.",
+-++-    "severity": "hard",
+-++-    "tags": [
+-++-      "ERRORS",
+-++-      "LOGIC"
+-++-    ],
+-++-    "examples": null,
+-++-    "exceptions": null,
+-++-    "tool_assist": null,
+-++-    "tool_output": null,
+-++-    "candidates_found": null
+-++-  },
+-++-  {
+-++-    "rule_id": "common_code-quality_descriptive-n

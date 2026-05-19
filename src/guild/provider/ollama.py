@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from logger_python import get_logger
 from ollama import AsyncClient, RequestError, ResponseError
 
 from guild.config.constants import OLLAMA_CLIENT_TIMEOUT_SECONDS
 from guild.provider.base import LLMProvider, LLMResponse
-from logger_python import get_logger
 
 __all__ = ["OllamaProvider", "create_provider"]
 

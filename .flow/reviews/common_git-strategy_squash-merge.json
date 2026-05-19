@@ -1,0 +1,6 @@
+{
+  "rule_id": "common_git-strategy_squash-merge",
+  "status": "N/A",
+  "verification": "process_gate",
+  "detail": "Squash-merge applies at PR merge time, not during development"
+}

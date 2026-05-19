@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from logger_python import get_logger
+
 from guild.config.constants import MAX_FILE_READ_CHARS
 from guild.tools.base import ToolResult, resolve_path
-from logger_python import get_logger
 
 __all__ = ["MAX_FILE_READ_CHARS", "execute_file_read", "execute_file_write"]
 

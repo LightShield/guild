@@ -8,9 +8,10 @@ import re
 from pathlib import Path
 from typing import Any
 
+from logger_python import get_logger
+
 from guild.config.constants import MAX_GLOB_RESULTS, MAX_SEARCH_RESULTS
 from guild.tools.base import ToolResult, resolve_path
-from logger_python import get_logger
 
 __all__ = [
     "MAX_GLOB_RESULTS",

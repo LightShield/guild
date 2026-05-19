@@ -11,6 +11,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING, Any
 
+from logger_python import get_logger
+
 from guild.agent.loop import AgentLoop
 from guild.config.constants import (
     AGENT_ID_PREFIX_LEN,
@@ -26,7 +28,6 @@ from guild.config.constants import (
     TASK_RESULT_PREVIEW_CHARS,
 )
 from guild.task.spec import TaskStatus
-from logger_python import get_logger
 
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from guild.blocks.definition import BlockDef, LoopDef, TeamDef

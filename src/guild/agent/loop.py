@@ -6,6 +6,8 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from logger_python import get_logger
+
 from guild.agent.completion import (
     COMPLETION_NUDGE,
     DEDUP_MESSAGE,
@@ -20,7 +22,6 @@ from guild.config.constants import (
     PROVIDER_CHAIN_MAX_DEPTH,
 )
 from guild.tools.base import TOOL_SCHEMAS, ToolResult
-from logger_python import get_logger
 
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from guild.agent.stuck import StuckDetector

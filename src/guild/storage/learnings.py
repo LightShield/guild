@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
+from logger_python import get_logger
+
 from guild.config.constants import (
     CONFIDENCE_DECAY_DECREMENT,
     CONFIDENCE_INVALIDATE_DECREMENT,
@@ -14,7 +16,6 @@ from guild.config.constants import (
     PRUNING_RETENTION_DAYS,
 )
 from guild.storage.connection import DBConnection
-from logger_python import get_logger
 
 __all__ = ["LearningOps", "LearningRecord"]
 

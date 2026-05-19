@@ -13,6 +13,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 import aiosqlite
+from logger_python import get_logger
 
 from guild.config.constants import (
     DEFAULT_MEMORY_LIST_LIMIT,
@@ -26,7 +27,6 @@ from guild.storage.memories import MemoryOps
 from guild.storage.messages import MessageOps
 from guild.storage.questions import QuestionOps, QuestionRecord
 from guild.storage.tasks import TaskOps
-from logger_python import get_logger
 
 if TYPE_CHECKING:  # pragma: no cover — type-checking only
     from pathlib import Path
