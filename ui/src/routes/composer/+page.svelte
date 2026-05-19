@@ -16,7 +16,7 @@
   let draggedBlock = $state(null);
 
   // Right panel state
-  let panelMode = $state('none'); // 'none' | 'create' | 'edit' | 'save-block'
+  let panelMode = $state('none'); // 'none' | 'create' | 'edit' | 'save-block' | 'inspect'
   let selectedNode = $state(null);
   let showHelp = $state(false);
   let selectedNodeIds = $state(new Set());
@@ -165,9 +165,10 @@
     const node = event.detail?.node || event.node;
     if (!node || node.type !== 'block') return;
 
-    // If it's a composite block (has children), toggle expand on click
+    // Composite block — open inspect panel
     if (node.data.children && node.data.children.length > 0) {
-      toggleBlockExpand(node.id);
+      selectedNode = node;
+      panelMode = 'inspect';
       return;
     }
 
@@ -887,6 +888,98 @@
               class="px-4 py-2.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-sm text-gray-400
                      border border-gray-700 transition-all duration-150">
               Cancel
+            </button>
+          </div>
+        </div>
+      {/if}
+
+      <!-- Inspect Block -->
+      {#if panelMode === 'inspect' && selectedNode}
+        {@const children = selectedNode.data.children || []}
+        {@const childEdges = selectedNode.data.childEdges || []}
+        <div class="p-5 space-y-4 flex flex-col h-full">
+          <div>
+            <h3 class="text-sm font-semibold text-gray-100 flex items-center gap-2">
+              <span class="text-purple-400">&#9646;&#9646;</span>
+              {selectedNode.data.blockName}
+            </h3>
+            <p class="text-xs text-gray-500 mt-0.5">{children.length} agents &middot; {childEdges.length} connections</p>
+          </div>
+
+          <!-- Flow visualization -->
+          <div class="flex-1 overflow-y-auto space-y-2">
+            {#each children as child}
+              {@const name = child.data?.blockName || child.blockName || 'agent'}
+              {@const childRole = child.data?.role || child.role || 'agent'}
+              {@const childInstructions = child.data?.instructions || child.instructions || ''}
+              {@const isNested = child.children && child.children.length > 0}
+              {@const outgoing = childEdges.filter(e => e.source === name || e.source === child.id).map(e => {
+                const t = children.find(c => (c.data?.blockName || c.blockName || c.id) === e.target || c.id === e.target);
+                return t?.data?.blockName || t?.blockName || e.target;
+              })}
+              {@const incoming = childEdges.filter(e => e.target === name || e.target === child.id).map(e => {
+                const s = children.find(c => (c.data?.blockName || c.blockName || c.id) === e.source || c.id === e.source);
+                return s?.data?.blockName || s?.blockName || e.source;
+              })}
+
+              <div class="rounded-xl bg-gray-800/60 border border-gray-700/50 p-3 space-y-2
+                          hover:border-gray-600/60 transition-colors">
+                <!-- Agent header -->
+                <div class="flex items-center gap-2">
+                  {#if isNested}
+                    <span class="text-[10px] text-purple-400">&#9646;&#9646;</span>
+                  {:else}
+                    <span class="w-2 h-2 rounded-full bg-guild-400/60"></span>
+                  {/if}
+                  <span class="text-sm font-medium text-gray-100 flex-1">{name}</span>
+                  <span class="text-[9px] px-1.5 py-0.5 rounded bg-gray-700 text-gray-400 uppercase font-medium">{childRole}</span>
+                </div>
+
+                <!-- Instructions preview -->
+                {#if childInstructions}
+                  <p class="text-[11px] text-gray-500 leading-relaxed line-clamp-2 ml-4">{childInstructions}</p>
+                {/if}
+
+                <!-- Connections -->
+                {#if incoming.length > 0 || outgoing.length > 0}
+                  <div class="ml-4 flex flex-wrap items-center gap-1.5 text-[10px]">
+                    {#if incoming.length > 0}
+                      <span class="text-gray-600">from:</span>
+                      {#each incoming as src}
+                        <span class="px-1.5 py-0.5 rounded bg-gray-700/60 text-gray-400 border border-gray-700/40">{src}</span>
+                      {/each}
+                    {/if}
+                    {#if outgoing.length > 0}
+                      {#if incoming.length > 0}<span class="text-gray-700 mx-1">|</span>{/if}
+                      <span class="text-gray-600">to:</span>
+                      {#each outgoing as tgt}
+                        <span class="px-1.5 py-0.5 rounded bg-guild-900/40 text-guild-400 border border-guild-800/40">{tgt}</span>
+                      {/each}
+                    {/if}
+                  </div>
+                {/if}
+
+                <!-- Nested block indicator -->
+                {#if isNested}
+                  <div class="ml-4 text-[10px] text-purple-500">Contains {child.children.length} sub-agents</div>
+                {/if}
+              </div>
+            {/each}
+          </div>
+
+          <!-- Actions -->
+          <div class="flex gap-2 pt-2 border-t border-gray-800 mt-auto">
+            <button
+              onclick={() => { toggleBlockExpand(selectedNode.id); }}
+              class="flex-1 px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-xs text-gray-300
+                     border border-gray-700 transition-all duration-150"
+            >
+              {selectedNode.data.expanded ? 'Collapse on Canvas' : 'Expand on Canvas'}
+            </button>
+            <button onclick={() => { panelMode = 'none'; selectedNode = null; }}
+              class="px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-xs text-gray-400
+                     border border-gray-700 transition-all duration-150">
+              Close
             </button>
           </div>
         </div>
