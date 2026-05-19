@@ -16,6 +16,8 @@ dependencies = [
     "aiosqlite>=0.19,<1",
     # Ollama client SDK for local LLM inference via HTTP API
     "ollama>=0.4,<1",
+    # Unified structured logging
+    "logger-python @ git+ssh://git@github.com/LightShield/logger_python.git",
 ]
 
 [project.optional-dependencies]
