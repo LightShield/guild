@@ -229,7 +229,8 @@ def _register_teams_endpoints(app: Any, guild_dir: Path) -> None:
             from guild.config.loader import load_config
 
             config = load_config(guild_dir)
-            return [{"name": t.name} for t in (config.teams or [])]
+            teams = getattr(config, "teams", None) or []
+            return [{"name": t.name} for t in teams]
         except (ImportError, OSError, AttributeError):
             return []
 

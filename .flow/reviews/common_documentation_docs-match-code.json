@@ -1,6 +1,0 @@
-{
-  "rule_id": "common_documentation_docs-match-code",
-  "status": "PASS",
-  "verification": "process_gate",
-  "detail": "README.md exists with substantial content"
-}

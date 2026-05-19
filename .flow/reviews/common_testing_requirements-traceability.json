@@ -1,6 +1,0 @@
-{
-  "rule_id": "common_testing_requirements-traceability",
-  "status": "PASS",
-  "verification": "process_gate",
-  "detail": "Traceability markers found in 16 test files"
-}

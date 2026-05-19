@@ -1,6 +1,0 @@
-{
-  "rule_id": "common_testing_test-driven",
-  "status": "PASS",
-  "verification": "process_gate",
-  "detail": "Test files found in commit history (TDD evidence)"
-}

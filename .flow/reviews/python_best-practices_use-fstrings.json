@@ -1,6 +1,0 @@
-{
-  "rule_id": "python_best-practices_use-fstrings",
-  "status": "PASS",
-  "verification": "tool_check",
-  "tool": "ruff:UP031,UP032"
-}

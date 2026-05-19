@@ -1,6 +1,0 @@
-{
-  "rule_id": "common_git-strategy_atomic-commits",
-  "status": "PASS",
-  "verification": "process_gate",
-  "detail": "Last 5 commits present (atomicity assumed from conventional format)"
-}

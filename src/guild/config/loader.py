@@ -209,7 +209,7 @@ def load_config(
         with contextlib.suppress(OSError):
             merged_file.unlink()
 
-    return config  # type: ignore[no-any-return]
+    return config  # type: ignore[return-value]
 
 
 # Fields that can be hot-reloaded without restart

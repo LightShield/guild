@@ -1,6 +1,0 @@
-{
-  "rule_id": "common_git-strategy_branch-naming",
-  "status": "N/A",
-  "verification": "process_gate",
-  "detail": "On main branch (naming applies to feature branches)"
-}

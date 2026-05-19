@@ -1,6 +1,0 @@
-{
-  "rule_id": "common_testing_test-type-markers",
-  "status": "PASS",
-  "verification": "process_gate",
-  "detail": "All test files have type markers"
-}

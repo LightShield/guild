@@ -1,6 +1,0 @@
-{
-  "rule_id": "python_organization_explicit-all-exports",
-  "status": "PASS",
-  "verification": "tool_check",
-  "tool": "ruff:F401"
-}

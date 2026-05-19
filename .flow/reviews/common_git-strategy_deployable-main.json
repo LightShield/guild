@@ -1,7 +1,0 @@
-{
-  "rule_id": "common_git-strategy_deployable-main",
-  "status": "N-A",
-  "verification": "exception",
-  "reason": "Process gate times out (2307 tests take >120s). Tests pass locally \u2014 verified by CI. Timeout is a limitation of the review script, not a real failure.",
-  "exception_type": "temporary"
-}

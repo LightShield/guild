@@ -1,6 +1,0 @@
-{
-  "rule_id": "python_stack_use-mypy-strict",
-  "status": "PASS",
-  "verification": "tool_check",
-  "tool": "mypy:--strict"
-}

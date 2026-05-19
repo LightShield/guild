@@ -1,6 +1,0 @@
-{
-  "rule_id": "common_git-strategy_conventional-commits",
-  "status": "PASS",
-  "verification": "process_gate",
-  "detail": "All 10 recent commits follow conventional format"
-}

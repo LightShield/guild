@@ -1,9 +1,0 @@
-{
-  "rule_id": "python_stack_max-complexity-10",
-  "status": "PASS",
-  "verification": "tool_check",
-  "tool": "ruff:C901",
-  "exceptions_applied": [
-    "src/guild/_vendor/*"
-  ]
-}

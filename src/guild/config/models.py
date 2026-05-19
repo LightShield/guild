@@ -25,7 +25,7 @@ from guild.permissions.checker import PermissionTier
 __all__ = ["GuildConfig"]
 
 
-class GuildConfig(ConfigsLoader):  # type: ignore[misc]
+class GuildConfig(ConfigsLoader):
     """Unified Guild configuration — flat fields with section-based TOML layout."""
 
     # Provider section
