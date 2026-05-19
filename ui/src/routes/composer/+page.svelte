@@ -169,14 +169,12 @@
 
   // --- Edit node ---
 
-  function onNodeClick(event) {
-    const node = event.detail?.node || event.node;
+  function onNodeClick({ node, event: _event }) {
     if (!node || node.type !== 'block') return;
 
-    // Composite block — open inspect panel
+    // Composite block — expand inline on canvas
     if (node.data.children && node.data.children.length > 0) {
-      selectedNode = node;
-      panelMode = 'inspect';
+      expandBlockInline(node);
       return;
     }
 
@@ -190,6 +188,96 @@
     editLoopUntil = node.data.loopUntil || '';
     editMaxIterations = node.data.maxIterations || 5;
     panelMode = 'edit';
+  }
+
+  // Track which blocks are expanded inline
+  let expandedBlocks = $state(new Map()); // blockNodeId -> { originalNode, childIds, edgeIds }
+
+  function expandBlockInline(blockNode) {
+    const blockId = blockNode.id;
+
+    // If already expanded, collapse it
+    if (expandedBlocks.has(blockId)) {
+      collapseBlockInline(blockId);
+      return;
+    }
+
+    const origNodes = blockNode.data._originalNodes || [];
+    const origEdges = blockNode.data.childEdges || [];
+    const baseX = blockNode.position.x;
+    const baseY = blockNode.position.y;
+
+    // Create child nodes at offset positions
+    const childIds = [];
+    const newNodes = origNodes.map(n => {
+      const childId = `${blockId}__${n.id || n.data?.blockName || Math.random()}`;
+      childIds.push(childId);
+      return {
+        ...n,
+        id: childId,
+        type: 'block',
+        position: { x: baseX + (n.position?.x || 0), y: baseY + (n.position?.y || 0) },
+        data: {
+          ...(n.data || {}),
+          blockName: n.data?.blockName || n.blockName || 'agent',
+          role: n.data?.role || n.role || 'agent',
+          model: n.data?.model || '',
+          instructions: n.data?.instructions || '',
+          verifier: n.data?.verifier || null,
+          loopUntil: n.data?.loopUntil || null,
+          maxIterations: n.data?.maxIterations || null,
+          children: null,
+          childEdges: null,
+          _originalNodes: null,
+          expanded: false,
+          onToggle: null,
+          _parentBlock: blockId,
+        },
+      };
+    });
+
+    // Create internal edges (semi-transparent, dashed)
+    const idMap = {};
+    origNodes.forEach((n, i) => {
+      idMap[n.id || n.data?.blockName || i] = childIds[i];
+    });
+
+    const edgeIds = [];
+    const newEdges = origEdges.map(e => {
+      const edgeId = `${blockId}__edge__${e.id || `${e.source}-${e.target}`}`;
+      edgeIds.push(edgeId);
+      return {
+        id: edgeId,
+        source: idMap[e.source] || e.source,
+        target: idMap[e.target] || e.target,
+        animated: true,
+        style: 'stroke: #a78bfa; stroke-width: 2px; stroke-dasharray: 5 3; opacity: 0.7;',
+      };
+    });
+
+    // Store expansion state
+    expandedBlocks = new Map(expandedBlocks);
+    expandedBlocks.set(blockId, { originalNode: blockNode, childIds, edgeIds });
+
+    // Remove the block node, add child nodes + edges
+    nodes = [...nodes.filter(n => n.id !== blockId), ...newNodes];
+    edges = [...edges, ...newEdges];
+  }
+
+  function collapseBlockInline(blockId) {
+    const state = expandedBlocks.get(blockId);
+    if (!state) return;
+
+    const { originalNode, childIds, edgeIds } = state;
+    const childIdSet = new Set(childIds);
+    const edgeIdSet = new Set(edgeIds);
+
+    // Remove child nodes and their edges, restore block node
+    nodes = [...nodes.filter(n => !childIdSet.has(n.id)), originalNode];
+    edges = edges.filter(e => !edgeIdSet.has(e.id) && !childIdSet.has(e.source) && !childIdSet.has(e.target));
+
+    expandedBlocks = new Map(expandedBlocks);
+    expandedBlocks.delete(blockId);
   }
 
   function applyEdit() {
@@ -905,65 +993,6 @@
         </div>
       {/if}
 
-      <!-- Inspect Block — mini canvas view -->
-      {#if panelMode === 'inspect' && selectedNode}
-        {@const originalNodes = selectedNode.data._originalNodes || []}
-        {@const children = selectedNode.data.children || []}
-        {@const inspectNodes = originalNodes.length > 0
-          ? originalNodes.map(n => ({
-              ...n,
-              type: 'block',
-              data: { ...n.data, children: null, childEdges: null, expanded: false, onToggle: null },
-            }))
-          : children.map((c, i) => ({
-              id: c.id || c.blockName || `child-${i}`,
-              type: 'block',
-              position: { x: 50 + i * 220, y: 100 + (i % 2) * 130 },
-              data: { blockName: c.data?.blockName || c.blockName || 'agent', role: c.data?.role || c.role || 'agent', model: '', instructions: '', verifier: null, loopUntil: null, maxIterations: null, children: null, childEdges: null, expanded: false, onToggle: null },
-            }))}
-        {@const inspectEdges = (selectedNode.data.childEdges || []).map(e => ({
-          ...e,
-          id: e.id || `${e.source}-${e.target}`,
-          animated: true,
-          style: 'stroke: #38bdf8; stroke-width: 2px;',
-        }))}
-        <div class="flex flex-col h-full">
-          <div class="px-5 pt-5 pb-3">
-            <h3 class="text-sm font-semibold text-gray-100 flex items-center gap-2">
-              <span class="text-purple-400">&#9646;&#9646;</span>
-              {selectedNode.data.blockName}
-            </h3>
-            <p class="text-xs text-gray-500 mt-0.5">{inspectNodes.length} agents &middot; {inspectEdges.length} connections</p>
-          </div>
-
-          <!-- Mini flow canvas -->
-          <div class="flex-1 border-t border-gray-800 relative">
-            <SvelteFlow
-              nodes={rawNodes}
-              edges={inspectEdges}
-              nodeTypes={nodeTypes}
-              fitView
-              nodesDraggable={false}
-              nodesConnectable={false}
-              elementsSelectable={false}
-              panOnDrag={true}
-              zoomOnScroll={true}
-              colorMode="dark"
-            >
-              <Background gap={16} size={1} />
-            </SvelteFlow>
-          </div>
-
-          <!-- Actions -->
-          <div class="flex gap-2 p-4 border-t border-gray-800">
-            <button onclick={() => { panelMode = 'none'; selectedNode = null; }}
-              class="flex-1 px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-xs text-gray-300
-                     border border-gray-700 transition-all duration-150 text-center">
-              Close
-            </button>
-          </div>
-        </div>
-      {/if}
     </div>
   {/if}
 </div>
