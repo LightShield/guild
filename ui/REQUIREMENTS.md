@@ -103,45 +103,77 @@ Extends REQ-05.6 (Visual team composer) from the main REQUIREMENTS.md.
 
 ## REQ-UI-04: Blocks (Composites)
 
+### Three Amigos — Block Interaction Refinement
+
+**User perspective:** When I click a block, I want to *peek inside* to see what agents are in there and how they're connected — like opening a folder. The block should still be a *thing* on my canvas with a visible boundary. I might want to wire an external connection directly to a specific agent inside the block. Only if I explicitly choose "Ungroup" should it dissolve into free nodes.
+
+**Developer perspective:** This means a block has two visual states: collapsed (single node) and expanded (shows children inside a container with a visible border/boundary). The block node stays on the canvas — it just grows larger to reveal its contents. Children are rendered inside the block's bounding box. External edges can connect to child nodes through the block boundary. "Ungroup" is a separate destructive action.
+
+**Tester perspective:** Key test: expand a block, drag an edge from an outside node INTO a specific child node, then collapse the block — what happens to that edge? It should re-route to the block's input port. Also: does the block boundary resize when children are dragged inside it?
+
+---
+
 | ID | Requirement | Notes |
 |----|-------------|-------|
 | REQ-UI-04.1 | Shift+drag to multi-select nodes on the canvas | Purple selection rectangle |
 | REQ-UI-04.2 | "Save Selection as Block" captures selected nodes AND their internal edges as a named block | Stored in localStorage |
-| REQ-UI-04.3 | A saved block placed on canvas renders as a single node (purple border, agent count badge) | Distinguishable from regular agents |
-| REQ-UI-04.4 | **Click a block → expands inline on the canvas** replacing the block node with its internal nodes at their original saved positions | Same layout as before they were saved |
-| REQ-UI-04.5 | Expanded block shows internal edges as **dashed, semi-transparent purple lines** | Visually distinct from top-level edges |
-| REQ-UI-04.6 | Clicking again (or a collapse control) collapses back to single block node | Toggle behavior — top-level edges to/from the block are preserved |
-| REQ-UI-04.7 | Blocks can contain other blocks (nesting) — expanding a parent reveals child blocks which can themselves be expanded | Recursive |
-| REQ-UI-04.8 | Saved blocks appear in sidebar under "Saved Blocks", draggable back onto canvas | Reusable |
-| REQ-UI-04.9 | Saved blocks persist in localStorage across sessions | Deletable via × button |
+| REQ-UI-04.3 | A saved block placed on canvas renders as a single collapsed node (purple border, agent count badge) | Distinguishable from regular agents |
+| REQ-UI-04.4 | **Click a block → expands in-place** showing internal nodes within a visible container boundary (dashed purple border around the group) | Block STAYS on canvas as a parent container — does NOT ungroup |
+| REQ-UI-04.5 | Expanded block shows internal edges as dashed semi-transparent purple lines within the container | Internal connections visible |
+| REQ-UI-04.6 | Internal child nodes are positioned at their saved relative positions inside the container boundary | Same layout as before saving |
+| REQ-UI-04.7 | Click expanded block's header/collapse button → collapses back to single node | Container shrinks back to compact representation |
+| REQ-UI-04.8 | External edges can connect to specific child nodes inside an expanded block | Drag from outside node into a child — edge connects through the block boundary |
+| REQ-UI-04.9 | When collapsing a block that has edges to specific children, those edges re-route to the block's port | Graceful degradation on collapse |
+| REQ-UI-04.10 | **"Ungroup" action** (right-click menu or button) dissolves the block into free nodes on the canvas | Destructive — removes the block container, children become top-level nodes |
+| REQ-UI-04.11 | Blocks can contain other blocks (nesting) — expanding parent shows child blocks in their collapsed state | Recursive peek |
+| REQ-UI-04.12 | Saved blocks appear in sidebar under "Saved Blocks", draggable back onto canvas | Reusable |
+| REQ-UI-04.13 | Saved blocks persist in localStorage across sessions | Deletable via × button |
 
 ### Acceptance Criteria
 
 **REQ-UI-04.1 — Multi-select**
 - AC-UI-04.1.1: Shift+drag draws a selection rectangle and selects all nodes inside it
-  - verify: Place 3 nodes in a cluster, Shift+drag around them → all 3 show selected state (e.g. border highlight)
+  - verify: Place 3 nodes in a cluster, Shift+drag around them → all 3 show selected state
 
 **REQ-UI-04.2 — Save as block**
 - AC-UI-04.2.1: With 2+ nodes selected, "Save Selection as Block" opens the save form
   - verify: Select 3 connected nodes, click "Save Selection as Block" → form appears asking for block name
 - AC-UI-04.2.2: The saved block stores node positions relative to each other and all internal edges
-  - verify: Save a block with nodes at positions (0,0), (200,0), (200,150) connected A→B→C → localStorage entry contains 3 nodes with those relative positions and 2 edges
+  - verify: Save a block with nodes at (0,0), (200,0), (200,150) connected A→B→C → localStorage entry contains 3 nodes with relative positions and 2 edges
 
-**REQ-UI-04.4 — Inline expansion**
-- AC-UI-04.4.1: Clicking a block node removes it and places its child nodes at (block.x + child.relativeX, block.y + child.relativeY)
-  - verify: Place a block at position (300, 200) that contains nodes at relative (0,0) and (200,0) → after click, child nodes appear at (300,200) and (500,200)
-- AC-UI-04.4.2: Internal edges appear as dashed semi-transparent lines between the expanded child nodes
-  - verify: Expand a block with edge A→B → a dashed purple/blue edge connects the child nodes on canvas
-- AC-UI-04.4.3: Top-level edges connected to the block are NOT lost on expand (they reconnect to appropriate child nodes or disappear gracefully)
-  - verify: Block has incoming edge from node X → after expand, edge still visible (connecting to first child) OR is hidden until collapse
+**REQ-UI-04.4 — In-place expansion (NOT ungroup)**
+- AC-UI-04.4.1: Clicking a collapsed block visually expands it — the block node grows into a container showing its children inside
+  - verify: Click a block → it grows from ~180px to a larger container (dashed purple border) with child nodes visible inside; the block still exists as a single entity on the canvas
+- AC-UI-04.4.2: The container has a header showing block name and a collapse button
+  - verify: Expanded block shows block name at top and a "▾" or "×" button to collapse
+- AC-UI-04.4.3: Internal edges appear as dashed semi-transparent lines between child nodes inside the container
+  - verify: Expand a block with edge A→B → a dashed purple edge connects child A to child B within the container
+- AC-UI-04.4.4: The block container is still selectable and movable as a single unit (dragging moves all children)
+  - verify: Drag the expanded block's header → entire container with children moves together
 
-**REQ-UI-04.6 — Collapse**
-- AC-UI-04.6.1: Clicking the expanded region (or a collapse button) removes child nodes and restores the single block node
-  - verify: Expand block, then trigger collapse → single block node reappears at original position, child nodes removed from canvas
+**REQ-UI-04.7 — Collapse**
+- AC-UI-04.7.1: Clicking the collapse button shrinks the block back to a single compact node
+  - verify: Expand block, click collapse → block returns to single-node representation at same position
 
-**REQ-UI-04.7 — Nested blocks**
-- AC-UI-04.7.1: Expanding a block that contains another block shows the inner block as a single (collapsed) purple node
-  - verify: Create block B inside block A → expand A → see B as a single purple node with agent count → click B → B expands showing its internals
+**REQ-UI-04.8 — External edges to children**
+- AC-UI-04.8.1: When a block is expanded, dragging an edge from an outside node to a visible child node creates a connection to that child
+  - verify: Expand block containing A and B. Drag edge from external node X to child A → edge connects X to A
+- AC-UI-04.8.2: The edge visually crosses the block boundary (enters the container)
+  - verify: Edge from X to child A is drawn as a line that visually passes through the dashed container border
+
+**REQ-UI-04.9 — Edge re-routing on collapse**
+- AC-UI-04.9.1: When collapsing a block that has external edges connected to specific children, those edges re-attach to the block's port
+  - verify: Connect X→child_A while expanded, then collapse → edge now shows X→block (not deleted)
+
+**REQ-UI-04.10 — Ungroup**
+- AC-UI-04.10.1: An explicit "Ungroup" action (in right-click menu or edit panel) dissolves the block
+  - verify: Right-click expanded block → "Ungroup" → container disappears, child nodes become top-level canvas nodes, internal edges become regular edges
+- AC-UI-04.10.2: After ungroup, the block no longer exists — children are independent
+  - verify: After ungroup, there is no purple container; children can be individually moved and connected
+
+**REQ-UI-04.11 — Nested blocks**
+- AC-UI-04.11.1: Expanding a block that contains another block shows the inner block in its collapsed state
+  - verify: Block A contains block B + agent C → expand A → see collapsed block B (purple, agent count) and agent C inside A's container
 
 ---
 

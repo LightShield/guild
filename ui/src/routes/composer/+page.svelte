@@ -142,22 +142,28 @@
 
   // ===== Block Expand / Collapse (REQ-UI-04.4 - 04.7) =====
 
+  // Layout constants for expanded containers
+  const CONTAINER_PADDING_X = 30;
+  const CONTAINER_PADDING_TOP = 50; // space for header
+  const CONTAINER_PADDING_BOTTOM = 30;
+  const CHILD_SPACING_X = 220;
+  const CHILD_SPACING_Y = 140;
+  const CHILD_COLS = 3;
+
   function expandBlock(blockNode) {
     const blockId = blockNode.id;
     const childNodesData = blockNode.data._childNodes || [];
     const childEdgesData = blockNode.data._childEdges || [];
-    const baseX = blockNode.position.x;
-    const baseY = blockNode.position.y;
 
     // Build ID mapping: original child id -> new canvas id
     const idMap = {};
     const childNodeIds = [];
 
-    const newChildNodes = childNodesData.map((child) => {
+    // Calculate child positions relative to parent (container-local coords)
+    const newChildNodes = childNodesData.map((child, index) => {
       const origId = child.id || child.data?.blockName || `child-${Math.random().toString(36).slice(2, 6)}`;
       const canvasId = `${blockId}__${origId}`;
       idMap[origId] = canvasId;
-      // Map blockName too but scoped to this block instance (key includes blockId prefix to avoid cross-wiring)
       const childBlockName = child.data?.blockName || child.blockName;
       if (childBlockName && childBlockName !== origId) {
         idMap[childBlockName] = canvasId;
@@ -167,13 +173,18 @@
       const childData = child.data || {};
       const isChildComposite = !!(childData.isComposite || (childData._childNodes && childData._childNodes.length > 0));
 
+      // Position relative to parent: use stored position or auto-layout grid
+      const col = index % CHILD_COLS;
+      const row = Math.floor(index / CHILD_COLS);
+      const relX = child.position?.x != null ? child.position.x + CONTAINER_PADDING_X : CONTAINER_PADDING_X + col * CHILD_SPACING_X;
+      const relY = child.position?.y != null ? child.position.y + CONTAINER_PADDING_TOP : CONTAINER_PADDING_TOP + row * CHILD_SPACING_Y;
+
       return {
         id: canvasId,
         type: 'block',
-        position: {
-          x: baseX + (child.position?.x || 0),
-          y: baseY + (child.position?.y || 0),
-        },
+        position: { x: relX, y: relY },
+        parentId: blockId,
+        extent: 'parent',
         data: {
           blockName: childData.blockName || child.blockName || 'agent',
           role: childData.role || child.role || 'agent',
@@ -191,6 +202,16 @@
       };
     });
 
+    // Calculate container size to fit all children
+    let maxX = 0;
+    let maxY = 0;
+    for (const child of newChildNodes) {
+      maxX = Math.max(maxX, child.position.x + 200); // 200 = approx child node width
+      maxY = Math.max(maxY, child.position.y + 100); // 100 = approx child node height
+    }
+    const containerWidth = Math.max(maxX + CONTAINER_PADDING_X, 300);
+    const containerHeight = Math.max(maxY + CONTAINER_PADDING_BOTTOM, 200);
+
     // Create internal edges with dashed purple styling
     const internalEdgeIds = [];
     const newInternalEdges = childEdgesData.map((edge) => {
@@ -207,53 +228,146 @@
       };
     });
 
-    // Hide top-level edges connected to this block (store them to restore on collapse)
-    const hiddenEdgeIds = [];
-    const remainingEdges = edges.filter((e) => {
-      if (e.source === blockId || e.target === blockId) {
-        hiddenEdgeIds.push(e.id);
-        return false;
-      }
-      return true;
-    });
-
-    // Store expansion state
+    // Store expansion state (save original node data for collapse restore)
     const newExpandedBlocks = new Map(expandedBlocks);
     newExpandedBlocks.set(blockId, {
-      originalNode: blockNode,
+      originalData: { ...blockNode.data },
+      originalStyle: blockNode.style || undefined,
       childNodeIds,
       internalEdgeIds,
-      hiddenEdgeIds,
-      hiddenEdges: edges.filter((e) => hiddenEdgeIds.includes(e.id)),
     });
     expandedBlocks = newExpandedBlocks;
 
-    // Remove block node, add children + internal edges
-    nodes = [...nodes.filter((n) => n.id !== blockId), ...newChildNodes];
-    edges = [...remainingEdges, ...newInternalEdges];
+    // Mutate the block node in-place: expand it into a container
+    nodes = [
+      ...nodes.map((n) => {
+        if (n.id === blockId) {
+          return {
+            ...n,
+            style: `width: ${containerWidth}px; height: ${containerHeight}px;`,
+            data: {
+              ...n.data,
+              expanded: true,
+              onCollapse: () => collapseBlock(blockId),
+              onUngroup: () => ungroupBlock(blockId),
+            },
+          };
+        }
+        return n;
+      }),
+      ...newChildNodes,
+    ];
+    edges = [...edges, ...newInternalEdges];
   }
 
   function collapseBlock(blockId) {
     const state = expandedBlocks.get(blockId);
     if (!state) return;
 
-    const { originalNode, childNodeIds, internalEdgeIds, hiddenEdges } = state;
+    const { originalData, originalStyle, childNodeIds, internalEdgeIds } = state;
     const childIdSet = new Set(childNodeIds);
     const internalEdgeIdSet = new Set(internalEdgeIds);
 
-    // First, recursively collapse any expanded child blocks
+    // Recursively collapse any expanded child blocks first
     for (const childId of childNodeIds) {
       if (expandedBlocks.has(childId)) {
         collapseBlock(childId);
       }
     }
 
-    // Remove child nodes and internal edges, restore the block node + hidden edges
-    nodes = [...nodes.filter((n) => !childIdSet.has(n.id)), originalNode];
-    edges = [
-      ...edges.filter((e) => !internalEdgeIdSet.has(e.id)),
-      ...(hiddenEdges || []),
-    ];
+    // Remove child nodes, remove internal edges, restore block node to compact form
+    nodes = nodes
+      .filter((n) => !childIdSet.has(n.id))
+      .map((n) => {
+        if (n.id === blockId) {
+          return {
+            ...n,
+            style: originalStyle || undefined,
+            data: {
+              ...originalData,
+            },
+          };
+        }
+        return n;
+      });
+    edges = edges.filter((e) => !internalEdgeIdSet.has(e.id));
+
+    // Remove from expanded map
+    const newExpandedBlocks = new Map(expandedBlocks);
+    newExpandedBlocks.delete(blockId);
+    expandedBlocks = newExpandedBlocks;
+  }
+
+  function ungroupBlock(blockId) {
+    const state = expandedBlocks.get(blockId);
+    if (!state) return;
+
+    const { childNodeIds, internalEdgeIds } = state;
+    const internalEdgeIdSet = new Set(internalEdgeIds);
+
+    // Find the parent block node to get its absolute position
+    const parentNode = nodes.find((n) => n.id === blockId);
+    if (!parentNode) return;
+    const parentX = parentNode.position.x;
+    const parentY = parentNode.position.y;
+
+    // Recursively collapse any expanded nested blocks first
+    for (const childId of childNodeIds) {
+      if (expandedBlocks.has(childId)) {
+        collapseBlock(childId);
+      }
+    }
+
+    // Convert child nodes: remove parentId, convert relative positions to absolute
+    // Remove the parent block node entirely
+    // Convert internal edges to regular edges
+    nodes = nodes
+      .filter((n) => n.id !== blockId)
+      .map((n) => {
+        if (n.parentId === blockId) {
+          return {
+            ...n,
+            parentId: undefined,
+            extent: undefined,
+            position: {
+              x: parentX + n.position.x,
+              y: parentY + n.position.y,
+            },
+            data: {
+              ...n.data,
+              _parentBlockId: undefined,
+            },
+          };
+        }
+        return n;
+      });
+
+    // Convert internal purple dashed edges to regular blue edges
+    edges = edges.map((e) => {
+      if (internalEdgeIdSet.has(e.id)) {
+        return {
+          ...e,
+          style: 'stroke: #38bdf8; stroke-width: 2px;',
+        };
+      }
+      return e;
+    });
+
+    // Re-route any edges that connected to the block node to connect to the first/last child
+    // (For simplicity, edges TO the block -> first child, edges FROM the block -> last child)
+    const firstChild = childNodeIds[0];
+    const lastChild = childNodeIds[childNodeIds.length - 1];
+    if (firstChild || lastChild) {
+      edges = edges.map((e) => {
+        if (e.target === blockId && firstChild) {
+          return { ...e, target: firstChild };
+        }
+        if (e.source === blockId && lastChild) {
+          return { ...e, source: lastChild };
+        }
+        return e;
+      });
+    }
 
     // Remove from expanded map
     const newExpandedBlocks = new Map(expandedBlocks);
@@ -266,16 +380,15 @@
   function onNodeClick({ node }) {
     if (!node || node.type !== 'block') return;
 
-    // Check if this node is an expanded block's child that is itself a composite
-    // or if this node IS a composite block on the canvas
+    // If this is a composite block, handle expand (collapse is via the button in header)
     if (node.data.isComposite) {
       const blockId = node.id;
-      // If already expanded, collapse it
+      // If already expanded, do nothing (user uses Collapse button in the container header)
       if (expandedBlocks.has(blockId)) {
-        collapseBlock(blockId);
-      } else {
-        expandBlock(node);
+        return;
       }
+      // Expand the collapsed composite block in-place
+      expandBlock(node);
       return;
     }
 
@@ -348,8 +461,13 @@
 
   function deleteNode() {
     if (!selectedNode) return;
-    edges = edges.filter((e) => e.source !== selectedNode.id && e.target !== selectedNode.id);
-    nodes = nodes.filter((n) => n.id !== selectedNode.id);
+    const nodeId = selectedNode.id;
+    // If the node is an expanded block, collapse it first to clean up children
+    if (expandedBlocks.has(nodeId)) {
+      collapseBlock(nodeId);
+    }
+    edges = edges.filter((e) => e.source !== nodeId && e.target !== nodeId);
+    nodes = nodes.filter((n) => n.id !== nodeId);
     panelMode = 'none';
     selectedNode = null;
   }
@@ -447,6 +565,12 @@
 
   function deleteSelected() {
     if (selectedNodeIds.size === 0) return;
+    // Collapse any expanded blocks that are being deleted
+    for (const nodeId of selectedNodeIds) {
+      if (expandedBlocks.has(nodeId)) {
+        collapseBlock(nodeId);
+      }
+    }
     edges = edges.filter((e) => !selectedNodeIds.has(e.source) && !selectedNodeIds.has(e.target));
     nodes = nodes.filter((n) => !selectedNodeIds.has(n.id));
     selectedNodeIds = new Set();
