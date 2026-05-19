@@ -31,8 +31,13 @@ Guild solves this with an **escalation-first architecture**: start with the chea
 
 ## Demo
 
-<!-- TODO: Replace with actual demo video/asciinema link -->
-> Demo showing Guild completing a coding task with automatic escalation from gemma4-4b-dense-med to gemma4-26b-moe-agent when stuck.
+<!-- Record with: asciinema rec demo.cast -c "guild task 'Build a REST API with auth middleware'" -->
+<!-- Then upload to asciinema.org and paste the embed link below -->
+<!-- Or record a screen capture of the Web UI flow composer + terminal side by side -->
+
+> **Live demo:** Guild autonomously builds code using Gemma 4, escalating from the fast 4B model to the 26B MoE model when stuck.
+> 
+> The web UI shows the flow composer where you can visually design multi-agent teams.
 
 ```bash
 # Install and initialize
