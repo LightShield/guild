@@ -99,6 +99,7 @@
   function createBlockNode(block, position) {
     const id = `${block.name}-${Date.now()}-${nodes.length}`;
     const children = block.composite ? (block.nodes || []).map(n => n.data || n) : null;
+    const childEdges = block.composite ? (block.edges || []) : null;
 
     const newNode = {
       id,
@@ -113,6 +114,7 @@
         loopUntil: null,
         maxIterations: null,
         children: children,
+        childEdges: childEdges,
         expanded: false,
         onToggle: children ? () => toggleBlockExpand(id) : null,
       },

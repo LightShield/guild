@@ -1,7 +1,7 @@
 <script>
   import { Handle, Position } from '@xyflow/svelte';
 
-  /** @type {{ data: { blockName: string, role: string, model: string, instructions: string, verifier: string|null, loopUntil: string|null, maxIterations: number|null, children: Array|null, expanded: boolean, onToggle: Function|null } }} */
+  /** @type {{ data: { blockName: string, role: string, model: string, instructions: string, verifier: string|null, loopUntil: string|null, maxIterations: number|null, children: Array|null, childEdges: Array|null, expanded: boolean, onToggle: Function|null } }} */
   let { data } = $props();
 
   const roleConfig = {
@@ -21,6 +21,22 @@
   const hasVerifier = $derived(!!data.verifier);
   const hasChildren = $derived(data.children && data.children.length > 0);
   const expanded = $derived(data.expanded || false);
+
+  // Build a connection map from edges for display
+  const connectionMap = $derived.by(() => {
+    if (!data.childEdges || !data.children) return {};
+    const map = {};
+    for (const edge of data.childEdges) {
+      const sourceName = data.children.find(c => c.blockName === edge.source || c.id === edge.source);
+      const targetName = data.children.find(c => c.blockName === edge.target || c.id === edge.target);
+      if (sourceName && targetName) {
+        const key = sourceName.blockName || sourceName.id;
+        if (!map[key]) map[key] = [];
+        map[key].push(targetName.blockName || targetName.id);
+      }
+    }
+    return map;
+  });
 </script>
 
 <div class="group relative">
@@ -84,28 +100,33 @@
       </div>
     {/if}
 
-    <!-- Expanded children list -->
+    <!-- Expanded children with connections -->
     {#if hasChildren && expanded}
-      <div class="mt-3 pt-2 border-t border-purple-900/30 space-y-1.5 max-h-[250px] overflow-y-auto">
-        {#each data.children as child, i}
-          <div class="flex items-center gap-2 px-2.5 py-2 rounded-lg bg-gray-800/60 border border-gray-700/40
-                      hover:border-gray-600/60 transition-colors cursor-default">
-            {#if child.children && child.children.length > 0}
-              <span class="text-[9px] text-purple-400">&#9646;&#9646;</span>
-            {:else}
-              <span class="w-1.5 h-1.5 rounded-full bg-guild-400/60"></span>
-            {/if}
-            <span class="text-xs font-medium text-gray-200 flex-1 truncate">{child.data?.blockName || child.blockName || 'agent'}</span>
-            <span class="text-[9px] text-gray-500 uppercase">{child.data?.role || child.role || 'agent'}</span>
-            {#if child.children && child.children.length > 0}
-              <span class="text-[8px] text-purple-600">{child.children.length}x</span>
+      <div class="mt-3 pt-2 border-t border-purple-900/30 space-y-1 max-h-[300px] overflow-y-auto">
+        {#each data.children as child}
+          {@const name = child.data?.blockName || child.blockName || 'agent'}
+          {@const childRole = child.data?.role || child.role || 'agent'}
+          {@const targets = connectionMap[name] || connectionMap[child.id] || []}
+          {@const isComposite = child.children && child.children.length > 0}
+          <div class="px-2.5 py-2 rounded-lg bg-gray-800/60 border border-gray-700/40">
+            <div class="flex items-center gap-2">
+              {#if isComposite}
+                <span class="text-[9px] text-purple-400">&#9646;&#9646;</span>
+              {:else}
+                <span class="w-1.5 h-1.5 rounded-full bg-guild-400/60"></span>
+              {/if}
+              <span class="text-xs font-medium text-gray-200 flex-1 truncate">{name}</span>
+              <span class="text-[9px] text-gray-500 uppercase">{childRole}</span>
+            </div>
+            {#if targets.length > 0}
+              <div class="mt-1 ml-4 flex items-center gap-1 flex-wrap">
+                <span class="text-[9px] text-gray-600">&rarr;</span>
+                {#each targets as target}
+                  <span class="text-[9px] px-1.5 py-0.5 rounded bg-guild-900/40 text-guild-400 border border-guild-800/40">{target}</span>
+                {/each}
+              </div>
             {/if}
           </div>
-          {#if i < data.children.length - 1}
-            <div class="flex justify-center">
-              <span class="text-[8px] text-gray-800">&#8595;</span>
-            </div>
-          {/if}
         {/each}
       </div>
     {/if}
