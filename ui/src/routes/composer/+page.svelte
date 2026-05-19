@@ -19,6 +19,7 @@
   // Right panel state
   let panelMode = $state('none'); // 'none' | 'create' | 'edit' | 'save-block'
   let selectedNode = $state(null);
+  let showHelp = $state(false);
 
   // Create agent form
   let newAgentName = $state('');
@@ -610,6 +611,57 @@
       <Background gap={24} size={1} />
       <MiniMap />
     </SvelteFlow>
+
+    <!-- Help legend -->
+    <div class="absolute bottom-3 left-3 z-10">
+      <button
+        onclick={() => { showHelp = !showHelp; }}
+        class="px-2.5 py-1.5 rounded-lg bg-gray-900/90 backdrop-blur-sm border border-gray-700/50
+               text-[11px] text-gray-400 hover:text-gray-200 transition-colors shadow-lg
+               {showHelp ? 'border-guild-700/50 text-guild-400' : ''}"
+      >
+        ? Shortcuts
+      </button>
+      {#if showHelp}
+        <div class="mt-2 bg-gray-900/95 backdrop-blur-sm rounded-xl border border-gray-700/50 p-4 shadow-2xl w-64">
+          <h4 class="text-[11px] font-semibold text-gray-300 uppercase tracking-wider mb-2.5">Keyboard & Mouse</h4>
+          <div class="space-y-1.5 text-[11px]">
+            <div class="flex items-center gap-3">
+              <kbd class="px-1.5 py-0.5 rounded bg-gray-800 border border-gray-700 text-gray-300 font-mono">Click</kbd>
+              <span class="text-gray-400">Select & edit node</span>
+            </div>
+            <div class="flex items-center gap-3">
+              <kbd class="px-1.5 py-0.5 rounded bg-gray-800 border border-gray-700 text-gray-300 font-mono">Shift + Drag</kbd>
+              <span class="text-gray-400">Multi-select nodes</span>
+            </div>
+            <div class="flex items-center gap-3">
+              <kbd class="px-1.5 py-0.5 rounded bg-gray-800 border border-gray-700 text-gray-300 font-mono">Drag handle</kbd>
+              <span class="text-gray-400">Connect two agents</span>
+            </div>
+            <div class="flex items-center gap-3">
+              <kbd class="px-1.5 py-0.5 rounded bg-gray-800 border border-gray-700 text-gray-300 font-mono">Backspace</kbd>
+              <span class="text-gray-400">Delete selected</span>
+            </div>
+            <div class="flex items-center gap-3">
+              <kbd class="px-1.5 py-0.5 rounded bg-gray-800 border border-gray-700 text-gray-300 font-mono">Esc</kbd>
+              <span class="text-gray-400">Close panel</span>
+            </div>
+            <div class="flex items-center gap-3">
+              <kbd class="px-1.5 py-0.5 rounded bg-gray-800 border border-gray-700 text-gray-300 font-mono">Scroll</kbd>
+              <span class="text-gray-400">Zoom in/out</span>
+            </div>
+          </div>
+          <hr class="border-gray-800 my-2.5" />
+          <h4 class="text-[11px] font-semibold text-gray-300 uppercase tracking-wider mb-2">Workflow</h4>
+          <div class="space-y-1.5 text-[11px] text-gray-400">
+            <p>1. Drag agents onto canvas (or use + Agent)</p>
+            <p>2. Connect them by dragging between handles</p>
+            <p>3. Click a node to edit or attach a verifier</p>
+            <p>4. <span class="text-purple-400">Shift+Drag</span> to select multiple, then "Save as Block"</p>
+          </div>
+        </div>
+      {/if}
+    </div>
   </div>
 
   <!-- Right panel -->
