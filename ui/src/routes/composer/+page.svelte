@@ -19,6 +19,7 @@
   let panelMode = $state('none'); // 'none' | 'create' | 'edit' | 'save-block'
   let selectedNode = $state(null);
   let showHelp = $state(false);
+  let selectedNodeIds = $state(new Set());
 
   // Create agent form
   let newAgentName = $state('');
@@ -212,16 +213,22 @@
     selectedNode = null;
   }
 
+  // --- Selection tracking ---
+
+  function onSelectionChange({ nodes: selectedNodes }) {
+    selectedNodeIds = new Set((selectedNodes || []).map(n => n.id));
+  }
+
   // --- Multi-select and save as block ---
 
   function getSelectedNodes() {
-    return nodes.filter(n => n.selected);
+    return nodes.filter(n => selectedNodeIds.has(n.id));
   }
 
   function openSaveBlockPanel() {
     const selected = getSelectedNodes();
     if (selected.length < 2) {
-      saveMessage = 'Select 2+ nodes to save as a block';
+      saveMessage = `Select 2+ nodes (currently ${selected.length} selected)`;
       setTimeout(() => (saveMessage = ''), 3000);
       return;
     }
@@ -299,11 +306,10 @@
   }
 
   function deleteSelected() {
-    const selectedNodeIds = new Set(nodes.filter(n => n.selected).map(n => n.id));
-    const selectedEdgeIds = new Set(edges.filter(e => e.selected).map(e => e.id));
-    if (selectedNodeIds.size === 0 && selectedEdgeIds.size === 0) return;
-    edges = edges.filter(e => !selectedEdgeIds.has(e.id) && !selectedNodeIds.has(e.source) && !selectedNodeIds.has(e.target));
+    if (selectedNodeIds.size === 0) return;
+    edges = edges.filter(e => !selectedNodeIds.has(e.source) && !selectedNodeIds.has(e.target));
     nodes = nodes.filter(n => !selectedNodeIds.has(n.id));
+    selectedNodeIds = new Set();
   }
 
   // --- Load preset flow ---
@@ -606,6 +612,7 @@
       fitView
       onconnect={onConnect}
       onnodeclick={onNodeClick}
+      onselectionchange={onSelectionChange}
       deleteKey="Backspace"
       colorMode="dark"
       selectionMode="partial"
