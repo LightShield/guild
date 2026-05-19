@@ -202,15 +202,17 @@
       };
     });
 
-    // Calculate container size to fit all children
+    // Calculate container size to fit all children (wider for composites which render larger)
     let maxX = 0;
     let maxY = 0;
     for (const child of newChildNodes) {
-      maxX = Math.max(maxX, child.position.x + 200); // 200 = approx child node width
-      maxY = Math.max(maxY, child.position.y + 100); // 100 = approx child node height
+      const childWidth = child.data.isComposite ? 220 : 200;
+      const childHeight = child.data.isComposite ? 80 : 70;
+      maxX = Math.max(maxX, child.position.x + childWidth);
+      maxY = Math.max(maxY, child.position.y + childHeight);
     }
-    const containerWidth = Math.max(maxX + CONTAINER_PADDING_X, 300);
-    const containerHeight = Math.max(maxY + CONTAINER_PADDING_BOTTOM, 200);
+    const containerWidth = Math.max(maxX + CONTAINER_PADDING_X, 320);
+    const containerHeight = Math.max(maxY + CONTAINER_PADDING_BOTTOM, 180);
 
     // Create internal edges with dashed purple styling
     const internalEdgeIds = [];
@@ -505,17 +507,38 @@
       idToBlockName[n.id] = n.data.blockName || n.id;
     }
 
-    const blockNodes = selected.map((n) => ({
-      id: idToBlockName[n.id],
-      position: { x: n.position.x - minX, y: n.position.y - minY },
-      data: { ...n.data },
-    }));
+    const blockNodes = selected.map((n) => {
+      // Clean copy of data: remove stale callbacks, keep structural info
+      const cleanData = { ...n.data };
+      delete cleanData.onCollapse;
+      delete cleanData.onUngroup;
+      delete cleanData.expanded;
+      delete cleanData._parentBlockId;
+      return {
+        id: idToBlockName[n.id],
+        position: { x: n.position.x - minX, y: n.position.y - minY },
+        data: cleanData,
+      };
+    });
 
     // Capture internal edges mapped to stable blockName identifiers
     const selectedIds = new Set(selected.map((n) => n.id));
     const blockEdges = edges
       .filter((e) => selectedIds.has(e.source) && selectedIds.has(e.target))
       .map((e) => ({ id: `${idToBlockName[e.source]}-${idToBlockName[e.target]}`, source: idToBlockName[e.source], target: idToBlockName[e.target] }));
+
+    // Count total agents recursively (composite children count their internal agents)
+    function countAgents(nodeList) {
+      let total = 0;
+      for (const n of nodeList) {
+        if (n.data?.isComposite && n.data?._childNodes) {
+          total += countAgents(n.data._childNodes);
+        } else {
+          total += 1;
+        }
+      }
+      return total;
+    }
 
     const compositeBlock = {
       name: blockName.trim(),
@@ -524,7 +547,7 @@
       composite: true,
       nodes: blockNodes,
       edges: blockEdges,
-      agentCount: selected.length,
+      agentCount: countAgents(blockNodes),
     };
 
     customBlocks = [...customBlocks, compositeBlock];
