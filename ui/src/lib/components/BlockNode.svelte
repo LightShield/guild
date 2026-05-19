@@ -24,7 +24,9 @@
 
 {#if isExpanded}
   <!-- Expanded container mode: rendered as a large group container -->
-  <div class="block-container-expanded">
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div class="block-container-expanded"
+       onclick={(e) => { if (e.target === e.currentTarget && data.onCollapse) data.onCollapse(); }}>
     <!-- Container header (drag area) -->
     <div class="flex items-center gap-2 px-4 py-2.5 border-b border-purple-700/40 bg-purple-950/40 rounded-t-xl">
       <span class="text-xs text-purple-400">&#9646;&#9646;</span>

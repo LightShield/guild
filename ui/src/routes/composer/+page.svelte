@@ -382,14 +382,27 @@
   function onNodeClick({ node }) {
     if (!node || node.type !== 'block') return;
 
-    // If this is a composite block, handle expand (collapse is via the button in header)
     if (node.data.isComposite) {
       const blockId = node.id;
-      // If already expanded, do nothing (user uses Collapse button in the container header)
+      // If already expanded, collapse it (toggle behavior)
       if (expandedBlocks.has(blockId)) {
+        collapseBlock(blockId);
         return;
       }
-      // Expand the collapsed composite block in-place
+      // Prevent expanding if this node is a child of another expanded block
+      // (xyflow doesn't support nested parentId)
+      if (node.data._parentBlockId) {
+        selectedNode = node;
+        panelMode = 'edit';
+        editName = node.data.blockName || '';
+        editRole = node.data.role || 'agent';
+        editModel = node.data.model || 'gemma4-4b-dense-med';
+        editInstructions = node.data.instructions || '';
+        editVerifier = node.data.verifier || '';
+        editLoopUntil = node.data.loopUntil || '';
+        editMaxIterations = node.data.maxIterations || 5;
+        return;
+      }
       expandBlock(node);
       return;
     }
@@ -502,9 +515,16 @@
     const minY = Math.min(...selected.map((n) => n.position.y));
 
     // Use blockName as stable identifier for edges (not canvas IDs which are ephemeral)
+    // Handle duplicates by appending index suffix
     const idToBlockName = {};
+    const usedNames = {};
     for (const n of selected) {
-      idToBlockName[n.id] = n.data.blockName || n.id;
+      let name = n.data.blockName || n.id;
+      if (usedNames[name]) {
+        name = `${name}_${usedNames[name]}`;
+      }
+      usedNames[n.data.blockName || n.id] = (usedNames[n.data.blockName || n.id] || 0) + 1;
+      idToBlockName[n.id] = name;
     }
 
     const blockNodes = selected.map((n) => {

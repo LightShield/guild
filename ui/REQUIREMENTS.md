@@ -105,11 +105,19 @@ Extends REQ-05.6 (Visual team composer) from the main REQUIREMENTS.md.
 
 ### Three Amigos — Block Interaction Refinement
 
-**User perspective:** When I click a block, I want to *peek inside* to see what agents are in there and how they're connected — like opening a folder. The block should still be a *thing* on my canvas with a visible boundary. I might want to wire an external connection directly to a specific agent inside the block. Only if I explicitly choose "Ungroup" should it dissolve into free nodes.
+**User perspective:** When I click a block, I want to *peek inside* to see what agents are in there and how they're connected — like opening a folder. Click again to close it (toggle). The block should still be a *thing* on my canvas with a visible boundary. I might want to wire an external connection directly to a specific agent inside the block. Only if I explicitly choose "Ungroup" should it dissolve into free nodes. I also want to create "super groups" — select a group + other agents, save as a new block that contains the original block inside it.
 
-**Developer perspective:** This means a block has two visual states: collapsed (single node) and expanded (shows children inside a container with a visible border/boundary). The block node stays on the canvas — it just grows larger to reveal its contents. Children are rendered inside the block's bounding box. External edges can connect to child nodes through the block boundary. "Ungroup" is a separate destructive action.
+**Developer perspective:** This means a block has two visual states: collapsed (single node) and expanded (shows children inside a container). The block node stays on the canvas — it just grows. Children are rendered with `parentId` (xyflow native subflows). Important constraint: xyflow does NOT support nested parentId (child-of-child). A block inside an expanded block renders as a collapsed node — it cannot be expanded until its parent is collapsed first. "Ungroup" is a separate destructive action.
 
-**Tester perspective:** Key test: expand a block, drag an edge from an outside node INTO a specific child node, then collapse the block — what happens to that edge? It should re-route to the block's input port. Also: does the block boundary resize when children are dragged inside it?
+**Tester perspective:** Edge cases to test:
+1. Expand block, click again → must collapse (toggle)
+2. Save a group containing another group → super-group with correct recursive agent count
+3. Expand super-group → inner block shows as collapsed purple node with correct count
+4. Click inner block while parent is expanded → does NOT expand (shows edit panel or tooltip "collapse parent first")
+5. Collapse parent, then expand inner block directly → works normally
+6. Two blocks with agents sharing the same name → saved block must use unique IDs (no collision)
+7. Expand, connect external edge to child, collapse → edge re-routes to block port
+8. Expand, ungroup → children become free, parent disappears, edges preserved
 
 ---
 
@@ -119,8 +127,10 @@ Extends REQ-05.6 (Visual team composer) from the main REQUIREMENTS.md.
 | REQ-UI-04.2 | "Save Selection as Block" captures selected nodes AND their internal edges as a named block | Stored in localStorage |
 | REQ-UI-04.3 | A saved block placed on canvas renders as a single collapsed node (purple border, agent count badge) | Distinguishable from regular agents |
 | REQ-UI-04.4 | **Click a block → expands in-place** showing internal nodes within a visible container boundary (dashed purple border around the group) | Block STAYS on canvas as a parent container — does NOT ungroup |
+| REQ-UI-04.4a | **Click an expanded block → collapses it** (toggle behavior) | Click anywhere on container or use header button |
 | REQ-UI-04.5 | Expanded block shows internal edges as dashed semi-transparent purple lines within the container | Internal connections visible |
 | REQ-UI-04.6 | Internal child nodes are positioned at their saved relative positions inside the container boundary | Same layout as before saving |
+| REQ-UI-04.6a | **Nested block inside expanded parent shows as collapsed** — cannot be expanded until parent is collapsed | xyflow limitation: no nested parentId |
 | REQ-UI-04.7 | Click expanded block's header/collapse button → collapses back to single node | Container shrinks back to compact representation |
 | REQ-UI-04.8 | External edges can connect to specific child nodes inside an expanded block | Drag from outside node into a child — edge connects through the block boundary |
 | REQ-UI-04.9 | When collapsing a block that has edges to specific children, those edges re-route to the block's port | Graceful degradation on collapse |
