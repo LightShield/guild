@@ -73,7 +73,16 @@ export async function saveTeam(name, nodes, edges) {
 	for (const node of nodes) {
 		const blockName = node.data?.blockName || node.id;
 		const role = node.data?.role || 'agent';
-		blocks[node.id] = { name: blockName, role };
+		blocks[node.id] = {
+			name: blockName,
+			role,
+			model: node.data?.model || 'gemma4-4b-dense-med',
+			instructions: node.data?.instructions || '',
+			verifier: node.data?.verifier || null,
+			loopUntil: node.data?.loopUntil || null,
+			maxIterations: node.data?.maxIterations || null,
+			position: node.position,
+		};
 	}
 
 	const connections = edges.map((edge) => ({

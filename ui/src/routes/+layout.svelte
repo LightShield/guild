@@ -1,5 +1,6 @@
 <script>
 	import { onMount, onDestroy } from 'svelte';
+	import { page } from '$app/state';
 	import { connectWebSocket, wsConnected } from '$lib/stores.js';
 	import '../app.css';
 
@@ -58,14 +59,15 @@
 		<!-- Navigation -->
 		<nav class="flex-1 px-2 py-3 space-y-0.5">
 			{#each nav as item}
+				{@const isActive = page.url.pathname === item.href || (item.href !== '/' && page.url.pathname.startsWith(item.href))}
 				<a
 					href={item.href}
-					class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-gray-400
-						   hover:bg-gray-800 hover:text-gray-100 transition-all duration-150
-						   {collapsed ? 'justify-center' : ''}"
+					class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-150
+						   {collapsed ? 'justify-center' : ''}
+						   {isActive ? 'bg-gray-800 text-guild-400' : 'text-gray-400 hover:bg-gray-800 hover:text-gray-100'}"
 					title={collapsed ? item.label : ''}
 				>
-					<span class="text-xs opacity-60">{@html item.icon}</span>
+					<span class="text-xs {isActive ? 'opacity-100' : 'opacity-60'}">{@html item.icon}</span>
 					{#if !collapsed}
 						<span class="font-medium">{item.label}</span>
 					{/if}

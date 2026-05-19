@@ -1,5 +1,6 @@
 <script>
   import { onMount } from 'svelte';
+  import { fly } from 'svelte/transition';
   import { SvelteFlow, Controls, Background, MiniMap } from '@xyflow/svelte';
   import '@xyflow/svelte/dist/style.css';
   import { fetchBlocks, fetchTeams, saveTeam } from '$lib/api.js';
@@ -156,12 +157,10 @@
       const origId = child.id || child.data?.blockName || `child-${Math.random().toString(36).slice(2, 6)}`;
       const canvasId = `${blockId}__${origId}`;
       idMap[origId] = canvasId;
-      // Also map by blockName for edge resolution
-      if (child.data?.blockName) {
-        idMap[child.data.blockName] = canvasId;
-      }
-      if (child.blockName) {
-        idMap[child.blockName] = canvasId;
+      // Map blockName too but scoped to this block instance (key includes blockId prefix to avoid cross-wiring)
+      const childBlockName = child.data?.blockName || child.blockName;
+      if (childBlockName && childBlockName !== origId) {
+        idMap[childBlockName] = canvasId;
       }
       childNodeIds.push(canvasId);
 
@@ -382,17 +381,23 @@
     const minX = Math.min(...selected.map((n) => n.position.x));
     const minY = Math.min(...selected.map((n) => n.position.y));
 
+    // Use blockName as stable identifier for edges (not canvas IDs which are ephemeral)
+    const idToBlockName = {};
+    for (const n of selected) {
+      idToBlockName[n.id] = n.data.blockName || n.id;
+    }
+
     const blockNodes = selected.map((n) => ({
-      id: n.id,
+      id: idToBlockName[n.id],
       position: { x: n.position.x - minX, y: n.position.y - minY },
       data: { ...n.data },
     }));
 
-    // Capture internal edges (both source and target in the selection)
+    // Capture internal edges mapped to stable blockName identifiers
     const selectedIds = new Set(selected.map((n) => n.id));
     const blockEdges = edges
       .filter((e) => selectedIds.has(e.source) && selectedIds.has(e.target))
-      .map((e) => ({ id: e.id, source: e.source, target: e.target }));
+      .map((e) => ({ id: `${idToBlockName[e.source]}-${idToBlockName[e.target]}`, source: idToBlockName[e.source], target: idToBlockName[e.target] }));
 
     const compositeBlock = {
       name: blockName.trim(),
@@ -481,14 +486,28 @@
     const teamEdges = [];
     let x = 50;
     for (const [instance, blockType] of Object.entries(team.blocks || {})) {
-      const role = typeof blockType === 'object' ? blockType.role || 'agent' : 'agent';
+      const isObj = typeof blockType === 'object';
+      const role = isObj ? blockType.role || 'agent' : 'agent';
+      const position = (isObj && blockType.position) ? blockType.position : { x, y: 150 + (teamNodes.length % 3) * 150 };
       teamNodes.push({
         id: instance,
         type: 'block',
-        position: { x, y: 150 + (teamNodes.length % 3) * 150 },
-        data: { blockName: instance, role, model: 'gemma4-4b-dense-med', instructions: '', verifier: null, loopUntil: null, maxIterations: null, isComposite: false, agentCount: 0, _childNodes: null, _childEdges: null },
+        position,
+        data: {
+          blockName: isObj ? blockType.name || instance : instance,
+          role,
+          model: (isObj && blockType.model) || 'gemma4-4b-dense-med',
+          instructions: (isObj && blockType.instructions) || '',
+          verifier: (isObj && blockType.verifier) || null,
+          loopUntil: (isObj && blockType.loopUntil) || null,
+          maxIterations: (isObj && blockType.maxIterations) || null,
+          isComposite: false,
+          agentCount: 0,
+          _childNodes: null,
+          _childEdges: null,
+        },
       });
-      x += 250;
+      if (!isObj || !blockType.position) x += 250;
     }
     for (const conn of team.connections || []) {
       teamEdges.push({
@@ -817,7 +836,8 @@
 
   <!-- Right panel -->
   {#if panelMode !== 'none'}
-    <div class="w-80 bg-gray-900/80 backdrop-blur-sm border-l border-gray-800 flex flex-col overflow-y-auto">
+    <div class="w-80 bg-gray-900/80 backdrop-blur-sm border-l border-gray-800 flex flex-col overflow-y-auto"
+         transition:fly={{ x: 320, duration: 200 }}>
       <!-- Create Agent -->
       {#if panelMode === 'create'}
         <div class="p-5 space-y-4">
