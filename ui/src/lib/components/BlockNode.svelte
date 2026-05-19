@@ -22,20 +22,53 @@
   const hasChildren = $derived(data.children && data.children.length > 0);
   const expanded = $derived(data.expanded || false);
 
-  // Build a connection map from edges for display
-  const connectionMap = $derived.by(() => {
-    if (!data.childEdges || !data.children) return {};
-    const map = {};
+  // Build ordered flow from edges using topological sort
+  const orderedFlow = $derived.by(() => {
+    if (!data.children || data.children.length === 0) return [];
+    if (!data.childEdges || data.childEdges.length === 0) return data.children.map(c => [c]);
+
+    // Build adjacency: source → [targets]
+    const adj = {};
+    const inDegree = {};
+    const nodeMap = {};
+    for (const child of data.children) {
+      const id = child.data?.blockName || child.blockName || child.id;
+      adj[id] = [];
+      inDegree[id] = 0;
+      nodeMap[id] = child;
+    }
     for (const edge of data.childEdges) {
-      const sourceName = data.children.find(c => c.blockName === edge.source || c.id === edge.source);
-      const targetName = data.children.find(c => c.blockName === edge.target || c.id === edge.target);
-      if (sourceName && targetName) {
-        const key = sourceName.blockName || sourceName.id;
-        if (!map[key]) map[key] = [];
-        map[key].push(targetName.blockName || targetName.id);
+      const src = data.children.find(c => (c.data?.blockName || c.blockName || c.id) === edge.source || c.id === edge.source);
+      const tgt = data.children.find(c => (c.data?.blockName || c.blockName || c.id) === edge.target || c.id === edge.target);
+      if (src && tgt) {
+        const srcId = src.data?.blockName || src.blockName || src.id;
+        const tgtId = tgt.data?.blockName || tgt.blockName || tgt.id;
+        adj[srcId].push(tgtId);
+        inDegree[tgtId] = (inDegree[tgtId] || 0) + 1;
       }
     }
-    return map;
+
+    // BFS topological layers (nodes at same depth = parallel)
+    const layers = [];
+    let queue = Object.keys(inDegree).filter(k => inDegree[k] === 0);
+    const visited = new Set();
+    while (queue.length > 0) {
+      const layer = queue.map(id => nodeMap[id]).filter(Boolean);
+      if (layer.length > 0) layers.push(layer);
+      const nextQueue = [];
+      for (const id of queue) {
+        visited.add(id);
+        for (const tgt of (adj[id] || [])) {
+          inDegree[tgt]--;
+          if (inDegree[tgt] === 0 && !visited.has(tgt)) nextQueue.push(tgt);
+        }
+      }
+      queue = nextQueue;
+    }
+    // Add any unvisited (disconnected) nodes
+    const remaining = data.children.filter(c => !visited.has(c.data?.blockName || c.blockName || c.id));
+    if (remaining.length > 0) layers.push(remaining);
+    return layers;
   });
 </script>
 
@@ -100,33 +133,43 @@
       </div>
     {/if}
 
-    <!-- Expanded children with connections -->
+    <!-- Expanded: layered flow view -->
     {#if hasChildren && expanded}
-      <div class="mt-3 pt-2 border-t border-purple-900/30 space-y-1 max-h-[300px] overflow-y-auto">
-        {#each data.children as child}
-          {@const name = child.data?.blockName || child.blockName || 'agent'}
-          {@const childRole = child.data?.role || child.role || 'agent'}
-          {@const targets = connectionMap[name] || connectionMap[child.id] || []}
-          {@const isComposite = child.children && child.children.length > 0}
-          <div class="px-2.5 py-2 rounded-lg bg-gray-800/60 border border-gray-700/40">
-            <div class="flex items-center gap-2">
-              {#if isComposite}
-                <span class="text-[9px] text-purple-400">&#9646;&#9646;</span>
-              {:else}
-                <span class="w-1.5 h-1.5 rounded-full bg-guild-400/60"></span>
-              {/if}
-              <span class="text-xs font-medium text-gray-200 flex-1 truncate">{name}</span>
-              <span class="text-[9px] text-gray-500 uppercase">{childRole}</span>
+      <div class="mt-3 pt-2 border-t border-purple-900/30 max-h-[350px] overflow-y-auto">
+        {#each orderedFlow as layer, layerIdx}
+          <!-- Parallel agents in this layer -->
+          <div class="flex gap-1.5 {layer.length > 1 ? 'justify-center' : ''}">
+            {#each layer as child}
+              {@const name = child.data?.blockName || child.blockName || 'agent'}
+              {@const childRole = child.data?.role || child.role || 'agent'}
+              {@const isNested = child.children && child.children.length > 0}
+              <div class="flex-1 min-w-0 px-2 py-1.5 rounded-lg bg-gray-800/70 border border-gray-700/40
+                          {layer.length > 1 ? 'max-w-[120px]' : ''}">
+                <div class="flex items-center gap-1.5">
+                  {#if isNested}
+                    <span class="text-[8px] text-purple-400">&#9646;&#9646;</span>
+                  {:else}
+                    <span class="w-1.5 h-1.5 rounded-full bg-guild-400/50 shrink-0"></span>
+                  {/if}
+                  <span class="text-[10px] font-medium text-gray-200 truncate">{name}</span>
+                </div>
+                <span class="text-[8px] text-gray-600 uppercase ml-3">{childRole}</span>
+              </div>
+            {/each}
+          </div>
+          <!-- Arrow between layers -->
+          {#if layerIdx < orderedFlow.length - 1}
+            <div class="flex justify-center py-0.5">
+              <svg width="20" height="14" class="text-guild-500/60">
+                <path d="M10 0 L10 10 M6 7 L10 11 L14 7" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
             </div>
-            {#if targets.length > 0}
-              <div class="mt-1 ml-4 flex items-center gap-1 flex-wrap">
-                <span class="text-[9px] text-gray-600">&rarr;</span>
-                {#each targets as target}
-                  <span class="text-[9px] px-1.5 py-0.5 rounded bg-guild-900/40 text-guild-400 border border-guild-800/40">{target}</span>
-                {/each}
+            {#if orderedFlow[layerIdx + 1]?.length > 1 && layer.length === 1}
+              <div class="flex justify-center -mt-0.5 mb-0.5">
+                <span class="text-[8px] text-cyan-600 font-medium uppercase tracking-wider">parallel</span>
               </div>
             {/if}
-          </div>
+          {/if}
         {/each}
       </div>
     {/if}
