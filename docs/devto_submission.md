@@ -31,13 +31,34 @@ Guild solves this with an **escalation-first architecture**: start with the chea
 
 ## Demo
 
-<!-- Record with: asciinema rec demo.cast -c "guild task 'Build a REST API with auth middleware'" -->
-<!-- Then upload to asciinema.org and paste the embed link below -->
-<!-- Or record a screen capture of the Web UI flow composer + terminal side by side -->
+### Real Session — Multi-Agent Team Build
 
-> **Live demo:** Guild autonomously builds code using Gemma 4, escalating from the fast 4B model to the 26B MoE model when stuck.
-> 
-> The web UI shows the flow composer where you can visually design multi-agent teams.
+This is from an actual run where Guild's team mode uses Gemma 4 4B as the coder and Gemma 4 26B MoE as the verifier:
+
+```
+$ guild team -t music-builder "Create a Python music player with real-time notch filter"
+
+[guild] Team: music-builder (coder + e2e_runner)
+[guild] Coder agent: gemma4-4b-dense-med
+[guild] Verifier agent: gemma4-26b-moe-agent
+
+Iteration 1:
+  [coder/4B]     Writing music_player.py...
+  [coder/4B]     Writing requirements.txt...
+  [e2e/26B]      Running DSP unit test... FAIL (runtime error in callback)
+
+Iteration 2:
+  [coder/4B]     Fixing based on verifier feedback...
+  [coder/4B]     Rewriting with filter state persistence (zi)...
+  [e2e/26B]      Running DSP unit test... PASS
+  [e2e/26B]      Running 3s playback test... PASS
+  [e2e/26B]      Checking stderr for errors... PASS
+
+[guild] Team completed in 2 iterations.
+[guild] Learning: "IIR notch filter requires maintaining zi state across chunks"
+```
+
+See the full example with code output: [`examples/music-player-poc/`](examples/music-player-poc/)
 
 ```bash
 # Install and initialize
