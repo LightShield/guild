@@ -9,18 +9,40 @@
   let nodes = $state([]);
   let edges = $state([]);
   let availableBlocks = $state([]);
+  let customBlocks = $state([]);
   let teams = $state([]);
   let selectedTeam = $state(null);
   let teamName = $state('');
   let saveMessage = $state('');
   let draggedBlock = $state(null);
+
+  // Right panel state
+  let panelMode = $state('none'); // 'none' | 'create' | 'edit' | 'save-block'
   let selectedNode = $state(null);
-  let verifierName = $state('');
-  let loopCondition = $state('');
-  let maxIterations = $state(5);
-  let showNodeConfig = $state(false);
+
+  // Create agent form
+  let newAgentName = $state('');
+  let newAgentRole = $state('agent');
+  let newAgentModel = $state('gemma4-4b-dense-med');
+  let newAgentInstructions = $state('');
+
+  // Edit agent form
+  let editName = $state('');
+  let editRole = $state('');
+  let editModel = $state('');
+  let editInstructions = $state('');
+  let editVerifier = $state('');
+  let editLoopUntil = $state('');
+  let editMaxIterations = $state(5);
+
+  // Save as block
+  let blockName = $state('');
+  let blockDescription = $state('');
 
   const nodeTypes = { block: BlockNode, phase: PhaseNode };
+
+  const roles = ['agent', 'planner', 'architect', 'implementer', 'coder', 'tester', 'reviewer', 'verifier', 'orchestrator'];
+  const models = ['gemma4-2b-edge-fast', 'gemma4-4b-dense-med', 'gemma4-26b-moe-agent'];
 
   const builtinRoles = [
     { name: 'requirements', role: 'planner', description: 'Gather and document requirements' },
@@ -38,9 +60,18 @@
     if (availableBlocks.length === 0) {
       availableBlocks = builtinRoles;
     }
+    // Load custom blocks from localStorage
+    const stored = localStorage.getItem('guild-custom-blocks');
+    if (stored) {
+      try { customBlocks = JSON.parse(stored); } catch { /* ignore */ }
+    }
   });
 
-  // --- Drag and drop from palette ---
+  function persistCustomBlocks() {
+    localStorage.setItem('guild-custom-blocks', JSON.stringify(customBlocks));
+  }
+
+  // --- Drag and drop ---
 
   function onDragStart(event, block) {
     draggedBlock = block;
@@ -55,22 +86,12 @@
 
   function onDrop(event) {
     event.preventDefault();
-
     let block = draggedBlock;
     if (!block) {
-      try {
-        block = JSON.parse(event.dataTransfer.getData('application/guild-block'));
-      } catch {
-        return;
-      }
+      try { block = JSON.parse(event.dataTransfer.getData('application/guild-block')); } catch { return; }
     }
-
-    const flowContainer = event.currentTarget;
-    const bounds = flowContainer.getBoundingClientRect();
-    const x = event.clientX - bounds.left;
-    const y = event.clientY - bounds.top;
-
-    createBlockNode(block, { x, y });
+    const bounds = event.currentTarget.getBoundingClientRect();
+    createBlockNode(block, { x: event.clientX - bounds.left, y: event.clientY - bounds.top });
     draggedBlock = null;
   }
 
@@ -81,56 +102,81 @@
       type: 'block',
       position,
       data: {
-        label: `${block.name} (${block.role || 'agent'})`,
         blockName: block.name,
         role: block.role || 'agent',
+        model: block.model || 'gemma4-4b-dense-med',
+        instructions: block.instructions || '',
         verifier: null,
         loopUntil: null,
         maxIterations: null,
       },
     };
     nodes = [...nodes, newNode];
+
+    // If it's a composite block, also add its internal nodes
+    if (block.composite && block.nodes) {
+      for (const subNode of block.nodes) {
+        const subId = `${subNode.data.blockName}-${Date.now()}-${nodes.length}`;
+        nodes = [...nodes, {
+          ...subNode,
+          id: subId,
+          position: { x: position.x + subNode.position.x, y: position.y + subNode.position.y },
+        }];
+      }
+      if (block.edges) {
+        for (const edge of block.edges) {
+          edges = [...edges, { ...edge, id: `${edge.id}-${Date.now()}` }];
+        }
+      }
+    }
   }
 
   function addBlock(block) {
-    const position = {
-      x: 100 + nodes.length * 220,
-      y: 150 + (nodes.length % 3) * 150,
-    };
-    createBlockNode(block, position);
+    createBlockNode(block, { x: 100 + nodes.length * 220, y: 150 + (nodes.length % 3) * 150 });
   }
 
-  // --- Connection drawing ---
+  // --- Create new agent ---
 
-  function onConnect(connection) {
-    const edgeId = `e-${connection.source}-${connection.target}-${edges.length}`;
-    const newEdge = {
-      id: edgeId,
-      source: connection.source,
-      target: connection.target,
-      sourceHandle: connection.sourceHandle,
-      targetHandle: connection.targetHandle,
-      animated: true,
-      style: 'stroke: #38bdf8; stroke-width: 2px;',
-      labelStyle: 'fill: #94a3b8; font-size: 11px;',
-    };
-    edges = [...edges, newEdge];
+  function openCreatePanel() {
+    panelMode = 'create';
+    newAgentName = '';
+    newAgentRole = 'agent';
+    newAgentModel = 'gemma4-4b-dense-med';
+    newAgentInstructions = '';
   }
 
-  // --- Node selection ---
+  function createAgent() {
+    if (!newAgentName.trim()) return;
+    const block = {
+      name: newAgentName.trim(),
+      role: newAgentRole,
+      model: newAgentModel,
+      instructions: newAgentInstructions,
+    };
+    addBlock(block);
+    // Also add to available blocks for reuse
+    availableBlocks = [...availableBlocks, block];
+    panelMode = 'none';
+  }
+
+  // --- Edit node ---
 
   function onNodeClick(event) {
     const node = event.detail?.node || event.node;
     if (node && node.type === 'block') {
       selectedNode = node;
-      verifierName = node.data.verifier || '';
-      loopCondition = node.data.loopUntil || '';
-      maxIterations = node.data.maxIterations || 5;
-      showNodeConfig = true;
+      editName = node.data.blockName || '';
+      editRole = node.data.role || 'agent';
+      editModel = node.data.model || 'gemma4-4b-dense-med';
+      editInstructions = node.data.instructions || '';
+      editVerifier = node.data.verifier || '';
+      editLoopUntil = node.data.loopUntil || '';
+      editMaxIterations = node.data.maxIterations || 5;
+      panelMode = 'edit';
     }
   }
 
-  function applyVerifier() {
+  function applyEdit() {
     if (!selectedNode) return;
     nodes = nodes.map(n => {
       if (n.id === selectedNode.id) {
@@ -138,72 +184,136 @@
           ...n,
           data: {
             ...n.data,
-            verifier: verifierName || null,
-            loopUntil: loopCondition || null,
-            maxIterations: maxIterations || null,
+            blockName: editName,
+            role: editRole,
+            model: editModel,
+            instructions: editInstructions,
+            verifier: editVerifier || null,
+            loopUntil: editLoopUntil || null,
+            maxIterations: editMaxIterations || null,
           }
         };
       }
       return n;
     });
-    showNodeConfig = false;
+    panelMode = 'none';
     selectedNode = null;
   }
 
-  function removeVerifier() {
+  function deleteNode() {
     if (!selectedNode) return;
-    nodes = nodes.map(n => {
-      if (n.id === selectedNode.id) {
-        return {
-          ...n,
-          data: { ...n.data, verifier: null, loopUntil: null, maxIterations: null }
-        };
-      }
-      return n;
-    });
-    verifierName = '';
-    loopCondition = '';
-    showNodeConfig = false;
+    edges = edges.filter(e => e.source !== selectedNode.id && e.target !== selectedNode.id);
+    nodes = nodes.filter(n => n.id !== selectedNode.id);
+    panelMode = 'none';
     selectedNode = null;
   }
 
-  // --- Delete selected nodes/edges ---
+  // --- Multi-select and save as block ---
+
+  function getSelectedNodes() {
+    return nodes.filter(n => n.selected);
+  }
+
+  function openSaveBlockPanel() {
+    const selected = getSelectedNodes();
+    if (selected.length < 2) {
+      saveMessage = 'Select 2+ nodes to save as a block';
+      setTimeout(() => (saveMessage = ''), 3000);
+      return;
+    }
+    panelMode = 'save-block';
+    blockName = '';
+    blockDescription = '';
+  }
+
+  function saveAsBlock() {
+    if (!blockName.trim()) return;
+    const selected = getSelectedNodes();
+    if (selected.length < 2) return;
+
+    // Normalize positions relative to the top-left of the selection
+    const minX = Math.min(...selected.map(n => n.position.x));
+    const minY = Math.min(...selected.map(n => n.position.y));
+
+    const blockNodes = selected.map(n => ({
+      ...n,
+      position: { x: n.position.x - minX, y: n.position.y - minY },
+    }));
+
+    // Capture internal edges (both source and target in selection)
+    const selectedIds = new Set(selected.map(n => n.id));
+    const blockEdges = edges.filter(e => selectedIds.has(e.source) && selectedIds.has(e.target));
+
+    const compositeBlock = {
+      name: blockName.trim(),
+      role: 'orchestrator',
+      description: blockDescription || `Composite: ${selected.map(n => n.data.blockName).join(' → ')}`,
+      composite: true,
+      nodes: blockNodes,
+      edges: blockEdges,
+      agentCount: selected.length,
+    };
+
+    customBlocks = [...customBlocks, compositeBlock];
+    persistCustomBlocks();
+    panelMode = 'none';
+    saveMessage = `Block "${blockName}" saved`;
+    setTimeout(() => (saveMessage = ''), 3000);
+  }
+
+  function deleteCustomBlock(index) {
+    customBlocks = customBlocks.filter((_, i) => i !== index);
+    persistCustomBlocks();
+  }
+
+  // --- Connection drawing ---
+
+  function onConnect(connection) {
+    const newEdge = {
+      id: `e-${connection.source}-${connection.target}-${edges.length}`,
+      source: connection.source,
+      target: connection.target,
+      sourceHandle: connection.sourceHandle,
+      targetHandle: connection.targetHandle,
+      animated: true,
+      style: 'stroke: #38bdf8; stroke-width: 2px;',
+    };
+    edges = [...edges, newEdge];
+  }
+
+  // --- Keyboard ---
 
   function onKeyDown(event) {
     if (event.key === 'Backspace' || event.key === 'Delete') {
+      if (panelMode !== 'none') return; // don't delete when editing inputs
       deleteSelected();
     }
     if (event.key === 'Escape') {
-      showNodeConfig = false;
+      panelMode = 'none';
       selectedNode = null;
     }
   }
 
   function deleteSelected() {
-    const selectedNodeIds = new Set(nodes.filter((n) => n.selected).map((n) => n.id));
-    const selectedEdgeIds = new Set(edges.filter((e) => e.selected).map((e) => e.id));
-
+    const selectedNodeIds = new Set(nodes.filter(n => n.selected).map(n => n.id));
+    const selectedEdgeIds = new Set(edges.filter(e => e.selected).map(e => e.id));
     if (selectedNodeIds.size === 0 && selectedEdgeIds.size === 0) return;
-
-    edges = edges.filter(
-      (e) => !selectedEdgeIds.has(e.id) && !selectedNodeIds.has(e.source) && !selectedNodeIds.has(e.target)
-    );
-    nodes = nodes.filter((n) => !selectedNodeIds.has(n.id));
+    edges = edges.filter(e => !selectedEdgeIds.has(e.id) && !selectedNodeIds.has(e.source) && !selectedNodeIds.has(e.target));
+    nodes = nodes.filter(n => !selectedNodeIds.has(n.id));
   }
 
   // --- Load preset flow ---
 
   function loadPresetFlow() {
-    const presetNodes = [
-      { id: 'req', type: 'block', position: { x: 50, y: 150 }, data: { blockName: 'requirements', role: 'planner', verifier: 'requirements_verifier', loopUntil: 'verifier approves', maxIterations: 5 } },
-      { id: 'arch', type: 'block', position: { x: 300, y: 150 }, data: { blockName: 'architect', role: 'architect', verifier: 'architect_verifier', loopUntil: 'verifier approves', maxIterations: 5 } },
-      { id: 'tester', type: 'block', position: { x: 550, y: 80 }, data: { blockName: 'tester', role: 'tester', verifier: 'tester_verifier', loopUntil: 'verifier approves', maxIterations: 5 } },
-      { id: 'impl', type: 'block', position: { x: 550, y: 250 }, data: { blockName: 'implementer', role: 'implementer', verifier: 'test_runner', loopUntil: 'tests pass', maxIterations: 5 } },
-      { id: 'review', type: 'block', position: { x: 800, y: 150 }, data: { blockName: 'code_reviewer', role: 'reviewer', verifier: null, loopUntil: 'reviewer approves', maxIterations: 3 } },
-      { id: 'verif', type: 'block', position: { x: 1050, y: 150 }, data: { blockName: 'verificator', role: 'verifier', verifier: null, loopUntil: 'all checks pass', maxIterations: null } },
+    nodes = [
+      { id: 'req', type: 'block', position: { x: 50, y: 150 }, data: { blockName: 'requirements', role: 'planner', model: 'gemma4-4b-dense-med', instructions: '', verifier: 'requirements_verifier', loopUntil: 'verifier approves', maxIterations: 5 } },
+      { id: 'arch', type: 'block', position: { x: 300, y: 150 }, data: { blockName: 'architect', role: 'architect', model: 'gemma4-4b-dense-med', instructions: '', verifier: 'architect_verifier', loopUntil: 'verifier approves', maxIterations: 5 } },
+      { id: 'tester', type: 'block', position: { x: 550, y: 80 }, data: { blockName: 'tester', role: 'tester', model: 'gemma4-4b-dense-med', instructions: '', verifier: 'tester_verifier', loopUntil: 'verifier approves', maxIterations: 5 } },
+      { id: 'impl', type: 'block', position: { x: 550, y: 250 }, data: { blockName: 'implementer', role: 'implementer', model: 'gemma4-4b-dense-med', instructions: '', verifier: 'test_runner', loopUntil: 'tests pass', maxIterations: 5 } },
+      { id: 'review', type: 'block', position: { x: 800, y: 150 }, data: { blockName: 'code_reviewer', role: 'reviewer', model: 'gemma4-26b-moe-agent', instructions: '', verifier: null, loopUntil: 'reviewer approves', maxIterations: 3 } },
+      { id: 'verif', type: 'block', position: { x: 1050, y: 150 }, data: { blockName: 'verificator', role: 'verifier', model: 'gemma4-26b-moe-agent', instructions: '', verifier: null, loopUntil: 'all checks pass', maxIterations: null } },
     ];
-
-    const presetEdges = [
+    edges = [
       { id: 'e-req-arch', source: 'req', target: 'arch', animated: true, style: 'stroke: #38bdf8; stroke-width: 2px;' },
       { id: 'e-arch-tester', source: 'arch', target: 'tester', animated: true, style: 'stroke: #38bdf8; stroke-width: 2px;' },
       { id: 'e-arch-impl', source: 'arch', target: 'impl', animated: true, style: 'stroke: #38bdf8; stroke-width: 2px;' },
@@ -211,9 +321,6 @@
       { id: 'e-impl-review', source: 'impl', target: 'review', animated: true, style: 'stroke: #38bdf8; stroke-width: 2px;' },
       { id: 'e-review-verif', source: 'review', target: 'verif', animated: true, style: 'stroke: #38bdf8; stroke-width: 2px;' },
     ];
-
-    nodes = presetNodes;
-    edges = presetEdges;
     teamName = 'full-development';
     selectedTeam = { name: 'full-development' };
   }
@@ -226,50 +333,33 @@
     const teamNodes = [];
     const teamEdges = [];
     let x = 50;
-
-    const blockEntries = Object.entries(team.blocks || {});
-    for (const [instance, blockType] of blockEntries) {
+    for (const [instance, blockType] of Object.entries(team.blocks || {})) {
       const role = typeof blockType === 'object' ? blockType.role || 'agent' : 'agent';
-      const name = typeof blockType === 'string' ? blockType : blockType.name || instance;
       teamNodes.push({
         id: instance,
         type: 'block',
         position: { x, y: 150 + (teamNodes.length % 3) * 150 },
-        data: {
-          blockName: instance,
-          role,
-          verifier: null,
-          loopUntil: null,
-          maxIterations: null,
-        },
+        data: { blockName: instance, role, model: 'gemma4-4b-dense-med', instructions: '', verifier: null, loopUntil: null, maxIterations: null },
       });
       x += 250;
     }
-
     for (const conn of team.connections || []) {
       teamEdges.push({
         id: `${conn.source_block}-${conn.target_block}`,
         source: conn.source_block,
         target: conn.target_block,
-        label: `${conn.source_port} -> ${conn.target_port}`,
         animated: true,
         style: 'stroke: #38bdf8; stroke-width: 2px;',
-        labelStyle: 'fill: #94a3b8; font-size: 11px;',
       });
     }
-
     nodes = teamNodes;
     edges = teamEdges;
   }
 
-  // --- Save team ---
+  // --- Save flow ---
 
   async function handleSave() {
-    if (!teamName.trim()) {
-      saveMessage = 'Please enter a team name.';
-      return;
-    }
-
+    if (!teamName.trim()) { saveMessage = 'Enter a flow name'; return; }
     try {
       await saveTeam(teamName.trim(), nodes, edges);
       saveMessage = `Saved "${teamName}"`;
@@ -280,15 +370,13 @@
     }
   }
 
-  // --- Clear ---
-
   function clearCanvas() {
     nodes = [];
     edges = [];
     selectedTeam = null;
     teamName = '';
     saveMessage = '';
-    showNodeConfig = false;
+    panelMode = 'none';
     selectedNode = null;
   }
 </script>
@@ -299,18 +387,28 @@
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="h-[calc(100vh-4rem)] flex" onkeydown={onKeyDown}>
-  <!-- Left sidebar: block palette -->
+  <!-- Left sidebar -->
   <div class="w-72 bg-gray-900/50 border-r border-gray-800 overflow-y-auto flex flex-col">
-    <!-- Header -->
-    <div class="px-5 pt-5 pb-3">
-      <h2 class="text-base font-semibold text-gray-100">Flow Composer</h2>
-      <p class="text-xs text-gray-500 mt-0.5">Build agent workflows with verification loops</p>
+    <!-- Header + Create button -->
+    <div class="px-5 pt-5 pb-3 flex items-start justify-between">
+      <div>
+        <h2 class="text-base font-semibold text-gray-100">Flow Composer</h2>
+        <p class="text-xs text-gray-500 mt-0.5">Build agent workflows</p>
+      </div>
+      <button
+        onclick={openCreatePanel}
+        class="px-2.5 py-1.5 rounded-lg bg-guild-600 hover:bg-guild-500 text-xs text-white
+               font-semibold transition-all duration-150 active:scale-95 shrink-0"
+        title="Create new agent"
+      >
+        + Agent
+      </button>
     </div>
 
     <!-- Agents palette -->
     <div class="px-4 pb-3">
       <h3 class="text-[11px] font-semibold text-gray-500 uppercase tracking-wider px-1 mb-2">Agents</h3>
-      <div class="space-y-1">
+      <div class="space-y-1 max-h-[200px] overflow-y-auto">
         {#each availableBlocks as block}
           <!-- svelte-ignore a11y_no_static_element_interactions -->
           <div
@@ -320,22 +418,59 @@
             tabindex="0"
             onclick={() => addBlock(block)}
             onkeydown={(e) => e.key === 'Enter' && addBlock(block)}
-            class="flex items-center gap-2.5 px-3 py-2.5 rounded-lg bg-gray-800/60
+            class="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-gray-800/60
                    hover:bg-gray-800 text-sm text-gray-200 cursor-grab active:cursor-grabbing
                    select-none border border-gray-700/50 hover:border-gray-600
                    transition-all duration-150 hover:shadow-md hover:shadow-black/10"
           >
             <span class="w-2 h-2 rounded-full bg-guild-400/60"></span>
-            <span class="font-medium flex-1 truncate">{block.name}</span>
-            <span class="text-[10px] text-gray-500 uppercase tracking-wider font-medium">{block.role || 'agent'}</span>
+            <span class="font-medium flex-1 truncate text-xs">{block.name}</span>
+            <span class="text-[9px] text-gray-500 uppercase tracking-wider font-medium">{block.role || 'agent'}</span>
           </div>
         {/each}
       </div>
     </div>
 
+    <!-- Custom blocks (composites) -->
+    {#if customBlocks.length > 0}
+      <div class="px-4 py-3 border-t border-gray-800">
+        <h3 class="text-[11px] font-semibold text-gray-500 uppercase tracking-wider px-1 mb-2">Saved Blocks</h3>
+        <div class="space-y-1">
+          {#each customBlocks as block, i}
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <div class="flex items-center gap-1">
+              <div
+                draggable="true"
+                ondragstart={(e) => onDragStart(e, block)}
+                role="button"
+                tabindex="0"
+                onclick={() => addBlock(block)}
+                onkeydown={(e) => e.key === 'Enter' && addBlock(block)}
+                class="flex-1 flex items-center gap-2 px-3 py-2 rounded-lg
+                       bg-purple-900/20 hover:bg-purple-900/40 text-sm text-purple-300
+                       cursor-grab active:cursor-grabbing select-none
+                       border border-purple-800/40 hover:border-purple-700/60 transition-all duration-150"
+              >
+                <span class="text-[10px]">&#9646;&#9646;</span>
+                <span class="font-medium flex-1 truncate text-xs">{block.name}</span>
+                <span class="text-[9px] text-purple-500">{block.agentCount}x</span>
+              </div>
+              <button
+                onclick={() => deleteCustomBlock(i)}
+                class="p-1.5 rounded text-gray-600 hover:text-red-400 transition-colors"
+                title="Remove block"
+              >
+                <span class="text-xs">&times;</span>
+              </button>
+            </div>
+          {/each}
+        </div>
+      </div>
+    {/if}
+
     <!-- Preset flows -->
     <div class="px-4 py-3 border-t border-gray-800">
-      <h3 class="text-[11px] font-semibold text-gray-500 uppercase tracking-wider px-1 mb-2">Preset Flows</h3>
+      <h3 class="text-[11px] font-semibold text-gray-500 uppercase tracking-wider px-1 mb-2">Presets</h3>
       <button
         onclick={loadPresetFlow}
         class="w-full flex items-center gap-2 text-left px-3 py-2.5 rounded-lg
@@ -344,12 +479,12 @@
                border border-guild-800/50 hover:border-guild-700/70 transition-all duration-150"
       >
         <span class="text-xs">&#9654;</span>
-        <span class="font-medium">Full Development</span>
+        <span class="font-medium text-xs">Full Development</span>
         <span class="ml-auto text-[9px] text-gray-500">6 agents</span>
       </button>
     </div>
 
-    <!-- Saved teams -->
+    <!-- Saved flows -->
     <div class="px-4 py-3 border-t border-gray-800">
       <h3 class="text-[11px] font-semibold text-gray-500 uppercase tracking-wider px-1 mb-2">Saved Flows</h3>
       <div class="space-y-1">
@@ -361,7 +496,7 @@
                    border border-transparent hover:border-gray-700 transition-all duration-150"
           >
             <span class="text-[10px] text-gray-600">&#9654;</span>
-            {team.name}
+            <span class="text-xs">{team.name}</span>
           </button>
         {/each}
         {#if teams.length === 0}
@@ -373,8 +508,19 @@
     <!-- Spacer -->
     <div class="flex-1"></div>
 
-    <!-- Save section -->
-    <div class="px-4 py-4 border-t border-gray-800 bg-gray-900/30">
+    <!-- Bottom actions -->
+    <div class="px-4 py-4 border-t border-gray-800 bg-gray-900/30 space-y-3">
+      <!-- Save as block (multi-select) -->
+      <button
+        onclick={openSaveBlockPanel}
+        class="w-full px-3 py-2 rounded-lg bg-purple-900/30 hover:bg-purple-900/50 text-xs text-purple-300
+               hover:text-purple-200 border border-purple-800/40 hover:border-purple-700/60
+               transition-all duration-150 font-medium"
+      >
+        Save Selection as Block
+      </button>
+
+      <!-- Save flow -->
       <div class="flex gap-2">
         <input
           type="text"
@@ -394,13 +540,12 @@
         </button>
       </div>
       {#if saveMessage}
-        <p class="text-xs mt-2 px-1 {saveMessage.startsWith('Error') ? 'text-red-400' : 'text-green-400'}">
+        <p class="text-xs px-1 {saveMessage.startsWith('Error') || saveMessage.startsWith('Select') ? 'text-red-400' : 'text-green-400'}">
           {saveMessage}
         </p>
       {/if}
 
-      <!-- Actions -->
-      <div class="flex gap-2 mt-3">
+      <div class="flex gap-2">
         <button
           onclick={deleteSelected}
           class="flex-1 px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-xs text-gray-400
@@ -419,7 +564,7 @@
     </div>
   </div>
 
-  <!-- Canvas: flow editor -->
+  <!-- Canvas -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
     class="flex-1 relative"
@@ -440,11 +585,11 @@
           <div class="text-3xl text-gray-700 mb-3">&#9830;</div>
           <p class="text-gray-300 font-medium">Build your agent workflow</p>
           <p class="text-xs text-gray-500 mt-2 leading-relaxed">
-            Drag agents from the sidebar, connect them with edges,
-            then click a node to attach a verifier loop.
+            Drag agents from the sidebar, connect them, then click to edit.
+            Multi-select nodes to save as a reusable block.
           </p>
           <p class="text-xs text-guild-500 mt-3 font-medium">
-            Or try the "Full Development" preset &rarr;
+            Or try "Full Development" preset &rarr;
           </p>
         </div>
       </div>
@@ -459,6 +604,7 @@
       onnodeclick={onNodeClick}
       deleteKey="Backspace"
       colorMode="dark"
+      selectionMode="partial"
     >
       <Controls position="bottom-right" />
       <Background gap={24} size={1} />
@@ -466,86 +612,221 @@
     </SvelteFlow>
   </div>
 
-  <!-- Right panel: node config (verifier decorator) -->
-  {#if showNodeConfig && selectedNode}
-    <div class="w-72 bg-gray-900/80 backdrop-blur-sm border-l border-gray-800 p-5 flex flex-col gap-4 overflow-y-auto">
-      <div>
-        <h3 class="text-sm font-semibold text-gray-100">Configure Agent</h3>
-        <p class="text-xs text-gray-500 mt-0.5">{selectedNode.data.blockName}</p>
-      </div>
+  <!-- Right panel -->
+  {#if panelMode !== 'none'}
+    <div class="w-80 bg-gray-900/80 backdrop-blur-sm border-l border-gray-800 flex flex-col overflow-y-auto">
+      <!-- Create Agent -->
+      {#if panelMode === 'create'}
+        <div class="p-5 space-y-4">
+          <div>
+            <h3 class="text-sm font-semibold text-gray-100">Create Agent</h3>
+            <p class="text-xs text-gray-500 mt-0.5">Define a new agent and add it to the canvas</p>
+          </div>
 
-      <div class="bg-gray-800/60 rounded-xl p-4 border border-gray-700/50 space-y-3">
-        <h4 class="text-[11px] font-semibold text-orange-400 uppercase tracking-wider flex items-center gap-1.5">
-          <span>&#8635;</span> Verifier Decorator
-        </h4>
-        <p class="text-[11px] text-gray-500 leading-relaxed">
-          Attach a verifier that loops this agent until a condition is met.
-        </p>
+          <div class="space-y-3">
+            <div>
+              <label for="create-name" class="text-[11px] text-gray-400 font-medium block mb-1">Name</label>
+              <input id="create-name" type="text" bind:value={newAgentName} placeholder="e.g. api_designer"
+                class="w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-sm text-gray-200
+                       placeholder-gray-600 focus:outline-none focus:border-guild-500 focus:ring-1 focus:ring-guild-500/20" />
+            </div>
 
-        <div>
-          <label for="verifier-name" class="text-[11px] text-gray-400 font-medium block mb-1">Verifier agent</label>
-          <input
-            id="verifier-name"
-            type="text"
-            bind:value={verifierName}
-            placeholder="e.g. requirements_verifier"
-            class="w-full px-3 py-2 rounded-lg bg-gray-900 border border-gray-700 text-sm text-gray-200
-                   placeholder-gray-600 focus:outline-none focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/20"
-          />
-        </div>
+            <div>
+              <label for="create-role" class="text-[11px] text-gray-400 font-medium block mb-1">Role</label>
+              <select id="create-role" bind:value={newAgentRole}
+                class="w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-sm text-gray-200
+                       focus:outline-none focus:border-guild-500">
+                {#each roles as r}
+                  <option value={r}>{r}</option>
+                {/each}
+              </select>
+            </div>
 
-        <div>
-          <label for="loop-condition" class="text-[11px] text-gray-400 font-medium block mb-1">Loop until</label>
-          <input
-            id="loop-condition"
-            type="text"
-            bind:value={loopCondition}
-            placeholder="e.g. verifier approves"
-            class="w-full px-3 py-2 rounded-lg bg-gray-900 border border-gray-700 text-sm text-gray-200
-                   placeholder-gray-600 focus:outline-none focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/20"
-          />
-        </div>
+            <div>
+              <label for="create-model" class="text-[11px] text-gray-400 font-medium block mb-1">Model</label>
+              <select id="create-model" bind:value={newAgentModel}
+                class="w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-sm text-gray-200
+                       focus:outline-none focus:border-guild-500">
+                {#each models as m}
+                  <option value={m}>{m}</option>
+                {/each}
+              </select>
+            </div>
 
-        <div>
-          <label for="max-iterations" class="text-[11px] text-gray-400 font-medium block mb-1">Max iterations</label>
-          <input
-            id="max-iterations"
-            type="number"
-            bind:value={maxIterations}
-            min="1"
-            max="20"
-            class="w-full px-3 py-2 rounded-lg bg-gray-900 border border-gray-700 text-sm text-gray-200
-                   focus:outline-none focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/20"
-          />
-        </div>
+            <div>
+              <label for="create-instructions" class="text-[11px] text-gray-400 font-medium block mb-1">Instructions</label>
+              <textarea id="create-instructions" bind:value={newAgentInstructions} rows="4"
+                placeholder="What should this agent do?"
+                class="w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-sm text-gray-200
+                       placeholder-gray-600 focus:outline-none focus:border-guild-500 focus:ring-1 focus:ring-guild-500/20
+                       resize-none"></textarea>
+            </div>
+          </div>
 
-        <div class="flex gap-2 pt-1">
-          <button
-            onclick={applyVerifier}
-            class="flex-1 px-3 py-2 rounded-lg bg-orange-600/80 hover:bg-orange-500 text-sm text-white
-                   font-medium transition-all duration-150 active:scale-95"
-          >
-            Apply
-          </button>
-          {#if selectedNode.data.verifier}
-            <button
-              onclick={removeVerifier}
-              class="px-3 py-2 rounded-lg bg-gray-800 hover:bg-red-900/60 text-sm text-gray-400
-                     hover:text-red-300 border border-gray-700 transition-all duration-150"
-            >
-              Remove
+          <div class="flex gap-2 pt-2">
+            <button onclick={createAgent}
+              class="flex-1 px-4 py-2.5 rounded-lg bg-guild-600 hover:bg-guild-500 text-sm text-white
+                     font-medium transition-all duration-150 active:scale-95">
+              Create & Add
             </button>
-          {/if}
+            <button onclick={() => { panelMode = 'none'; }}
+              class="px-4 py-2.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-sm text-gray-400
+                     border border-gray-700 transition-all duration-150">
+              Cancel
+            </button>
+          </div>
         </div>
-      </div>
+      {/if}
 
-      <button
-        onclick={() => { showNodeConfig = false; selectedNode = null; }}
-        class="mt-auto px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-xs text-gray-400
-               hover:text-gray-200 border border-gray-700 transition-all duration-150 text-center"
-      >
-        Close
-      </button>
+      <!-- Edit Agent -->
+      {#if panelMode === 'edit' && selectedNode}
+        <div class="p-5 space-y-4">
+          <div>
+            <h3 class="text-sm font-semibold text-gray-100">Edit Agent</h3>
+            <p class="text-[11px] text-gray-500 mt-0.5">Node: {selectedNode.id}</p>
+          </div>
+
+          <div class="space-y-3">
+            <div>
+              <label for="edit-name" class="text-[11px] text-gray-400 font-medium block mb-1">Name</label>
+              <input id="edit-name" type="text" bind:value={editName}
+                class="w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-sm text-gray-200
+                       focus:outline-none focus:border-guild-500 focus:ring-1 focus:ring-guild-500/20" />
+            </div>
+
+            <div>
+              <label for="edit-role" class="text-[11px] text-gray-400 font-medium block mb-1">Role</label>
+              <select id="edit-role" bind:value={editRole}
+                class="w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-sm text-gray-200
+                       focus:outline-none focus:border-guild-500">
+                {#each roles as r}
+                  <option value={r}>{r}</option>
+                {/each}
+              </select>
+            </div>
+
+            <div>
+              <label for="edit-model" class="text-[11px] text-gray-400 font-medium block mb-1">Model</label>
+              <select id="edit-model" bind:value={editModel}
+                class="w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-sm text-gray-200
+                       focus:outline-none focus:border-guild-500">
+                {#each models as m}
+                  <option value={m}>{m}</option>
+                {/each}
+              </select>
+            </div>
+
+            <div>
+              <label for="edit-instructions" class="text-[11px] text-gray-400 font-medium block mb-1">Instructions</label>
+              <textarea id="edit-instructions" bind:value={editInstructions} rows="4"
+                placeholder="Agent instructions..."
+                class="w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-sm text-gray-200
+                       placeholder-gray-600 focus:outline-none focus:border-guild-500 focus:ring-1 focus:ring-guild-500/20
+                       resize-none"></textarea>
+            </div>
+          </div>
+
+          <!-- Verifier section -->
+          <div class="bg-gray-800/60 rounded-xl p-4 border border-gray-700/50 space-y-3">
+            <h4 class="text-[11px] font-semibold text-orange-400 uppercase tracking-wider flex items-center gap-1.5">
+              <span>&#8635;</span> Verification Loop
+            </h4>
+
+            <div>
+              <label for="edit-verifier" class="text-[11px] text-gray-400 font-medium block mb-1">Verifier agent</label>
+              <input id="edit-verifier" type="text" bind:value={editVerifier}
+                placeholder="e.g. requirements_verifier"
+                class="w-full px-3 py-2 rounded-lg bg-gray-900 border border-gray-700 text-sm text-gray-200
+                       placeholder-gray-600 focus:outline-none focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/20" />
+            </div>
+
+            <div>
+              <label for="edit-loop" class="text-[11px] text-gray-400 font-medium block mb-1">Loop until</label>
+              <input id="edit-loop" type="text" bind:value={editLoopUntil}
+                placeholder="e.g. verifier approves"
+                class="w-full px-3 py-2 rounded-lg bg-gray-900 border border-gray-700 text-sm text-gray-200
+                       placeholder-gray-600 focus:outline-none focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/20" />
+            </div>
+
+            <div>
+              <label for="edit-max-iter" class="text-[11px] text-gray-400 font-medium block mb-1">Max iterations</label>
+              <input id="edit-max-iter" type="number" bind:value={editMaxIterations} min="1" max="20"
+                class="w-full px-3 py-2 rounded-lg bg-gray-900 border border-gray-700 text-sm text-gray-200
+                       focus:outline-none focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/20" />
+            </div>
+          </div>
+
+          <div class="flex gap-2 pt-2">
+            <button onclick={applyEdit}
+              class="flex-1 px-4 py-2.5 rounded-lg bg-guild-600 hover:bg-guild-500 text-sm text-white
+                     font-medium transition-all duration-150 active:scale-95">
+              Apply
+            </button>
+            <button onclick={deleteNode}
+              class="px-4 py-2.5 rounded-lg bg-red-900/50 hover:bg-red-900/80 text-sm text-red-300
+                     border border-red-800/50 transition-all duration-150">
+              Delete
+            </button>
+            <button onclick={() => { panelMode = 'none'; selectedNode = null; }}
+              class="px-4 py-2.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-sm text-gray-400
+                     border border-gray-700 transition-all duration-150">
+              Close
+            </button>
+          </div>
+        </div>
+      {/if}
+
+      <!-- Save as Block -->
+      {#if panelMode === 'save-block'}
+        <div class="p-5 space-y-4">
+          <div>
+            <h3 class="text-sm font-semibold text-gray-100">Save as Block</h3>
+            <p class="text-xs text-gray-500 mt-0.5">
+              Package {getSelectedNodes().length} selected agents as a reusable block
+            </p>
+          </div>
+
+          <div class="bg-purple-900/20 rounded-lg p-3 border border-purple-800/30">
+            <p class="text-[11px] text-purple-300 font-medium mb-1">Included agents:</p>
+            <div class="flex flex-wrap gap-1">
+              {#each getSelectedNodes() as node}
+                <span class="px-2 py-0.5 rounded bg-purple-900/40 text-[10px] text-purple-200 border border-purple-800/40">
+                  {node.data.blockName}
+                </span>
+              {/each}
+            </div>
+          </div>
+
+          <div class="space-y-3">
+            <div>
+              <label for="block-name" class="text-[11px] text-gray-400 font-medium block mb-1">Block name</label>
+              <input id="block-name" type="text" bind:value={blockName} placeholder="e.g. review-pipeline"
+                class="w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-sm text-gray-200
+                       placeholder-gray-600 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/20" />
+            </div>
+
+            <div>
+              <label for="block-desc" class="text-[11px] text-gray-400 font-medium block mb-1">Description</label>
+              <input id="block-desc" type="text" bind:value={blockDescription} placeholder="What does this block do?"
+                class="w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-sm text-gray-200
+                       placeholder-gray-600 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/20" />
+            </div>
+          </div>
+
+          <div class="flex gap-2 pt-2">
+            <button onclick={saveAsBlock}
+              class="flex-1 px-4 py-2.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-sm text-white
+                     font-medium transition-all duration-150 active:scale-95">
+              Save Block
+            </button>
+            <button onclick={() => { panelMode = 'none'; }}
+              class="px-4 py-2.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-sm text-gray-400
+                     border border-gray-700 transition-all duration-150">
+              Cancel
+            </button>
+          </div>
+        </div>
+      {/if}
     </div>
   {/if}
 </div>
@@ -583,5 +864,10 @@
   }
   :global(.svelte-flow__attribution) {
     display: none !important;
+  }
+  :global(.svelte-flow__selection) {
+    background: rgba(147, 51, 234, 0.08) !important;
+    border: 1px solid rgba(147, 51, 234, 0.4) !important;
+    border-radius: 0.5rem !important;
   }
 </style>
