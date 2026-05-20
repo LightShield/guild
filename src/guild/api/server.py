@@ -229,6 +229,106 @@ def _register_blocks_endpoint(app: Any) -> None:
         except (ImportError, OSError):
             return []
 
+    @app.get("/api/blocks/{block_name}")  # type: ignore[untyped-decorator]
+    async def get_block(block_name: str) -> dict[str, Any]:
+        """Get a single block definition by name."""
+        from fastapi import HTTPException
+        from guild.blocks.registry import BlockRegistry
+
+        registry = BlockRegistry()
+        block = registry.get_block(block_name)
+        if block is None:
+            raise HTTPException(status_code=HTTP_NOT_FOUND, detail=f"Block '{block_name}' not found")
+        return {
+            "name": block.name,
+            "role": block.role,
+            "version": block.version,
+            "system_prompt": block.system_prompt,
+            "tools": block.tools,
+            "max_retries": block.max_retries,
+            "inputs": [{"name": p.name, "type_tag": p.type_tag, "description": p.description} for p in block.inputs],
+            "outputs": [{"name": p.name, "type_tag": p.type_tag, "description": p.description} for p in block.outputs],
+        }
+
+    @app.post("/api/blocks")  # type: ignore[untyped-decorator]
+    async def create_block(request: Any) -> dict[str, str]:
+        """Create a new block definition (writes TOML to .guild/blocks/)."""
+        from fastapi import HTTPException, Request as FRequest
+
+        body = await request.json()
+        name: str = body.get("name", "")
+        if not name:
+            raise HTTPException(status_code=HTTP_BAD_REQUEST, detail="Block name is required")
+
+        blocks_dir = guild_dir / "blocks"
+        blocks_dir.mkdir(exist_ok=True)
+        block_path = blocks_dir / f"{name}.toml"
+
+        role: str = body.get("role", "agent")
+        system_prompt: str = body.get("system_prompt", body.get("instructions", ""))
+        tools: list[str] = body.get("tools", [])
+        max_retries: int = body.get("max_retries", 1)
+        inputs: list[dict[str, str]] = body.get("inputs", [{"name": "input", "type_tag": "any"}])
+        outputs: list[dict[str, str]] = body.get("outputs", [{"name": "output", "type_tag": "any"}])
+
+        lines = [
+            "[block]",
+            f'name = "{name}"',
+            f'role = "{role}"',
+            'version = "1.0.0"',
+            f'system_prompt = """{system_prompt}"""',
+            f"tools = {tools!r}",
+            f"max_retries = {max_retries}",
+        ]
+
+        for port in inputs:
+            lines.append("")
+            lines.append("[[block.inputs]]")
+            lines.append(f'name = "{port.get("name", "input")}"')
+            lines.append(f'type_tag = "{port.get("type_tag", "any")}"')
+
+        for port in outputs:
+            lines.append("")
+            lines.append("[[block.outputs]]")
+            lines.append(f'name = "{port.get("name", "output")}"')
+            lines.append(f'type_tag = "{port.get("type_tag", "any")}"')
+
+        # Composite block: store children and internal edges
+        children: list[dict[str, Any]] = body.get("children", [])
+        internal_edges: list[dict[str, str]] = body.get("internal_edges", [])
+        if children:
+            lines.append("")
+            lines.append("[block.composition]")
+            lines.append(f'entry_block = "{children[0].get("name", children[0].get("id", ""))}"')
+            lines.append("")
+            lines.append("[block.composition.blocks]")
+            for child in children:
+                child_name = child.get("name", child.get("id", ""))
+                child_type = child.get("type", child.get("role", "agent"))
+                lines.append(f'{child_name} = "{child_type}"')
+            for edge in internal_edges:
+                lines.append("")
+                lines.append("[[block.composition.connections]]")
+                lines.append(f'source_block = "{edge.get("sourceChildId", "")}"')
+                lines.append(f'source_port = "{edge.get("sourcePortId", "output")}"')
+                lines.append(f'target_block = "{edge.get("targetChildId", "")}"')
+                lines.append(f'target_port = "{edge.get("targetPortId", "input")}"')
+
+        lines.append("")
+        block_path.write_text("\n".join(lines))
+        return {"status": "ok", "name": name}
+
+    @app.delete("/api/blocks/{block_name}")  # type: ignore[untyped-decorator]
+    async def delete_block(block_name: str) -> dict[str, str]:
+        """Delete a block definition."""
+        from fastapi import HTTPException
+
+        block_path = guild_dir / "blocks" / f"{block_name}.toml"
+        if not block_path.exists():
+            raise HTTPException(status_code=HTTP_NOT_FOUND, detail=f"Block '{block_name}' not found")
+        block_path.unlink()
+        return {"status": "ok", "name": block_name}
+
 
 def _register_teams_endpoints(app: Any, guild_dir: Path) -> None:
     """Register the GET/POST /api/teams routes."""
@@ -236,15 +336,60 @@ def _register_teams_endpoints(app: Any, guild_dir: Path) -> None:
 
     @app.get("/api/teams")  # type: ignore[untyped-decorator]
     async def list_teams() -> list[dict[str, str]]:
-        """List configured team compositions."""
-        try:
-            from guild.config.loader import load_config
+        """List configured team compositions from .guild/teams/*.toml."""
+        results = []
+        teams_dir = guild_dir / "teams"
+        if teams_dir.is_dir():
+            for f in sorted(teams_dir.glob("*.toml")):
+                results.append({"name": f.stem})
+        if not results:
+            try:
+                from guild.config.loader import load_config
+                config = load_config(guild_dir)
+                teams = getattr(config, "teams", None) or []
+                results = [{"name": t.name} for t in teams]
+            except (ImportError, OSError, AttributeError):
+                pass
+        return results
 
-            config = load_config(guild_dir)
-            teams = getattr(config, "teams", None) or []
-            return [{"name": t.name} for t in teams]
-        except (ImportError, OSError, AttributeError):
-            return []
+    @app.get("/api/teams/{team_name}")  # type: ignore[untyped-decorator]
+    async def get_team(team_name: str) -> dict[str, Any]:
+        """Get a team definition by name (reads TOML)."""
+        from fastapi import HTTPException
+
+        team_path = guild_dir / "teams" / f"{team_name}.toml"
+        if not team_path.exists():
+            raise HTTPException(status_code=HTTP_NOT_FOUND, detail=f"Team '{team_name}' not found")
+        content = team_path.read_text()
+        try:
+            import tomllib
+            data = tomllib.loads(content)
+        except (ImportError, ValueError):
+            try:
+                import tomli as tomllib  # type: ignore[no-redef]
+                data = tomllib.loads(content)
+            except (ImportError, ValueError):
+                return {"name": team_name, "raw": content}
+        team = data.get("team", {})
+        return {
+            "name": team.get("name", team_name),
+            "description": team.get("description", ""),
+            "entry_block": team.get("entry_block", ""),
+            "blocks": team.get("blocks", {}),
+            "connections": team.get("connections", []),
+            "ui": team.get("ui", {}),
+        }
+
+    @app.delete("/api/teams/{team_name}")  # type: ignore[untyped-decorator]
+    async def delete_team(team_name: str) -> dict[str, str]:
+        """Delete a team definition."""
+        from fastapi import HTTPException
+
+        team_path = guild_dir / "teams" / f"{team_name}.toml"
+        if not team_path.exists():
+            raise HTTPException(status_code=HTTP_NOT_FOUND, detail=f"Team '{team_name}' not found")
+        team_path.unlink()
+        return {"status": "ok", "name": team_name}
 
     @app.post("/api/teams")  # type: ignore[untyped-decorator]
     async def save_team(request: Request) -> dict[str, str]:

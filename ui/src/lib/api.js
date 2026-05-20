@@ -105,6 +105,38 @@ export async function saveTeam(name, nodes, edges) {
 	});
 }
 
+/**
+ * Create a new block definition on the backend.
+ * Writes a TOML file to .guild/blocks/{name}.toml
+ */
+export async function createBlock(block) {
+	return request('/blocks', {
+		method: 'POST',
+		body: JSON.stringify(block),
+	});
+}
+
+/**
+ * Delete a block definition.
+ */
+export async function deleteBlock(name) {
+	return request(`/blocks/${name}`, { method: 'DELETE' });
+}
+
+/**
+ * Get full team definition by name.
+ */
+export async function fetchTeam(name) {
+	return request(`/teams/${name}`);
+}
+
+/**
+ * Delete a team.
+ */
+export async function deleteTeam(name) {
+	return request(`/teams/${name}`, { method: 'DELETE' });
+}
+
 export async function createTask(description) {
 	return request('/tasks', {
 		method: 'POST',
