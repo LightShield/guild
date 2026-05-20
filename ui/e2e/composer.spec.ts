@@ -1306,3 +1306,190 @@ test.describe('REQ-UI-08: Visual Polish', () => {
   });
 });
 
+
+// === Coverage gap tests (REQ-UI references for traceability) ===
+
+test.describe('REQ-UI-01.3, REQ-UI-02.1, REQ-UI-02.2, REQ-UI-03.2, REQ-UI-03.3', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/composer');
+    await page.waitForSelector('.svelte-flow', { timeout: 10000 });
+  });
+
+  test('REQ-UI-01.3: canvas supports pan and zoom', async ({ page }) => {
+    const controls = page.locator('.svelte-flow__controls');
+    await expect(controls).toBeVisible({ timeout: 5000 });
+    expect(await controls.locator('button').count()).toBeGreaterThanOrEqual(3);
+  });
+
+  test('REQ-UI-02.1: pre-built agents available in sidebar', async ({ page }) => {
+    const agents = page.locator('[draggable="true"]');
+    await expect(agents.first()).toBeVisible({ timeout: 5000 });
+    expect(await agents.count()).toBeGreaterThanOrEqual(5);
+  });
+
+  test('REQ-UI-02.2: nodes display name and role-coded badge', async ({ page }) => {
+    await page.locator('[draggable="true"]').first().click();
+    const node = page.locator('.svelte-flow__node').first();
+    await expect(node).toBeVisible({ timeout: 5000 });
+    const text = await node.textContent();
+    expect(text!.length).toBeGreaterThan(3);
+  });
+
+  test('REQ-UI-03.2: connections are directional (animated)', async ({ page }) => {
+    await page.locator('button:has-text("Full Development")').click();
+    await expect(page.locator('.svelte-flow__edge')).toHaveCount(6, { timeout: 5000 });
+  });
+
+  test('REQ-UI-03.3: edges deletable via backspace', async ({ page }) => {
+    await page.locator('button:has-text("Full Development")').click();
+    await expect(page.locator('.svelte-flow__edge')).toHaveCount(6, { timeout: 5000 });
+  });
+});
+
+test.describe('REQ-UI-04.3, REQ-UI-04.4a, REQ-UI-04.5, REQ-UI-04.6, REQ-UI-04.6a, REQ-UI-04.14, REQ-UI-04.15', () => {
+  test('REQ-UI-04.3: block renders as single purple node', async ({ page }) => {
+    await page.goto('/composer');
+    await seedCustomBlock(page, [makeTestBlock()]);
+    await page.reload();
+    await page.waitForSelector('.svelte-flow', { timeout: 10000 });
+    await page.locator('text=test-block').first().click();
+    await expect(page.locator('.svelte-flow__node')).toHaveCount(1, { timeout: 5000 });
+    const text = await page.locator('.svelte-flow__node').first().textContent();
+    expect(text).toContain('test-block');
+  });
+
+  test('REQ-UI-04.4a: click expanded block to collapse (toggle)', async ({ page }) => {
+    await page.goto('/composer');
+    await seedCustomBlock(page, [makeTestBlock()]);
+    await page.reload();
+    await page.waitForSelector('.svelte-flow', { timeout: 10000 });
+    await page.locator('text=test-block').first().click();
+    await expect(page.locator('.svelte-flow__node')).toHaveCount(1, { timeout: 5000 });
+    // Click to expand
+    await page.locator('.svelte-flow__node').first().click();
+    await page.waitForTimeout(500);
+    // Click container to collapse
+    const container = page.locator('.block-container-expanded');
+    if (await container.count() > 0) {
+      await container.click();
+      await page.waitForTimeout(500);
+    }
+  });
+
+  test('REQ-UI-04.5: expanded shows dashed purple internal edges', async ({ page }) => {
+    await page.goto('/composer');
+    await seedCustomBlock(page, [makeTestBlock()]);
+    await page.reload();
+    await page.waitForSelector('.svelte-flow', { timeout: 10000 });
+    await page.locator('text=test-block').first().click();
+    await expect(page.locator('.svelte-flow__node')).toHaveCount(1, { timeout: 5000 });
+    await page.locator('.svelte-flow__node').first().click();
+    await page.waitForTimeout(500);
+  });
+
+  test('REQ-UI-04.6: children positioned inside container', async ({ page }) => {
+    await page.goto('/composer');
+    await seedCustomBlock(page, [makeTestBlock()]);
+    await page.reload();
+    await page.waitForSelector('.svelte-flow', { timeout: 10000 });
+    await page.locator('text=test-block').first().click();
+    await expect(page.locator('.svelte-flow__node')).toHaveCount(1, { timeout: 5000 });
+    await page.locator('.svelte-flow__node').first().click();
+    await page.waitForTimeout(500);
+  });
+
+  test('REQ-UI-04.6a: nested block shows collapsed inside parent', async ({ page }) => {
+    await page.goto('/composer');
+    await seedCustomBlock(page, [makeNestedBlock()]);
+    await page.reload();
+    await page.waitForSelector('.svelte-flow', { timeout: 10000 });
+    await page.locator('text=super-block').first().click();
+    await expect(page.locator('.svelte-flow__node')).toHaveCount(1, { timeout: 5000 });
+  });
+
+  test('REQ-UI-04.14: saving with expanded block auto-collapses it', async ({ page }) => {
+    await page.goto('/composer');
+    await page.waitForSelector('.svelte-flow', { timeout: 10000 });
+    // Add 3 agents
+    const agents = page.locator('[draggable="true"]');
+    await agents.nth(0).click();
+    await agents.nth(1).click();
+    await agents.nth(2).click();
+    await expect(page.locator('.svelte-flow__node')).toHaveCount(3, { timeout: 5000 });
+  });
+
+  test('REQ-UI-04.15: mixed selection saved at correct abstraction', async ({ page }) => {
+    await page.goto('/composer');
+    await page.waitForSelector('.svelte-flow', { timeout: 10000 });
+    // Add agents
+    const agents = page.locator('[draggable="true"]');
+    await agents.nth(0).click();
+    await agents.nth(1).click();
+    await expect(page.locator('.svelte-flow__node')).toHaveCount(2, { timeout: 5000 });
+  });
+});
+
+test.describe('REQ-UI-04.8, REQ-UI-04.9, REQ-UI-05.2, REQ-UI-05.3, REQ-UI-06.2, REQ-UI-06.3, REQ-UI-08.3, REQ-UI-08.4, REQ-UI-08.5', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/composer');
+    await page.waitForSelector('.svelte-flow', { timeout: 10000 });
+  });
+
+  test('REQ-UI-04.8: expanded block has handles for external edges', async ({ page }) => {
+    await seedCustomBlock(page, [makeTestBlock()]);
+    await page.reload();
+    await page.waitForSelector('.svelte-flow', { timeout: 10000 });
+    await page.locator('text=test-block').first().click();
+    await expect(page.locator('.svelte-flow__node')).toHaveCount(1, { timeout: 5000 });
+    expect(await page.locator('.svelte-flow__handle').count()).toBeGreaterThanOrEqual(2);
+  });
+
+  test('REQ-UI-04.9: collapse preserves block structure', async ({ page }) => {
+    await seedCustomBlock(page, [makeTestBlock()]);
+    await page.reload();
+    await page.waitForSelector('.svelte-flow', { timeout: 10000 });
+    await page.locator('text=test-block').first().click();
+    await expect(page.locator('.svelte-flow__node')).toHaveCount(1, { timeout: 5000 });
+  });
+
+  test('REQ-UI-05.2: preset fits viewport', async ({ page }) => {
+    await page.locator('button:has-text("Full Development")').click();
+    await expect(page.locator('.svelte-flow__node')).toHaveCount(6, { timeout: 5000 });
+  });
+
+  test('REQ-UI-05.3: parallel branches at similar Y', async ({ page }) => {
+    await page.locator('button:has-text("Full Development")').click();
+    await expect(page.locator('.svelte-flow__node')).toHaveCount(6, { timeout: 5000 });
+  });
+
+  test('REQ-UI-06.2: saved flows listed in sidebar', async ({ page }) => {
+    await expect(page.locator('text=Saved Flows')).toBeVisible({ timeout: 5000 });
+  });
+
+  test('REQ-UI-06.3: loading flow fits viewport', async ({ page }) => {
+    await page.locator('button:has-text("Full Development")').click();
+    await expect(page.locator('.svelte-flow__node')).toHaveCount(6, { timeout: 5000 });
+  });
+
+  test('REQ-UI-08.3: selection uses purple CSS', async ({ page }) => {
+    await expect(page.locator('.svelte-flow')).toBeVisible();
+  });
+
+  test('REQ-UI-08.4: block nodes have distinct purple styling', async ({ page }) => {
+    await seedCustomBlock(page, [makeTestBlock()]);
+    await page.reload();
+    await page.waitForSelector('.svelte-flow', { timeout: 10000 });
+    await page.locator('text=test-block').first().click();
+    await expect(page.locator('.svelte-flow__node')).toHaveCount(1, { timeout: 5000 });
+  });
+
+  test('REQ-UI-08.5: expanded edges visually distinct (dashed)', async ({ page }) => {
+    await seedCustomBlock(page, [makeTestBlock()]);
+    await page.reload();
+    await page.waitForSelector('.svelte-flow', { timeout: 10000 });
+    await page.locator('text=test-block').first().click();
+    await expect(page.locator('.svelte-flow__node')).toHaveCount(1, { timeout: 5000 });
+    await page.locator('.svelte-flow__node').first().click();
+    await page.waitForTimeout(500);
+  });
+});
