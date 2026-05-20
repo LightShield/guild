@@ -62,6 +62,47 @@
     { name: 'verificator', role: 'verifier', description: 'Final verification gate', instructions: 'You are the final verification gate. Check:\n1. All requirements have been implemented\n2. All tests pass\n3. Code follows project conventions\n4. No security vulnerabilities introduced\n5. Documentation is complete\nIf any check fails, route back to the relevant phase.' },
   ];
 
+  // Built-in templates (REQ-V2-06): pre-wired patterns with slots
+  const builtinTemplates = [
+    {
+      name: 'Verification Loop',
+      description: 'Agent + verifier with feedback loop (max 5 iterations)',
+      role: 'orchestrator',
+      children: [
+        { id: 'doer', name: 'doer', type: 'leaf', role: 'agent', ports: [{ id: 'in', name: 'in', direction: 'input', type_tag: 'any' }, { id: 'out', name: 'out', direction: 'output', type_tag: 'any' }], position: { x: 0, y: 0 }, slot: true, slotLabel: 'Drop agent here' },
+        { id: 'verifier', name: 'verifier', type: 'leaf', role: 'verifier', ports: [{ id: 'in', name: 'in', direction: 'input', type_tag: 'any' }, { id: 'out', name: 'out', direction: 'output', type_tag: 'any' }], position: { x: 250, y: 0 }, slot: true, slotLabel: 'Drop verifier here', slotRequires: 'verifier' },
+      ],
+      internalEdges: [
+        { id: 'doer-verifier', sourceChildId: 'doer', sourcePortId: 'out', targetChildId: 'verifier', targetPortId: 'in' },
+      ],
+      loop: { generator: 'doer', evaluator: 'verifier', maxIterations: 5 },
+    },
+    {
+      name: 'Parallel Split',
+      description: 'Fan-out to N agents, sync at end',
+      role: 'orchestrator',
+      children: [
+        { id: 'branch_a', name: 'branch_a', type: 'leaf', role: 'agent', ports: [{ id: 'in', name: 'in', direction: 'input', type_tag: 'any' }, { id: 'out', name: 'out', direction: 'output', type_tag: 'any' }], position: { x: 0, y: 0 }, slot: true, slotLabel: 'Branch A' },
+        { id: 'branch_b', name: 'branch_b', type: 'leaf', role: 'agent', ports: [{ id: 'in', name: 'in', direction: 'input', type_tag: 'any' }, { id: 'out', name: 'out', direction: 'output', type_tag: 'any' }], position: { x: 0, y: 150 }, slot: true, slotLabel: 'Branch B' },
+      ],
+      internalEdges: [],
+    },
+    {
+      name: 'Sequential Chain',
+      description: 'Linear pipeline: A → B → C',
+      role: 'orchestrator',
+      children: [
+        { id: 'step_1', name: 'step_1', type: 'leaf', role: 'agent', ports: [{ id: 'in', name: 'in', direction: 'input', type_tag: 'any' }, { id: 'out', name: 'out', direction: 'output', type_tag: 'any' }], position: { x: 0, y: 0 }, slot: true, slotLabel: 'Step 1' },
+        { id: 'step_2', name: 'step_2', type: 'leaf', role: 'agent', ports: [{ id: 'in', name: 'in', direction: 'input', type_tag: 'any' }, { id: 'out', name: 'out', direction: 'output', type_tag: 'any' }], position: { x: 250, y: 0 }, slot: true, slotLabel: 'Step 2' },
+        { id: 'step_3', name: 'step_3', type: 'leaf', role: 'agent', ports: [{ id: 'in', name: 'in', direction: 'input', type_tag: 'any' }, { id: 'out', name: 'out', direction: 'output', type_tag: 'any' }], position: { x: 500, y: 0 }, slot: true, slotLabel: 'Step 3' },
+      ],
+      internalEdges: [
+        { id: 'step1-step2', sourceChildId: 'step_1', sourcePortId: 'out', targetChildId: 'step_2', targetPortId: 'in' },
+        { id: 'step2-step3', sourceChildId: 'step_2', sourcePortId: 'out', targetChildId: 'step_3', targetPortId: 'in' },
+      ],
+    },
+  ];
+
   onMount(async () => {
     try { availableBlocks = await fetchBlocks(); } catch { availableBlocks = []; }
     try { teams = await fetchTeams(); } catch { teams = []; }
@@ -883,6 +924,32 @@
         </div>
       </div>
     {/if}
+
+    <!-- Templates (REQ-V2-06) -->
+    <div class="px-4 py-3 border-t border-gray-800">
+      <h3 class="text-[11px] font-semibold text-gray-500 uppercase tracking-wider px-1 mb-2">Templates</h3>
+      <div class="space-y-1">
+        {#each builtinTemplates as template}
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <div
+            draggable="true"
+            ondragstart={(e) => onDragStart(e, { ...template, composite: true, nodes: template.children, edges: template.internalEdges })}
+            role="button"
+            tabindex="0"
+            onclick={() => addBlockFromSidebar({ ...template, composite: true, nodes: template.children, edges: template.internalEdges })}
+            onkeydown={(e) => e.key === 'Enter' && addBlockFromSidebar({ ...template, composite: true, nodes: template.children, edges: template.internalEdges })}
+            class="flex items-center gap-2 px-3 py-2 rounded-lg
+                   bg-orange-900/15 hover:bg-orange-900/30 text-sm text-orange-300 hover:text-orange-200
+                   cursor-grab active:cursor-grabbing select-none
+                   border border-orange-800/30 hover:border-orange-700/50 transition-all duration-150"
+          >
+            <span class="text-[10px]">&#9881;</span>
+            <span class="font-medium flex-1 truncate text-xs">{template.name}</span>
+            <span class="text-[9px] text-orange-600">{template.children.length} slots</span>
+          </div>
+        {/each}
+      </div>
+    </div>
 
     <!-- Preset flows -->
     <div class="px-4 py-3 border-t border-gray-800">
