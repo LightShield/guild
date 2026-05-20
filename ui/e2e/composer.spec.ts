@@ -253,7 +253,7 @@ test.describe('REQ-UI-02: Agent Nodes', () => {
 
   test('AC-UI-02.4.1: clicking a pre-built agent shows its instructions in the edit panel', async ({ page }) => {
     // Add architect from sidebar (may need scrolling in the agent list)
-    const architectItem = page.locator('[draggable="true"]').filter({ hasText: /^architect/ });
+    const architectItem = page.locator('[draggable="true"]').filter({ hasText: 'architect' }).first();
     // Scroll into view if needed
     await architectItem.scrollIntoViewIfNeeded();
     await expect(architectItem).toBeVisible({ timeout: 5000 });
