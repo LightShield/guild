@@ -38,6 +38,10 @@
   let editRole = $state('');
   let editModel = $state('');
   let editInstructions = $state('');
+  let editTools = $state('');
+  let editMaxRetries = $state(1);
+  let editPermission = $state('ask');
+  let showAdvanced = $state(false);
 
   // ===== Save as block form =====
   let blockName = $state('');
@@ -257,7 +261,8 @@
   // ===== Expand / Collapse (Flat Nodes + Visual Boundaries) =====
 
   const BOUNDARY_PADDING_X = 40;
-  const BOUNDARY_PADDING_TOP = 60;
+  const BOUNDARY_HEADER_HEIGHT = 50;
+  const BOUNDARY_PADDING_TOP = BOUNDARY_HEADER_HEIGHT + 30;
   const BOUNDARY_PADDING_BOTTOM = 40;
   const CHILD_SPACING_X = 240;
   const CHILD_SPACING_Y = 140;
@@ -279,8 +284,8 @@
 
       const col = index % CHILD_COLS;
       const row = Math.floor(index / CHILD_COLS);
-      const relX = child.position?.x ?? (BOUNDARY_PADDING_X + col * CHILD_SPACING_X);
-      const relY = child.position?.y ?? (BOUNDARY_PADDING_TOP + row * CHILD_SPACING_Y);
+      const relX = child.position?.x != null ? child.position.x + BOUNDARY_PADDING_X : (BOUNDARY_PADDING_X + col * CHILD_SPACING_X);
+      const relY = child.position?.y != null ? child.position.y + BOUNDARY_PADDING_TOP : (BOUNDARY_PADDING_TOP + row * CHILD_SPACING_Y);
 
       const isChildComposite = !!(child.children && child.children.length > 0);
       const childPorts = isChildComposite
@@ -380,6 +385,10 @@
       internalEdgeIds,
     });
     expandedBlocks = newExpanded;
+
+    // Track boundary position for drag delta calculation
+    boundaryLastPositions = new Map(boundaryLastPositions);
+    boundaryLastPositions.set(boundaryNodeId, { ...blockPos });
 
     // Remove the block node, add boundary + children
     nodes = [
@@ -487,6 +496,10 @@
     editRole = node.data.role || 'agent';
     editModel = node.data.model || 'gemma4-4b-dense-med';
     editInstructions = node.data.instructions || '';
+    editTools = (node.data.tools || []).join(', ');
+    editMaxRetries = node.data.maxRetries || 1;
+    editPermission = node.data.permission || 'ask';
+    showAdvanced = false;
     panelMode = 'edit';
   }
 
@@ -494,6 +507,41 @@
 
   function onSelectionChange({ nodes: selectedNodes }) {
     selectedNodeIds = new Set((selectedNodes || []).map((n) => n.id));
+  }
+
+  // Track last boundary positions for delta calculation
+  let boundaryLastPositions = $state(new Map());
+
+  function onNodeDrag({ node }) {
+    if (!node || node.type !== 'group-boundary') return;
+
+    // Find which expanded block this boundary belongs to
+    let expandedBlockId = null;
+    for (const [blockId, state] of expandedBlocks) {
+      if (state.boundaryNodeId === node.id) {
+        expandedBlockId = blockId;
+        break;
+      }
+    }
+    if (!expandedBlockId) return;
+
+    const state = expandedBlocks.get(expandedBlockId);
+    const lastPos = boundaryLastPositions.get(node.id) || state.position;
+    const dx = node.position.x - lastPos.x;
+    const dy = node.position.y - lastPos.y;
+
+    if (dx === 0 && dy === 0) return;
+
+    // Move all child nodes by the same delta
+    nodes = nodes.map((n) => {
+      if (state.childNodeIds.includes(n.id)) {
+        return { ...n, position: { x: n.position.x + dx, y: n.position.y + dy } };
+      }
+      return n;
+    });
+
+    boundaryLastPositions = new Map(boundaryLastPositions);
+    boundaryLastPositions.set(node.id, { ...node.position });
   }
 
   // ===== Create Agent =====
@@ -524,6 +572,7 @@
   function applyEdit() {
     if (!selectedNode) return;
     const nodeId = selectedNode.id;
+    const tools = editTools.split(',').map(t => t.trim()).filter(Boolean);
     nodes = nodes.map((n) => {
       if (n.id === nodeId) {
         return {
@@ -534,6 +583,9 @@
             role: editRole,
             model: editModel,
             instructions: editInstructions,
+            tools,
+            maxRetries: editMaxRetries,
+            permission: editPermission,
           },
         };
       }
@@ -1085,6 +1137,7 @@
       fitView={shouldFitView}
       onconnect={onConnect}
       onnodeclick={onNodeClick}
+      onnodedrag={onNodeDrag}
       onselectionchange={onSelectionChange}
       deleteKey="Backspace"
       colorMode="dark"
@@ -1261,6 +1314,48 @@
                        placeholder-gray-600 focus:outline-none focus:border-guild-500 focus:ring-1 focus:ring-guild-500/20
                        resize-none"></textarea>
             </div>
+          </div>
+
+          <!-- Advanced section (collapsible) -->
+          <div class="border-t border-gray-800 pt-3">
+            <button
+              onclick={() => { showAdvanced = !showAdvanced; }}
+              class="flex items-center gap-2 text-[11px] text-gray-500 hover:text-gray-300 transition-colors w-full"
+            >
+              <span class="text-[9px]">{showAdvanced ? '&#9660;' : '&#9654;'}</span>
+              <span class="font-medium uppercase tracking-wider">Advanced</span>
+            </button>
+            {#if showAdvanced}
+              <div class="mt-3 space-y-3">
+                <div>
+                  <label for="edit-tools" class="text-[11px] text-gray-400 font-medium block mb-1">Tools (comma-separated)</label>
+                  <input id="edit-tools" type="text" bind:value={editTools}
+                    placeholder="file_read, file_write, shell, search, glob"
+                    class="w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-sm text-gray-200
+                           placeholder-gray-600 focus:outline-none focus:border-guild-500 focus:ring-1 focus:ring-guild-500/20" />
+                  <p class="text-[9px] text-gray-600 mt-1">Available: file_read, file_write, shell, search, glob, spawn_agent</p>
+                </div>
+
+                <div>
+                  <label for="edit-permission" class="text-[11px] text-gray-400 font-medium block mb-1">Permission Tier</label>
+                  <select id="edit-permission" bind:value={editPermission}
+                    class="w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-sm text-gray-200
+                           focus:outline-none focus:border-guild-500">
+                    <option value="nothing">Nothing (fully restricted)</option>
+                    <option value="ask">Ask (prompt for each tool use)</option>
+                    <option value="scoped">Scoped (allowlist + path boundaries)</option>
+                    <option value="autopilot">Autopilot (everything allowed)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label for="edit-retries" class="text-[11px] text-gray-400 font-medium block mb-1">Max Retries</label>
+                  <input id="edit-retries" type="number" bind:value={editMaxRetries} min="0" max="10"
+                    class="w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-sm text-gray-200
+                           focus:outline-none focus:border-guild-500 focus:ring-1 focus:ring-guild-500/20" />
+                </div>
+              </div>
+            {/if}
           </div>
 
           <!-- Port info (read-only display) -->
