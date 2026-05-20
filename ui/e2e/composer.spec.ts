@@ -1787,3 +1787,37 @@ test.describe('REQ-V2 remaining coverage', () => {
     await expect(page.locator('.svelte-flow')).toBeVisible();
   });
 });
+
+// === Python Dev Loop preset test ===
+test.describe('Python Dev Loop Preset', () => {
+  test('loads Python Dev Loop with TDD Implementer block and verification loops', async ({ page }) => {
+    await page.goto('/composer');
+    await page.waitForSelector('.svelte-flow', { timeout: 10000 });
+    
+    // Click the Python Dev Loop preset
+    const presetBtn = page.locator('button:has-text("Python Dev Loop")');
+    await expect(presetBtn).toBeVisible({ timeout: 5000 });
+    await presetBtn.click();
+    
+    // Should load 6 nodes (req_interviewer, req_verifier, architect, arch_verifier, tdd_impl, verificator)
+    await expect(page.locator('.svelte-flow__node')).toHaveCount(6, { timeout: 5000 });
+    
+    // Should have edges (including verification loop feedback edges)
+    const edgeCount = await page.locator('.svelte-flow__edge').count();
+    expect(edgeCount).toBeGreaterThanOrEqual(6);
+    
+    // The TDD Implementer should be a composite block (shows "block" badge)
+    const tddBlock = page.locator('.svelte-flow__node').filter({ hasText: 'tdd_implementer' });
+    await expect(tddBlock).toBeVisible({ timeout: 5000 });
+    const tddText = await tddBlock.textContent();
+    expect(tddText).toContain('block');
+    
+    // Click TDD block to expand it
+    await tddBlock.click();
+    await page.waitForTimeout(500);
+    
+    // Should now have more nodes (boundary + 4 children + remaining 5 top-level)
+    const expandedCount = await page.locator('.svelte-flow__node').count();
+    expect(expandedCount).toBeGreaterThan(6);
+  });
+});
