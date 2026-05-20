@@ -458,10 +458,14 @@
     ];
     edges = updatedEdges;
 
-    // Remove from expanded map
+    // Remove from expanded map and clean up drag tracking
     const newExpanded = new Map(expandedBlocks);
     newExpanded.delete(blockNodeId);
     expandedBlocks = newExpanded;
+
+    const newPositions = new Map(boundaryLastPositions);
+    newPositions.delete(boundaryNodeId);
+    boundaryLastPositions = newPositions;
   }
 
   // ===== Node Click Handler =====
@@ -602,6 +606,92 @@
     nodes = nodes.filter((n) => n.id !== nodeId);
     panelMode = 'none';
     selectedNode = null;
+  }
+
+  // ===== Split / Merge (REQ-V2-07) =====
+
+  function splitBlock() {
+    if (!selectedNode) return;
+    const nodeId = selectedNode.id;
+    const nodeData = selectedNode.data;
+    const nodePos = selectedNode.position;
+
+    // Create 3 sub-blocks from the original agent
+    const subNames = [`${nodeData.blockName}_1`, `${nodeData.blockName}_2`, `${nodeData.blockName}_3`];
+    const subChildren = subNames.map((name, i) => ({
+      id: name,
+      name,
+      type: 'leaf',
+      role: nodeData.role,
+      model: nodeData.model,
+      instructions: '',
+      ports: [
+        { id: 'in', name: 'in', direction: 'input', type_tag: 'any' },
+        { id: 'out', name: 'out', direction: 'output', type_tag: 'any' },
+      ],
+      position: { x: i * 240, y: 0 },
+    }));
+
+    // Chain them: 1 → 2 → 3
+    const subEdges = [
+      { id: `${subNames[0]}-${subNames[1]}`, sourceChildId: subNames[0], sourcePortId: 'out', targetChildId: subNames[1], targetPortId: 'in' },
+      { id: `${subNames[1]}-${subNames[2]}`, sourceChildId: subNames[1], sourcePortId: 'out', targetChildId: subNames[2], targetPortId: 'in' },
+    ];
+
+    // Derive ports for the new composite (first input, last output)
+    const newNodeId = `${nodeData.blockName}-split-${Date.now()}`;
+    const ports = deriveCompositePorts(newNodeId, subChildren, subEdges);
+
+    // Replace the original node with a composite
+    const compositeNode = {
+      id: newNodeId,
+      type: 'block',
+      position: nodePos,
+      data: {
+        blockName: nodeData.blockName,
+        type: 'composite',
+        role: nodeData.role,
+        model: nodeData.model,
+        instructions: nodeData.instructions,
+        ports,
+        children: subChildren,
+        internalEdges: subEdges,
+        childCount: 3,
+      },
+    };
+
+    // Remap edges that connected to the original node to use new port handles
+    edges = edges.map((e) => {
+      if (e.target === nodeId) {
+        const inputPort = ports.find(p => p.direction === 'input');
+        return inputPort ? { ...e, target: newNodeId, targetHandle: inputPort.handleId } : e;
+      }
+      if (e.source === nodeId) {
+        const outputPort = ports.find(p => p.direction === 'output');
+        return outputPort ? { ...e, source: newNodeId, sourceHandle: outputPort.handleId } : e;
+      }
+      return e;
+    });
+
+    nodes = [...nodes.filter(n => n.id !== nodeId), compositeNode];
+    panelMode = 'none';
+    selectedNode = null;
+    saveMessage = `Split "${nodeData.blockName}" into 3 sub-agents`;
+    setTimeout(() => (saveMessage = ''), 3000);
+  }
+
+  function mergeSelected() {
+    const selected = getSelectedNodes();
+    if (selected.length < 2) {
+      saveMessage = 'Select 2+ nodes to merge';
+      setTimeout(() => (saveMessage = ''), 3000);
+      return;
+    }
+    // Merge is the same as saveAsBlock but replaces in-place (removes originals from canvas)
+    blockName = `merged_${Date.now().toString(36)}`;
+    blockDescription = '';
+    // Trigger the save-block flow which will handle the rest
+    panelMode = 'save-block';
   }
 
   // ===== Save as Block =====
@@ -1046,14 +1136,25 @@
     <!-- Bottom actions -->
     <div class="px-4 py-4 border-t border-gray-800 bg-gray-900/30 space-y-3">
       <!-- Save as block (multi-select) -->
-      <button
-        onclick={openSaveBlockPanel}
-        class="w-full px-3 py-2 rounded-lg bg-purple-900/30 hover:bg-purple-900/50 text-xs text-purple-300
-               hover:text-purple-200 border border-purple-800/40 hover:border-purple-700/60
-               transition-all duration-150 font-medium"
-      >
-        Save Selection as Block
-      </button>
+      <div class="flex gap-2">
+        <button
+          onclick={openSaveBlockPanel}
+          class="flex-1 px-3 py-2 rounded-lg bg-purple-900/30 hover:bg-purple-900/50 text-xs text-purple-300
+                 hover:text-purple-200 border border-purple-800/40 hover:border-purple-700/60
+                 transition-all duration-150 font-medium"
+        >
+          Save as Block
+        </button>
+        <button
+          onclick={mergeSelected}
+          class="px-3 py-2 rounded-lg bg-indigo-900/30 hover:bg-indigo-900/50 text-xs text-indigo-300
+                 hover:text-indigo-200 border border-indigo-800/40 hover:border-indigo-700/60
+                 transition-all duration-150 font-medium"
+          title="Merge selected nodes into one composite"
+        >
+          Merge
+        </button>
+      </div>
 
       <!-- Save flow -->
       <div class="flex gap-2">
@@ -1380,13 +1481,19 @@
                      font-medium transition-all duration-150 active:scale-95">
               Apply
             </button>
+            <button onclick={splitBlock}
+              class="px-3 py-2.5 rounded-lg bg-indigo-900/50 hover:bg-indigo-900/80 text-sm text-indigo-300
+                     border border-indigo-800/50 transition-all duration-150"
+              title="Split into 3 sub-agents">
+              Split
+            </button>
             <button onclick={deleteNode}
-              class="px-4 py-2.5 rounded-lg bg-red-900/50 hover:bg-red-900/80 text-sm text-red-300
+              class="px-3 py-2.5 rounded-lg bg-red-900/50 hover:bg-red-900/80 text-sm text-red-300
                      border border-red-800/50 transition-all duration-150">
               Delete
             </button>
             <button onclick={() => { panelMode = 'none'; selectedNode = null; }}
-              class="px-4 py-2.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-sm text-gray-400
+              class="px-3 py-2.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-sm text-gray-400
                      border border-gray-700 transition-all duration-150">
               Close
             </button>
