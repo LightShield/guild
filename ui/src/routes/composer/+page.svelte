@@ -508,8 +508,36 @@
 
   function saveAsBlock() {
     if (!blockName.trim()) return;
-    const selected = getSelectedNodes();
+    let selected = getSelectedNodes();
     if (selected.length < 2) return;
+
+    // REQ-UI-04.14: Auto-collapse any expanded blocks before saving
+    // This preserves them as atomic composites rather than individual children
+    const expandedInSelection = selected.filter((n) => expandedBlocks.has(n.id));
+    for (const expandedNode of expandedInSelection) {
+      collapseBlock(expandedNode.id);
+    }
+
+    // Re-fetch selected nodes after collapse (state has changed)
+    if (expandedInSelection.length > 0) {
+      selected = getSelectedNodes();
+    }
+
+    // Exclude child nodes whose parent is also in the selection
+    // (they're already represented by their parent block)
+    const selectedIds = new Set(selected.map((n) => n.id));
+    selected = selected.filter((n) => {
+      if (n.data._parentBlockId && selectedIds.has(n.data._parentBlockId)) {
+        return false; // parent is selected, skip child
+      }
+      return true;
+    });
+
+    if (selected.length < 2) {
+      saveMessage = 'Need 2+ top-level nodes after filtering children';
+      setTimeout(() => (saveMessage = ''), 3000);
+      return;
+    }
 
     // Normalize positions relative to the top-left of the selection
     const minX = Math.min(...selected.map((n) => n.position.x));
@@ -543,9 +571,9 @@
     });
 
     // Capture internal edges mapped to stable blockName identifiers
-    const selectedIds = new Set(selected.map((n) => n.id));
+    const filteredIds = new Set(selected.map((n) => n.id));
     const blockEdges = edges
-      .filter((e) => selectedIds.has(e.source) && selectedIds.has(e.target))
+      .filter((e) => filteredIds.has(e.source) && filteredIds.has(e.target))
       .map((e) => ({ id: `${idToBlockName[e.source]}-${idToBlockName[e.target]}`, source: idToBlockName[e.source], target: idToBlockName[e.target] }));
 
     // Count total agents recursively (composite children count their internal agents)

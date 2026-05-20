@@ -118,6 +118,10 @@ Extends REQ-05.6 (Visual team composer) from the main REQUIREMENTS.md.
 6. Two blocks with agents sharing the same name → saved block must use unique IDs (no collision)
 7. Expand, connect external edge to child, collapse → edge re-routes to block port
 8. Expand, ungroup → children become free, parent disappears, edges preserved
+9. **Select expanded block + its visible children + other nodes → save as block:** The expanded block must be saved as ONE atomic composite, not as individual children. Children that belong to an expanded parent should be excluded from the selection — the parent represents them.
+10. **Select collapsed block + expanded block + free agent → save as block:** The collapsed block is saved as-is (atomic), the expanded block is auto-collapsed before saving (preserving its internal structure), the free agent is saved as a regular node.
+11. **Select only children of an expanded block (without the parent) → save as block:** This creates a NEW block from those children — they become a new sub-group. The parent block loses those children (they're extracted).
+12. Mixed: some children selected, some not, parent not selected → should warn or refuse (partial extraction is ambiguous)
 
 ---
 
@@ -138,6 +142,8 @@ Extends REQ-05.6 (Visual team composer) from the main REQUIREMENTS.md.
 | REQ-UI-04.11 | Blocks can contain other blocks (nesting) — expanding parent shows child blocks in their collapsed state | Recursive peek |
 | REQ-UI-04.12 | Saved blocks appear in sidebar under "Saved Blocks", draggable back onto canvas | Reusable |
 | REQ-UI-04.13 | Saved blocks persist in localStorage across sessions | Deletable via × button |
+| REQ-UI-04.14 | **Saving a selection that includes an expanded block preserves the block as atomic** — auto-collapse expanded blocks before saving, exclude their visible children from the node list | Expanded children are part of their parent, not separate nodes |
+| REQ-UI-04.15 | Saving a selection with a mix of collapsed blocks, expanded blocks, and free agents correctly captures each at its proper abstraction level | Collapsed=atomic, expanded=auto-collapse to atomic, free=individual |
 
 ### Acceptance Criteria
 
