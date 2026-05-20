@@ -5,13 +5,14 @@
   import '@xyflow/svelte/dist/style.css';
   import { fetchBlocks, fetchTeams, saveTeam } from '$lib/api.js';
   import BlockNode from '$lib/components/BlockNode.svelte';
+  import GroupBoundary from '$lib/components/GroupBoundary.svelte';
 
-  // --- Core flow state ---
+  // ===== Core flow state =====
   let nodes = $state([]);
   let edges = $state([]);
   let shouldFitView = $state(false);
 
-  // --- Sidebar data ---
+  // ===== Sidebar data =====
   let availableBlocks = $state([]);
   let customBlocks = $state([]);
   let teams = $state([]);
@@ -20,36 +21,33 @@
   let saveMessage = $state('');
   let draggedBlock = $state(null);
 
-  // --- Right panel state ---
+  // ===== Right panel state =====
   let panelMode = $state('none'); // 'none' | 'create' | 'edit' | 'save-block'
   let selectedNode = $state(null);
   let showHelp = $state(false);
   let selectedNodeIds = $state(new Set());
 
-  // --- Create agent form ---
+  // ===== Create agent form =====
   let newAgentName = $state('');
   let newAgentRole = $state('agent');
   let newAgentModel = $state('gemma4-4b-dense-med');
   let newAgentInstructions = $state('');
 
-  // --- Edit agent form ---
+  // ===== Edit agent form =====
   let editName = $state('');
   let editRole = $state('');
   let editModel = $state('');
   let editInstructions = $state('');
-  let editVerifier = $state('');
-  let editLoopUntil = $state('');
-  let editMaxIterations = $state(5);
 
-  // --- Save as block form ---
+  // ===== Save as block form =====
   let blockName = $state('');
   let blockDescription = $state('');
 
-  // --- Block expand/collapse state ---
-  // Maps blockNodeId -> { originalNode, childNodeIds, internalEdgeIds, hiddenEdgeIds }
+  // ===== Expand/collapse tracking =====
+  // Maps compositeBlockId -> { block: Block, boundaryNodeId, childNodeIds[], internalEdgeIds[], position }
   let expandedBlocks = $state(new Map());
 
-  const nodeTypes = { block: BlockNode };
+  const nodeTypes = { block: BlockNode, 'group-boundary': GroupBoundary };
 
   const roles = ['agent', 'planner', 'architect', 'implementer', 'coder', 'tester', 'reviewer', 'verifier', 'orchestrator'];
   const models = ['gemma4-2b-edge-fast', 'gemma4-4b-dense-med', 'gemma4-26b-moe-agent'];
@@ -78,6 +76,81 @@
 
   function persistCustomBlocks() {
     try { localStorage.setItem('guild-custom-blocks', JSON.stringify(customBlocks)); } catch { /* quota exceeded */ }
+  }
+
+  // ===== Port Utilities =====
+
+  /** Create a handle ID from a node ID and port ID */
+  function makeHandleId(nodeId, portId) {
+    return `${nodeId}__port__${portId}`;
+  }
+
+  /** Default ports for a leaf block: 1 input, 1 output */
+  function defaultLeafPorts(nodeId) {
+    return [
+      { id: 'in', name: 'in', direction: 'input', type_tag: 'any', handleId: makeHandleId(nodeId, 'in') },
+      { id: 'out', name: 'out', direction: 'output', type_tag: 'any', handleId: makeHandleId(nodeId, 'out') },
+    ];
+  }
+
+  /**
+   * Derive ports for a composite block (matches backend get_composite_ports).
+   * Input ports = child input ports not targeted by any internal edge.
+   * Output ports = child output ports not sourced by any internal edge.
+   */
+  function deriveCompositePorts(nodeId, children, internalEdges) {
+    const targetedPorts = new Set();
+    const sourcedPorts = new Set();
+    for (const edge of internalEdges) {
+      targetedPorts.add(`${edge.targetChildId}__${edge.targetPortId}`);
+      sourcedPorts.add(`${edge.sourceChildId}__${edge.sourcePortId}`);
+    }
+
+    const inputs = [];
+    const outputs = [];
+
+    for (const child of children) {
+      const childPorts = child.ports || defaultLeafPorts(child.id);
+      for (const port of childPorts) {
+        if (port.direction === 'input' && !targetedPorts.has(`${child.id}__${port.id}`)) {
+          inputs.push({
+            id: `${child.id}.${port.id}`,
+            name: `${child.name}.${port.name}`,
+            direction: 'input',
+            type_tag: port.type_tag || 'any',
+            handleId: makeHandleId(nodeId, `${child.id}.${port.id}`),
+            mapsTo: { childId: child.id, portId: port.id },
+          });
+        }
+        if (port.direction === 'output' && !sourcedPorts.has(`${child.id}__${port.id}`)) {
+          outputs.push({
+            id: `${child.id}.${port.id}`,
+            name: `${child.name}.${port.name}`,
+            direction: 'output',
+            type_tag: port.type_tag || 'any',
+            handleId: makeHandleId(nodeId, `${child.id}.${port.id}`),
+            mapsTo: { childId: child.id, portId: port.id },
+          });
+        }
+      }
+    }
+    return [...inputs, ...outputs];
+  }
+
+  /** Build a Block data structure from node data */
+  function buildBlock(nodeId, data) {
+    const block = {
+      id: nodeId,
+      name: data.blockName || 'agent',
+      type: data.type || 'leaf',
+      role: data.role || 'agent',
+      model: data.model,
+      instructions: data.instructions,
+      ports: data.ports || [],
+      children: data.children || [],
+      internalEdges: data.internalEdges || [],
+    };
+    return block;
   }
 
   // ===== Drag and Drop =====
@@ -109,7 +182,11 @@
 
   function placeBlockOnCanvas(block, position) {
     const id = `${block.name}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-    const isComposite = !!(block.composite && block.nodes && block.nodes.length > 0);
+    const isComposite = !!(block.children && block.children.length > 0);
+
+    const ports = isComposite
+      ? deriveCompositePorts(id, block.children, block.internalEdges || [])
+      : defaultLeafPorts(id);
 
     const newNode = {
       id,
@@ -117,306 +194,258 @@
       position,
       data: {
         blockName: block.name,
+        type: isComposite ? 'composite' : 'leaf',
         role: block.role || 'agent',
         model: block.model || 'gemma4-4b-dense-med',
         instructions: block.instructions || '',
-        verifier: null,
-        loopUntil: null,
-        maxIterations: null,
-        isComposite,
-        agentCount: isComposite ? (block.agentCount || block.nodes.length) : 0,
-        _childNodes: isComposite ? block.nodes : null,
-        _childEdges: isComposite ? (block.edges || []) : null,
+        ports,
+        children: isComposite ? block.children : [],
+        internalEdges: isComposite ? (block.internalEdges || []) : [],
+        childCount: isComposite ? countAgents(block.children) : 0,
       },
     };
     nodes = [...nodes, newNode];
   }
 
   function addBlockFromSidebar(block) {
-    const col = nodes.length % 4;
-    const row = Math.floor(nodes.length / 4);
+    const col = nodes.filter((n) => n.type === 'block').length % 4;
+    const row = Math.floor(nodes.filter((n) => n.type === 'block').length / 4);
     placeBlockOnCanvas(block, { x: 80 + col * 240, y: 80 + row * 180 });
   }
 
-  // ===== Block Expand / Collapse (REQ-UI-04.4 - 04.7) =====
+  // ===== Expand / Collapse (Flat Nodes + Visual Boundaries) =====
 
-  // Layout constants for expanded containers
-  const CONTAINER_PADDING_X = 30;
-  const CONTAINER_PADDING_TOP = 50; // space for header
-  const CONTAINER_PADDING_BOTTOM = 30;
-  const CHILD_SPACING_X = 220;
+  const BOUNDARY_PADDING_X = 40;
+  const BOUNDARY_PADDING_TOP = 60;
+  const BOUNDARY_PADDING_BOTTOM = 40;
+  const CHILD_SPACING_X = 240;
   const CHILD_SPACING_Y = 140;
   const CHILD_COLS = 3;
 
-  function expandBlock(blockNode) {
-    const blockId = blockNode.id;
-    const childNodesData = blockNode.data._childNodes || [];
-    const childEdgesData = blockNode.data._childEdges || [];
+  function expandBlock(blockNodeId) {
+    const blockNode = nodes.find((n) => n.id === blockNodeId);
+    if (!blockNode || blockNode.data.type !== 'composite') return;
+    if (expandedBlocks.has(blockNodeId)) return;
 
-    // Build ID mapping: original child id -> new canvas id
-    const idMap = {};
+    const { children, internalEdges, ports } = blockNode.data;
+    const blockPos = blockNode.position;
+
+    // Create child nodes as flat top-level nodes
     const childNodeIds = [];
+    const newChildNodes = children.map((child, index) => {
+      const childNodeId = `${blockNodeId}__child__${child.id}`;
+      childNodeIds.push(childNodeId);
 
-    // Calculate child positions relative to parent (container-local coords)
-    const newChildNodes = childNodesData.map((child, index) => {
-      const origId = child.id || child.data?.blockName || `child-${Math.random().toString(36).slice(2, 6)}`;
-      const canvasId = `${blockId}__${origId}`;
-      idMap[origId] = canvasId;
-      const childBlockName = child.data?.blockName || child.blockName;
-      if (childBlockName && childBlockName !== origId) {
-        idMap[childBlockName] = canvasId;
-      }
-      childNodeIds.push(canvasId);
-
-      const childData = child.data || {};
-      const isChildComposite = !!(childData.isComposite || (childData._childNodes && childData._childNodes.length > 0));
-
-      // Position relative to parent: use stored position or auto-layout grid
       const col = index % CHILD_COLS;
       const row = Math.floor(index / CHILD_COLS);
-      const relX = child.position?.x != null ? child.position.x + CONTAINER_PADDING_X : CONTAINER_PADDING_X + col * CHILD_SPACING_X;
-      const relY = child.position?.y != null ? child.position.y + CONTAINER_PADDING_TOP : CONTAINER_PADDING_TOP + row * CHILD_SPACING_Y;
+      const relX = child.position?.x ?? (BOUNDARY_PADDING_X + col * CHILD_SPACING_X);
+      const relY = child.position?.y ?? (BOUNDARY_PADDING_TOP + row * CHILD_SPACING_Y);
+
+      const isChildComposite = !!(child.children && child.children.length > 0);
+      const childPorts = isChildComposite
+        ? deriveCompositePorts(childNodeId, child.children, child.internalEdges || [])
+        : defaultLeafPorts(childNodeId);
 
       return {
-        id: canvasId,
+        id: childNodeId,
         type: 'block',
-        position: { x: relX, y: relY },
-        parentId: blockId,
-        extent: 'parent',
+        position: { x: blockPos.x + relX, y: blockPos.y + relY },
         data: {
-          blockName: childData.blockName || child.blockName || 'agent',
-          role: childData.role || child.role || 'agent',
-          model: childData.model || child.model || 'gemma4-4b-dense-med',
-          instructions: childData.instructions || child.instructions || '',
-          verifier: childData.verifier || null,
-          loopUntil: childData.loopUntil || null,
-          maxIterations: childData.maxIterations || null,
-          isComposite: isChildComposite,
-          agentCount: isChildComposite ? (childData.agentCount || (childData._childNodes || childData.nodes || []).length) : 0,
-          _childNodes: childData._childNodes || (child.composite ? child.nodes : null) || null,
-          _childEdges: childData._childEdges || (child.composite ? child.edges : null) || null,
-          _parentBlockId: blockId,
+          blockName: child.name,
+          type: isChildComposite ? 'composite' : 'leaf',
+          role: child.role || 'agent',
+          model: child.model || 'gemma4-4b-dense-med',
+          instructions: child.instructions || '',
+          ports: childPorts,
+          children: child.children || [],
+          internalEdges: child.internalEdges || [],
+          childCount: isChildComposite ? countAgents(child.children) : 0,
         },
+        zIndex: 10,
       };
     });
 
-    // Calculate container size to fit all children (wider for composites which render larger)
-    let maxX = 0;
-    let maxY = 0;
+    // Calculate boundary size from children
+    let maxX = 0, maxY = 0;
     for (const child of newChildNodes) {
-      const childWidth = child.data.isComposite ? 220 : 200;
-      const childHeight = child.data.isComposite ? 80 : 70;
-      maxX = Math.max(maxX, child.position.x + childWidth);
-      maxY = Math.max(maxY, child.position.y + childHeight);
+      maxX = Math.max(maxX, child.position.x - blockPos.x + 200);
+      maxY = Math.max(maxY, child.position.y - blockPos.y + 80);
     }
-    const containerWidth = Math.max(maxX + CONTAINER_PADDING_X + 20, 350);
-    const containerHeight = Math.max(maxY + CONTAINER_PADDING_BOTTOM + 20, 200);
+    const boundaryWidth = Math.max(maxX + BOUNDARY_PADDING_X + 20, 400);
+    const boundaryHeight = Math.max(maxY + BOUNDARY_PADDING_BOTTOM + 20, 250);
 
-    // Create internal edges with dashed purple styling
+    // Create boundary node (low z-index, behind children)
+    const boundaryNodeId = `${blockNodeId}__boundary`;
+    const boundaryNode = {
+      id: boundaryNodeId,
+      type: 'group-boundary',
+      position: { ...blockPos },
+      style: `width: ${boundaryWidth}px; height: ${boundaryHeight}px;`,
+      data: {
+        blockName: blockNode.data.blockName,
+        childCount: blockNode.data.childCount,
+        ports: ports,
+        onCollapse: () => collapseBlock(blockNodeId),
+      },
+      zIndex: 1,
+    };
+
+    // Create internal edges (dashed purple)
     const internalEdgeIds = [];
-    const newInternalEdges = childEdgesData.map((edge) => {
-      const edgeId = `${blockId}__edge__${edge.id || edge.source + '-' + edge.target}`;
+    const newInternalEdges = (internalEdges || []).map((ie) => {
+      const edgeId = `${blockNodeId}__ie__${ie.id || ie.sourceChildId + '-' + ie.targetChildId}`;
       internalEdgeIds.push(edgeId);
-      const resolvedSource = idMap[edge.source] || edge.source;
-      const resolvedTarget = idMap[edge.target] || edge.target;
+      const sourceNodeId = `${blockNodeId}__child__${ie.sourceChildId}`;
+      const targetNodeId = `${blockNodeId}__child__${ie.targetChildId}`;
       return {
         id: edgeId,
-        source: resolvedSource,
-        target: resolvedTarget,
+        source: sourceNodeId,
+        target: targetNodeId,
+        sourceHandle: makeHandleId(sourceNodeId, ie.sourcePortId),
+        targetHandle: makeHandleId(targetNodeId, ie.targetPortId),
         animated: true,
         style: 'stroke: #a78bfa; stroke-width: 2px; stroke-dasharray: 5 3; opacity: 0.7;',
       };
     });
 
-    // Store expansion state (save original node data for collapse restore)
-    const newExpandedBlocks = new Map(expandedBlocks);
-    newExpandedBlocks.set(blockId, {
-      originalData: { ...blockNode.data },
-      originalStyle: blockNode.style || undefined,
-      childNodeIds,
-      internalEdgeIds,
-    });
-    expandedBlocks = newExpandedBlocks;
-
-    // Mutate the block node in-place: expand it into a container
-    nodes = [
-      ...nodes.map((n) => {
-        if (n.id === blockId) {
-          return {
-            ...n,
-            style: `width: ${containerWidth}px; height: ${containerHeight}px;`,
-            data: {
-              ...n.data,
-              expanded: true,
-              onCollapse: () => collapseBlock(blockId),
-              onUngroup: () => ungroupBlock(blockId),
-            },
-          };
+    // Remap external edges: edges connected to the block's ports now connect to child ports
+    const updatedEdges = edges.map((e) => {
+      // Edge targeting this block
+      if (e.target === blockNodeId && e.targetHandle) {
+        const port = ports.find((p) => p.handleId === e.targetHandle && p.mapsTo);
+        if (port) {
+          const childNodeId = `${blockNodeId}__child__${port.mapsTo.childId}`;
+          return { ...e, target: childNodeId, targetHandle: makeHandleId(childNodeId, port.mapsTo.portId) };
         }
-        return n;
-      }),
-      ...newChildNodes,
-    ];
-    edges = [...edges, ...newInternalEdges];
-  }
-
-  function collapseBlock(blockId) {
-    const state = expandedBlocks.get(blockId);
-    if (!state) return;
-
-    const { originalData, originalStyle, childNodeIds, internalEdgeIds } = state;
-    const childIdSet = new Set(childNodeIds);
-    const internalEdgeIdSet = new Set(internalEdgeIds);
-
-    // Recursively collapse any expanded child blocks first
-    for (const childId of childNodeIds) {
-      if (expandedBlocks.has(childId)) {
-        collapseBlock(childId);
       }
-    }
-
-    // Remove child nodes, remove internal edges, restore block node to compact form
-    nodes = nodes
-      .filter((n) => !childIdSet.has(n.id))
-      .map((n) => {
-        if (n.id === blockId) {
-          return {
-            ...n,
-            style: originalStyle || undefined,
-            data: {
-              ...originalData,
-            },
-          };
+      // Edge sourcing from this block
+      if (e.source === blockNodeId && e.sourceHandle) {
+        const port = ports.find((p) => p.handleId === e.sourceHandle && p.mapsTo);
+        if (port) {
+          const childNodeId = `${blockNodeId}__child__${port.mapsTo.childId}`;
+          return { ...e, source: childNodeId, sourceHandle: makeHandleId(childNodeId, port.mapsTo.portId) };
         }
-        return n;
-      });
-    edges = edges.filter((e) => !internalEdgeIdSet.has(e.id));
-
-    // Remove from expanded map
-    const newExpandedBlocks = new Map(expandedBlocks);
-    newExpandedBlocks.delete(blockId);
-    expandedBlocks = newExpandedBlocks;
-  }
-
-  function ungroupBlock(blockId) {
-    const state = expandedBlocks.get(blockId);
-    if (!state) return;
-
-    const { childNodeIds, internalEdgeIds } = state;
-    const internalEdgeIdSet = new Set(internalEdgeIds);
-
-    // Find the parent block node to get its absolute position
-    const parentNode = nodes.find((n) => n.id === blockId);
-    if (!parentNode) return;
-    const parentX = parentNode.position.x;
-    const parentY = parentNode.position.y;
-
-    // Recursively collapse any expanded nested blocks first
-    for (const childId of childNodeIds) {
-      if (expandedBlocks.has(childId)) {
-        collapseBlock(childId);
-      }
-    }
-
-    // Convert child nodes: remove parentId, convert relative positions to absolute
-    // Remove the parent block node entirely
-    // Convert internal edges to regular edges
-    nodes = nodes
-      .filter((n) => n.id !== blockId)
-      .map((n) => {
-        if (n.parentId === blockId) {
-          return {
-            ...n,
-            parentId: undefined,
-            extent: undefined,
-            position: {
-              x: parentX + n.position.x,
-              y: parentY + n.position.y,
-            },
-            data: {
-              ...n.data,
-              _parentBlockId: undefined,
-            },
-          };
-        }
-        return n;
-      });
-
-    // Convert internal purple dashed edges to regular blue edges
-    edges = edges.map((e) => {
-      if (internalEdgeIdSet.has(e.id)) {
-        return {
-          ...e,
-          style: 'stroke: #38bdf8; stroke-width: 2px;',
-        };
       }
       return e;
     });
 
-    // Re-route any edges that connected to the block node to connect to the first/last child
-    // (For simplicity, edges TO the block -> first child, edges FROM the block -> last child)
-    const firstChild = childNodeIds[0];
-    const lastChild = childNodeIds[childNodeIds.length - 1];
-    if (firstChild || lastChild) {
-      edges = edges.map((e) => {
-        if (e.target === blockId && firstChild) {
-          return { ...e, target: firstChild };
+    // Store expansion state
+    const newExpanded = new Map(expandedBlocks);
+    newExpanded.set(blockNodeId, {
+      block: blockNode.data,
+      position: { ...blockPos },
+      boundaryNodeId,
+      childNodeIds,
+      internalEdgeIds,
+    });
+    expandedBlocks = newExpanded;
+
+    // Remove the block node, add boundary + children
+    nodes = [
+      ...nodes.filter((n) => n.id !== blockNodeId),
+      boundaryNode,
+      ...newChildNodes,
+    ];
+    edges = [...updatedEdges, ...newInternalEdges];
+  }
+
+  function collapseBlock(blockNodeId) {
+    const state = expandedBlocks.get(blockNodeId);
+    if (!state) return;
+
+    const { block, position, boundaryNodeId, childNodeIds, internalEdgeIds } = state;
+
+    // Recursively collapse any expanded children first
+    for (const childId of childNodeIds) {
+      if (expandedBlocks.has(childId)) {
+        collapseBlock(childId);
+      }
+    }
+
+    const childIdSet = new Set(childNodeIds);
+    const internalEdgeIdSet = new Set(internalEdgeIds);
+
+    // Rebuild ports (in case children positions changed we keep original ports)
+    const ports = block.ports;
+
+    // Remap external edges back: edges connected to children re-route to block ports
+    const updatedEdges = edges
+      .filter((e) => !internalEdgeIdSet.has(e.id))
+      .map((e) => {
+        // Edge targeting a child of this block
+        if (childIdSet.has(e.target)) {
+          const port = ports.find((p) => p.mapsTo && `${blockNodeId}__child__${p.mapsTo.childId}` === e.target);
+          if (port) {
+            return { ...e, target: blockNodeId, targetHandle: port.handleId };
+          }
         }
-        if (e.source === blockId && lastChild) {
-          return { ...e, source: lastChild };
+        // Edge sourcing from a child of this block
+        if (childIdSet.has(e.source)) {
+          const port = ports.find((p) => p.mapsTo && `${blockNodeId}__child__${p.mapsTo.childId}` === e.source);
+          if (port) {
+            return { ...e, source: blockNodeId, sourceHandle: port.handleId };
+          }
         }
         return e;
       });
-    }
+
+    // Get boundary position (may have been dragged)
+    const boundaryNode = nodes.find((n) => n.id === boundaryNodeId);
+    const restorePos = boundaryNode ? boundaryNode.position : position;
+
+    // Recreate the block node
+    const restoredNode = {
+      id: blockNodeId,
+      type: 'block',
+      position: restorePos,
+      data: { ...block, ports: ports.map((p) => ({ ...p, handleId: makeHandleId(blockNodeId, p.id) })) },
+    };
+
+    // Remove boundary + children, add block back
+    nodes = [
+      ...nodes.filter((n) => n.id !== boundaryNodeId && !childIdSet.has(n.id)),
+      restoredNode,
+    ];
+    edges = updatedEdges;
 
     // Remove from expanded map
-    const newExpandedBlocks = new Map(expandedBlocks);
-    newExpandedBlocks.delete(blockId);
-    expandedBlocks = newExpandedBlocks;
+    const newExpanded = new Map(expandedBlocks);
+    newExpanded.delete(blockNodeId);
+    expandedBlocks = newExpanded;
   }
 
   // ===== Node Click Handler =====
 
   function onNodeClick({ node, event }) {
-    if (!node || node.type !== 'block') return;
+    if (!node) return;
 
-    // If Shift is held, user is multi-selecting — don't expand/collapse/edit
+    // Shift-click = multi-select, do not expand/edit
     if (event?.shiftKey) return;
 
-    if (node.data.isComposite) {
-      const blockId = node.id;
-      // If already expanded, collapse it (toggle behavior)
-      if (expandedBlocks.has(blockId)) {
-        collapseBlock(blockId);
-        return;
-      }
-      // Prevent expanding if this node is a child of another expanded block
-      // (xyflow doesn't support nested parentId)
-      if (node.data._parentBlockId) {
-        selectedNode = node;
-        panelMode = 'edit';
-        editName = node.data.blockName || '';
-        editRole = node.data.role || 'agent';
-        editModel = node.data.model || 'gemma4-4b-dense-med';
-        editInstructions = node.data.instructions || '';
-        editVerifier = node.data.verifier || '';
-        editLoopUntil = node.data.loopUntil || '';
-        editMaxIterations = node.data.maxIterations || 5;
-        return;
-      }
-      expandBlock(node);
+    // Click on boundary -> collapse
+    if (node.type === 'group-boundary') {
+      if (node.data.onCollapse) node.data.onCollapse();
       return;
     }
 
-    // Regular node: open edit panel
+    if (node.type !== 'block') return;
+
+    // Composite block -> expand it
+    if (node.data.type === 'composite') {
+      if (expandedBlocks.has(node.id)) {
+        // Already expanded somehow (shouldn't happen since node is removed), ignore
+        return;
+      }
+      expandBlock(node.id);
+      return;
+    }
+
+    // Leaf block -> open edit panel
     selectedNode = node;
     editName = node.data.blockName || '';
     editRole = node.data.role || 'agent';
     editModel = node.data.model || 'gemma4-4b-dense-med';
     editInstructions = node.data.instructions || '';
-    editVerifier = node.data.verifier || '';
-    editLoopUntil = node.data.loopUntil || '';
-    editMaxIterations = node.data.maxIterations || 5;
     panelMode = 'edit';
   }
 
@@ -453,8 +482,9 @@
 
   function applyEdit() {
     if (!selectedNode) return;
+    const nodeId = selectedNode.id;
     nodes = nodes.map((n) => {
-      if (n.id === selectedNode.id) {
+      if (n.id === nodeId) {
         return {
           ...n,
           data: {
@@ -463,9 +493,6 @@
             role: editRole,
             model: editModel,
             instructions: editInstructions,
-            verifier: editVerifier || null,
-            loopUntil: editLoopUntil || null,
-            maxIterations: editMaxIterations || null,
           },
         };
       }
@@ -478,20 +505,16 @@
   function deleteNode() {
     if (!selectedNode) return;
     const nodeId = selectedNode.id;
-    // If the node is an expanded block, collapse it first to clean up children
-    if (expandedBlocks.has(nodeId)) {
-      collapseBlock(nodeId);
-    }
     edges = edges.filter((e) => e.source !== nodeId && e.target !== nodeId);
     nodes = nodes.filter((n) => n.id !== nodeId);
     panelMode = 'none';
     selectedNode = null;
   }
 
-  // ===== Save as Block (REQ-UI-04.2) =====
+  // ===== Save as Block =====
 
   function getSelectedNodes() {
-    return nodes.filter((n) => selectedNodeIds.has(n.id));
+    return nodes.filter((n) => selectedNodeIds.has(n.id) && n.type === 'block');
   }
 
   function openSaveBlockPanel() {
@@ -508,95 +531,63 @@
 
   function saveAsBlock() {
     if (!blockName.trim()) return;
-    let selected = getSelectedNodes();
+    const selected = getSelectedNodes();
     if (selected.length < 2) return;
 
-    // REQ-UI-04.14: Auto-collapse any expanded blocks before saving
-    // This preserves them as atomic composites rather than individual children
-    const expandedInSelection = selected.filter((n) => expandedBlocks.has(n.id));
-    for (const expandedNode of expandedInSelection) {
-      collapseBlock(expandedNode.id);
-    }
-
-    // Re-fetch selected nodes after collapse (state has changed)
-    if (expandedInSelection.length > 0) {
-      selected = getSelectedNodes();
-    }
-
-    // Exclude child nodes whose parent is also in the selection
-    // (they're already represented by their parent block)
-    const selectedIds = new Set(selected.map((n) => n.id));
-    selected = selected.filter((n) => {
-      if (n.data._parentBlockId && selectedIds.has(n.data._parentBlockId)) {
-        return false; // parent is selected, skip child
-      }
-      return true;
-    });
-
-    if (selected.length < 2) {
-      saveMessage = 'Need 2+ top-level nodes after filtering children';
-      setTimeout(() => (saveMessage = ''), 3000);
-      return;
-    }
-
-    // Normalize positions relative to the top-left of the selection
-    const minX = Math.min(...selected.map((n) => n.position.x));
-    const minY = Math.min(...selected.map((n) => n.position.y));
-
-    // Use blockName as stable identifier for edges (not canvas IDs which are ephemeral)
-    // Handle duplicates by appending index suffix
-    const idToBlockName = {};
-    const usedNames = {};
+    // Collapse any expanded children in the selection
     for (const n of selected) {
-      let name = n.data.blockName || n.id;
-      if (usedNames[name]) {
-        name = `${name}_${usedNames[name]}`;
+      if (expandedBlocks.has(n.id)) {
+        collapseBlock(n.id);
       }
-      usedNames[n.data.blockName || n.id] = (usedNames[n.data.blockName || n.id] || 0) + 1;
-      idToBlockName[n.id] = name;
     }
 
-    const blockNodes = selected.map((n) => {
-      // Clean copy of data: remove stale callbacks, keep structural info
-      const cleanData = { ...n.data };
-      delete cleanData.onCollapse;
-      delete cleanData.onUngroup;
-      delete cleanData.expanded;
-      delete cleanData._parentBlockId;
-      return {
-        id: idToBlockName[n.id],
-        position: { x: n.position.x - minX, y: n.position.y - minY },
-        data: cleanData,
-      };
+    // Re-fetch after potential collapse
+    const finalSelected = getSelectedNodes();
+    if (finalSelected.length < 2) return;
+
+    // Normalize positions relative to the top-left
+    const minX = Math.min(...finalSelected.map((n) => n.position.x));
+    const minY = Math.min(...finalSelected.map((n) => n.position.y));
+
+    const selectedIds = new Set(finalSelected.map((n) => n.id));
+
+    // Build children array for the composite block
+    const children = finalSelected.map((n) => ({
+      id: n.data.blockName || n.id,
+      name: n.data.blockName || 'agent',
+      type: n.data.type || 'leaf',
+      role: n.data.role || 'agent',
+      model: n.data.model,
+      instructions: n.data.instructions,
+      ports: (n.data.ports || []).map((p) => ({ id: p.id, name: p.name, direction: p.direction, type_tag: p.type_tag })),
+      children: n.data.children || [],
+      internalEdges: n.data.internalEdges || [],
+      position: { x: n.position.x - minX, y: n.position.y - minY },
+    }));
+
+    // Build a mapping from canvas node IDs to child IDs
+    const nodeIdToChildId = {};
+    finalSelected.forEach((n, i) => {
+      nodeIdToChildId[n.id] = children[i].id;
     });
 
-    // Capture internal edges mapped to stable blockName identifiers
-    const filteredIds = new Set(selected.map((n) => n.id));
-    const blockEdges = edges
-      .filter((e) => filteredIds.has(e.source) && filteredIds.has(e.target))
-      .map((e) => ({ id: `${idToBlockName[e.source]}-${idToBlockName[e.target]}`, source: idToBlockName[e.source], target: idToBlockName[e.target] }));
-
-    // Count total agents recursively (composite children count their internal agents)
-    function countAgents(nodeList) {
-      let total = 0;
-      for (const n of nodeList) {
-        if (n.data?.isComposite && n.data?._childNodes) {
-          total += countAgents(n.data._childNodes);
-        } else {
-          total += 1;
-        }
-      }
-      return total;
-    }
+    // Capture internal edges (edges between selected nodes)
+    const internalEdges = edges
+      .filter((e) => selectedIds.has(e.source) && selectedIds.has(e.target))
+      .map((e) => ({
+        id: `${nodeIdToChildId[e.source]}-${nodeIdToChildId[e.target]}`,
+        sourceChildId: nodeIdToChildId[e.source],
+        sourcePortId: 'out',
+        targetChildId: nodeIdToChildId[e.target],
+        targetPortId: 'in',
+      }));
 
     const compositeBlock = {
       name: blockName.trim(),
       role: 'orchestrator',
-      description: blockDescription || `Composite: ${selected.map((n) => n.data.blockName).join(' + ')}`,
-      composite: true,
-      nodes: blockNodes,
-      edges: blockEdges,
-      agentCount: countAgents(blockNodes),
+      description: blockDescription || `Composite: ${children.map((c) => c.name).join(' + ')}`,
+      children,
+      internalEdges,
     };
 
     customBlocks = [...customBlocks, compositeBlock];
@@ -637,7 +628,7 @@
 
   function deleteSelected() {
     if (selectedNodeIds.size === 0) return;
-    // Collapse any expanded blocks that are being deleted
+    // Clean up any expanded blocks being deleted
     for (const nodeId of selectedNodeIds) {
       if (expandedBlocks.has(nodeId)) {
         collapseBlock(nodeId);
@@ -648,25 +639,63 @@
     selectedNodeIds = new Set();
   }
 
-  // ===== Preset Flow (REQ-UI-05) =====
+  // ===== Count agents recursively =====
+
+  function countAgents(children) {
+    let total = 0;
+    for (const child of children || []) {
+      if (child.children && child.children.length > 0) {
+        total += countAgents(child.children);
+      } else {
+        total += 1;
+      }
+    }
+    return total;
+  }
+
+  // ===== Preset Flow =====
 
   function loadPresetFlow() {
-    nodes = [
-      { id: 'req', type: 'block', position: { x: 50, y: 150 }, data: { blockName: 'requirements', role: 'planner', model: 'gemma4-4b-dense-med', instructions: builtinRoles[0].instructions, verifier: 'requirements_verifier', loopUntil: 'verifier approves', maxIterations: 5, isComposite: false, agentCount: 0, _childNodes: null, _childEdges: null } },
-      { id: 'arch', type: 'block', position: { x: 300, y: 150 }, data: { blockName: 'architect', role: 'architect', model: 'gemma4-4b-dense-med', instructions: builtinRoles[1].instructions, verifier: 'architect_verifier', loopUntil: 'verifier approves', maxIterations: 5, isComposite: false, agentCount: 0, _childNodes: null, _childEdges: null } },
-      { id: 'tester', type: 'block', position: { x: 550, y: 100 }, data: { blockName: 'tester', role: 'tester', model: 'gemma4-4b-dense-med', instructions: builtinRoles[3].instructions, verifier: 'tester_verifier', loopUntil: 'verifier approves', maxIterations: 5, isComposite: false, agentCount: 0, _childNodes: null, _childEdges: null } },
-      { id: 'impl', type: 'block', position: { x: 550, y: 200 }, data: { blockName: 'implementer', role: 'implementer', model: 'gemma4-4b-dense-med', instructions: builtinRoles[2].instructions, verifier: 'test_runner', loopUntil: 'tests pass', maxIterations: 5, isComposite: false, agentCount: 0, _childNodes: null, _childEdges: null } },
-      { id: 'review', type: 'block', position: { x: 800, y: 150 }, data: { blockName: 'code_reviewer', role: 'reviewer', model: 'gemma4-26b-moe-agent', instructions: builtinRoles[5].instructions, verifier: null, loopUntil: 'reviewer approves', maxIterations: 3, isComposite: false, agentCount: 0, _childNodes: null, _childEdges: null } },
-      { id: 'verif', type: 'block', position: { x: 1050, y: 150 }, data: { blockName: 'verificator', role: 'verifier', model: 'gemma4-26b-moe-agent', instructions: builtinRoles[6].instructions, verifier: null, loopUntil: 'all checks pass', maxIterations: null, isComposite: false, agentCount: 0, _childNodes: null, _childEdges: null } },
+    const presetNodes = [
+      { id: 'req', name: 'requirements', role: 'planner', model: 'gemma4-4b-dense-med', instructions: builtinRoles[0].instructions },
+      { id: 'arch', name: 'architect', role: 'architect', model: 'gemma4-4b-dense-med', instructions: builtinRoles[1].instructions },
+      { id: 'tester', name: 'tester', role: 'tester', model: 'gemma4-4b-dense-med', instructions: builtinRoles[3].instructions },
+      { id: 'impl', name: 'implementer', role: 'implementer', model: 'gemma4-4b-dense-med', instructions: builtinRoles[2].instructions },
+      { id: 'review', name: 'code_reviewer', role: 'reviewer', model: 'gemma4-26b-moe-agent', instructions: builtinRoles[5].instructions },
+      { id: 'verif', name: 'verificator', role: 'verifier', model: 'gemma4-26b-moe-agent', instructions: builtinRoles[6].instructions },
     ];
+
+    const positions = [
+      { x: 50, y: 150 }, { x: 300, y: 150 }, { x: 550, y: 100 },
+      { x: 550, y: 250 }, { x: 800, y: 150 }, { x: 1050, y: 150 },
+    ];
+
+    nodes = presetNodes.map((pn, i) => ({
+      id: pn.id,
+      type: 'block',
+      position: positions[i],
+      data: {
+        blockName: pn.name,
+        type: 'leaf',
+        role: pn.role,
+        model: pn.model,
+        instructions: pn.instructions,
+        ports: defaultLeafPorts(pn.id),
+        children: [],
+        internalEdges: [],
+        childCount: 0,
+      },
+    }));
+
     edges = [
-      { id: 'e-req-arch', source: 'req', target: 'arch', animated: true, style: 'stroke: #38bdf8; stroke-width: 2px;' },
-      { id: 'e-arch-tester', source: 'arch', target: 'tester', animated: true, style: 'stroke: #38bdf8; stroke-width: 2px;' },
-      { id: 'e-arch-impl', source: 'arch', target: 'impl', animated: true, style: 'stroke: #38bdf8; stroke-width: 2px;' },
-      { id: 'e-tester-review', source: 'tester', target: 'review', animated: true, style: 'stroke: #38bdf8; stroke-width: 2px;' },
-      { id: 'e-impl-review', source: 'impl', target: 'review', animated: true, style: 'stroke: #38bdf8; stroke-width: 2px;' },
-      { id: 'e-review-verif', source: 'review', target: 'verif', animated: true, style: 'stroke: #38bdf8; stroke-width: 2px;' },
+      { id: 'e-req-arch', source: 'req', target: 'arch', sourceHandle: makeHandleId('req', 'out'), targetHandle: makeHandleId('arch', 'in'), animated: true, style: 'stroke: #38bdf8; stroke-width: 2px;' },
+      { id: 'e-arch-tester', source: 'arch', target: 'tester', sourceHandle: makeHandleId('arch', 'out'), targetHandle: makeHandleId('tester', 'in'), animated: true, style: 'stroke: #38bdf8; stroke-width: 2px;' },
+      { id: 'e-arch-impl', source: 'arch', target: 'impl', sourceHandle: makeHandleId('arch', 'out'), targetHandle: makeHandleId('impl', 'in'), animated: true, style: 'stroke: #38bdf8; stroke-width: 2px;' },
+      { id: 'e-tester-review', source: 'tester', target: 'review', sourceHandle: makeHandleId('tester', 'out'), targetHandle: makeHandleId('review', 'in'), animated: true, style: 'stroke: #38bdf8; stroke-width: 2px;' },
+      { id: 'e-impl-review', source: 'impl', target: 'review', sourceHandle: makeHandleId('impl', 'out'), targetHandle: makeHandleId('review', 'in'), animated: true, style: 'stroke: #38bdf8; stroke-width: 2px;' },
+      { id: 'e-review-verif', source: 'review', target: 'verif', sourceHandle: makeHandleId('review', 'out'), targetHandle: makeHandleId('verif', 'in'), animated: true, style: 'stroke: #38bdf8; stroke-width: 2px;' },
     ];
+
     teamName = 'full-development';
     selectedTeam = { name: 'full-development' };
     shouldFitView = true;
@@ -685,22 +714,21 @@
       const isObj = typeof blockType === 'object';
       const role = isObj ? blockType.role || 'agent' : 'agent';
       const position = (isObj && blockType.position) ? blockType.position : { x, y: 150 + (teamNodes.length % 3) * 150 };
+      const nodeId = instance;
       teamNodes.push({
-        id: instance,
+        id: nodeId,
         type: 'block',
         position,
         data: {
           blockName: isObj ? blockType.name || instance : instance,
+          type: 'leaf',
           role,
           model: (isObj && blockType.model) || 'gemma4-4b-dense-med',
           instructions: (isObj && blockType.instructions) || '',
-          verifier: (isObj && blockType.verifier) || null,
-          loopUntil: (isObj && blockType.loopUntil) || null,
-          maxIterations: (isObj && blockType.maxIterations) || null,
-          isComposite: false,
-          agentCount: 0,
-          _childNodes: null,
-          _childEdges: null,
+          ports: defaultLeafPorts(nodeId),
+          children: [],
+          internalEdges: [],
+          childCount: 0,
         },
       });
       if (!isObj || !blockType.position) x += 250;
@@ -710,6 +738,8 @@
         id: `${conn.source_block}-${conn.target_block}`,
         source: conn.source_block,
         target: conn.target_block,
+        sourceHandle: makeHandleId(conn.source_block, conn.source_port || 'out'),
+        targetHandle: makeHandleId(conn.target_block, conn.target_port || 'in'),
         animated: true,
         style: 'stroke: #38bdf8; stroke-width: 2px;',
       });
@@ -725,7 +755,7 @@
   async function handleSave() {
     if (!teamName.trim()) { saveMessage = 'Enter a flow name'; return; }
     try {
-      await saveTeam(teamName.trim(), nodes, edges);
+      await saveTeam(teamName.trim(), nodes.filter((n) => n.type === 'block'), edges);
       saveMessage = `Saved "${teamName}"`;
       teams = await fetchTeams();
       setTimeout(() => (saveMessage = ''), 3000);
@@ -818,7 +848,7 @@
               >
                 <span class="text-[10px]">&#9646;&#9646;</span>
                 <span class="font-medium flex-1 truncate text-xs">{block.name}</span>
-                <span class="text-[9px] text-purple-500">{block.agentCount}x</span>
+                <span class="text-[9px] text-purple-500">{countAgents(block.children)}x</span>
               </div>
               <button
                 onclick={() => deleteCustomBlock(i)}
@@ -993,7 +1023,7 @@
           <div class="space-y-1.5 text-[11px]">
             <div class="flex items-center gap-3">
               <kbd class="px-1.5 py-0.5 rounded bg-gray-800 border border-gray-700 text-gray-300 font-mono">Click</kbd>
-              <span class="text-gray-400">Select & edit node</span>
+              <span class="text-gray-400">Expand block / Edit leaf</span>
             </div>
             <div class="flex items-center gap-3">
               <kbd class="px-1.5 py-0.5 rounded bg-gray-800 border border-gray-700 text-gray-300 font-mono">Shift + Drag</kbd>
@@ -1001,7 +1031,7 @@
             </div>
             <div class="flex items-center gap-3">
               <kbd class="px-1.5 py-0.5 rounded bg-gray-800 border border-gray-700 text-gray-300 font-mono">Drag handle</kbd>
-              <span class="text-gray-400">Connect two agents</span>
+              <span class="text-gray-400">Connect ports</span>
             </div>
             <div class="flex items-center gap-3">
               <kbd class="px-1.5 py-0.5 rounded bg-gray-800 border border-gray-700 text-gray-300 font-mono">Backspace</kbd>
@@ -1020,10 +1050,10 @@
           <h4 class="text-[11px] font-semibold text-gray-300 uppercase tracking-wider mb-2">Workflow</h4>
           <div class="space-y-1.5 text-[11px] text-gray-400">
             <p>1. Drag agents onto canvas (or use + Agent)</p>
-            <p>2. Connect them by dragging between handles</p>
-            <p>3. Click a node to edit or attach a verifier</p>
-            <p>4. <span class="text-purple-400">Shift+Drag</span> to select multiple, then "Save as Block"</p>
-            <p>5. Click a <span class="text-purple-400">block</span> to expand/collapse inline</p>
+            <p>2. Connect them by dragging between port handles</p>
+            <p>3. Click a leaf node to edit it</p>
+            <p>4. Click a <span class="text-purple-400">composite block</span> to expand inline</p>
+            <p>5. <span class="text-purple-400">Shift+Drag</span> to select multiple, then "Save as Block"</p>
           </div>
         </div>
       {/if}
@@ -1145,35 +1175,21 @@
             </div>
           </div>
 
-          <!-- Verifier section -->
-          <div class="bg-gray-800/60 rounded-xl p-4 border border-gray-700/50 space-y-3">
-            <h4 class="text-[11px] font-semibold text-orange-400 uppercase tracking-wider flex items-center gap-1.5">
-              <span>&#8635;</span> Verification Loop
-            </h4>
-
-            <div>
-              <label for="edit-verifier" class="text-[11px] text-gray-400 font-medium block mb-1">Verifier agent</label>
-              <input id="edit-verifier" type="text" bind:value={editVerifier}
-                placeholder="e.g. requirements_verifier"
-                class="w-full px-3 py-2 rounded-lg bg-gray-900 border border-gray-700 text-sm text-gray-200
-                       placeholder-gray-600 focus:outline-none focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/20" />
+          <!-- Port info (read-only display) -->
+          {#if selectedNode.data.ports && selectedNode.data.ports.length > 0}
+            <div class="bg-gray-800/60 rounded-xl p-3 border border-gray-700/50">
+              <h4 class="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Ports</h4>
+              <div class="space-y-1">
+                {#each selectedNode.data.ports as port}
+                  <div class="flex items-center gap-2 text-[10px]">
+                    <span class="w-1.5 h-1.5 rounded-full {port.direction === 'input' ? 'bg-green-400' : 'bg-blue-400'}"></span>
+                    <span class="text-gray-300">{port.name}</span>
+                    <span class="text-gray-600 ml-auto">{port.type_tag}</span>
+                  </div>
+                {/each}
+              </div>
             </div>
-
-            <div>
-              <label for="edit-loop" class="text-[11px] text-gray-400 font-medium block mb-1">Loop until</label>
-              <input id="edit-loop" type="text" bind:value={editLoopUntil}
-                placeholder="e.g. verifier approves"
-                class="w-full px-3 py-2 rounded-lg bg-gray-900 border border-gray-700 text-sm text-gray-200
-                       placeholder-gray-600 focus:outline-none focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/20" />
-            </div>
-
-            <div>
-              <label for="edit-max-iter" class="text-[11px] text-gray-400 font-medium block mb-1">Max iterations</label>
-              <input id="edit-max-iter" type="number" bind:value={editMaxIterations} min="1" max="20"
-                class="w-full px-3 py-2 rounded-lg bg-gray-900 border border-gray-700 text-sm text-gray-200
-                       focus:outline-none focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/20" />
-            </div>
-          </div>
+          {/if}
 
           <div class="flex gap-2 pt-2">
             <button onclick={applyEdit}
