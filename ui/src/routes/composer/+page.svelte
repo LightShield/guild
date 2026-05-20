@@ -571,16 +571,23 @@
       nodeIdToChildId[n.id] = children[i].id;
     });
 
-    // Capture internal edges (edges between selected nodes)
+    // Capture internal edges (edges between selected nodes) with port IDs from handles
     const internalEdges = edges
       .filter((e) => selectedIds.has(e.source) && selectedIds.has(e.target))
-      .map((e) => ({
-        id: `${nodeIdToChildId[e.source]}-${nodeIdToChildId[e.target]}`,
-        sourceChildId: nodeIdToChildId[e.source],
-        sourcePortId: 'out',
-        targetChildId: nodeIdToChildId[e.target],
-        targetPortId: 'in',
-      }));
+      .map((e) => {
+        const sourcePortId = e.sourceHandle?.split('__port__')[1] || 'out';
+        const targetPortId = e.targetHandle?.split('__port__')[1] || 'in';
+        return {
+          id: `${nodeIdToChildId[e.source]}-${nodeIdToChildId[e.target]}`,
+          sourceChildId: nodeIdToChildId[e.source],
+          sourcePortId,
+          targetChildId: nodeIdToChildId[e.target],
+          targetPortId,
+        };
+      });
+
+    // Derive ports for the composite block
+    const ports = deriveCompositePorts(`composite-${Date.now()}`, children, internalEdges);
 
     const compositeBlock = {
       name: blockName.trim(),
@@ -588,10 +595,24 @@
       description: blockDescription || `Composite: ${children.map((c) => c.name).join(' + ')}`,
       children,
       internalEdges,
+      ports,
     };
 
     customBlocks = [...customBlocks, compositeBlock];
     persistCustomBlocks();
+
+    // Also save to backend if available (fire and forget)
+    import('$lib/api.js').then(({ createBlock }) => {
+      createBlock({
+        name: compositeBlock.name,
+        role: compositeBlock.role,
+        system_prompt: '',
+        inputs: ports.filter(p => p.direction === 'input').map(p => ({ name: p.name, type_tag: p.type_tag })),
+        outputs: ports.filter(p => p.direction === 'output').map(p => ({ name: p.name, type_tag: p.type_tag })),
+        children: children.map(c => ({ name: c.id, type: c.role })),
+        internal_edges: internalEdges,
+      }).catch(() => { /* backend not available */ });
+    }).catch(() => {});
     panelMode = 'none';
     saveMessage = `Block "${blockName}" saved`;
     setTimeout(() => (saveMessage = ''), 3000);
