@@ -906,6 +906,128 @@
     requestAnimationFrame(() => { shouldFitView = false; });
   }
 
+  // Python-specific guidelines summary (HARD rules) injected into all agent prompts
+  const PYTHON_GUIDELINES = `## Python Guidelines (HARD rules)
+- pyproject.toml only (no setup.py/setup.cfg)
+- pytest + pytest-cov with --cov-branch --cov-fail-under=100
+- ruff (linter), black (formatter), mypy --strict (type checker)
+- snake_case functions/vars, PascalCase classes, UPPER_CASE constants
+- Type hints on ALL function signatures
+- Line length: 100 chars
+- No magic numbers/strings (use named constants)
+- Functions <50 lines, params <5
+- Early exit / guard clauses
+- Dataclasses for data containers
+- Context managers for resources
+- f-strings for formatting, pathlib for files
+- No mutable default arguments
+- @pytest.mark.{unit,integration,e2e} on all tests
+- @pytest.mark.req('REQ-XX.X') on E2E tests
+- Arrange-Act-Assert structure in tests
+- One behavior per test, <20 lines each
+- Tests are black-box (no internal state access)
+- 100% branch coverage, document any exclusions`;
+
+  function loadPythonDevLoop() {
+    // Development block: planner → test-writer → implementer → code-reviewer (as composite)
+    const devBlockChildren = [
+      { id: 'planner', name: 'planner', type: 'leaf', role: 'planner', model: 'gemma4-4b-dense-med',
+        instructions: `You are a development planner. Given architecture and requirements:\n1. Create plan.md with file creation order\n2. Define test strategy (which tests for which ACs)\n3. List dependencies between files\n4. Specify test names and their file locations\n\n${PYTHON_GUIDELINES}`,
+        ports: [{ id: 'in', name: 'in', direction: 'input', type_tag: 'any' }, { id: 'out', name: 'out', direction: 'output', type_tag: 'plan' }],
+        position: { x: 0, y: 0 } },
+      { id: 'test_writer', name: 'test_writer', type: 'leaf', role: 'tester', model: 'gemma4-4b-dense-med',
+        instructions: `You are a test engineer writing black-box failing tests from acceptance criteria.\n1. Read plan.md for test names and locations\n2. Each AC → minimum 3 tests (happy, sad, edge)\n3. Tests must fail meaningfully (not just ImportError)\n4. Use @pytest.mark.req('REQ-XX.X') on E2E tests\n5. Arrange-Act-Assert, <20 lines each\n6. NEVER access internal state\n\n${PYTHON_GUIDELINES}`,
+        ports: [{ id: 'in', name: 'in', direction: 'input', type_tag: 'plan' }, { id: 'out', name: 'out', direction: 'output', type_tag: 'code-changes' }],
+        position: { x: 250, y: 0 } },
+      { id: 'implementer', name: 'implementer', type: 'leaf', role: 'implementer', model: 'gemma4-4b-dense-med',
+        instructions: `You are a senior Python developer. TDD discipline: write minimal code to pass tests.\n1. Read all tests first, then plan.md for file order\n2. Implement in dependency order\n3. Per file: read failing tests → minimal impl → refactor\n4. NEVER modify tests\n5. No dead code, no features without tests\n6. Constructor injection, no global state\n\n${PYTHON_GUIDELINES}`,
+        ports: [{ id: 'in', name: 'in', direction: 'input', type_tag: 'code-changes' }, { id: 'out', name: 'out', direction: 'output', type_tag: 'code-changes' }],
+        position: { x: 500, y: 0 } },
+      { id: 'code_reviewer', name: 'refactorer', type: 'leaf', role: 'reviewer', model: 'gemma4-26b-moe-agent',
+        instructions: `You are a refactoring agent (the "green→refactor" step of TDD).\n1. Code already passes all tests — DO NOT break them\n2. Improve structure: extract functions >50 lines, reduce params >5\n3. Apply DRY, remove duplication, improve naming\n4. Run linters (ruff, black --check, mypy --strict)\n5. Verify tests still pass after each refactor\n6. If clean and well-structured: APPROVED\n\n${PYTHON_GUIDELINES}`,
+        ports: [{ id: 'in', name: 'in', direction: 'input', type_tag: 'code-changes' }, { id: 'out', name: 'out', direction: 'output', type_tag: 'review' }],
+        position: { x: 750, y: 0 } },
+    ];
+
+    const devBlockEdges = [
+      { id: 'plan-test', sourceChildId: 'planner', sourcePortId: 'out', targetChildId: 'test_writer', targetPortId: 'in' },
+      { id: 'test-impl', sourceChildId: 'test_writer', sourcePortId: 'out', targetChildId: 'implementer', targetPortId: 'in' },
+      { id: 'impl-review', sourceChildId: 'implementer', sourcePortId: 'out', targetChildId: 'code_reviewer', targetPortId: 'in' },
+    ];
+
+    // Top-level agents (each with verification loop concept)
+    const topNodes = [
+      { id: 'req_interviewer', name: 'requirements', role: 'planner', model: 'gemma4-4b-dense-med',
+        instructions: `You are a requirements interviewer. Challenge the user, push on edge cases.\n1. Ask "what if?" for each stated requirement\n2. Produce requirements.md with testable ACs\n3. Each AC: one observable outcome + verify block (input → expected)\n4. Identify dependencies and risks\n\n${PYTHON_GUIDELINES}` },
+      { id: 'req_verifier', name: 'req_verifier', role: 'verifier', model: 'gemma4-26b-moe-agent',
+        instructions: `You verify requirements completeness and testability.\n1. Check: every AC has exactly one observable outcome\n2. Check: no ambiguity (could two devs implement differently?)\n3. Check: all edge cases covered\n4. If FAIL: list specific issues for the interviewer to fix\n5. If PASS: confirm and proceed` },
+      { id: 'architect', name: 'architect', role: 'architect', model: 'gemma4-4b-dense-med',
+        instructions: `You design system architecture from requirements.\nOutput: architecture.md (max 150 lines)\n1. Component boundaries and domains\n2. Public interfaces between modules\n3. Test seams (what to mock, what to integrate)\n4. Extension points\n5. SOLID at module level, domain grouping\n\n${PYTHON_GUIDELINES}` },
+      { id: 'arch_verifier', name: 'arch_verifier', role: 'verifier', model: 'gemma4-26b-moe-agent',
+        instructions: `You verify architecture alignment with requirements.\n1. Every component traceable to a requirement?\n2. Boundaries clean (no circular deps)?\n3. Test seams identified for all externals?\n4. Extension points for anticipated change?\n5. If FAIL: specific issues. If PASS: proceed.` },
+      { id: 'tdd_impl', name: 'tdd_implementer', role: 'orchestrator', model: 'gemma4-4b-dense-med',
+        instructions: 'TDD Implementer: plan → write-tests (red) → implement (green) → refactor',
+        type: 'composite', children: devBlockChildren, internalEdges: devBlockEdges },
+      { id: 'verificator', name: 'verificator', role: 'verifier', model: 'gemma4-26b-moe-agent',
+        instructions: `Final verification gate.\n1. VER-01 Intent Fidelity: reqs → impl + tests, no scope creep/gap\n2. VER-02 Convention Compliance: code style matches project\n3. VER-03 E2E Functionality: user can actually USE this\n4. VER-04 Systemic Learnings: 3+ repeated patterns = process issue\n5. VER-05 Gut Check: "feels wrong" red flags\nIf any check fails, route back to the failing phase.\n\n${PYTHON_GUIDELINES}` },
+    ];
+
+    const positions = [
+      { x: 50, y: 80 },   // req_interviewer
+      { x: 50, y: 250 },  // req_verifier
+      { x: 350, y: 80 },  // architect
+      { x: 350, y: 250 }, // arch_verifier
+      { x: 700, y: 150 }, // dev_block (composite)
+      { x: 1100, y: 150 }, // verificator
+    ];
+
+    nodes = topNodes.map((tn, i) => {
+      const isComposite = tn.type === 'composite';
+      const nodeId = tn.id;
+      const ports = isComposite
+        ? deriveCompositePorts(nodeId, tn.children, tn.internalEdges)
+        : defaultLeafPorts(nodeId);
+      return {
+        id: nodeId,
+        type: 'block',
+        position: positions[i],
+        data: {
+          blockName: tn.name,
+          type: isComposite ? 'composite' : 'leaf',
+          role: tn.role,
+          model: tn.model,
+          instructions: tn.instructions,
+          ports,
+          children: tn.children || [],
+          internalEdges: tn.internalEdges || [],
+          childCount: isComposite ? countAgents(tn.children) : 0,
+        },
+      };
+    });
+
+    edges = [
+      // Requirements flow: interviewer → verifier (loop), interviewer → architect
+      { id: 'e-req-reqv', source: 'req_interviewer', target: 'req_verifier', sourceHandle: makeHandleId('req_interviewer', 'out'), targetHandle: makeHandleId('req_verifier', 'in'), animated: true, style: 'stroke: #38bdf8; stroke-width: 2px;' },
+      { id: 'e-reqv-req', source: 'req_verifier', target: 'req_interviewer', sourceHandle: makeHandleId('req_verifier', 'out'), targetHandle: makeHandleId('req_interviewer', 'in'), animated: true, style: 'stroke: #f97316; stroke-width: 2px; stroke-dasharray: 4 2;' },
+      // Req → Architect
+      { id: 'e-req-arch', source: 'req_interviewer', target: 'architect', sourceHandle: makeHandleId('req_interviewer', 'out'), targetHandle: makeHandleId('architect', 'in'), animated: true, style: 'stroke: #38bdf8; stroke-width: 2px;' },
+      // Architecture flow: architect → verifier (loop)
+      { id: 'e-arch-archv', source: 'architect', target: 'arch_verifier', sourceHandle: makeHandleId('architect', 'out'), targetHandle: makeHandleId('arch_verifier', 'in'), animated: true, style: 'stroke: #38bdf8; stroke-width: 2px;' },
+      { id: 'e-archv-arch', source: 'arch_verifier', target: 'architect', sourceHandle: makeHandleId('arch_verifier', 'out'), targetHandle: makeHandleId('architect', 'in'), animated: true, style: 'stroke: #f97316; stroke-width: 2px; stroke-dasharray: 4 2;' },
+      // Architect → Dev block
+      { id: 'e-arch-dev', source: 'architect', target: 'tdd_impl', sourceHandle: makeHandleId('architect', 'out'), targetHandle: deriveCompositePorts('tdd_impl', devBlockChildren, devBlockEdges).find(p => p.direction === 'input')?.handleId || makeHandleId('tdd_impl', 'planner.in'), animated: true, style: 'stroke: #38bdf8; stroke-width: 2px;' },
+      // Dev block → Verificator
+      { id: 'e-dev-verif', source: 'tdd_impl', target: 'verificator', sourceHandle: deriveCompositePorts('tdd_impl', devBlockChildren, devBlockEdges).find(p => p.direction === 'output')?.handleId || makeHandleId('tdd_impl', 'code_reviewer.out'), targetHandle: makeHandleId('verificator', 'in'), animated: true, style: 'stroke: #38bdf8; stroke-width: 2px;' },
+      // Verificator → loop back (failure routes)
+      { id: 'e-verif-dev', source: 'verificator', target: 'tdd_impl', sourceHandle: makeHandleId('verificator', 'out'), targetHandle: deriveCompositePorts('tdd_impl', devBlockChildren, devBlockEdges).find(p => p.direction === 'input')?.handleId || makeHandleId('tdd_impl', 'planner.in'), animated: true, style: 'stroke: #f97316; stroke-width: 2px; stroke-dasharray: 4 2;' },
+    ];
+
+    teamName = 'python-dev-loop';
+    selectedTeam = { name: 'python Dev Loop' };
+    shouldFitView = true;
+    requestAnimationFrame(() => { shouldFitView = false; });
+  }
+
   // ===== Load Team =====
 
   function loadTeam(team) {
@@ -1096,17 +1218,30 @@
     <!-- Preset flows -->
     <div class="px-4 py-3 border-t border-gray-800">
       <h3 class="text-[11px] font-semibold text-gray-500 uppercase tracking-wider px-1 mb-2">Presets</h3>
-      <button
-        onclick={loadPresetFlow}
-        class="w-full flex items-center gap-2 text-left px-3 py-2.5 rounded-lg
-               bg-gradient-to-r from-guild-900/30 to-gray-800/40 hover:from-guild-900/50 hover:to-gray-800/60
-               text-sm text-guild-300 hover:text-guild-200
-               border border-guild-800/50 hover:border-guild-700/70 transition-all duration-150"
-      >
-        <span class="text-xs">&#9654;</span>
-        <span class="font-medium text-xs">Full Development</span>
-        <span class="ml-auto text-[9px] text-gray-500">6 agents</span>
-      </button>
+      <div class="space-y-1.5">
+        <button
+          onclick={loadPresetFlow}
+          class="w-full flex items-center gap-2 text-left px-3 py-2.5 rounded-lg
+                 bg-gradient-to-r from-guild-900/30 to-gray-800/40 hover:from-guild-900/50 hover:to-gray-800/60
+                 text-sm text-guild-300 hover:text-guild-200
+                 border border-guild-800/50 hover:border-guild-700/70 transition-all duration-150"
+        >
+          <span class="text-xs">&#9654;</span>
+          <span class="font-medium text-xs">Full Development</span>
+          <span class="ml-auto text-[9px] text-gray-500">6 agents</span>
+        </button>
+        <button
+          onclick={loadPythonDevLoop}
+          class="w-full flex items-center gap-2 text-left px-3 py-2.5 rounded-lg
+                 bg-gradient-to-r from-green-900/30 to-gray-800/40 hover:from-green-900/50 hover:to-gray-800/60
+                 text-sm text-green-300 hover:text-green-200
+                 border border-green-800/50 hover:border-green-700/70 transition-all duration-150"
+        >
+          <span class="text-xs">&#9654;</span>
+          <span class="font-medium text-xs">Python Dev Loop</span>
+          <span class="ml-auto text-[9px] text-gray-500">TDD + verifiers</span>
+        </button>
+      </div>
     </div>
 
     <!-- Saved flows -->
