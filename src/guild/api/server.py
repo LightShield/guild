@@ -207,13 +207,25 @@ def _register_blocks_endpoint(app: Any) -> None:
     """Register the GET /api/blocks route."""
 
     @app.get("/api/blocks")  # type: ignore[untyped-decorator]
-    async def list_blocks() -> list[dict[str, str]]:
-        """List available block definitions."""
+    async def list_blocks() -> list[dict[str, Any]]:
+        """List available block definitions with full detail."""
         try:
             from guild.blocks.registry import BlockRegistry
 
             registry = BlockRegistry()
-            return [{"name": block.name} for block in registry.list_blocks()]
+            results = []
+            for block in registry.list_blocks():
+                results.append({
+                    "name": block.name,
+                    "role": block.role,
+                    "version": block.version,
+                    "system_prompt": block.system_prompt,
+                    "tools": block.tools,
+                    "max_retries": block.max_retries,
+                    "inputs": [{"name": p.name, "type_tag": p.type_tag} for p in block.inputs],
+                    "outputs": [{"name": p.name, "type_tag": p.type_tag} for p in block.outputs],
+                })
+            return results
         except (ImportError, OSError):
             return []
 
@@ -246,23 +258,42 @@ def _register_teams_endpoints(app: Any, guild_dir: Path) -> None:
         teams_dir = guild_dir / "teams"
         teams_dir.mkdir(exist_ok=True)
         team_path = teams_dir / f"{name}.toml"
-        blocks: dict[str, str] = body.get("blocks", {})
+        blocks: dict[str, Any] = body.get("blocks", {})
         connections: list[dict[str, str]] = body.get("connections", [])
+        description: str = body.get("description", "")
+        entry_block: str = body.get("entry_block", next(iter(blocks), ""))
 
         lines = [
             "[team]",
             f'name = "{name}"',
-            f'entry_block = "{next(iter(blocks), "")}"',
+            f'description = "{description}"',
+            f'entry_block = "{entry_block}"',
             "",
             "[team.blocks]",
         ]
         for key, val in blocks.items():
-            lines.append(f'{key} = "{val}"')
+            if isinstance(val, dict):
+                lines.append(f'{key} = "{val.get("type", val.get("name", key))}"')
+            else:
+                lines.append(f'{key} = "{val}"')
         for conn in connections:
             lines.append("")
             lines.append("[[team.connections]]")
-            for k, v in conn.items():
-                lines.append(f'{k} = "{v}"')
+            lines.append(f'source_block = "{conn.get("source_block", "")}"')
+            lines.append(f'source_port = "{conn.get("source_port", "output")}"')
+            lines.append(f'target_block = "{conn.get("target_block", "")}"')
+            lines.append(f'target_port = "{conn.get("target_port", "input")}"')
+
+        # Store UI positions as metadata comment (not consumed by runtime)
+        positions = {k: v.get("position") for k, v in blocks.items() if isinstance(v, dict) and v.get("position")}
+        if positions:
+            lines.append("")
+            lines.append("# UI layout metadata (not used by runtime)")
+            lines.append("[team.ui]")
+            for key, pos in positions.items():
+                if pos:
+                    lines.append(f'{key} = {{ x = {pos["x"]}, y = {pos["y"]} }}')
+
         lines.append("")
         team_path.write_text("\n".join(lines))
         return {"status": "ok", "name": name}
