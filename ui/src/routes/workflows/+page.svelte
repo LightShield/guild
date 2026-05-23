@@ -3,14 +3,14 @@
 	import { fetchTasks, fetchWorkflow, fetchWorkflows } from '$lib/api.js';
 	import { taskEvents, tasks } from '$lib/stores.js';
 
-	let loading = true;
-	let selectedWorkflowId = '';
-	let workflowRecords = [];
-	let selectedRecord = null;
-	let fullEvents = [];
-	let childEvents = [];
-	let copied = '';
-	let apiUnavailable = false;
+	let loading = $state(true);
+	let selectedWorkflowId = $state('');
+	let workflowRecords = $state([]);
+	let selectedRecord = $state(null);
+	let fullEvents = $state([]);
+	let childEvents = $state([]);
+	let copied = $state('');
+	let apiUnavailable = $state(false);
 
 	const workflowTasks = $derived.by(() => {
 		const apiRecords = workflowRecords.length ? workflowRecords : $tasks;
