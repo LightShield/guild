@@ -63,14 +63,14 @@
 </script>
 
 <svelte:head>
-	<title>Guild - Composer</title>
+	<title>Guild - Compositions</title>
 </svelte:head>
 
 <div class="space-y-6">
 	<div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
 		<div>
-			<h2 class="text-2xl font-bold text-gray-100">Composer</h2>
-			<p class="mt-1 text-sm text-gray-500">Start from saved flows, open the visual studio, and inspect running compositions.</p>
+			<h2 class="text-2xl font-bold text-gray-100">Compositions</h2>
+			<p class="mt-1 text-sm text-gray-500">Saved workflow definitions and their executions. Use Composer Studio when you want the canvas editor.</p>
 		</div>
 		<div class="flex flex-wrap gap-2">
 			<a href="/composer-studio" class="rounded border border-guild-600 bg-guild-600 px-4 py-2 text-sm font-semibold text-white hover:bg-guild-500">

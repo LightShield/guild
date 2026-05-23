@@ -10,8 +10,8 @@
 		{ href: '/workflows', label: 'Workflows', icon: '&#8759;' },
 		{ href: '/agents', label: 'Agents', icon: '&#9679;' },
 		{ href: '/config', label: 'Config', icon: '&#9881;' },
-		{ href: '/composer', label: 'Composer', icon: '&#9830;' },
-		{ href: '/composer-studio', label: 'Studio', icon: '&#8942;' },
+		{ href: '/composer', label: 'Compositions', icon: '&#9830;' },
+		{ href: '/composer-studio', label: 'Composer Studio', icon: '&#8942;' },
 		{ href: '/messages', label: 'Messages', icon: '&#9993;' }
 	];
 

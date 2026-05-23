@@ -53,6 +53,7 @@ API_ROUTES: dict[str, str] = {
     "GET /api/workflows/{execution_id}": "Get workflow execution details",
     "GET /api/agents": "List all agents",
     "GET /api/blocks": "List available blocks",
+    "POST /api/blocks/{name}/run": "Run one block agent",
     "GET /api/teams": "List available teams",
     "POST /api/teams": "Save team composition",
     "POST /api/teams/{name}/run": "Run a saved team",
@@ -1052,7 +1053,41 @@ def _register_config_crud_routes(app: Any, guild_dir: Path) -> None:
     """Register config GET/POST routes."""
     from fastapi import Request
 
-    from guild.config.loader import load_config
+    from guild.config.loader import load_config, write_toml_bytes
+
+    config_sections = {
+        "provider": [
+            "provider_name",
+            "base_url",
+            "model",
+            "temperature",
+            "max_tokens",
+            "health_check_timeout_seconds",
+        ],
+        "guild": [
+            "default_permission",
+            "max_concurrent_agents",
+            "max_concurrent_tool_calls",
+            "autonomy_timeout_minutes",
+            "stuck_max_repeated_errors",
+            "stuck_max_no_progress_turns",
+            "stuck_max_repeated_calls",
+            "shell_timeout_seconds",
+            "shell_max_output_chars",
+            "cli_provider_timeout_seconds",
+            "default_max_turns",
+            "context_max_tokens",
+            "compact_threshold",
+            "preserve_recent_messages",
+            "websocket_poll_seconds",
+            "max_spawn_depth",
+        ],
+        "escalation": ["escalation_chain", "escalation_cli_providers"],
+        "daemon": ["auto_recovery", "presence_aware_notifications"],
+        "security": ["sandbox_mode", "sandbox_network"],
+        "routing": ["permission_model"],
+        "resource": ["resource_mode"],
+    }
 
     @app.get("/api/config")  # type: ignore[untyped-decorator]
     async def get_config() -> dict[str, Any]:
@@ -1066,9 +1101,18 @@ def _register_config_crud_routes(app: Any, guild_dir: Path) -> None:
 
     @app.post("/api/config")  # type: ignore[untyped-decorator]
     async def post_config(request: Request) -> dict[str, str]:
-        """Update Guild configuration (not yet implemented)."""
-        await request.json()
-        return {"status": "ok", "message": "Config update not yet implemented"}
+        """Update Guild configuration."""
+        body = await request.json()
+        config_path = guild_dir / "config.toml"
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        nested: dict[str, dict[str, Any]] = {}
+        for section, keys in config_sections.items():
+            values = {key: body[key] for key in keys if key in body}
+            if values:
+                nested[section] = values
+        with config_path.open("wb") as f:
+            write_toml_bytes(f, nested)
+        return {"status": "ok", "message": "Config saved"}
 
 
 def _register_websocket(app: Any, get_storage: Callable[[], "Storage"], guild_dir: Path) -> None:

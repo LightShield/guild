@@ -36,6 +36,18 @@
 		if (task.status === 'failed') return `[failed] ${label}`;
 		return label;
 	}
+
+	function originLabel(agent) {
+		if (agent.parent_task) return `workflow ${agent.parent_task.assigned_agent || agent.parent_task.task_id?.slice(0, 8)}`;
+		if (agent.task) return `direct ${agent.task.task_id?.slice(0, 8)}`;
+		return 'legacy';
+	}
+
+	function originHref(agent) {
+		if (agent.parent_task) return `/workflows?execution=${encodeURIComponent(agent.parent_task.task_id)}`;
+		if (agent.task) return `/tasks`;
+		return '';
+	}
 </script>
 
 <svelte:head>
@@ -74,6 +86,7 @@
 					<tr class="border-b border-gray-800">
 						<th class="px-4 py-3 text-left text-xs text-gray-500 uppercase">Agent</th>
 						<th class="px-4 py-3 text-left text-xs text-gray-500 uppercase">Status</th>
+						<th class="px-4 py-3 text-left text-xs text-gray-500 uppercase">Origin</th>
 						<th class="px-4 py-3 text-left text-xs text-gray-500 uppercase">Task Source</th>
 						<th class="px-4 py-3 text-right text-xs text-gray-500 uppercase">Tokens</th>
 						<th class="px-4 py-3 text-left text-xs text-gray-500 uppercase">Last Seen</th>
@@ -90,6 +103,13 @@
 								<span class="inline-flex border px-2 py-0.5 rounded text-xs font-medium {statusClass(agent.status)}">
 									{agent.status}
 								</span>
+							</td>
+							<td class="px-4 py-3 max-w-md">
+								{#if originHref(agent)}
+									<a href={originHref(agent)} class="text-sm text-guild-400 hover:text-guild-300">{originLabel(agent)}</a>
+								{:else}
+									<span class="text-sm text-gray-600">{originLabel(agent)}</span>
+								{/if}
 							</td>
 							<td class="px-4 py-3 max-w-md">
 								<p class="text-sm text-gray-300 line-clamp-2">{taskLabel(agent)}</p>
