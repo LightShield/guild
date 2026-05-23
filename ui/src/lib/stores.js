@@ -18,6 +18,9 @@ export const learnings = writable([]);
 /** @type {import('svelte/store').Writable<Array>} */
 export const audit = writable([]);
 
+/** @type {import('svelte/store').Writable<Array>} */
+export const taskEvents = writable([]);
+
 /** @type {import('svelte/store').Writable<boolean>} */
 export const wsConnected = writable(false);
 
@@ -39,6 +42,7 @@ export function connectWebSocket() {
         status.set(data);
         if (data.tasks) tasks.set(data.tasks);
         if (data.agents) agents.set(data.agents);
+        if (data.task_events) taskEvents.set(data.task_events);
     };
 
     ws.onclose = () => {

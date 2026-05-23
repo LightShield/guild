@@ -6,8 +6,10 @@ and parallel branch failure isolation.
 
 from __future__ import annotations
 
+import asyncio
 import json
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from enum import Enum
 from typing import TYPE_CHECKING, Any
 
@@ -18,6 +20,7 @@ from guild.config.constants import (
     AGENT_ID_PREFIX_LEN,
     BLOCK_RETRY_DELAY_SECONDS,
     BLOCK_RETRY_MAX,
+    CLI_PROVIDER_TIMEOUT_SECONDS,
     DEFAULT_LOOP_MAX_ITERATIONS,
     HEURISTIC_FAIL_SCORE,
     HEURISTIC_PASS_SCORE,
@@ -56,6 +59,11 @@ _EVAL_PASS_KEY = "pass"
 _EVAL_PASSED_KEY = "passed"
 _EVAL_SCORE_KEY = "score"
 _EVAL_FEEDBACK_KEY = "feedback"
+
+
+def _now() -> str:
+    """Return current UTC timestamp as ISO string."""
+    return datetime.now(UTC).isoformat()
 
 
 def _extract_embedded_json(text: str) -> str | None:
@@ -157,6 +165,7 @@ class TeamRunnerConfig:
 
     storage: Storage | None = None
     working_dir: str | None = None
+    parent_task_id: str | None = None
 
 
 class TeamRunner:
@@ -185,10 +194,13 @@ class TeamRunner:
         self._provider = provider
         self._storage = config.storage
         self._working_dir = config.working_dir
+        self._parent_task_id = config.parent_task_id
         self._outputs: dict[str, str] = {}
+        self._initial_input: str = ""
         self._agent_statuses: dict[str, AgentStatus] = {}
         self._caller_decisions: dict[str, str] = {}
         self._preserved_messages: dict[str, list[dict[str, Any]]] = {}
+        self._completed_blocks: list[str] = []
 
     @property
     def agent_statuses(self) -> dict[str, AgentStatus]:
@@ -240,6 +252,7 @@ class TeamRunner:
         2. For each block: gather inputs, run agent, handle loops/failures
         """
         order = self._execution_order()
+        self._initial_input = initial_input
         self._outputs[self._team.entry_block] = initial_input
         loop_handled = self._loop_handled_blocks()
 
@@ -248,6 +261,12 @@ class TeamRunner:
             if instance_name in loop_handled:
                 continue
 
+            await self._set_progress(instance_name)
+            await self._add_parent_event(
+                "block_running",
+                f"Running block '{instance_name}'.",
+                block_name=instance_name,
+            )
             input_data = self._gather_input(instance_name, initial_input)
             loop_def = self._find_loop_for_generator(instance_name)
 
@@ -256,8 +275,46 @@ class TeamRunner:
             else:
                 last_output = await self._run_block_with_escalation(instance_name, input_data)
             self._outputs[instance_name] = last_output
+            self._completed_blocks.append(instance_name)
+            await self._set_progress(None, last_output)
+            await self._add_parent_event(
+                "block_completed",
+                f"Block '{instance_name}' completed.",
+                block_name=instance_name,
+            )
 
         return last_output
+
+    async def _set_progress(self, running_block: str | None, latest_output: str = "") -> None:
+        """Persist coarse team execution progress for the UI."""
+        if self._storage is None or not self._parent_task_id:
+            return
+        completed = ", ".join(self._completed_blocks) if self._completed_blocks else "none"
+        parts = [f"Completed blocks: {completed}"]
+        if running_block:
+            parts.append(f"Running block: {running_block}")
+        if latest_output:
+            parts.append(f"Latest output:\n{latest_output}")
+        message = "\n\n".join(parts)
+        await self._storage.update_task(self._parent_task_id, result=message)
+
+    async def _add_parent_event(
+        self,
+        event_type: str,
+        message: str,
+        block_name: str | None = None,
+        agent_id: str | None = None,
+    ) -> None:
+        """Persist a parent flow timeline event for the UI."""
+        if self._storage is None or not self._parent_task_id:
+            return
+        await self._storage.add_task_event(
+            self._parent_task_id,
+            event_type,
+            message,
+            agent_id=agent_id,
+            block_name=block_name,
+        )
 
     def _loop_handled_blocks(self) -> set[str]:
         """Return block names that are handled inside loops (evaluators)."""
@@ -290,14 +347,22 @@ class TeamRunner:
     def _gather_input(self, instance_name: str, fallback: str) -> str:
         """Gather inputs from upstream block outputs for a given block."""
         parts: list[str] = []
+        seen: set[str] = set()
         for conn in self._team.connections:
             if conn.target_block != instance_name:
                 continue
             upstream_output = self._outputs.get(conn.source_block)
-            if upstream_output:
+            if upstream_output and upstream_output not in seen:
                 parts.append(upstream_output)
+                seen.add(upstream_output)
 
-        return "\n\n".join(parts) if parts else fallback
+        if not parts:
+            return fallback
+        return (
+            f"Original user task:\n{self._initial_input or fallback}\n\n"
+            f"Upstream block outputs for '{instance_name}':\n"
+            + "\n\n".join(parts)
+        )
 
     def _find_loop_for_generator(self, instance_name: str) -> LoopDef | None:
         """Find a loop definition where this block is the generator."""
@@ -525,9 +590,26 @@ class TeamRunner:
         if self._storage:
             desc = f"[{block_def.name}] {input_data[:TASK_DESC_PREVIEW_CHARS]}"
             await self._storage.create_task(task_id, desc)
-            await self._storage.register_agent(agent_id, block_def.name)
+            await self._storage.register_agent(agent_id, block_def.name, task_id)
             await self._storage.update_task(
-                task_id, assigned_agent=agent_id, status=TaskStatus.RUNNING.value
+                task_id,
+                assigned_agent=agent_id,
+                status=TaskStatus.RUNNING.value,
+                result=f"Block task started for '{block_def.name}'.",
+            )
+            await self._storage.update_agent(agent_id, status=AgentStatus.RUNNING.value)
+            await self._storage.add_task_event(
+                task_id,
+                "running",
+                f"Block task started for '{block_def.name}'.",
+                agent_id=agent_id,
+                block_name=block_def.name,
+            )
+            await self._add_parent_event(
+                "agent_spawned",
+                f"Spawned agent '{agent_id}' for block '{block_def.name}'.",
+                block_name=block_def.name,
+                agent_id=agent_id,
             )
             await self._storage.log_audit(
                 "task_created",
@@ -562,7 +644,23 @@ class TeamRunner:
             if msg.role and msg.content:
                 await self._storage.append_message(agent_id, msg.role, msg.content)
         await self._storage.update_task(
-            task_id, status=TaskStatus.COMPLETED.value, result=result[:TASK_RESULT_PREVIEW_CHARS]
+            task_id,
+            status=TaskStatus.COMPLETED.value,
+            result=result[:TASK_RESULT_PREVIEW_CHARS],
+            completed_at=_now(),
+        )
+        await self._storage.update_agent(
+            agent_id,
+            status=AgentStatus.COMPLETED.value,
+            token_input=str(loop.total_input_tokens),
+            token_output=str(loop.total_output_tokens),
+        )
+        await self._storage.add_task_event(
+            task_id,
+            "completed",
+            f"Block '{block_def.name}' returned output.",
+            agent_id=agent_id,
+            block_name=block_def.name,
         )
         await self._storage.log_audit(
             "task_completed",
@@ -580,6 +678,7 @@ class TeamRunner:
         system_prompt = await self._build_block_prompt(block_def)
 
         provider = self._get_provider_for_block(block_def)
+        provider_name = self._provider_label_for_block(block_def)
 
         from guild.agent.loop import AgentLoopConfig
 
@@ -588,30 +687,90 @@ class TeamRunner:
             tool_executors=tool_executors,
             config=AgentLoopConfig(working_dir=self._working_dir, max_turns=SUB_AGENT_MAX_TURNS),
         )
-        result = await loop.run(
-            system_prompt=system_prompt,
-            user_input=input_data,
-            self_review=block_def.role == "reviewer",
-        )
+        try:
+            wait_message = (
+                f"Block '{block_def.name}' is waiting on provider "
+                f"'{provider_name or 'unknown'}'."
+            )
+            await self._add_parent_event(
+                "provider_wait",
+                wait_message,
+                block_name=block_def.name,
+                agent_id=agent_id,
+            )
+            if self._storage:
+                await self._storage.add_task_event(
+                    task_id,
+                    "provider_wait",
+                    f"Waiting on provider '{provider_name or 'unknown'}'.",
+                    agent_id=agent_id,
+                    block_name=block_def.name,
+                )
+                await self._storage.update_task(
+                    task_id,
+                    result=f"Waiting on provider '{provider_name or 'unknown'}'.",
+                )
+            result = await asyncio.wait_for(
+                loop.run(
+                    system_prompt=system_prompt,
+                    user_input=input_data,
+                    self_review=False,
+                ),
+                timeout=CLI_PROVIDER_TIMEOUT_SECONDS,
+            )
+        except (TimeoutError, OSError, RuntimeError, ValueError) as exc:
+            message = str(exc) or f"Timed out after {CLI_PROVIDER_TIMEOUT_SECONDS}s"
+            if self._storage:
+                await self._storage.update_agent(agent_id, status=AgentStatus.FAILED.value)
+                await self._storage.update_task(
+                    task_id,
+                    status=TaskStatus.FAILED.value,
+                    result=message,
+                    completed_at=_now(),
+                )
+                await self._storage.add_task_event(
+                    task_id,
+                    "failed",
+                    f"Block '{block_def.name}' failed: {message}",
+                    agent_id=agent_id,
+                    block_name=block_def.name,
+                )
+            await self._add_parent_event(
+                "block_failed",
+                f"Block '{block_def.name}' failed: {message}",
+                block_name=block_def.name,
+                agent_id=agent_id,
+            )
+            raise
 
         await self._persist_block_result(block_def, loop, task_id, agent_id, result)
         return result
 
     def _get_provider_for_block(self, block_def: BlockDef) -> LLMProvider:
-        """Get the provider for a block, using per-block model override if set."""
-        if not block_def.model:
+        """Get the provider for a block, using per-block provider/model overrides if set."""
+        if not block_def.provider and not block_def.model:
             return self._provider
 
         from guild.cli.task_runner import create_provider_for_backend
         from guild.provider.retry import RetryConfig, RetryProvider
 
         base_url = self._resolve_base_url()
-        raw = create_provider_for_backend("ollama", base_url, block_def.model)
+        provider_name = block_def.provider or "ollama"
+        model = block_def.model or provider_name
+        raw = create_provider_for_backend(provider_name, base_url, model)
         config = RetryConfig(
             max_retries=BLOCK_RETRY_MAX,
             initial_delay_seconds=BLOCK_RETRY_DELAY_SECONDS,
         )
         return RetryProvider(raw, config=config)
+
+    def _provider_label_for_block(self, block_def: BlockDef) -> str:
+        """Return a user-facing provider label for timeline events."""
+        provider_name = block_def.provider or getattr(self._provider, "command", None)
+        model = block_def.model or getattr(self._provider, "model", None)
+        if provider_name and model and provider_name != model:
+            return f"{provider_name}/{model}"
+        return str(provider_name or model or "default")
 
     def _resolve_base_url(self) -> str:
         """Walk the provider chain to find the actual base_url."""

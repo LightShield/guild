@@ -1,29 +1,8 @@
-"""Daemon module — background agent execution and supervision."""
+"""Daemon module — background agent execution and supervision.
 
-from guild.daemon.lifecycle import ExitCode, LifecycleManager
-from guild.daemon.resource import (
-    ActivityState,
-    ResourceMonitor,
-    ResourceStatus,
-    ResourceThresholds,
-    SchedulingMode,
-)
-from guild.daemon.sleep_wake import SleepWakeConfig, SleepWakeDetector, WakeBehavior
-from guild.daemon.supervisor import DaemonSupervisor
+Submodules are intentionally not imported here. The daemon runner is executed
+with ``python -m guild.daemon.run``, and eager re-exports can create circular
+imports while Python initializes the package before the submodule.
+"""
 
-__all__ = [
-    "ActivityState",
-    "DaemonSupervisor",
-    "ExitCode",
-    "LifecycleManager",
-    "ResourceMonitor",
-    "ResourceStatus",
-    "ResourceThresholds",
-    "SchedulingMode",
-    "SleepWakeConfig",
-    "SleepWakeDetector",
-    "WakeBehavior",
-]
-
-# guild.daemon.run is an entry point module (python -m guild.daemon.run),
-# not re-exported here.
+__all__: list[str] = []

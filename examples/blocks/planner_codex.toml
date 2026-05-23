@@ -1,0 +1,16 @@
+[block]
+name = "planner-codex"
+role = "planner"
+version = "1.0.0"
+provider = "codex"
+model = "codex"
+system_prompt = "Break down tasks into actionable plans."
+
+[[block.inputs]]
+name = "task"
+type = "text"
+
+[[block.outputs]]
+name = "plan"
+type = "plan"
+

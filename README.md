@@ -74,6 +74,53 @@ OLLAMA_HOST=0.0.0.0 ollama serve
 guild config --set provider.base_url=http://<ollama-host-ip>:11434
 ```
 
+### Agent CLI Fallbacks
+
+Guild can run directly on installed agent CLIs, or escalate to them after local
+model fallbacks. The CLI provider supports `claude`/`gemini` style print mode
+and `codex exec`.
+
+To run without downloading Gemma/Ollama models, use Claude:
+
+```bash
+make install
+make init
+make task-claude TASK="Create a hello.txt file containing 'Hello from Guild'"
+```
+
+Or use Codex:
+
+```bash
+make install
+make init
+make task-codex TASK="Create a hello.txt file containing 'Hello from Guild'"
+```
+
+For a mixed team without changing global config, use the bundled
+`codex-claude` team. Codex plans/codes and Claude reviews:
+
+```bash
+make install
+make team-codex-claude TASK="Create a hello.txt file containing 'Hello from Guild'"
+```
+
+To start the API and UI, build the bundled UI, and install the mixed team:
+
+```bash
+make start
+```
+
+Then open http://127.0.0.1:8585.
+
+To keep Ollama as primary and use installed CLIs only as fallbacks:
+
+```bash
+guild config --set escalation.escalation_cli_providers=claude,codex
+```
+
+The repo includes `CLAUDE.md`, `AGENTS.md`, and `GEMINI.md` so Claude Code,
+Codex, Gemini, and similar agents can discover the same project guidance.
+
 ## The Escalation in Action
 
 ```

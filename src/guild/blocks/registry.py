@@ -204,6 +204,7 @@ class BlockRegistry:
             role=data.get("role", data["name"]),
             version=data.get("version", "1.0.0"),
             system_prompt=data.get("system_prompt", ""),
+            provider=data.get("provider"),
             model=data.get("model"),
             tools=data.get("tools", []),
             inputs=inputs,

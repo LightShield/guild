@@ -22,6 +22,7 @@ __all__ = [
     "kill_all_tasks",
     "kill_task",
     "launch_background_task",
+    "launch_background_team_task",
     "pause_task",
     "resume_task",
 ]
@@ -50,6 +51,24 @@ def launch_background_task(guild_dir: Path, task_id: str) -> None:
     # manages its own lifecycle (PID file, signal handling). No cleanup needed.
     subprocess.Popen(
         [sys.executable, "-m", "guild.daemon.run", task_id, str(guild_dir)],
+        start_new_session=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        stdin=subprocess.DEVNULL,
+    )
+
+
+def launch_background_team_task(guild_dir: Path, task_id: str, team_name: str) -> None:
+    """Fork a background daemon process to run a task through a team."""
+    subprocess.Popen(
+        [
+            sys.executable,
+            "-m",
+            "guild.daemon.team_run",
+            task_id,
+            str(guild_dir),
+            team_name,
+        ],
         start_new_session=True,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,

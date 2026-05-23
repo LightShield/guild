@@ -7,7 +7,10 @@ Does NOT support structured tool calling — text in/text out only.
 from __future__ import annotations
 
 import asyncio
+import os
 import shutil
+import signal
+from contextlib import suppress
 from typing import Any
 
 from logger_python import get_logger
@@ -18,6 +21,11 @@ from guild.provider.base import LLMProvider, LLMResponse
 __all__ = ["CLIToolProvider"]
 
 logger = get_logger(__name__)
+
+
+def _estimate_tokens(text: str) -> int:
+    """Return a rough local token estimate for CLI providers."""
+    return max(1, len(text) // 4) if text else 0
 
 
 class CLIToolProvider(LLMProvider):
@@ -46,7 +54,7 @@ class CLIToolProvider(LLMProvider):
     ) -> LLMResponse:
         """Send the conversation to the CLI tool and return the text response.
 
-        Extracts the last user message as the prompt. Tools are ignored
+        Serializes the full conversation as the prompt. Tools are ignored
         since CLI providers only support text in/text out.
         """
         prompt = self._extract_prompt(messages)
@@ -58,6 +66,8 @@ class CLIToolProvider(LLMProvider):
         return LLMResponse(
             content=stdout.strip(),
             tool_calls=None,
+            input_tokens=_estimate_tokens(prompt),
+            output_tokens=_estimate_tokens(stdout),
             model=self.model or self.command,
         )
 
@@ -66,22 +76,14 @@ class CLIToolProvider(LLMProvider):
         return shutil.which(self.command) is not None
 
     def _extract_prompt(self, messages: list[dict[str, Any]]) -> str:
-        """Extract the prompt text from the message list.
-
-        Uses the last user message. Falls back to concatenating all
-        messages if no user message is found.
-        """
-        for msg in reversed(messages):
-            if msg.get("role") == "user":
-                content: str = msg.get("content", "")
-                return content
-
+        """Serialize all messages so CLI agents receive full context."""
         parts: list[str] = []
         for msg in messages:
+            role = str(msg.get("role") or "message").upper()
             text: str = msg.get("content", "")
             if text:
-                parts.append(text)
-        return "\n".join(parts)
+                parts.append(f"{role}:\n{text}")
+        return "\n\n".join(parts)
 
     def _build_command(self, prompt: str) -> list[str]:
         """Build the command list to execute.
@@ -89,8 +91,18 @@ class CLIToolProvider(LLMProvider):
         Different CLI tools have different invocation patterns:
         - gemini: gemini -p "prompt"
         - claude: claude -p "prompt"
+        - codex: codex exec "prompt"
         """
+        if self.command == "codex":
+            cmd = [self.command, "exec", "--dangerously-bypass-approvals-and-sandbox"]
+            if self.model and self.model != self.command:
+                cmd.extend(["--model", self.model])
+            cmd.append(prompt)
+            return cmd
+
         cmd = [self.command]
+        if self.command == "claude":
+            cmd.append("--dangerously-skip-permissions")
         if self.model and self.model != self.command:
             cmd.extend(["--model", self.model])
         cmd.extend(["-p", prompt])
@@ -105,13 +117,18 @@ class CLIToolProvider(LLMProvider):
                 *cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                start_new_session=True,
             )
             stdout_bytes, stderr_bytes = await asyncio.wait_for(
                 process.communicate(),
                 timeout=self._timeout,
             )
         except TimeoutError as exc:
-            process.kill()
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except (AttributeError, ProcessLookupError):
+                with suppress(ProcessLookupError):
+                    process.kill()
             await process.wait()
             logger.warning("CLI provider %s timed out after %ds", self.command, self._timeout)
             raise TimeoutError(

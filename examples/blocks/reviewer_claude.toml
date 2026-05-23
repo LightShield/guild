@@ -1,0 +1,17 @@
+[block]
+name = "reviewer-claude"
+role = "reviewer"
+version = "1.0.0"
+provider = "claude"
+model = "claude"
+system_prompt = "Review code changes for correctness, edge cases, and maintainability."
+tools = ["file_read", "shell", "search"]
+
+[[block.inputs]]
+name = "changes"
+type = "code-changes"
+
+[[block.outputs]]
+name = "result"
+type = "review"
+

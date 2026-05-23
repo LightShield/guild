@@ -3,7 +3,8 @@
   import { fly } from 'svelte/transition';
   import { SvelteFlow, Controls, Background, MiniMap } from '@xyflow/svelte';
   import '@xyflow/svelte/dist/style.css';
-  import { fetchBlocks, fetchTeams, saveTeam } from '$lib/api.js';
+  import { createBlock, fetchBlocks, fetchTasks, fetchTeam, fetchTeams, runTeam, saveTeam } from '$lib/api.js';
+  import { taskEvents, tasks } from '$lib/stores.js';
   import BlockNode from '$lib/components/BlockNode.svelte';
   import GroupBoundary from '$lib/components/GroupBoundary.svelte';
 
@@ -19,6 +20,9 @@
   let selectedTeam = $state(null);
   let teamName = $state('');
   let saveMessage = $state('');
+  let runTaskDescription = $state('');
+  let runningFlow = $state(false);
+  let activeTaskId = $state('');
   let draggedBlock = $state(null);
 
   // ===== Right panel state =====
@@ -30,12 +34,14 @@
   // ===== Create agent form =====
   let newAgentName = $state('');
   let newAgentRole = $state('agent');
-  let newAgentModel = $state('gemma4-4b-dense-med');
+  let newAgentProvider = $state('codex');
+  let newAgentModel = $state('codex');
   let newAgentInstructions = $state('');
 
   // ===== Edit agent form =====
   let editName = $state('');
   let editRole = $state('');
+  let editProvider = $state('codex');
   let editModel = $state('');
   let editInstructions = $state('');
   let editTools = $state('');
@@ -54,7 +60,96 @@
   const nodeTypes = { block: BlockNode, 'group-boundary': GroupBoundary };
 
   const roles = ['agent', 'planner', 'architect', 'implementer', 'coder', 'tester', 'reviewer', 'verifier', 'orchestrator'];
-  const models = ['gemma4-2b-edge-fast', 'gemma4-4b-dense-med', 'gemma4-26b-moe-agent'];
+  const DRAFT_STORAGE_KEY = 'guild-composer-draft-v2';
+  const providerOptions = [
+    { value: 'codex', label: 'Codex' },
+    { value: 'claude', label: 'Claude' },
+  ];
+  const providerModels = {
+    codex: ['codex', 'gpt-5.4', 'gpt-5.4-mini'],
+    claude: ['claude', 'sonnet', 'opus'],
+  };
+  let draftLoaded = $state(false);
+  const activeFlowName = $derived((teamName.trim() || selectedTeam?.name || '').trim());
+  const activeFlowTasks = $derived.by(() => {
+    if (!activeFlowName) return [];
+    return [...$tasks]
+      .filter((task) => task.assigned_agent === activeFlowName)
+      .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')));
+  });
+  const activeFlowTask = $derived.by(() => {
+    if (activeTaskId) {
+      const explicitTask = activeFlowTasks.find((task) => task.task_id === activeTaskId);
+      if (explicitTask) return explicitTask;
+    }
+    return activeFlowTasks.find((task) => ['pending', 'running'].includes(task.status)) || activeFlowTasks[0] || null;
+  });
+  const activeFlowEvents = $derived.by(() => {
+    if (!activeFlowTask) return [];
+    return $taskEvents
+      .filter((event) => event.task_id === activeFlowTask.task_id)
+      .slice(-6)
+      .reverse();
+  });
+
+  function modelsForProvider(provider) {
+    return providerModels[provider] || [provider || 'codex'];
+  }
+
+  function defaultModelForProvider(provider) {
+    return modelsForProvider(provider)[0];
+  }
+
+  function selectCreateProvider(provider) {
+    newAgentProvider = provider;
+    newAgentModel = defaultModelForProvider(provider);
+  }
+
+  function selectEditProvider(provider) {
+    editProvider = provider;
+    editModel = defaultModelForProvider(provider);
+  }
+
+  function getCompletedBlocks(result) {
+    const match = String(result || '').match(/Completed blocks:\s*([^\n]+)/);
+    if (!match || match[1] === 'none') return new Set();
+    return new Set(match[1].split(',').map((item) => item.trim()).filter(Boolean));
+  }
+
+  function getRunningBlock(result) {
+    const match = String(result || '').match(/Running block:\s*([^\n]+)/);
+    return match ? match[1].trim() : '';
+  }
+
+  function nodeExecutionStatus(nodeId) {
+    if (!activeFlowTask) return '';
+    if (activeFlowTask.status === 'failed') return 'failed';
+    if (activeFlowTask.status === 'pending') return 'queued';
+    const completed = getCompletedBlocks(activeFlowTask.result);
+    if (activeFlowTask.status === 'completed') return 'completed';
+    if (getRunningBlock(activeFlowTask.result) === nodeId) return 'running';
+    if (completed.has(nodeId)) return 'completed';
+    if (activeFlowTask.status === 'running') return 'queued';
+    return '';
+  }
+
+  function applyExecutionState() {
+    let changed = false;
+    const nextNodes = nodes.map((node) => {
+      if (node.type !== 'block') return node;
+      const executionStatus = nodeExecutionStatus(node.id);
+      if (node.data?.executionStatus === executionStatus) return node;
+      changed = true;
+      return { ...node, data: { ...node.data, executionStatus } };
+    });
+    if (changed) nodes = nextNodes;
+  }
+
+  $effect(() => {
+    activeFlowTask;
+    nodes.length;
+    applyExecutionState();
+  });
 
   const builtinRoles = [
     { name: 'requirements', role: 'planner', description: 'Gather and document requirements', instructions: 'You are a requirements analyst. Given a feature request:\n1. Ask clarifying questions about scope and constraints\n2. Document functional and non-functional requirements\n3. Define acceptance criteria for each requirement\n4. Identify dependencies and risks' },
@@ -117,7 +212,35 @@
     if (stored) {
       try { customBlocks = JSON.parse(stored); } catch { /* ignore */ }
     }
+    restoreDraft();
+    draftLoaded = true;
   });
+
+  $effect(() => {
+    if (!draftLoaded) return;
+    const draft = JSON.stringify({
+      nodes: nodes.filter((n) => n.type === 'block'),
+      edges,
+      teamName,
+    });
+    try { localStorage.setItem(DRAFT_STORAGE_KEY, draft); } catch { /* quota exceeded */ }
+  });
+
+  function restoreDraft() {
+    const stored = localStorage.getItem(DRAFT_STORAGE_KEY);
+    if (!stored) return;
+    try {
+      const draft = JSON.parse(stored);
+      if (!Array.isArray(draft.nodes) || draft.nodes.length === 0) return;
+      nodes = draft.nodes;
+      edges = Array.isArray(draft.edges) ? draft.edges : [];
+      teamName = draft.teamName || '';
+      saveMessage = 'Restored unsaved draft';
+      setTimeout(() => (saveMessage = ''), 3000);
+    } catch {
+      localStorage.removeItem(DRAFT_STORAGE_KEY);
+    }
+  }
 
   function persistCustomBlocks() {
     try { localStorage.setItem('guild-custom-blocks', JSON.stringify(customBlocks)); } catch { /* quota exceeded */ }
@@ -189,6 +312,7 @@
       name: data.blockName || 'agent',
       type: data.type || 'leaf',
       role: data.role || 'agent',
+      provider: data.provider || 'codex',
       model: data.model,
       instructions: data.instructions,
       ports: data.ports || [],
@@ -241,8 +365,9 @@
         blockName: block.name,
         type: isComposite ? 'composite' : 'leaf',
         role: block.role || 'agent',
-        model: block.model || 'gemma4-4b-dense-med',
-        instructions: block.instructions || '',
+        provider: block.provider || 'codex',
+        model: block.model || defaultModelForProvider(block.provider || 'codex'),
+        instructions: block.instructions || block.system_prompt || '',
         ports,
         children: isComposite ? block.children : [],
         internalEdges: isComposite ? (block.internalEdges || []) : [],
@@ -498,7 +623,8 @@
     selectedNode = node;
     editName = node.data.blockName || '';
     editRole = node.data.role || 'agent';
-    editModel = node.data.model || 'gemma4-4b-dense-med';
+    editProvider = node.data.provider || 'codex';
+    editModel = node.data.model || defaultModelForProvider(editProvider);
     editInstructions = node.data.instructions || '';
     editTools = (node.data.tools || []).join(', ');
     editMaxRetries = node.data.maxRetries || 1;
@@ -554,7 +680,8 @@
     panelMode = 'create';
     newAgentName = '';
     newAgentRole = 'agent';
-    newAgentModel = 'gemma4-4b-dense-med';
+    newAgentProvider = 'codex';
+    newAgentModel = 'codex';
     newAgentInstructions = '';
   }
 
@@ -563,11 +690,21 @@
     const block = {
       name: newAgentName.trim(),
       role: newAgentRole,
+      provider: newAgentProvider,
       model: newAgentModel,
       instructions: newAgentInstructions,
     };
     addBlockFromSidebar(block);
     availableBlocks = [...availableBlocks, block];
+    createBlock({
+      name: block.name,
+      role: block.role,
+      provider: block.provider,
+      model: block.model,
+      system_prompt: block.instructions,
+      inputs: [{ name: 'in', type_tag: 'any' }],
+      outputs: [{ name: 'out', type_tag: 'any' }],
+    }).catch(() => { /* backend not available */ });
     panelMode = 'none';
   }
 
@@ -585,6 +722,7 @@
             ...n.data,
             blockName: editName,
             role: editRole,
+            provider: editProvider,
             model: editModel,
             instructions: editInstructions,
             tools,
@@ -740,6 +878,7 @@
       name: n.data.blockName || 'agent',
       type: n.data.type || 'leaf',
       role: n.data.role || 'agent',
+      provider: n.data.provider || 'codex',
       model: n.data.model,
       instructions: n.data.instructions,
       ports: (n.data.ports || []).map((p) => ({ id: p.id, name: p.name, direction: p.direction, type_tag: p.type_tag })),
@@ -1030,7 +1169,15 @@
 
   // ===== Load Team =====
 
-  function loadTeam(team) {
+  async function loadTeam(team) {
+    if (!team.blocks && team.name) {
+      try {
+        team = await fetchTeam(team.name);
+      } catch (e) {
+        saveMessage = `Error: ${e.message}`;
+        return;
+      }
+    }
     selectedTeam = team;
     teamName = team.name;
     const teamNodes = [];
@@ -1049,7 +1196,8 @@
           blockName: isObj ? blockType.name || instance : instance,
           type: 'leaf',
           role,
-          model: (isObj && blockType.model) || 'gemma4-4b-dense-med',
+          provider: (isObj && blockType.provider) || 'codex',
+          model: (isObj && blockType.model) || defaultModelForProvider((isObj && blockType.provider) || 'codex'),
           instructions: (isObj && blockType.instructions) || '',
           ports: defaultLeafPorts(nodeId),
           children: [],
@@ -1083,10 +1231,32 @@
     try {
       await saveTeam(teamName.trim(), nodes.filter((n) => n.type === 'block'), edges);
       saveMessage = `Saved "${teamName}"`;
+      try { localStorage.removeItem(DRAFT_STORAGE_KEY); } catch { /* ignore */ }
       teams = await fetchTeams();
       setTimeout(() => (saveMessage = ''), 3000);
     } catch (e) {
       saveMessage = `Error: ${e.message}`;
+    }
+  }
+
+  async function handleRunFlow() {
+    const name = teamName.trim() || selectedTeam?.name || '';
+    const description = runTaskDescription.trim();
+    if (!name) { saveMessage = 'Enter a flow name'; return; }
+    if (!description) { saveMessage = 'Enter a task to run'; return; }
+    runningFlow = true;
+    try {
+      await saveTeam(name, nodes.filter((n) => n.type === 'block'), edges);
+      teams = await fetchTeams();
+      const task = await runTeam(name, description);
+      activeTaskId = task.id;
+      $tasks = await fetchTasks();
+      runTaskDescription = '';
+      saveMessage = `Started "${name}" as task ${task.id.slice(0, 8)}`;
+    } catch (e) {
+      saveMessage = `Error: ${e.message}`;
+    } finally {
+      runningFlow = false;
     }
   }
 
@@ -1097,8 +1267,10 @@
     selectedTeam = null;
     teamName = '';
     saveMessage = '';
+    activeTaskId = '';
     panelMode = 'none';
     selectedNode = null;
+    try { localStorage.removeItem(DRAFT_STORAGE_KEY); } catch { /* ignore */ }
   }
 </script>
 
@@ -1310,8 +1482,27 @@
           Save
         </button>
       </div>
+      <div class="space-y-2">
+        <textarea
+          bind:value={runTaskDescription}
+          rows="3"
+          placeholder="Task to run with this flow..."
+          class="w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-sm text-gray-200
+                 placeholder-gray-600 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500/20
+                 transition-all duration-150 resize-none"
+        ></textarea>
+        <button
+          onclick={handleRunFlow}
+          disabled={runningFlow || !runTaskDescription.trim()}
+          class="w-full px-4 py-2 rounded-lg bg-green-700 hover:bg-green-600 disabled:bg-gray-700
+                 disabled:text-gray-500 disabled:cursor-not-allowed text-sm text-white
+                 font-medium transition-all duration-150 active:scale-95"
+        >
+          {runningFlow ? 'Starting...' : 'Run Flow'}
+        </button>
+      </div>
       {#if saveMessage}
-        <p class="text-xs px-1 {saveMessage.startsWith('Error') || saveMessage.startsWith('Select') ? 'text-red-400' : 'text-green-400'}">
+        <p class="text-xs px-1 {saveMessage.startsWith('Error') || saveMessage.startsWith('Select') || saveMessage.startsWith('Enter') ? 'text-red-400' : 'text-green-400'}">
           {saveMessage}
         </p>
       {/if}
@@ -1347,6 +1538,44 @@
                   text-sm text-gray-300 border border-gray-700/50 shadow-lg">
         <span class="text-gray-500">Flow:</span>
         <span class="font-semibold text-white ml-1">{selectedTeam.name}</span>
+      </div>
+    {/if}
+
+    {#if activeFlowTask}
+      <div class="absolute top-3 right-3 z-10 w-[360px] max-w-[calc(100%-1.5rem)] bg-gray-900/95 backdrop-blur-sm
+                  border border-gray-700/70 rounded-lg shadow-xl overflow-hidden">
+        <div class="px-4 py-3 border-b border-gray-800 flex items-center gap-3">
+          <span class="w-2 h-2 rounded-full
+            {activeFlowTask.status === 'running' ? 'bg-green-300 animate-pulse' :
+             activeFlowTask.status === 'completed' ? 'bg-sky-300' :
+             activeFlowTask.status === 'failed' ? 'bg-red-300' :
+             'bg-gray-300'}"></span>
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-2">
+              <p class="text-xs font-semibold text-gray-100 truncate">{activeFlowTask.assigned_agent}</p>
+              <span class="text-[9px] uppercase tracking-wider text-gray-500">{activeFlowTask.status}</span>
+            </div>
+            <p class="text-[11px] text-gray-500 font-mono">{activeFlowTask.task_id?.slice(0, 8)}</p>
+          </div>
+        </div>
+        <div class="px-4 py-3 space-y-2">
+          <p class="text-xs text-gray-300 line-clamp-2">{activeFlowTask.description}</p>
+          {#if activeFlowEvents.length > 0}
+            <div class="space-y-1.5 max-h-36 overflow-auto">
+              {#each activeFlowEvents as event}
+                <div class="rounded border border-gray-800 bg-gray-950/60 px-2 py-1.5">
+                  <div class="flex items-center gap-2">
+                    <span class="text-[9px] uppercase tracking-wider text-guild-400">{event.event_type}</span>
+                    <span class="text-[10px] text-gray-600">{event.timestamp}</span>
+                  </div>
+                  <p class="text-[11px] text-gray-300 mt-0.5">{event.message}</p>
+                </div>
+              {/each}
+            </div>
+          {/if}
+          <pre class="max-h-32 overflow-auto whitespace-pre-wrap break-words rounded bg-gray-950/80 border border-gray-800
+                      p-2 text-[11px] text-gray-300">{activeFlowTask.result || 'Queued. Waiting for runner progress.'}</pre>
+        </div>
       </div>
     {/if}
 
@@ -1469,11 +1698,22 @@
             </div>
 
             <div>
-              <label for="create-model" class="text-[11px] text-gray-400 font-medium block mb-1">Model</label>
+              <label for="create-provider" class="text-[11px] text-gray-400 font-medium block mb-1">Provider</label>
+              <select id="create-provider" bind:value={newAgentProvider} onchange={(e) => selectCreateProvider(e.currentTarget.value)}
+                class="w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-sm text-gray-200
+                       focus:outline-none focus:border-guild-500">
+                {#each providerOptions as provider}
+                  <option value={provider.value}>{provider.label}</option>
+                {/each}
+              </select>
+            </div>
+
+            <div>
+              <label for="create-model" class="text-[11px] text-gray-400 font-medium block mb-1">Model / Profile</label>
               <select id="create-model" bind:value={newAgentModel}
                 class="w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-sm text-gray-200
                        focus:outline-none focus:border-guild-500">
-                {#each models as m}
+                {#each modelsForProvider(newAgentProvider) as m}
                   <option value={m}>{m}</option>
                 {/each}
               </select>
@@ -1532,11 +1772,22 @@
             </div>
 
             <div>
-              <label for="edit-model" class="text-[11px] text-gray-400 font-medium block mb-1">Model</label>
+              <label for="edit-provider" class="text-[11px] text-gray-400 font-medium block mb-1">Provider</label>
+              <select id="edit-provider" bind:value={editProvider} onchange={(e) => selectEditProvider(e.currentTarget.value)}
+                class="w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-sm text-gray-200
+                       focus:outline-none focus:border-guild-500">
+                {#each providerOptions as provider}
+                  <option value={provider.value}>{provider.label}</option>
+                {/each}
+              </select>
+            </div>
+
+            <div>
+              <label for="edit-model" class="text-[11px] text-gray-400 font-medium block mb-1">Model / Profile</label>
               <select id="edit-model" bind:value={editModel}
                 class="w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-sm text-gray-200
                        focus:outline-none focus:border-guild-500">
-                {#each models as m}
+                {#each modelsForProvider(editProvider) as m}
                   <option value={m}>{m}</option>
                 {/each}
               </select>

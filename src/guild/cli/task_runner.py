@@ -51,6 +51,7 @@ __all__ = [
 logger = get_logger(__name__)
 
 OLLAMA_PROVIDER_NAME = "ollama"
+CLI_PROVIDER_NAMES = {"claude", "codex", "gemini"}
 
 
 @dataclass
@@ -77,6 +78,11 @@ def create_provider_for_backend(provider_name: str, base_url: str, model: str) -
         from guild.provider.ollama import create_provider
 
         return create_provider(base_url, model)
+    if provider_name in CLI_PROVIDER_NAMES:
+        from guild.provider.cli_provider import CLIToolProvider
+
+        cli_model = model if model and model != provider_name else None
+        return CLIToolProvider(command=provider_name, model=cli_model)
     raise ValueError(f"Unknown provider: {provider_name}")
 
 
@@ -249,7 +255,7 @@ async def persist_task_result(
     await store.update_task(
         task_id, status=TaskStatus.COMPLETED, result=result, assigned_agent=agent_id
     )
-    await store.register_agent(agent_id, "master")
+    await store.register_agent(agent_id, "master", task_id)
     await store.update_agent(
         agent_id,
         token_input=str(loop.total_input_tokens),
@@ -289,6 +295,7 @@ async def run_team_task(
     guild_dir: Path,
     team_name: str,
     description: str,
+    parent_task_id: str | None = None,
 ) -> str:
     """Run a task through a multi-agent team composition."""
     from guild.blocks.registry import BlockRegistry
@@ -299,6 +306,7 @@ async def run_team_task(
     async with Storage(db_path) as store:
         registry = BlockRegistry()
         registry.load_from_dir(guild_dir / "blocks")
+        registry.load_from_dir(guild_dir / "teams")
 
         team_def = registry.get_team(team_name)
         if team_def is None:
@@ -309,7 +317,11 @@ async def run_team_task(
             team=team_def,
             registry=registry,
             provider=provider,
-            config=TeamRunnerConfig(storage=store, working_dir=working_dir),
+            config=TeamRunnerConfig(
+                storage=store,
+                working_dir=working_dir,
+                parent_task_id=parent_task_id,
+            ),
         )
         result = await runner.run(description)
     return result

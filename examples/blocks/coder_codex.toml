@@ -1,0 +1,19 @@
+[block]
+name = "coder-codex"
+role = "coder"
+version = "1.0.0"
+provider = "codex"
+model = "codex"
+system_prompt = "Implement code changes based on specifications."
+tools = ["file_read", "file_write", "shell"]
+permission = "scoped"
+max_retries = 2
+
+[[block.inputs]]
+name = "spec"
+type = "plan"
+
+[[block.outputs]]
+name = "changes"
+type = "code-changes"
+

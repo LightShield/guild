@@ -16,19 +16,49 @@
   };
 
   const role = $derived(data.role || 'agent');
+  const provider = $derived(data.provider || 'codex');
+  const executionStatus = $derived(data.executionStatus || '');
   const config = $derived(roleConfig[role] || roleConfig.agent);
   const isComposite = $derived(data.type === 'composite');
   const ports = $derived(data.ports || []);
   const inputPorts = $derived(ports.filter((p) => p.direction === 'input'));
   const outputPorts = $derived(ports.filter((p) => p.direction === 'output'));
   const showPortLabels = $derived(inputPorts.length > 1 || outputPorts.length > 1);
+  const executionConfig = $derived(
+    executionStatus === 'running' ? {
+      border: '!border-green-400',
+      ring: 'ring-2 ring-green-400/60 shadow-green-500/20',
+      dot: 'bg-green-300 animate-pulse',
+      label: 'running',
+      text: 'text-green-300',
+    } : executionStatus === 'completed' ? {
+      border: '!border-sky-400/80',
+      ring: 'ring-1 ring-sky-400/40 shadow-sky-500/10',
+      dot: 'bg-sky-300',
+      label: 'done',
+      text: 'text-sky-300',
+    } : executionStatus === 'failed' ? {
+      border: '!border-red-400',
+      ring: 'ring-2 ring-red-400/50 shadow-red-500/20',
+      dot: 'bg-red-300',
+      label: 'failed',
+      text: 'text-red-300',
+    } : executionStatus === 'queued' ? {
+      border: '!border-gray-400/60',
+      ring: 'ring-1 ring-gray-500/30',
+      dot: 'bg-gray-300',
+      label: 'queued',
+      text: 'text-gray-300',
+    } : null
+  );
 </script>
 
 <div class="group relative">
   <div class="rounded-xl border {isComposite ? 'border-purple-500/60' : config.border} bg-gray-900/95 backdrop-blur-sm
               px-4 py-3.5 min-w-[180px] shadow-xl shadow-black/20
               transition-all duration-200 hover:shadow-2xl hover:shadow-black/30 hover:scale-[1.02]
-              {isComposite ? 'cursor-pointer' : ''}">
+              {isComposite ? 'cursor-pointer' : ''}
+              {executionConfig ? `${executionConfig.border} ${executionConfig.ring}` : ''}">
 
     <!-- Input handles (left side) -->
     {#each inputPorts as port, i}
@@ -63,6 +93,14 @@
       </span>
       {#if isComposite}
         <span class="text-[9px] text-gray-600 ml-1">{data.childCount || '?'} agents</span>
+      {:else}
+        <span class="text-[9px] text-gray-500 ml-1 uppercase">{provider}</span>
+      {/if}
+      {#if executionConfig}
+        <span class="ml-auto inline-flex items-center gap-1 text-[9px] uppercase tracking-wider {executionConfig.text}">
+          <span class="w-1.5 h-1.5 rounded-full {executionConfig.dot}"></span>
+          {executionConfig.label}
+        </span>
       {/if}
     </div>
 

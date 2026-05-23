@@ -54,7 +54,9 @@ class StorageProtocol(Protocol):
         """Update fields on an existing task."""
         ...
 
-    async def register_agent(self, agent_id: str, block_name: str) -> None:
+    async def register_agent(
+        self, agent_id: str, block_name: str, task_id: str | None = None
+    ) -> None:
         """Register a new agent with its block type."""
         ...
 

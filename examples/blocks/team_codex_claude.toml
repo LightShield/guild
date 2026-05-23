@@ -1,0 +1,22 @@
+[team]
+name = "codex-claude"
+description = "Codex plans and codes; Claude reviews."
+entry_block = "plan"
+
+[team.blocks]
+plan = "planner-codex"
+code = "coder-codex"
+review = "reviewer-claude"
+
+[[team.connections]]
+source_block = "plan"
+source_port = "plan"
+target_block = "code"
+target_port = "spec"
+
+[[team.connections]]
+source_block = "code"
+source_port = "changes"
+target_block = "review"
+target_port = "changes"
+

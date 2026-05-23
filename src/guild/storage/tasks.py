@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from logger_python import get_logger
 
-from guild.storage.connection import DBConnection
+if TYPE_CHECKING:
+    from guild.storage.connection import DBConnection
 
 __all__ = ["TaskOps"]
 
@@ -66,17 +67,56 @@ class TaskOps:
         )
         await self._db.commit()
 
-    async def register_agent(self, agent_id: str, block_name: str) -> None:
+    async def add_task_event(
+        self,
+        task_id: str,
+        event_type: str,
+        message: str,
+        agent_id: str | None = None,
+        block_name: str | None = None,
+    ) -> None:
+        """Append a task timeline event."""
+        await self._db.execute(
+            "INSERT INTO task_events"
+            " (task_id, event_type, message, agent_id, block_name, timestamp)"
+            " VALUES (?, ?, ?, ?, ?, ?)",
+            (task_id, event_type, message, agent_id, block_name, _now()),
+        )
+        await self._db.commit()
+
+    async def list_task_events(
+        self, task_id: str | None = None, limit: int = 100
+    ) -> list[dict[str, Any]]:
+        """List task timeline events, newest last."""
+        if task_id is None:
+            cursor = await self._db.execute(
+                "SELECT * FROM task_events ORDER BY id DESC LIMIT ?",
+                (limit,),
+            )
+            fetched_rows = list(await cursor.fetchall())
+            rows = list(reversed(fetched_rows))
+        else:
+            cursor = await self._db.execute(
+                "SELECT * FROM task_events WHERE task_id = ? ORDER BY id ASC LIMIT ?",
+                (task_id, limit),
+            )
+            rows = list(await cursor.fetchall())
+        return [dict(r) for r in rows]
+
+    async def register_agent(
+        self, agent_id: str, block_name: str, task_id: str | None = None
+    ) -> None:
         """Register a new agent."""
         await self._db.execute(
-            "INSERT INTO agents (agent_id, block_name, created_at) VALUES (?, ?, ?)",
-            (agent_id, block_name, _now()),
+            "INSERT INTO agents (agent_id, block_name, created_at, task_id, last_seen)"
+            " VALUES (?, ?, ?, ?, ?)",
+            (agent_id, block_name, _now(), task_id, _now()),
         )
         await self._db.commit()
 
     async def list_agents(self) -> list[dict[str, Any]]:
         """List all registered agents."""
-        cursor = await self._db.execute("SELECT * FROM agents")
+        cursor = await self._db.execute("SELECT * FROM agents ORDER BY created_at DESC")
         rows = await cursor.fetchall()
         return [dict(r) for r in rows]
 
@@ -84,10 +124,11 @@ class TaskOps:
         """Update one or more fields on an existing agent."""
         if not fields:
             return
-        allowed = {"status", "token_input", "token_output"}
+        allowed = {"status", "token_input", "token_output", "task_id", "last_seen"}
         filtered = {k: v for k, v in fields.items() if k in allowed}
         if not filtered:
             return
+        filtered.setdefault("last_seen", _now())
         set_clause = ", ".join(f"{k} = ?" for k in filtered)
         values = list(filtered.values()) + [agent_id]
         await self._db.execute(

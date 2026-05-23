@@ -30,6 +30,7 @@ class BlockDef:
     role: str
     version: str = "1.0.0"
     system_prompt: str = ""
+    provider: str | None = None
     model: str | None = None
     tools: list[str] = field(default_factory=list)
     inputs: list[PortDef] = field(default_factory=list)

@@ -7,8 +7,12 @@ Includes WebSocket endpoint for real-time status updates.
 
 import asyncio
 import json
+import math
+import os
+import re
 from collections.abc import AsyncGenerator, Callable
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -37,14 +41,19 @@ __all__ = ["API_ROUTES", "create_app"]
 
 logger = get_logger(__name__)
 
+_SAFE_TOML_KEY_RE = re.compile(r"^[A-Za-z0-9_-]+$")
+
 API_ROUTES: dict[str, str] = {
     "GET /api/status": "Project status, tasks, agents",
     "GET /api/tasks": "List all tasks",
     "GET /api/tasks/{id}": "Get task details",
+    "GET /api/tasks/{id}/messages": "Get task messages",
+    "GET /api/tasks/{id}/events": "Get task timeline events",
     "GET /api/agents": "List all agents",
     "GET /api/blocks": "List available blocks",
     "GET /api/teams": "List available teams",
     "POST /api/teams": "Save team composition",
+    "POST /api/teams/{name}/run": "Run a saved team",
     "GET /api/learnings": "List learnings",
     "GET /api/audit": "Audit log",
     "GET /api/config": "Current config",
@@ -60,11 +69,70 @@ API_ROUTES: dict[str, str] = {
 _UI_DIST = Path(__file__).resolve().parent.parent.parent.parent / "ui" / "dist"
 
 
-async def _get_current_status(storage: "Storage") -> dict[str, Any]:
+def _toml_quote(value: Any) -> str:
+    """Return a TOML basic string literal."""
+    text = str(value)
+    return (
+        '"'
+        + text.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n").replace("\r", "\\r")
+        + '"'
+    )
+
+
+def _toml_string_array(values: Any) -> str:
+    """Return a TOML array containing basic string literals."""
+    if not isinstance(values, list):
+        from fastapi import HTTPException
+
+        raise HTTPException(status_code=HTTP_BAD_REQUEST, detail="tools must be a list")
+    return "[" + ", ".join(_toml_quote(value) for value in values) + "]"
+
+
+def _validate_toml_key(value: Any, label: str) -> str:
+    """Validate path-derived identifiers before using them as filenames or TOML keys."""
+    if not isinstance(value, str) or not value or not _SAFE_TOML_KEY_RE.fullmatch(value):
+        from fastapi import HTTPException
+
+        raise HTTPException(
+            status_code=HTTP_BAD_REQUEST,
+            detail=f"{label} must contain only letters, numbers, underscores, and hyphens",
+        )
+    return value
+
+
+def _toml_number(value: Any, label: str) -> str:
+    """Validate and serialize a finite TOML number."""
+    if isinstance(value, bool) or not isinstance(value, int | float) or not math.isfinite(value):
+        from fastapi import HTTPException
+
+        raise HTTPException(status_code=HTTP_BAD_REQUEST, detail=f"{label} must be a number")
+    return str(value)
+
+
+def _toml_position_attrs(position: Any) -> list[str]:
+    """Validate and serialize UI position metadata."""
+    if position is None:
+        return []
+    if not isinstance(position, dict) or "x" not in position or "y" not in position:
+        from fastapi import HTTPException
+
+        raise HTTPException(
+            status_code=HTTP_BAD_REQUEST,
+            detail="position must include numeric x and y values",
+        )
+    return [
+        f"x = {_toml_number(position['x'], 'position.x')}",
+        f"y = {_toml_number(position['y'], 'position.y')}",
+    ]
+
+
+async def _get_current_status(storage: "Storage", guild_dir: Path) -> dict[str, Any]:
     """Gather current status for WebSocket broadcast."""
+    await _mark_stale_tasks(storage, guild_dir)
     summary = await storage.get_token_summary()
     tasks = await storage.list_tasks()
     agents = await storage.list_agents()
+    task_events = await storage.list_task_events(limit=150)
     return {
         "status": "ok",
         "version": __version__,
@@ -74,16 +142,128 @@ async def _get_current_status(storage: "Storage") -> dict[str, Any]:
         "total_output_tokens": summary["total_output"],
         "tasks": tasks,
         "agents": agents,
+        "task_events": task_events,
     }
 
 
-def _register_task_routes(app: Any, get_storage: Callable[[], "Storage"]) -> None:
+def _now() -> str:
+    """Return current UTC timestamp as ISO string."""
+    return datetime.now(UTC).isoformat()
+
+
+def _task_has_live_pid(guild_dir: Path, task_id: str) -> bool:
+    """Return True when a daemon PID file exists and points at a live process."""
+    pid_path = guild_dir / "run" / f"{task_id}.pid"
+    if not pid_path.exists():
+        return False
+    try:
+        pid = int(pid_path.read_text().strip())
+        os.kill(pid, 0)
+        return True
+    except (OSError, ValueError):
+        return False
+
+
+def _looks_like_block_child_task(task: dict[str, Any]) -> bool:
+    """Return True for per-block rows created inside a parent team run."""
+    assigned_agent = str(task.get("assigned_agent") or "")
+    description = str(task.get("description") or "")
+    is_generated_agent = bool(re.match(r"^[A-Za-z0-9_-]+-[0-9a-f]{8}$", assigned_agent))
+    return description.startswith("[") or is_generated_agent
+
+
+def _task_is_older_than(task: dict[str, Any], seconds: int) -> bool:
+    """Return True when a task was created more than seconds ago."""
+    try:
+        created = datetime.fromisoformat(str(task.get("created_at") or ""))
+    except ValueError:
+        return False
+    if created.tzinfo is None:
+        created = created.replace(tzinfo=UTC)
+    return datetime.now(UTC) - created > timedelta(seconds=seconds)
+
+
+async def _mark_stale_tasks(storage: "Storage", guild_dir: Path) -> None:
+    """Mark orphaned parent and child tasks failed so the UI does not show phantom runs."""
+    running_tasks = await storage.list_tasks(status=TaskStatus.RUNNING)
+    all_tasks = {task["task_id"]: task for task in await storage.list_tasks()}
+    parent_by_agent: dict[str, str] = {}
+    for event in await storage.list_task_events(limit=1000):
+        if event.get("event_type") != "agent_spawned" or not event.get("agent_id"):
+            continue
+        parent_by_agent[str(event["agent_id"])] = str(event["task_id"])
+
+    for task in running_tasks:
+        task_id = task.get("task_id", "")
+        if _looks_like_block_child_task(task):
+            parent_id = parent_by_agent.get(str(task.get("assigned_agent") or ""))
+            parent = all_tasks.get(parent_id or "")
+            if parent is None:
+                if _task_is_older_than(task, 30):
+                    message = "Stopped: block task has no linked parent workflow."
+                    await storage.update_task(
+                        task_id,
+                        status=TaskStatus.FAILED,
+                        completed_at=_now(),
+                        result=message,
+                    )
+                    await storage.add_task_event(
+                        task_id,
+                        "failed",
+                        message,
+                        agent_id=task.get("assigned_agent"),
+                    )
+                continue
+            parent_status = str(parent.get("status") or "")
+            parent_running_without_pid = (
+                parent_status == TaskStatus.RUNNING
+                and not _task_has_live_pid(guild_dir, str(parent.get("task_id") or ""))
+            )
+            if parent_status in {
+                TaskStatus.COMPLETED,
+                TaskStatus.FAILED,
+                TaskStatus.KILLED,
+            } or parent_running_without_pid:
+                message = "Stopped: parent workflow is no longer running."
+                await storage.update_task(
+                    task_id,
+                    status=TaskStatus.FAILED,
+                    completed_at=_now(),
+                    result=message,
+                )
+                await storage.add_task_event(
+                    task_id,
+                    "failed",
+                    message,
+                    agent_id=task.get("assigned_agent"),
+                )
+            continue
+        if _task_has_live_pid(guild_dir, task_id):
+            continue
+        message = "Stopped: no live daemon process owns this running task."
+        await storage.update_task(
+            task_id,
+            status=TaskStatus.FAILED,
+            completed_at=_now(),
+            result=message,
+        )
+        await storage.add_task_event(
+            task_id,
+            "failed",
+            message,
+            agent_id=task.get("assigned_agent"),
+        )
+
+
+def _register_task_routes(app: Any, get_storage: Callable[[], "Storage"], guild_dir: Path) -> None:
     """Register task-related API routes."""
-    _register_task_query_routes(app, get_storage)
-    _register_task_action_routes(app, get_storage)
+    _register_task_query_routes(app, get_storage, guild_dir)
+    _register_task_action_routes(app, get_storage, guild_dir)
 
 
-def _register_task_query_routes(app: Any, get_storage: Callable[[], "Storage"]) -> None:
+def _register_task_query_routes(
+    app: Any, get_storage: Callable[[], "Storage"], guild_dir: Path
+) -> None:
     """Register task query (GET/POST create) routes."""
     from fastapi import HTTPException, Request
 
@@ -91,12 +271,14 @@ def _register_task_query_routes(app: Any, get_storage: Callable[[], "Storage"]) 
     async def list_tasks(status: str | None = None) -> list[dict[str, Any]]:
         """List all tasks, optionally filtered by status."""
         storage = get_storage()
+        await _mark_stale_tasks(storage, guild_dir)
         return await storage.list_tasks(status=status)
 
     @app.get("/api/tasks/{task_id}")  # type: ignore[untyped-decorator]
     async def get_task(task_id: str) -> dict[str, Any]:
         """Return a single task by ID."""
         storage = get_storage()
+        await _mark_stale_tasks(storage, guild_dir)
         task = await storage.get_task(task_id)
         if task is None:
             raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Task not found")
@@ -114,11 +296,42 @@ def _register_task_query_routes(app: Any, get_storage: Callable[[], "Storage"]) 
             raise HTTPException(status_code=HTTP_BAD_REQUEST, detail="description is required")
         task_id = str(uuid.uuid4())
         await storage.create_task(task_id, description)
+        await storage.add_task_event(
+            task_id,
+            "queued",
+            "Task created from the UI; waiting for daemon startup.",
+        )
         await storage.log_audit("task_created", details=f"task_id={task_id}")
+        from guild.cli.daemon_ops import launch_background_task
+
+        launch_background_task(guild_dir, task_id)
         return {"id": task_id, "status": TaskStatus.PENDING, "description": description}
 
+    @app.get("/api/tasks/{task_id}/events")  # type: ignore[untyped-decorator]
+    async def get_task_events(task_id: str) -> list[dict[str, Any]]:
+        """Return timeline events for a task."""
+        storage = get_storage()
+        task = await storage.get_task(task_id)
+        if task is None:
+            raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Task not found")
+        return await storage.list_task_events(task_id)
 
-def _register_task_action_routes(app: Any, get_storage: Callable[[], "Storage"]) -> None:
+
+    @app.get("/api/tasks/{task_id}/messages")  # type: ignore[untyped-decorator]
+    async def get_task_messages(task_id: str) -> dict[str, Any]:
+        """Return messages for the task's assigned agent."""
+        storage = get_storage()
+        task = await storage.get_task(task_id)
+        if task is None:
+            raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Task not found")
+        agent_id = task.get("assigned_agent")
+        messages = await storage.get_messages(agent_id) if agent_id else []
+        return {"task": task, "agent_id": agent_id, "messages": messages}
+
+
+def _register_task_action_routes(
+    app: Any, get_storage: Callable[[], "Storage"], guild_dir: Path
+) -> None:
     """Register task action (kill/pause/resume) routes."""
     from fastapi import HTTPException
 
@@ -129,7 +342,26 @@ def _register_task_action_routes(app: Any, get_storage: Callable[[], "Storage"])
         task = await storage.get_task(task_id)
         if task is None:
             raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Task not found")
-        await storage.update_task(task_id, status=TaskStatus.KILLED)
+        from guild.cli.daemon_ops import kill_task as kill_daemon_task
+
+        killed = (
+            kill_daemon_task(task_id, guild_dir)
+            if _task_has_live_pid(guild_dir, task_id)
+            else False
+        )
+        await storage.update_task(
+            task_id,
+            status=TaskStatus.KILLED,
+            completed_at=_now(),
+            result="Killed by user." if killed else "Stopped: no live process was found.",
+        )
+        await storage.add_task_event(
+            task_id,
+            "killed",
+            "Stop requested from the UI."
+            if killed
+            else "Stop requested from the UI; no live process was found.",
+        )
         await storage.log_audit("task_killed", details=f"task_id={task_id}")
         return {"id": task_id, "action": TaskStatus.KILLED}
 
@@ -163,7 +395,36 @@ def _register_agent_routes(app: Any, get_storage: Callable[[], "Storage"]) -> No
     async def list_agents() -> list[dict[str, Any]]:
         """List all registered agents."""
         storage = get_storage()
-        return await storage.list_agents()
+        agents = await storage.list_agents()
+        tasks = await storage.list_tasks()
+        tasks_by_id = {task["task_id"]: task for task in tasks}
+        tasks_by_agent = {
+            task.get("assigned_agent"): task for task in tasks if task.get("assigned_agent")
+        }
+        events = await storage.list_task_events(limit=300)
+        parent_by_agent: dict[str, dict[str, Any]] = {}
+        for event in events:
+            if event.get("event_type") != "agent_spawned":
+                continue
+            agent_id = event.get("agent_id")
+            task_id = event.get("task_id")
+            if agent_id and task_id and task_id in tasks_by_id:
+                parent_by_agent[str(agent_id)] = tasks_by_id[str(task_id)]
+
+        enriched = []
+        for agent in agents:
+            agent_task = tasks_by_id.get(agent.get("task_id")) or tasks_by_agent.get(
+                agent.get("agent_id")
+            )
+            parent_task = parent_by_agent.get(str(agent.get("agent_id")))
+            enriched.append(
+                {
+                    **agent,
+                    "task": agent_task,
+                    "parent_task": parent_task,
+                }
+            )
+        return enriched
 
 
 def _register_config_routes(
@@ -178,20 +439,23 @@ def _register_status_routes(
     app: Any, get_storage: Callable[[], "Storage"], guild_dir: Path
 ) -> None:
     """Register status, learnings, and audit routes."""
-    _register_status_endpoint(app, get_storage)
-    _register_blocks_endpoint(app)
+    _register_status_endpoint(app, get_storage, guild_dir)
+    _register_blocks_endpoint(app, guild_dir)
     _register_teams_endpoints(app, guild_dir)
     _register_learnings_endpoint(app, get_storage)
     _register_audit_endpoint(app, get_storage)
 
 
-def _register_status_endpoint(app: Any, get_storage: Callable[[], "Storage"]) -> None:
+def _register_status_endpoint(
+    app: Any, get_storage: Callable[[], "Storage"], guild_dir: Path
+) -> None:
     """Register the GET /api/status route."""
 
     @app.get("/api/status")  # type: ignore[untyped-decorator]
     async def get_status() -> dict[str, Any]:
         """Return project status with token usage summaries."""
         storage = get_storage()
+        await _mark_stale_tasks(storage, guild_dir)
         summary = await storage.get_token_summary()
         return {
             "status": "ok",
@@ -203,7 +467,7 @@ def _register_status_endpoint(app: Any, get_storage: Callable[[], "Storage"]) ->
         }
 
 
-def _register_blocks_endpoint(app: Any) -> None:
+def _register_blocks_endpoint(app: Any, guild_dir: Path) -> None:
     """Register the GET /api/blocks route."""
 
     @app.get("/api/blocks")  # type: ignore[untyped-decorator]
@@ -213,18 +477,25 @@ def _register_blocks_endpoint(app: Any) -> None:
             from guild.blocks.registry import BlockRegistry
 
             registry = BlockRegistry()
+            registry.load_from_dir(guild_dir / "blocks")
             results = []
             for block in registry.list_blocks():
-                results.append({
-                    "name": block.name,
-                    "role": block.role,
-                    "version": block.version,
-                    "system_prompt": block.system_prompt,
-                    "tools": block.tools,
-                    "max_retries": block.max_retries,
-                    "inputs": [{"name": p.name, "type_tag": p.type_tag} for p in block.inputs],
-                    "outputs": [{"name": p.name, "type_tag": p.type_tag} for p in block.outputs],
-                })
+                results.append(
+                    {
+                        "name": block.name,
+                        "role": block.role,
+                        "version": block.version,
+                        "system_prompt": block.system_prompt,
+                        "provider": block.provider,
+                        "model": block.model,
+                        "tools": block.tools,
+                        "max_retries": block.max_retries,
+                        "inputs": [{"name": p.name, "type_tag": p.type_tag} for p in block.inputs],
+                        "outputs": [
+                            {"name": p.name, "type_tag": p.type_tag} for p in block.outputs
+                        ],
+                    }
+                )
             return results
         except (ImportError, OSError):
             return []
@@ -233,65 +504,85 @@ def _register_blocks_endpoint(app: Any) -> None:
     async def get_block(block_name: str) -> dict[str, Any]:
         """Get a single block definition by name."""
         from fastapi import HTTPException
+
         from guild.blocks.registry import BlockRegistry
 
+        block_name = _validate_toml_key(block_name, "Block name")
         registry = BlockRegistry()
+        registry.load_from_dir(guild_dir / "blocks")
         block = registry.get_block(block_name)
         if block is None:
-            raise HTTPException(status_code=HTTP_NOT_FOUND, detail=f"Block '{block_name}' not found")
+            raise HTTPException(
+                status_code=HTTP_NOT_FOUND, detail=f"Block '{block_name}' not found"
+            )
         return {
             "name": block.name,
             "role": block.role,
             "version": block.version,
             "system_prompt": block.system_prompt,
+            "provider": block.provider,
+            "model": block.model,
             "tools": block.tools,
             "max_retries": block.max_retries,
-            "inputs": [{"name": p.name, "type_tag": p.type_tag, "description": p.description} for p in block.inputs],
-            "outputs": [{"name": p.name, "type_tag": p.type_tag, "description": p.description} for p in block.outputs],
+            "inputs": [
+                {"name": p.name, "type_tag": p.type_tag, "description": p.description}
+                for p in block.inputs
+            ],
+            "outputs": [
+                {"name": p.name, "type_tag": p.type_tag, "description": p.description}
+                for p in block.outputs
+            ],
         }
 
     @app.post("/api/blocks")  # type: ignore[untyped-decorator]
     async def create_block(request: Any) -> dict[str, str]:
         """Create a new block definition (writes TOML to .guild/blocks/)."""
-        from fastapi import HTTPException, Request as FRequest
+        from fastapi import HTTPException
 
         body = await request.json()
         name: str = body.get("name", "")
         if not name:
             raise HTTPException(status_code=HTTP_BAD_REQUEST, detail="Block name is required")
+        name = _validate_toml_key(name, "Block name")
 
         blocks_dir = guild_dir / "blocks"
         blocks_dir.mkdir(exist_ok=True)
         block_path = blocks_dir / f"{name}.toml"
 
         role: str = body.get("role", "agent")
+        provider: str = body.get("provider", "")
+        model: str = body.get("model", "")
         system_prompt: str = body.get("system_prompt", body.get("instructions", ""))
         tools: list[str] = body.get("tools", [])
-        max_retries: int = body.get("max_retries", 1)
+        max_retries = body.get("max_retries", 1)
         inputs: list[dict[str, str]] = body.get("inputs", [{"name": "input", "type_tag": "any"}])
         outputs: list[dict[str, str]] = body.get("outputs", [{"name": "output", "type_tag": "any"}])
 
         lines = [
             "[block]",
-            f'name = "{name}"',
-            f'role = "{role}"',
+            f"name = {_toml_quote(name)}",
+            f"role = {_toml_quote(role)}",
             'version = "1.0.0"',
-            f'system_prompt = """{system_prompt}"""',
-            f"tools = {tools!r}",
-            f"max_retries = {max_retries}",
+            f"system_prompt = {_toml_quote(system_prompt)}",
+            f"max_retries = {_toml_number(max_retries, 'max_retries')}",
         ]
+        if provider:
+            lines.append(f"provider = {_toml_quote(provider)}")
+        if model:
+            lines.append(f"model = {_toml_quote(model)}")
+        lines.append(f"tools = {_toml_string_array(tools)}")
 
         for port in inputs:
             lines.append("")
             lines.append("[[block.inputs]]")
-            lines.append(f'name = "{port.get("name", "input")}"')
-            lines.append(f'type_tag = "{port.get("type_tag", "any")}"')
+            lines.append(f"name = {_toml_quote(port.get('name', 'input'))}")
+            lines.append(f"type = {_toml_quote(port.get('type_tag', port.get('type', 'any')))}")
 
         for port in outputs:
             lines.append("")
             lines.append("[[block.outputs]]")
-            lines.append(f'name = "{port.get("name", "output")}"')
-            lines.append(f'type_tag = "{port.get("type_tag", "any")}"')
+            lines.append(f"name = {_toml_quote(port.get('name', 'output'))}")
+            lines.append(f"type = {_toml_quote(port.get('type_tag', port.get('type', 'any')))}")
 
         # Composite block: store children and internal edges
         children: list[dict[str, Any]] = body.get("children", [])
@@ -299,20 +590,29 @@ def _register_blocks_endpoint(app: Any) -> None:
         if children:
             lines.append("")
             lines.append("[block.composition]")
-            lines.append(f'entry_block = "{children[0].get("name", children[0].get("id", ""))}"')
+            entry_child = _validate_toml_key(
+                children[0].get("name", children[0].get("id", "")), "Entry child"
+            )
+            lines.append(f"entry_block = {_toml_quote(entry_child)}")
             lines.append("")
             lines.append("[block.composition.blocks]")
             for child in children:
-                child_name = child.get("name", child.get("id", ""))
-                child_type = child.get("type", child.get("role", "agent"))
-                lines.append(f'{child_name} = "{child_type}"')
+                child_name = _validate_toml_key(
+                    child.get("name", child.get("id", "")), "Child name"
+                )
+                child_type = _validate_toml_key(
+                    child.get("type", child.get("role", "agent")), "Child type"
+                )
+                lines.append(f"{child_name} = {_toml_quote(child_type)}")
             for edge in internal_edges:
                 lines.append("")
                 lines.append("[[block.composition.connections]]")
-                lines.append(f'source_block = "{edge.get("sourceChildId", "")}"')
-                lines.append(f'source_port = "{edge.get("sourcePortId", "output")}"')
-                lines.append(f'target_block = "{edge.get("targetChildId", "")}"')
-                lines.append(f'target_port = "{edge.get("targetPortId", "input")}"')
+                source_block = _validate_toml_key(edge.get("sourceChildId", ""), "Source child")
+                target_block = _validate_toml_key(edge.get("targetChildId", ""), "Target child")
+                lines.append(f"source_block = {_toml_quote(source_block)}")
+                lines.append(f"source_port = {_toml_quote(edge.get('sourcePortId', 'output'))}")
+                lines.append(f"target_block = {_toml_quote(target_block)}")
+                lines.append(f"target_port = {_toml_quote(edge.get('targetPortId', 'input'))}")
 
         lines.append("")
         block_path.write_text("\n".join(lines))
@@ -323,9 +623,12 @@ def _register_blocks_endpoint(app: Any) -> None:
         """Delete a block definition."""
         from fastapi import HTTPException
 
+        block_name = _validate_toml_key(block_name, "Block name")
         block_path = guild_dir / "blocks" / f"{block_name}.toml"
         if not block_path.exists():
-            raise HTTPException(status_code=HTTP_NOT_FOUND, detail=f"Block '{block_name}' not found")
+            raise HTTPException(
+                status_code=HTTP_NOT_FOUND, detail=f"Block '{block_name}' not found"
+            )
         block_path.unlink()
         return {"status": "ok", "name": block_name}
 
@@ -345,6 +648,7 @@ def _register_teams_endpoints(app: Any, guild_dir: Path) -> None:
         if not results:
             try:
                 from guild.config.loader import load_config
+
                 config = load_config(guild_dir)
                 teams = getattr(config, "teams", None) or []
                 results = [{"name": t.name} for t in teams]
@@ -357,27 +661,48 @@ def _register_teams_endpoints(app: Any, guild_dir: Path) -> None:
         """Get a team definition by name (reads TOML)."""
         from fastapi import HTTPException
 
+        team_name = _validate_toml_key(team_name, "Team name")
         team_path = guild_dir / "teams" / f"{team_name}.toml"
         if not team_path.exists():
             raise HTTPException(status_code=HTTP_NOT_FOUND, detail=f"Team '{team_name}' not found")
         content = team_path.read_text()
         try:
             import tomllib
+
             data = tomllib.loads(content)
         except (ImportError, ValueError):
             try:
-                import tomli as tomllib  # type: ignore[no-redef]
+                import tomli as tomllib  # type: ignore[import-not-found,no-redef]
+
                 data = tomllib.loads(content)
             except (ImportError, ValueError):
                 return {"name": team_name, "raw": content}
         team = data.get("team", {})
+        blocks = team.get("blocks", {})
+        ui = team.get("ui", {})
+        if isinstance(blocks, dict) and isinstance(ui, dict):
+            normalized_ui = {}
+            for key, value in ui.items():
+                if isinstance(value, dict) and "x" in value and "y" in value:
+                    value = {
+                        **value,
+                        "position": {"x": value.pop("x"), "y": value.pop("y")},
+                    }
+                normalized_ui[key] = value
+            ui = normalized_ui
+            blocks = {
+                key: {**value, "type": blocks.get(key, key)}
+                if isinstance(value, dict)
+                else blocks.get(key, key)
+                for key, value in ui.items()
+            } | {key: value for key, value in blocks.items() if key not in ui}
         return {
             "name": team.get("name", team_name),
             "description": team.get("description", ""),
             "entry_block": team.get("entry_block", ""),
-            "blocks": team.get("blocks", {}),
+            "blocks": blocks,
             "connections": team.get("connections", []),
-            "ui": team.get("ui", {}),
+            "ui": ui,
         }
 
     @app.delete("/api/teams/{team_name}")  # type: ignore[untyped-decorator]
@@ -385,11 +710,60 @@ def _register_teams_endpoints(app: Any, guild_dir: Path) -> None:
         """Delete a team definition."""
         from fastapi import HTTPException
 
+        team_name = _validate_toml_key(team_name, "Team name")
         team_path = guild_dir / "teams" / f"{team_name}.toml"
         if not team_path.exists():
             raise HTTPException(status_code=HTTP_NOT_FOUND, detail=f"Team '{team_name}' not found")
         team_path.unlink()
         return {"status": "ok", "name": team_name}
+
+    @app.post("/api/teams/{team_name}/run")  # type: ignore[untyped-decorator]
+    async def run_team(team_name: str, request: Request) -> dict[str, Any]:
+        """Create a task and run it through a saved team composition."""
+        import uuid
+
+        from fastapi import HTTPException
+
+        team_name = _validate_toml_key(team_name, "Team name")
+        team_path = guild_dir / "teams" / f"{team_name}.toml"
+        if not team_path.exists():
+            raise HTTPException(status_code=HTTP_NOT_FOUND, detail=f"Team '{team_name}' not found")
+
+        body = await request.json()
+        description: str = body.get("description", "").strip()
+        if not description:
+            raise HTTPException(status_code=HTTP_BAD_REQUEST, detail="description is required")
+
+        task_id = str(uuid.uuid4())
+        db_path = guild_dir / DB_FILENAME
+        from guild.storage.sqlite import Storage
+
+        async with Storage(db_path) as store:
+            await store.create_task(task_id, description)
+            await store.add_task_event(
+                task_id,
+                "queued",
+                f"Flow '{team_name}' queued from Composer; waiting for daemon startup.",
+            )
+            await store.update_task(
+                task_id,
+                assigned_agent=team_name,
+                result=f"Queued flow '{team_name}'...",
+            )
+            await store.log_audit(
+                "team_task_created",
+                details=f"task_id={task_id} team={team_name}",
+            )
+
+        from guild.cli.daemon_ops import launch_background_team_task
+
+        launch_background_team_task(guild_dir, task_id, team_name)
+        return {
+            "id": task_id,
+            "status": TaskStatus.PENDING,
+            "description": description,
+            "team": team_name,
+        }
 
     @app.post("/api/teams")  # type: ignore[untyped-decorator]
     async def save_team(request: Request) -> dict[str, str]:
@@ -400,44 +774,100 @@ def _register_teams_endpoints(app: Any, guild_dir: Path) -> None:
         name: str = body.get("name", "")
         if not name:
             raise HTTPException(status_code=HTTP_BAD_REQUEST, detail="Team name is required")
+        name = _validate_toml_key(name, "Team name")
         teams_dir = guild_dir / "teams"
+        blocks_dir = guild_dir / "blocks"
         teams_dir.mkdir(exist_ok=True)
+        blocks_dir.mkdir(exist_ok=True)
         team_path = teams_dir / f"{name}.toml"
         blocks: dict[str, Any] = body.get("blocks", {})
-        connections: list[dict[str, str]] = body.get("connections", [])
+        raw_connections: list[dict[str, str]] = body.get("connections", [])
+        connections: list[dict[str, str]] = []
+        seen_connections: set[tuple[str, str, str, str]] = set()
+        for conn in raw_connections:
+            key = (
+                str(conn.get("source_block", "")),
+                str(conn.get("source_port", "output")),
+                str(conn.get("target_block", "")),
+                str(conn.get("target_port", "input")),
+            )
+            if key in seen_connections:
+                continue
+            seen_connections.add(key)
+            connections.append(conn)
         description: str = body.get("description", "")
         entry_block: str = body.get("entry_block", next(iter(blocks), ""))
+        if entry_block:
+            entry_block = _validate_toml_key(entry_block, "Entry block")
 
         lines = [
             "[team]",
-            f'name = "{name}"',
-            f'description = "{description}"',
-            f'entry_block = "{entry_block}"',
+            f"name = {_toml_quote(name)}",
+            f"description = {_toml_quote(description)}",
+            f"entry_block = {_toml_quote(entry_block)}",
             "",
             "[team.blocks]",
         ]
         for key, val in blocks.items():
+            key = _validate_toml_key(key, "Block key")
             if isinstance(val, dict):
-                lines.append(f'{key} = "{val.get("type", val.get("name", key))}"')
+                block_type = val.get("type", val.get("name", key))
+                block_type = _validate_toml_key(str(block_type), "Block type")
+                lines.append(f"{key} = {_toml_quote(block_type)}")
+                block_lines = [
+                    "[block]",
+                    f"name = {_toml_quote(block_type)}",
+                    f"role = {_toml_quote(val.get('role', 'agent'))}",
+                    'version = "1.0.0"',
+                    f"system_prompt = {_toml_quote(val.get('instructions', ''))}",
+                ]
+                if val.get("provider"):
+                    block_lines.append(f"provider = {_toml_quote(val['provider'])}")
+                if val.get("model"):
+                    block_lines.append(f"model = {_toml_quote(val['model'])}")
+                block_lines.extend(
+                    [
+                        'tools = ["file_read", "file_write", "shell", "search"]',
+                        "",
+                        "[[block.inputs]]",
+                        'name = "in"',
+                        'type = "any"',
+                        "",
+                        "[[block.outputs]]",
+                        'name = "out"',
+                        'type = "any"',
+                        "",
+                    ]
+                )
+                (blocks_dir / f"{block_type}.toml").write_text("\n".join(block_lines))
             else:
-                lines.append(f'{key} = "{val}"')
+                block_type = _validate_toml_key(str(val), "Block type")
+                lines.append(f"{key} = {_toml_quote(block_type)}")
         for conn in connections:
             lines.append("")
             lines.append("[[team.connections]]")
-            lines.append(f'source_block = "{conn.get("source_block", "")}"')
-            lines.append(f'source_port = "{conn.get("source_port", "output")}"')
-            lines.append(f'target_block = "{conn.get("target_block", "")}"')
-            lines.append(f'target_port = "{conn.get("target_port", "input")}"')
+            source_block = _validate_toml_key(conn.get("source_block", ""), "Source block")
+            target_block = _validate_toml_key(conn.get("target_block", ""), "Target block")
+            lines.append(f"source_block = {_toml_quote(source_block)}")
+            lines.append(f"source_port = {_toml_quote(conn.get('source_port', 'output'))}")
+            lines.append(f"target_block = {_toml_quote(target_block)}")
+            lines.append(f"target_port = {_toml_quote(conn.get('target_port', 'input'))}")
 
         # Store UI positions as metadata comment (not consumed by runtime)
-        positions = {k: v.get("position") for k, v in blocks.items() if isinstance(v, dict) and v.get("position")}
-        if positions:
+        ui_nodes = {k: v for k, v in blocks.items() if isinstance(v, dict)}
+        if ui_nodes:
             lines.append("")
             lines.append("# UI layout metadata (not used by runtime)")
             lines.append("[team.ui]")
-            for key, pos in positions.items():
-                if pos:
-                    lines.append(f'{key} = {{ x = {pos["x"]}, y = {pos["y"]} }}')
+            for key, val in ui_nodes.items():
+                key = _validate_toml_key(key, "Block key")
+                attrs = []
+                attrs.extend(_toml_position_attrs(val.get("position")))
+                for field in ("provider", "model", "role", "instructions", "name"):
+                    if val.get(field):
+                        attrs.append(f"{field} = {_toml_quote(val[field])}")
+                if attrs:
+                    lines.append(f'{key} = {{ {", ".join(attrs)} }}')
 
         lines.append("")
         team_path.write_text("\n".join(lines))
@@ -487,7 +917,7 @@ def _register_config_crud_routes(app: Any, guild_dir: Path) -> None:
         return {"status": "ok", "message": "Config update not yet implemented"}
 
 
-def _register_websocket(app: Any, get_storage: Callable[[], "Storage"]) -> None:
+def _register_websocket(app: Any, get_storage: Callable[[], "Storage"], guild_dir: Path) -> None:
     """Register the WebSocket endpoint for real-time updates (REQ-05.5)."""
     from fastapi import WebSocket, WebSocketDisconnect
 
@@ -498,7 +928,7 @@ def _register_websocket(app: Any, get_storage: Callable[[], "Storage"]) -> None:
         try:
             while True:
                 storage = get_storage()
-                data = await _get_current_status(storage)
+                data = await _get_current_status(storage, guild_dir)
                 await websocket.send_json(data)
                 await asyncio.sleep(WEBSOCKET_POLL_SECONDS)
         except WebSocketDisconnect:
@@ -677,10 +1107,10 @@ def _build_lifespan(
 def _register_all_routes(app: Any, get_storage: Callable[[], "Storage"], guild_dir: Path) -> None:
     """Register all API routes on the app."""
     _register_a2a_routes(app)
-    _register_task_routes(app, get_storage)
+    _register_task_routes(app, get_storage, guild_dir)
     _register_agent_routes(app, get_storage)
     _register_config_routes(app, get_storage, guild_dir)
-    _register_websocket(app, get_storage)
+    _register_websocket(app, get_storage, guild_dir)
     _register_static_files(app)
 
 

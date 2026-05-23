@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
 from logger_python import get_logger
@@ -19,6 +20,11 @@ from guild.task.spec import TaskStatus
 __all__: list[str] = []
 
 logger = get_logger(__name__)
+
+
+def _now() -> str:
+    """Return current UTC timestamp as ISO string."""
+    return datetime.now(UTC).isoformat()
 
 
 async def _run_task(
@@ -44,7 +50,21 @@ async def _run_task(
             return
 
         description = task["description"]
-        await store.update_task(task_id, status=TaskStatus.RUNNING)
+        await store.update_task(
+            task_id,
+            status=TaskStatus.RUNNING,
+            result="Starting single-agent task...",
+        )
+        await store.add_task_event(
+            task_id,
+            "running",
+            "Daemon started; building single-agent prompt and tools.",
+        )
+        await store.log_audit(
+            action="task_started",
+            agent_id="guild-daemon",
+            details=f"task={task_id}",
+        )
 
         provider = create_provider_for_backend(config.provider_name, config.base_url, config.model)
         tool_executors = build_tool_executors()
@@ -62,7 +82,17 @@ async def _run_task(
 
         try:
             result = await supervisor.run(loop.run(GUILD_MASTER_PROMPT, description))
-            await store.update_task(task_id, status=TaskStatus.COMPLETED, result=result)
+            await store.update_task(
+                task_id,
+                status=TaskStatus.COMPLETED,
+                result=result,
+                completed_at=_now(),
+            )
+            await store.add_task_event(
+                task_id,
+                "completed",
+                "Single-agent task completed.",
+            )
             await store.log_audit(
                 action="task_completed",
                 agent_id="guild-daemon",
@@ -70,7 +100,17 @@ async def _run_task(
             )
         except (OSError, RuntimeError) as exc:
             logger.warning("Task %s failed: %s", task_id, exc)
-            await store.update_task(task_id, status=TaskStatus.FAILED, result=str(exc))
+            await store.update_task(
+                task_id,
+                status=TaskStatus.FAILED,
+                result=str(exc),
+                completed_at=_now(),
+            )
+            await store.add_task_event(
+                task_id,
+                "failed",
+                f"Single-agent task failed: {exc}",
+            )
 
 
 def main() -> None:  # pragma: no cover — CLI entry point boilerplate

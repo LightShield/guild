@@ -17,9 +17,9 @@ dependencies = [
     # Ollama client SDK for local LLM inference via HTTP API
     "ollama>=0.4,<1",
     # Unified structured logging
-    "logger-python @ git+ssh://git@github.com/LightShield/logger_python.git",
+    "logger-python @ git+https://github.com/LightShield/logger_python.git",
     # Declarative multi-source configuration
-    "configsloader @ git+ssh://git@github.com/LightShield/configs_loader_python.git",
+    "configsloader @ git+https://github.com/LightShield/configs_loader_python.git",
 ]
 
 [project.optional-dependencies]
@@ -96,6 +96,7 @@ exclude_also = [
 omit = [
     "src/guild/storage/protocol.py",
     "src/guild/daemon/run.py",
+    "src/guild/daemon/team_run.py",
 ]
 
 [tool.mypy]

@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Global Workflow
+
+Honor user-level or global agent instructions, including workflow/mode rules such as caveman mode and context-tool rules such as lean-ctx. For shell commands, prefer `lean-ctx -c <command>` from `PATH`; do not hardcode a user-specific install path. Fall back to raw commands only when lean-ctx is unavailable, incompatible with the command, an interactive TTY is required, or the wrapper would risk changing command behavior.
+
 ## Project Overview
 
 Guild is a locally-focused agent harness for running an autonomous coding agent against local models (Ollama). Core value: an agent that works while you're away and backs off when you're present ("good neighbor"). Version 0.2.0.

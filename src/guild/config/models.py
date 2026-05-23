@@ -31,7 +31,10 @@ class GuildConfig(ConfigsLoader):
 
     # Provider section
     provider_name: str = Field(
-        default="ollama", section="provider", description="LLM provider name"
+        default="ollama",
+        section="provider",
+        env="GUILD_PROVIDER_NAME",
+        description="LLM provider name",
     )
     base_url: str = Field(
         default="http://localhost:11434",

@@ -58,7 +58,9 @@ CREATE TABLE IF NOT EXISTS agents (
     status TEXT NOT NULL DEFAULT 'idle',
     created_at TEXT NOT NULL,
     token_input INTEGER NOT NULL DEFAULT 0,
-    token_output INTEGER NOT NULL DEFAULT 0
+    token_output INTEGER NOT NULL DEFAULT 0,
+    task_id TEXT,
+    last_seen TEXT
 );
 
 CREATE TABLE IF NOT EXISTS messages (
@@ -68,6 +70,16 @@ CREATE TABLE IF NOT EXISTS messages (
     content TEXT NOT NULL,
     tool_call_id TEXT,
     tool_calls TEXT,
+    timestamp TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS task_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    message TEXT NOT NULL,
+    agent_id TEXT,
+    block_name TEXT,
     timestamp TEXT NOT NULL
 );
 
@@ -191,6 +203,7 @@ class Storage:
         self._db.row_factory = aiosqlite.Row
         await self._db.execute("PRAGMA journal_mode=WAL")
         await self._db.executescript(_SCHEMA_SQL)
+        await self._migrate_schema()
         await self._db.commit()
         # Initialize delegates
         self._tasks = TaskOps(self._db)
@@ -201,6 +214,16 @@ class Storage:
         self._checkpoints = CheckpointOps(self._db)
         self._memories = MemoryOps(self._db)
         logger.debug("Storage connected: %s", self._db_path)
+
+    async def _migrate_schema(self) -> None:
+        """Apply lightweight SQLite migrations for existing local DBs."""
+        assert self._db is not None
+        cursor = await self._db.execute("PRAGMA table_info(agents)")
+        columns = {row[1] for row in await cursor.fetchall()}
+        if "task_id" not in columns:
+            await self._db.execute("ALTER TABLE agents ADD COLUMN task_id TEXT")
+        if "last_seen" not in columns:
+            await self._db.execute("ALTER TABLE agents ADD COLUMN last_seen TEXT")
 
     async def close(self) -> None:
         """Close the database connection."""
@@ -241,11 +264,34 @@ class Storage:
         assert self._tasks is not None
         await self._tasks.update_task(task_id, **fields)
 
-    async def register_agent(self, agent_id: str, block_name: str) -> None:
+    async def add_task_event(
+        self,
+        task_id: str,
+        event_type: str,
+        message: str,
+        agent_id: str | None = None,
+        block_name: str | None = None,
+    ) -> None:
+        """Append a task timeline event."""
+        self._ensure_connected()
+        assert self._tasks is not None
+        await self._tasks.add_task_event(task_id, event_type, message, agent_id, block_name)
+
+    async def list_task_events(
+        self, task_id: str | None = None, limit: int = 100
+    ) -> list[dict[str, Any]]:
+        """List task timeline events."""
+        self._ensure_connected()
+        assert self._tasks is not None
+        return await self._tasks.list_task_events(task_id, limit)
+
+    async def register_agent(
+        self, agent_id: str, block_name: str, task_id: str | None = None
+    ) -> None:
         """Register a new agent."""
         self._ensure_connected()
         assert self._tasks is not None
-        await self._tasks.register_agent(agent_id, block_name)
+        await self._tasks.register_agent(agent_id, block_name, task_id)
 
     async def list_agents(self) -> list[dict[str, Any]]:
         """List all registered agents."""

@@ -29,6 +29,14 @@ export async function fetchTask(id) {
 	return request(`/tasks/${id}`);
 }
 
+export async function fetchTaskMessages(id) {
+	return request(`/tasks/${id}/messages`);
+}
+
+export async function fetchTaskEvents(id) {
+	return request(`/tasks/${id}/events`);
+}
+
 export async function fetchAgents() {
 	return request('/agents');
 }
@@ -79,20 +87,34 @@ export async function saveTeam(name, nodes, edges) {
 			type: blockName,
 			name: blockName,
 			position: node.position,
+			provider: node.data?.provider || 'codex',
+			model: node.data?.model || node.data?.provider || 'codex',
+			role: node.data?.role || 'agent',
+			instructions: node.data?.instructions || '',
 		};
 	}
 
 	// Convert edges to port-to-port connections matching backend Connection format
-	const connections = edges.map((edge) => {
+	const seenConnections = new Set();
+	const connections = edges.flatMap((edge) => {
 		// Handle IDs are formatted as: nodeId__port__portId
 		const sourcePort = edge.sourceHandle?.split('__port__')[1] || 'out';
 		const targetPort = edge.targetHandle?.split('__port__')[1] || 'in';
-		return {
+		const connection = {
 			source_block: edge.source,
 			source_port: sourcePort,
 			target_block: edge.target,
 			target_port: targetPort,
 		};
+		const key = [
+			connection.source_block,
+			connection.source_port,
+			connection.target_block,
+			connection.target_port,
+		].join('\0');
+		if (seenConnections.has(key)) return [];
+		seenConnections.add(key);
+		return [connection];
 	});
 
 	// Determine entry block (first node with no incoming edges)
@@ -102,6 +124,16 @@ export async function saveTeam(name, nodes, edges) {
 	return request('/teams', {
 		method: 'POST',
 		body: JSON.stringify({ name, blocks, connections, entry_block: entryBlock }),
+	});
+}
+
+/**
+ * Run a saved team configuration through the backend.
+ */
+export async function runTeam(name, description) {
+	return request(`/teams/${name}/run`, {
+		method: 'POST',
+		body: JSON.stringify({ description }),
 	});
 }
 
