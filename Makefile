@@ -6,10 +6,12 @@ MODEL ?= $(PROVIDER)
 TASK ?= Create a hello.txt file containing 'Hello from Guild'
 HOST ?= 127.0.0.1
 PORT ?= 8585
+UI_HOST ?= 127.0.0.1
+UI_PORT ?= 5173
 
 .DEFAULT_GOAL := help
 
-.PHONY: help install install-api install-dev ui-install ui-build init install-mixed-team start terminate-all-agents config config-claude config-codex task task-claude task-codex team-codex-claude chat test test-unit lint format typecheck check clean
+.PHONY: help install install-api install-dev ui-install ui-build init install-mixed-team start dev dev-api dev-ui terminate-all-agents config config-claude config-codex task task-claude task-codex team-codex-claude chat test test-unit lint format typecheck check clean
 
 help:
 	@printf '%s\n' 'Guild development shortcuts'
@@ -23,6 +25,9 @@ help:
 	@printf '%s\n' '  make init           Initialize .guild/'
 	@printf '%s\n' '  make install-mixed-team'
 	@printf '%s\n' '  make start          Build UI, install mixed team, start API/UI'
+	@printf '%s\n' '  make dev            Start hot-reload API + UI'
+	@printf '%s\n' '  make dev-api        Start API with reload'
+	@printf '%s\n' '  make dev-ui         Start Vite UI with HMR'
 	@printf '%s\n' '  make terminate-all-agents'
 	@printf '%s\n' ''
 	@printf '%s\n' 'Claude/Codex usage:'
@@ -62,6 +67,20 @@ install-mixed-team: init
 
 start: install-api ui-build install-mixed-team
 	$(GUILD) serve --host $(HOST) --port $(PORT)
+
+dev: install-api ui-install install-mixed-team
+	@printf '%s\n' 'API: http://$(HOST):$(PORT)'
+	@printf '%s\n' 'UI:  http://$(UI_HOST):$(UI_PORT)'
+	@trap 'kill 0' INT TERM EXIT; \
+	$(MAKE) --no-print-directory dev-api & \
+	$(MAKE) --no-print-directory dev-ui & \
+	wait
+
+dev-api:
+	$(PYTHON) -m uvicorn 'guild.api.server:create_app' --factory --reload --host $(HOST) --port $(PORT)
+
+dev-ui:
+	npm --prefix ui run dev -- --host $(UI_HOST) --port $(UI_PORT)
 
 terminate-all-agents:
 	-@pkill -TERM -f 'guild\.daemon\.(run|team_run)|codex exec|claude .*--dangerously-skip-permissions|claude --dangerously-skip-permissions|claude .* -p ' 2>/dev/null || true
