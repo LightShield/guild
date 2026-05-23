@@ -4,6 +4,14 @@ export default {
 	darkMode: 'class',
 	theme: {
 		extend: {
+			borderRadius: {
+				DEFAULT: '0.2rem',
+				sm: '0.15rem',
+				md: '0.2rem',
+				lg: '0.2rem',
+				xl: '0.2rem',
+				'2xl': '0.25rem'
+			},
 			colors: {
 				guild: {
 					50: '#f0f9ff',
