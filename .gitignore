@@ -34,6 +34,10 @@ logs/
 # Data
 *.db
 *.sqlite
+*.db-shm
+*.db-wal
+.guild/blocks/
+.guild/teams/
 
 # Secrets
 .env
