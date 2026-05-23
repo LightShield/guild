@@ -152,6 +152,16 @@ export async function runTeam(name, description) {
 }
 
 /**
+ * Run a task through one selected block agent.
+ */
+export async function runBlock(name, description) {
+	return request(`/blocks/${name}/run`, {
+		method: 'POST',
+		body: JSON.stringify({ description }),
+	});
+}
+
+/**
  * Create a new block definition on the backend.
  * Writes a TOML file to .guild/blocks/{name}.toml
  */

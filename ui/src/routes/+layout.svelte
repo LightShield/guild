@@ -11,6 +11,7 @@
 		{ href: '/agents', label: 'Agents', icon: '&#9679;' },
 		{ href: '/config', label: 'Config', icon: '&#9881;' },
 		{ href: '/composer', label: 'Composer', icon: '&#9830;' },
+		{ href: '/composer-studio', label: 'Studio', icon: '&#8942;' },
 		{ href: '/messages', label: 'Messages', icon: '&#9993;' }
 	];
 
@@ -60,7 +61,7 @@
 		<!-- Navigation -->
 		<nav class="flex-1 px-2 py-3 space-y-0.5">
 			{#each nav as item}
-				{@const isActive = page.url.pathname === item.href || (item.href !== '/' && page.url.pathname.startsWith(item.href))}
+				{@const isActive = page.url.pathname === item.href || (item.href !== '/' && page.url.pathname.startsWith(`${item.href}/`))}
 				<a
 					href={item.href}
 					class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-150

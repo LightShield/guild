@@ -1,5 +1,6 @@
 <script>
 	import { onMount } from 'svelte';
+	import { page } from '$app/state';
 	import { fetchTasks, fetchWorkflow, fetchWorkflows } from '$lib/api.js';
 	import { taskEvents, tasks } from '$lib/stores.js';
 
@@ -68,6 +69,10 @@
 
 	onMount(async () => {
 		await loadWorkflows();
+		const requestedExecution = page.url.searchParams.get('execution');
+		if (requestedExecution) {
+			await selectWorkflow(requestedExecution);
+		}
 	});
 
 	async function loadWorkflows() {

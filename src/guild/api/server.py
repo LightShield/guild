@@ -569,6 +569,7 @@ def _register_status_endpoint(
 
 def _register_blocks_endpoint(app: Any, guild_dir: Path) -> None:
     """Register the GET /api/blocks route."""
+    from fastapi import Request
 
     @app.get("/api/blocks")  # type: ignore[untyped-decorator]
     async def list_blocks() -> list[dict[str, Any]]:
@@ -634,8 +635,61 @@ def _register_blocks_endpoint(app: Any, guild_dir: Path) -> None:
             ],
         }
 
+    @app.post("/api/blocks/{block_name}/run")  # type: ignore[untyped-decorator]
+    async def run_block(block_name: str, request: Request) -> dict[str, Any]:
+        """Create a task and run it through one selected block agent."""
+        import uuid
+
+        from fastapi import HTTPException
+
+        from guild.blocks.registry import BlockRegistry
+
+        block_name = _validate_toml_key(block_name, "Block name")
+        registry = BlockRegistry()
+        registry.load_from_dir(guild_dir / "blocks")
+        if registry.get_block(block_name) is None:
+            raise HTTPException(
+                status_code=HTTP_NOT_FOUND, detail=f"Block '{block_name}' not found"
+            )
+
+        body = await request.json()
+        description: str = body.get("description", "").strip()
+        if not description:
+            raise HTTPException(status_code=HTTP_BAD_REQUEST, detail="description is required")
+
+        task_id = str(uuid.uuid4())
+        db_path = guild_dir / DB_FILENAME
+        from guild.storage.sqlite import Storage
+
+        async with Storage(db_path) as store:
+            await store.create_task(task_id, description)
+            await store.add_task_event(
+                task_id,
+                "queued",
+                f"Agent '{block_name}' queued from Tasks; waiting for daemon startup.",
+            )
+            await store.update_task(
+                task_id,
+                assigned_agent=block_name,
+                result=f"Queued agent '{block_name}'...",
+            )
+            await store.log_audit(
+                "block_task_created",
+                details=f"task_id={task_id} block={block_name}",
+            )
+
+        from guild.cli.daemon_ops import launch_background_block_task
+
+        launch_background_block_task(guild_dir, task_id, block_name)
+        return {
+            "id": task_id,
+            "status": TaskStatus.PENDING,
+            "description": description,
+            "agent": block_name,
+        }
+
     @app.post("/api/blocks")  # type: ignore[untyped-decorator]
-    async def create_block(request: Any) -> dict[str, str]:
+    async def create_block(request: Request) -> dict[str, str]:
         """Create a new block definition (writes TOML to .guild/blocks/)."""
         from fastapi import HTTPException
 

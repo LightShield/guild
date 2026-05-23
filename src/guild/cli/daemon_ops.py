@@ -76,6 +76,24 @@ def launch_background_team_task(guild_dir: Path, task_id: str, team_name: str) -
     )
 
 
+def launch_background_block_task(guild_dir: Path, task_id: str, block_name: str) -> None:
+    """Fork a background daemon process to run a task through a single block."""
+    subprocess.Popen(
+        [
+            sys.executable,
+            "-m",
+            "guild.daemon.block_run",
+            task_id,
+            str(guild_dir),
+            block_name,
+        ],
+        start_new_session=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        stdin=subprocess.DEVNULL,
+    )
+
+
 def get_running_tasks(run_dir: Path) -> list[dict[str, Any]]:
     """List tasks with live PID files in the run directory."""
     import os as _os

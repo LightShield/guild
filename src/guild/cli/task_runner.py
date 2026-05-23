@@ -325,3 +325,46 @@ async def run_team_task(
         )
         result = await runner.run(description)
     return result
+
+
+async def run_block_task(
+    config: GuildConfig,
+    working_dir: str,
+    guild_dir: Path,
+    block_name: str,
+    description: str,
+    parent_task_id: str | None = None,
+) -> str:
+    """Run a task through one selected block agent."""
+    from guild.blocks.definition import TeamDef
+    from guild.blocks.registry import BlockRegistry
+    from guild.orchestration.team_runner import TeamRunner, TeamRunnerConfig
+    from guild.storage.sqlite import Storage
+
+    db_path = guild_dir / DB_FILENAME
+    async with Storage(db_path) as store:
+        registry = BlockRegistry()
+        registry.load_from_dir(guild_dir / "blocks")
+        block_def = registry.get_block(block_name)
+        if block_def is None:
+            raise ValueError(f"Block '{block_name}' not found in {guild_dir / 'blocks'}")
+
+        team_def = TeamDef(
+            name=f"single-{block_name}",
+            description=f"One-off task for block '{block_name}'",
+            blocks={block_name: block_name},
+            entry_block=block_name,
+        )
+        provider = create_resilient_provider(config)
+        runner = TeamRunner(
+            team=team_def,
+            registry=registry,
+            provider=provider,
+            config=TeamRunnerConfig(
+                storage=store,
+                working_dir=working_dir,
+                parent_task_id=parent_task_id,
+            ),
+        )
+        result = await runner.run(description)
+    return result

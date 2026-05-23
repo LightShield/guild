@@ -1,10 +1,15 @@
 <script>
 	import { onMount } from 'svelte';
-	import { fetchTasks, createTask, killTask } from '$lib/api.js';
+	import { fetchBlocks, fetchTasks, fetchTeams, createTask, killTask, runBlock, runTeam } from '$lib/api.js';
 	import { taskEvents, tasks } from '$lib/stores.js';
 
 	let loading = true;
 	let newTaskDescription = '';
+	let targetType = 'agent';
+	let selectedAgent = '';
+	let selectedWorkflow = '';
+	let availableBlocks = [];
+	let teams = [];
 	let creating = false;
 	let expandedTaskId = '';
 	let stoppingTaskId = '';
@@ -30,7 +35,16 @@
 
 	onMount(async () => {
 		try {
-			$tasks = await fetchTasks();
+			const [loadedTasks, loadedBlocks, loadedTeams] = await Promise.all([
+				fetchTasks(),
+				fetchBlocks().catch(() => []),
+				fetchTeams().catch(() => []),
+			]);
+			$tasks = loadedTasks;
+			availableBlocks = loadedBlocks;
+			teams = loadedTeams;
+			selectedAgent = loadedBlocks[0]?.name || '';
+			selectedWorkflow = loadedTeams[0]?.name || '';
 		} catch (e) {
 			console.error('Failed to load tasks:', e);
 		} finally {
@@ -43,7 +57,14 @@
 		if (!newTaskDescription.trim()) return;
 		creating = true;
 		try {
-			await createTask(newTaskDescription);
+			if (targetType === 'workflow') {
+				if (!selectedWorkflow) return;
+				await runTeam(selectedWorkflow, newTaskDescription);
+			} else if (selectedAgent) {
+				await runBlock(selectedAgent, newTaskDescription);
+			} else {
+				await createTask(newTaskDescription);
+			}
 			newTaskDescription = '';
 			$tasks = await fetchTasks();
 		} catch (e) {
@@ -78,26 +99,72 @@
 
 	<!-- Create Task -->
 	<div class="bg-gray-800 rounded-xl p-6 border border-gray-700">
-		<h3 class="text-lg font-semibold mb-4">Create Task</h3>
-		<form onsubmit={handleCreateTask} class="flex gap-4">
+		<div class="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+			<div>
+				<h3 class="text-lg font-semibold">Create Task</h3>
+				<p class="mt-1 text-sm text-gray-500">Choose a block agent or a saved workflow, then run it.</p>
+			</div>
+			<div class="inline-flex rounded border border-gray-700 bg-gray-900 p-1">
+				<button
+					type="button"
+					onclick={() => (targetType = 'agent')}
+					class="rounded px-3 py-1.5 text-xs font-semibold transition {targetType === 'agent' ? 'bg-guild-600 text-white' : 'text-gray-400 hover:text-gray-200'}"
+				>
+					Agent
+				</button>
+				<button
+					type="button"
+					onclick={() => (targetType = 'workflow')}
+					class="rounded px-3 py-1.5 text-xs font-semibold transition {targetType === 'workflow' ? 'bg-guild-600 text-white' : 'text-gray-400 hover:text-gray-200'}"
+				>
+					Workflow
+				</button>
+			</div>
+		</div>
+		<form onsubmit={handleCreateTask} class="grid gap-3 lg:grid-cols-[240px_minmax(0,1fr)_auto]">
+			{#if targetType === 'workflow'}
+				<select
+					bind:value={selectedWorkflow}
+					class="px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-sm text-gray-100 focus:outline-none focus:ring-2 focus:ring-guild-500"
+				>
+					{#each teams as team}
+						<option value={team.name}>{team.name}</option>
+					{/each}
+				</select>
+			{:else}
+				<select
+					bind:value={selectedAgent}
+					class="px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-sm text-gray-100 focus:outline-none focus:ring-2 focus:ring-guild-500"
+				>
+					{#each availableBlocks as block}
+						<option value={block.name}>{block.name} ({block.role || 'agent'})</option>
+					{/each}
+					{#if availableBlocks.length === 0}
+						<option value="">Default agent</option>
+					{/if}
+				</select>
+			{/if}
 			<input
 				type="text"
 				bind:value={newTaskDescription}
-				placeholder="Describe the task..."
-				class="flex-1 px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg
+				placeholder={targetType === 'workflow' ? 'Describe what this workflow should do...' : 'Describe what this agent should do...'}
+				class="min-w-0 px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg
 					   text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2
 					   focus:ring-guild-500 focus:border-transparent"
 			/>
 			<button
 				type="submit"
-				disabled={creating || !newTaskDescription.trim()}
+				disabled={creating || !newTaskDescription.trim() || (targetType === 'workflow' && !selectedWorkflow) || (targetType === 'agent' && availableBlocks.length > 0 && !selectedAgent)}
 				class="px-6 py-2 bg-guild-600 hover:bg-guild-500 disabled:bg-gray-600
 					   disabled:cursor-not-allowed text-white rounded-lg transition-colors
 					   font-medium text-sm"
 			>
-				{creating ? 'Creating...' : 'Create'}
+				{creating ? 'Starting...' : targetType === 'workflow' ? 'Run Workflow' : 'Run Agent'}
 			</button>
 		</form>
+		{#if targetType === 'workflow' && teams.length === 0}
+			<p class="mt-3 text-xs text-amber-300">No saved workflows yet. Build one in <a href="/composer-studio" class="text-guild-300 hover:text-guild-200">Composer Studio</a>.</p>
+		{/if}
 	</div>
 
 	<!-- Task List -->
