@@ -1,5 +1,5 @@
 <script>
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { page } from '$app/state';
 	import { fetchTasks, fetchWorkflow, fetchWorkflows } from '$lib/api.js';
 	import { taskEvents, tasks } from '$lib/stores.js';
@@ -14,8 +14,20 @@
 	let apiUnavailable = $state(false);
 
 	const workflowTasks = $derived.by(() => {
-		const apiRecords = workflowRecords.length ? workflowRecords : $tasks;
-		return [...apiRecords]
+		// Merge: workflowRecords has rich detail, $tasks has live status — combine both
+		const liveMap = new Map($tasks.map((t) => [t.task_id, t]));
+		const recordIds = new Set(workflowRecords.map((r) => r.task_id));
+		const merged = [
+			// existing records with live status overrides
+			...workflowRecords.map((r) => {
+				const live = liveMap.get(r.task_id);
+				return live ? { ...r, status: live.status, result: live.result } : r;
+			}),
+			// new tasks from WS not yet in workflowRecords
+			...$tasks.filter((t) => !recordIds.has(t.task_id)),
+		];
+		const base = workflowRecords.length ? merged : $tasks;
+		return base
 			.filter((task) => isWorkflowTask(task))
 			.sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')));
 	});
@@ -67,13 +79,35 @@
 		}
 	});
 
+	// Re-fetch selected workflow detail when new events arrive for it
+	let _lastEventCount = 0;
+	$effect(() => {
+		const count = $taskEvents.filter((e) => e.task_id === selectedWorkflowId).length;
+		if (count !== _lastEventCount && selectedWorkflowId) {
+			_lastEventCount = count;
+			fetchWorkflow(selectedWorkflowId)
+				.then((record) => {
+					if (record) {
+						selectedRecord = record;
+						fullEvents = record.events || [];
+						childEvents = record.child_events || [];
+					}
+				})
+				.catch(() => {});
+		}
+	});
+
+	let _pollInterval = null;
 	onMount(async () => {
 		await loadWorkflows();
 		const requestedExecution = page.url.searchParams.get('execution');
 		if (requestedExecution) {
 			await selectWorkflow(requestedExecution);
 		}
+		// Poll as safety net for data the WS doesn't push (workflow-specific API detail)
+		_pollInterval = setInterval(loadWorkflows, 15000);
 	});
+	onDestroy(() => clearInterval(_pollInterval));
 
 	async function loadWorkflows() {
 		loading = true;

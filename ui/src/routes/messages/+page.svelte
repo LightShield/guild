@@ -1,5 +1,5 @@
 <script>
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { fetchTaskEvents, fetchTaskMessages, fetchTasks, fetchTeams } from '$lib/api.js';
   import { taskEvents, tasks } from '$lib/stores.js';
 
@@ -37,6 +37,22 @@
   });
   const selectedTask = $derived(orderedTasks.find((task) => task.task_id === selectedTaskId) || null);
 
+  // Re-fetch messages+events when new WS events arrive for the selected task
+  let _lastMsgEventCount = 0;
+  $effect(() => {
+    const count = $taskEvents.filter((e) => e.task_id === selectedTaskId).length;
+    if (count !== _lastMsgEventCount && selectedTaskId && !loadingMessages) {
+      _lastMsgEventCount = count;
+      fetchTaskMessages(selectedTaskId)
+        .then((data) => { taskDetail = data.task; messages = data.messages || []; })
+        .catch(() => {});
+      fetchTaskEvents(selectedTaskId)
+        .then((evts) => { events = evts; })
+        .catch(() => {});
+    }
+  });
+
+  let _msgPollInterval = null;
   onMount(async () => {
     try {
       const [loadedTasks, loadedTeams] = await Promise.all([
@@ -52,7 +68,12 @@
     } finally {
       loading = false;
     }
+    // Poll selected task messages every 10s (catches updates WS doesn't push)
+    _msgPollInterval = setInterval(() => {
+      if (selectedTaskId && !loadingMessages) loadMessages(selectedTaskId);
+    }, 10000);
   });
+  onDestroy(() => clearInterval(_msgPollInterval));
 
   async function loadMessages(taskId) {
     selectedTaskId = taskId;

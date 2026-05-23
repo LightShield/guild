@@ -1,5 +1,5 @@
 <script>
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { fetchBlocks, fetchTasks, fetchTeams, createTask, killTask, runBlock, runTeam } from '$lib/api.js';
 	import { taskEvents, tasks } from '$lib/stores.js';
 
@@ -128,6 +128,7 @@
 		return 'bg-gray-700 text-gray-300';
 	}
 
+	let _tasksPoll = null;
 	onMount(async () => {
 		try {
 			const [loadedTasks, loadedBlocks, loadedTeams] = await Promise.all([
@@ -145,7 +146,9 @@
 		} finally {
 			loading = false;
 		}
+		_tasksPoll = setInterval(async () => { $tasks = await fetchTasks().catch(() => $tasks); }, 20000);
 	});
+	onDestroy(() => clearInterval(_tasksPoll));
 
 	async function handleCreateTask(event) {
 		event?.preventDefault();
