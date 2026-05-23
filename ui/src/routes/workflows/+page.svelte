@@ -10,6 +10,7 @@
 	let fullEvents = [];
 	let childEvents = [];
 	let copied = '';
+	let apiUnavailable = false;
 
 	const workflowTasks = $derived.by(() => {
 		const apiRecords = workflowRecords.length ? workflowRecords : $tasks;
@@ -67,8 +68,16 @@
 
 	onMount(async () => {
 		try {
-			workflowRecords = await fetchWorkflows();
-			$tasks = await fetchTasks();
+			const [records, loadedTasks] = await Promise.all([
+				fetchWorkflows().catch((error) => {
+					apiUnavailable = true;
+					console.warn('Workflow API unavailable; falling back to task/event data:', error);
+					return [];
+				}),
+				fetchTasks()
+			]);
+			workflowRecords = records;
+			$tasks = loadedTasks;
 		} finally {
 			loading = false;
 		}
@@ -88,17 +97,20 @@
 	}
 
 	async function selectWorkflow(taskId) {
+		if (!taskId || selectedWorkflowId === taskId) return;
 		selectedWorkflowId = taskId;
 		selectedRecord = null;
 		fullEvents = [];
 		childEvents = [];
 		copied = '';
+		if (apiUnavailable) return;
 		try {
 			selectedRecord = await fetchWorkflow(taskId);
 			fullEvents = selectedRecord.events || [];
 			childEvents = selectedRecord.child_events || [];
 		} catch (error) {
-			console.error('Failed to load workflow execution:', error);
+			apiUnavailable = true;
+			console.warn('Workflow detail API unavailable; using live task/event data:', error);
 		}
 	}
 
@@ -175,6 +187,12 @@
 			</div>
 		</div>
 	</div>
+	{#if apiUnavailable}
+		<div class="rounded border border-amber-800/60 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">
+			Workflow API is unavailable from the running server. Showing live task/event fallback data; restart
+			<code class="rounded bg-amber-950 px-1.5 py-0.5">guild serve</code> for full execution details.
+		</div>
+	{/if}
 
 	{#if loading}
 		<div class="text-gray-400">Loading workflows...</div>

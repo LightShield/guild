@@ -14,6 +14,11 @@ async function request(path, options = {}) {
 	if (!res.ok) {
 		throw new Error(`API error: ${res.status} ${res.statusText}`);
 	}
+	const contentType = res.headers.get('content-type') || '';
+	if (!contentType.includes('application/json')) {
+		const text = await res.text();
+		throw new Error(`API returned non-JSON response for ${path}: ${text.slice(0, 80)}`);
+	}
 	return res.json();
 }
 
