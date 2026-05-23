@@ -67,6 +67,11 @@
 	});
 
 	onMount(async () => {
+		await loadWorkflows();
+	});
+
+	async function loadWorkflows() {
+		loading = true;
 		try {
 			const [records, loadedTasks] = await Promise.all([
 				fetchWorkflows().catch((error) => {
@@ -78,10 +83,11 @@
 			]);
 			workflowRecords = records;
 			$tasks = loadedTasks;
+			if (records.length) apiUnavailable = false;
 		} finally {
 			loading = false;
 		}
-	});
+	}
 
 	function isWorkflowTask(task) {
 		const agent = task.assigned_agent || '';
@@ -103,11 +109,11 @@
 		fullEvents = [];
 		childEvents = [];
 		copied = '';
-		if (apiUnavailable) return;
 		try {
 			selectedRecord = await fetchWorkflow(taskId);
 			fullEvents = selectedRecord.events || [];
 			childEvents = selectedRecord.child_events || [];
+			apiUnavailable = false;
 		} catch (error) {
 			apiUnavailable = true;
 			console.warn('Workflow detail API unavailable; using live task/event data:', error);
@@ -188,9 +194,17 @@
 		</div>
 	</div>
 	{#if apiUnavailable}
-		<div class="rounded border border-amber-800/60 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">
-			Workflow API is unavailable from the running server. Showing live task/event fallback data; restart
-			<code class="rounded bg-amber-950 px-1.5 py-0.5">guild serve</code> for full execution details.
+		<div class="flex items-center justify-between gap-4 rounded border border-amber-800/60 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">
+			<p>
+				Workflow API detail fetch failed. Showing live task/event fallback data.
+			</p>
+			<button
+				type="button"
+				onclick={loadWorkflows}
+				class="rounded border border-amber-700 px-3 py-1.5 text-xs text-amber-100 hover:bg-amber-900/40"
+			>
+				Retry API
+			</button>
 		</div>
 	{/if}
 
