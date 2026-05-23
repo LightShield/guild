@@ -59,6 +59,7 @@ _EVAL_PASS_KEY = "pass"
 _EVAL_PASSED_KEY = "passed"
 _EVAL_SCORE_KEY = "score"
 _EVAL_FEEDBACK_KEY = "feedback"
+_QUALITY_GATE_ROLES = {"reviewer", "tester", "verifier", "evaluator", "qa"}
 
 
 def _now() -> str:
@@ -157,6 +158,43 @@ def _format_loop_feedback(
         f"Previous attempt (iteration {iteration + 1}):\n{gen_output}\n\n"
         f"Feedback: {feedback}"
     )
+
+
+def _is_quality_gate(block_def: BlockDef) -> bool:
+    """Return True when a block should validate an artifact, not replace it with status prose."""
+    role = block_def.role.lower()
+    name = block_def.name.lower()
+    return role in _QUALITY_GATE_ROLES or any(token in name for token in _QUALITY_GATE_ROLES)
+
+
+def _normalize_quality_gate_output(block_def: BlockDef, input_data: str, result: str) -> str:
+    """Keep reviewer/tester/verifier status prose out of the downstream artifact."""
+    if not _is_quality_gate(block_def):
+        return result
+
+    stripped = result.strip()
+    lower = stripped.lower()
+    if lower in {"approved", "pass", "passed", "ok", "looks good", "no issues found"}:
+        return input_data
+
+    status_prefixes = (
+        "no code changes were needed",
+        "no tests were needed",
+        "no tests to run",
+        "all tests pass",
+        "approved",
+        "pass.",
+        "passed.",
+    )
+    lines = stripped.splitlines()
+    while lines and any(lines[0].lower().startswith(prefix) for prefix in status_prefixes):
+        lines.pop(0)
+        while lines and not lines[0].strip():
+            lines.pop(0)
+    stripped_without_status = "\n".join(lines).strip()
+    if stripped_without_status:
+        return stripped_without_status
+    return input_data
 
 
 @dataclass
@@ -392,7 +430,7 @@ class TeamRunner:
                 self._agent_statuses[instance_name] = AgentStatus.RUNNING
                 result = await self._invoke_agent(block_def, input_data)
                 self._agent_statuses[instance_name] = AgentStatus.COMPLETED
-                return result
+                return _normalize_quality_gate_output(block_def, input_data, result)
             except (
                 BlockError,
                 OSError,
@@ -625,6 +663,18 @@ class TeamRunner:
         from guild.config.constants import MIN_INJECTION_CONFIDENCE
 
         system_prompt = block_def.system_prompt
+        if _is_quality_gate(block_def):
+            system_prompt = (
+                f"{system_prompt}\n\n"
+                "Quality gate output contract:\n"
+                "- The next block, and possibly the user, will see your output as the artifact.\n"
+                "- If the upstream artifact satisfies the original task, "
+                "return the artifact unchanged.\n"
+                "- If it needs fixes, return only the corrected artifact.\n"
+                "- Do not prepend status text such as APPROVED, PASS, no tests needed, "
+                "or no code changes.\n"
+                "- If the original task is not a code task, do not mention tests or code changes."
+            )
         if self._storage:
             learnings = await self._storage.list_learnings(min_confidence=MIN_INJECTION_CONFIDENCE)
             injection = format_learnings_for_injection(learnings)
