@@ -63,118 +63,115 @@
 </script>
 
 <svelte:head>
-	<title>Guild - Compositions</title>
+	<title>Guild — Composer</title>
 </svelte:head>
 
-<div class="space-y-6">
-	<div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+<div class="page animate-fade-in">
+	<div class="page-header">
 		<div>
-			<h2 class="text-2xl font-bold text-gray-100">Compositions</h2>
-			<p class="mt-1 text-sm text-gray-500">Saved workflow definitions and their executions. Use Composer Studio when you want the canvas editor.</p>
+			<div class="label-xs prompt-label" style="margin-bottom: 0.4rem">orchestration</div>
+			<h1 class="page-title">Composer</h1>
 		</div>
-		<div class="flex flex-wrap gap-2">
-			<a href="/composer-studio" class="rounded border border-guild-600 bg-guild-600 px-4 py-2 text-sm font-semibold text-white hover:bg-guild-500">
-				Open Composer Studio
-			</a>
-			<a href="/workflows" class="rounded border border-gray-700 px-4 py-2 text-sm text-gray-300 hover:border-guild-500 hover:text-guild-300">
-				View Workflows
-			</a>
+		<div class="header-actions">
+			<a href="/composer-studio" class="btn-primary">Open Studio</a>
+			<a href="/workflows" class="btn-ghost">Workflows</a>
 		</div>
 	</div>
 
 	{#if apiNotice}
-		<div class="flex items-center justify-between gap-4 rounded border border-amber-800/60 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">
+		<div class="notice-bar">
 			<p>{apiNotice}</p>
-			<button type="button" onclick={loadComposer} class="rounded border border-amber-700 px-3 py-1.5 text-xs text-amber-100 hover:bg-amber-900/40">
-				Retry
-			</button>
+			<button type="button" onclick={loadComposer} class="btn-ghost" style="font-size: 0.65rem; padding: 0.3rem 0.625rem">Retry</button>
 		</div>
 	{/if}
 
 	{#if loading}
-		<div class="text-gray-400">Loading composer...</div>
+		<div class="loading-state"><span class="running-dot"></span><span>Loading composer...</span></div>
 	{:else}
-		<div class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-			<section class="space-y-4">
-				<div class="grid gap-3 sm:grid-cols-3">
-					<div class="rounded border border-gray-800 bg-gray-900 px-4 py-3">
-						<p class="text-[11px] uppercase text-gray-500">Saved Flows</p>
-						<p class="mt-1 text-2xl font-semibold text-gray-100">{teams.length}</p>
-					</div>
-					<div class="rounded border border-gray-800 bg-gray-900 px-4 py-3">
-						<p class="text-[11px] uppercase text-gray-500">Active</p>
-						<p class="mt-1 text-2xl font-semibold text-emerald-300">{activeWorkflows.length}</p>
-					</div>
-					<div class="rounded border border-gray-800 bg-gray-900 px-4 py-3">
-						<p class="text-[11px] uppercase text-gray-500">Recent Runs</p>
-						<p class="mt-1 text-2xl font-semibold text-sky-300">{recentWorkflows.length}</p>
-					</div>
-				</div>
+		<!-- Stats row -->
+		<div class="composer-stats">
+			<div class="c-stat">
+				<div class="label-xs">Saved flows</div>
+				<div class="c-stat-num">{teams.length}</div>
+			</div>
+			<div class="c-stat {activeWorkflows.length > 0 ? 'c-stat--active' : ''}">
+				{#if activeWorkflows.length > 0}<span class="running-dot" style="position: absolute; top: 0.875rem; right: 0.875rem"></span>{/if}
+				<div class="label-xs">Active</div>
+				<div class="c-stat-num" style="color: {activeWorkflows.length > 0 ? 'var(--running)' : 'var(--text-primary)'}">{activeWorkflows.length}</div>
+			</div>
+			<div class="c-stat">
+				<div class="label-xs">Recent runs</div>
+				<div class="c-stat-num" style="color: var(--accent)">{recentWorkflows.length}</div>
+			</div>
+		</div>
 
-				<div class="rounded border border-gray-800 bg-gray-900">
-					<div class="flex items-center justify-between border-b border-gray-800 px-4 py-3">
+		<div class="composer-grid">
+			<!-- Saved flows -->
+			<section>
+				<div class="panel" style="overflow: hidden">
+					<div class="panel-head">
 						<div>
-							<h3 class="text-sm font-semibold text-gray-100">Saved Flows</h3>
-							<p class="text-xs text-gray-500">Open a flow in Studio to edit or run it.</p>
+							<div class="label-xs prompt-label" style="margin-bottom: 0.25rem">flows</div>
+							<div class="panel-title">Saved Flows</div>
 						</div>
-						<a href="/composer-studio" class="text-xs font-semibold text-guild-400 hover:text-guild-300">New / Edit</a>
+						<a href="/composer-studio" class="link-accent" style="font-size: 0.72rem">New / Edit →</a>
 					</div>
-					<div class="divide-y divide-gray-800">
+					<div class="flow-list">
 						{#each teams as team}
-							<a href={`/composer-studio?team=${encodeURIComponent(team.name)}`} class="block px-4 py-3 hover:bg-gray-800/60">
-								<div class="flex items-center justify-between gap-3">
-									<p class="truncate text-sm font-semibold text-gray-100">{team.name}</p>
-									<span class="text-xs text-gray-500">Open</span>
+							<a href={`/composer-studio?team=${encodeURIComponent(team.name)}`} class="flow-item row-hover">
+								<div class="flow-item-row">
+									<p class="flow-name">{team.name}</p>
+									<span class="flow-open">open →</span>
 								</div>
-								<p class="mt-1 text-xs text-gray-500">{team.blocks?.length || Object.keys(team.blocks || {}).length || 0} blocks</p>
+								<p class="flow-meta">{team.blocks?.length || Object.keys(team.blocks || {}).length || 0} blocks</p>
 							</a>
 						{:else}
-							<div class="px-4 py-8 text-center text-sm text-gray-500">
-								No saved flows yet. Open Studio to create one.
-							</div>
+							<div class="empty-state">No saved flows yet. Open Studio to create one.</div>
 						{/each}
 					</div>
 				</div>
 			</section>
 
-			<aside class="space-y-4">
-				<div class="rounded border border-gray-800 bg-gray-900">
-					<div class="border-b border-gray-800 px-4 py-3">
-						<h3 class="text-sm font-semibold text-gray-100">Active Workflows</h3>
-						<p class="text-xs text-gray-500">Running or queued executions.</p>
+			<!-- Sidebar: active + recent -->
+			<aside class="composer-aside">
+				<div class="panel" style="overflow: hidden">
+					<div class="panel-head">
+						<div class="label-xs prompt-label">active</div>
 					</div>
-					<div class="space-y-2 p-3">
+					<div class="workflow-list">
 						{#each activeWorkflows as workflow}
-							<a href={`/workflows?execution=${encodeURIComponent(executionId(workflow))}`} class="block rounded border border-gray-800 bg-gray-950/60 p-3 hover:border-guild-700">
-								<div class="flex items-center justify-between gap-3">
-									<p class="truncate text-sm font-semibold text-gray-100">{workflow.assigned_agent}</p>
-									<span class="rounded border px-2 py-0.5 text-[11px] {statusClass(workflow.status)}">{workflow.status}</span>
+							<a href={`/workflows?execution=${encodeURIComponent(executionId(workflow))}`} class="wf-item row-hover">
+								<div class="wf-item-row">
+									<div class="flex items-center gap-1.5">
+										<span class="running-dot"></span>
+										<p class="wf-name">{workflow.assigned_agent}</p>
+									</div>
+									<span class="status-badge status-{workflow.status}">{workflow.status}</span>
 								</div>
-								<p class="mt-2 line-clamp-2 text-xs text-gray-400">{workflow.description}</p>
-								<p class="mt-2 font-mono text-[11px] text-gray-600">exec {shortId(executionId(workflow))}</p>
+								<p class="wf-desc">{workflow.description}</p>
+								<p class="wf-id">exec {shortId(executionId(workflow))}</p>
 							</a>
 						{:else}
-							<p class="px-1 py-5 text-center text-sm text-gray-600">No active workflows.</p>
+							<div class="empty-state">No active workflows.</div>
 						{/each}
 					</div>
 				</div>
 
-				<div class="rounded border border-gray-800 bg-gray-900">
-					<div class="border-b border-gray-800 px-4 py-3">
-						<h3 class="text-sm font-semibold text-gray-100">Recent Results</h3>
-						<p class="text-xs text-gray-500">Completed and failed runs.</p>
+				<div class="panel" style="overflow: hidden">
+					<div class="panel-head">
+						<div class="label-xs prompt-label">recent</div>
 					</div>
-					<div class="space-y-2 p-3">
+					<div class="workflow-list">
 						{#each recentWorkflows as workflow}
-							<a href={`/workflows?execution=${encodeURIComponent(executionId(workflow))}`} class="block rounded border border-gray-800 bg-gray-950/60 p-3 hover:border-guild-700">
-								<div class="flex items-center justify-between gap-3">
-									<p class="truncate text-sm font-semibold text-gray-100">{workflow.assigned_agent}</p>
-									<span class="rounded border px-2 py-0.5 text-[11px] {statusClass(workflow.status)}">{workflow.status}</span>
+							<a href={`/workflows?execution=${encodeURIComponent(executionId(workflow))}`} class="wf-item row-hover">
+								<div class="wf-item-row">
+									<p class="wf-name">{workflow.assigned_agent}</p>
+									<span class="status-badge status-{workflow.status}">{workflow.status}</span>
 								</div>
-								<p class="mt-2 font-mono text-[11px] text-gray-600">exec {shortId(executionId(workflow))}</p>
+								<p class="wf-id">exec {shortId(executionId(workflow))}</p>
 							</a>
 						{:else}
-							<p class="px-1 py-5 text-center text-sm text-gray-600">No finished workflows yet.</p>
+							<div class="empty-state">No finished workflows yet.</div>
 						{/each}
 					</div>
 				</div>
@@ -182,3 +179,99 @@
 		</div>
 	{/if}
 </div>
+
+<style>
+	.page { display: flex; flex-direction: column; gap: 1.25rem; }
+	.page-header { display: flex; align-items: flex-end; justify-content: space-between; }
+	.page-title {
+		font-size: 1.125rem;
+		font-weight: 700;
+		background: linear-gradient(90deg, var(--text-primary) 60%, var(--text-secondary));
+		-webkit-background-clip: text;
+		-webkit-text-fill-color: transparent;
+		background-clip: text;
+	}
+	.header-actions { display: flex; gap: 0.5rem; }
+
+	.loading-state { display: flex; align-items: center; gap: 0.625rem; font-size: 0.78rem; color: var(--text-secondary); }
+
+	.notice-bar {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+		padding: 0.625rem 0.875rem;
+		background: rgba(251, 191, 36, 0.06);
+		border: 1px solid rgba(251, 191, 36, 0.2);
+		border-radius: 0.15rem;
+		font-size: 0.78rem;
+		color: #fbbf24;
+	}
+
+	.composer-stats {
+		display: grid;
+		grid-template-columns: repeat(3, 1fr);
+		gap: 0.625rem;
+	}
+	.c-stat {
+		position: relative;
+		background: var(--bg-surface);
+		border: 1px solid var(--border-default);
+		border-radius: 0.15rem;
+		padding: 0.875rem 1rem;
+		display: flex;
+		flex-direction: column;
+		gap: 0.375rem;
+	}
+	.c-stat--active {
+		border-color: rgba(52,211,153,0.2);
+		background: rgba(52,211,153,0.04);
+	}
+	.c-stat-num { font-size: 2rem; font-weight: 700; color: var(--text-primary); line-height: 1; margin-top: 0.375rem; }
+
+	.composer-grid {
+		display: grid;
+		grid-template-columns: 1fr 300px;
+		gap: 1rem;
+		align-items: start;
+	}
+
+	.panel-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 0.75rem 1rem;
+		border-bottom: 1px solid var(--border-subtle);
+	}
+	.panel-title { font-size: 0.8rem; font-weight: 600; color: var(--text-primary); margin-top: 0.15rem; }
+
+	.flow-list { }
+	.flow-item {
+		display: block;
+		padding: 0.625rem 1rem;
+		border-bottom: 1px solid var(--border-subtle);
+		text-decoration: none;
+	}
+	.flow-item:last-child { border-bottom: none; }
+	.flow-item-row { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+	.flow-name { font-size: 0.8rem; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	.flow-open { font-size: 0.65rem; color: var(--text-secondary); white-space: nowrap; }
+	.flow-meta { font-size: 0.65rem; color: var(--text-secondary); margin-top: 0.15rem; }
+
+	.empty-state { padding: 1.5rem; text-align: center; font-size: 0.75rem; color: var(--text-secondary); }
+
+	.composer-aside { display: flex; flex-direction: column; gap: 0.75rem; }
+
+	.workflow-list { }
+	.wf-item {
+		display: block;
+		padding: 0.625rem 0.875rem;
+		border-bottom: 1px solid var(--border-subtle);
+		text-decoration: none;
+	}
+	.wf-item:last-child { border-bottom: none; }
+	.wf-item-row { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+	.wf-name { font-size: 0.78rem; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	.wf-desc { font-size: 0.68rem; color: var(--text-secondary); margin-top: 0.25rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	.wf-id { font-size: 0.6rem; color: var(--text-tertiary); margin-top: 0.25rem; }
+</style>

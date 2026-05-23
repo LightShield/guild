@@ -11,7 +11,7 @@ UI_PORT ?= 5173
 
 .DEFAULT_GOAL := help
 
-.PHONY: help setup install install-api install-dev ui-install ui-build init install-mixed-team start dev dev-api dev-ui terminate-all-agents config config-claude config-codex task task-claude task-codex team-codex-claude chat test test-unit lint format typecheck check clean
+.PHONY: help setup install install-api install-dev ui-install ui-build init install-mixed-team start dev dev-api dev-ui terminate-all-agents config config-claude config-codex task task-claude task-codex team-codex-claude chat test test-unit lint format typecheck check clean clear-db clean-db
 
 help:
 	@printf '%s\n' 'Guild development shortcuts'
@@ -135,3 +135,13 @@ check: lint typecheck test-unit
 
 clean:
 	rm -rf .pytest_cache .mypy_cache .ruff_cache htmlcov .coverage
+
+clear-db: ## Delete the Guild SQLite database (resets all task/message history)
+	@if [ -f ".guild/guild.db" ]; then \
+		rm -f .guild/guild.db; \
+		printf '%s\n' 'Deleted .guild/guild.db'; \
+	else \
+		printf '%s\n' 'No .guild/guild.db found (nothing to delete)'; \
+	fi
+
+clean-db: clear-db

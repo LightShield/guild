@@ -11,7 +11,7 @@
 <!-- Group boundary: a large dashed-border rectangle behind expanded children -->
 <div class="group-boundary">
   <!-- Header bar -->
-  <div class="flex items-center gap-2 px-4 py-2.5 border-b border-purple-700/40 bg-purple-950/40 rounded-t-xl">
+  <div class="boundary-drag flex items-center gap-2 px-4 py-2.5 border-b border-purple-700/40 bg-purple-950/40 rounded-t-xl cursor-grab active:cursor-grabbing select-none">
     <span class="text-xs text-purple-400">&#9646;&#9646;</span>
     <span class="text-sm font-semibold text-purple-200 flex-1 truncate">{data.blockName || 'block'}</span>
     <span class="text-[9px] text-purple-500 uppercase tracking-wider mr-2">{data.childCount || 0} agents</span>

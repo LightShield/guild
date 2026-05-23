@@ -177,91 +177,82 @@
 	<title>Guild - Workflows</title>
 </svelte:head>
 
-<div class="space-y-6">
-	<div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+<div class="page animate-fade-in">
+	<div class="page-header">
 		<div>
-			<h2 class="text-2xl font-bold text-gray-100">Workflows</h2>
-			<p class="mt-1 text-sm text-gray-500">Live and historical composed runs, grouped by flow.</p>
+			<div class="label-xs prompt-label" style="margin-bottom: 0.4rem">orchestration</div>
+			<h1 class="page-title">Workflows</h1>
 		</div>
-		<div class="grid grid-cols-3 gap-2 text-sm">
-			<div class="rounded border border-gray-800 bg-gray-900 px-3 py-2">
-				<p class="text-[11px] uppercase text-gray-500">Active</p>
-				<p class="text-lg font-semibold text-emerald-300">{activeWorkflows.length}</p>
+		<div class="stat-row">
+			<div class="stat-chip">
+				<div class="label-xs">Active</div>
+				<div class="stat-num" style="color: var(--running)">{activeWorkflows.length}</div>
 			</div>
-			<div class="rounded border border-gray-800 bg-gray-900 px-3 py-2">
-				<p class="text-[11px] uppercase text-gray-500">History</p>
-				<p class="text-lg font-semibold text-gray-200">{pastWorkflows.length}</p>
+			<div class="stat-chip">
+				<div class="label-xs">History</div>
+				<div class="stat-num">{pastWorkflows.length}</div>
 			</div>
-			<div class="rounded border border-gray-800 bg-gray-900 px-3 py-2">
-				<p class="text-[11px] uppercase text-gray-500">Blocks</p>
-				<p class="text-lg font-semibold text-sky-300">{selectedBlockRuns.length}</p>
+			<div class="stat-chip">
+				<div class="label-xs">Blocks</div>
+				<div class="stat-num" style="color: var(--accent)">{selectedBlockRuns.length}</div>
 			</div>
 		</div>
 	</div>
+
 	{#if apiUnavailable}
-		<div class="flex items-center justify-between gap-4 rounded border border-amber-800/60 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">
-			<p>
-				Workflow API detail fetch failed. Showing live task/event fallback data.
-			</p>
-			<button
-				type="button"
-				onclick={loadWorkflows}
-				class="rounded border border-amber-700 px-3 py-1.5 text-xs text-amber-100 hover:bg-amber-900/40"
-			>
-				Retry API
-			</button>
+		<div class="notice-bar">
+			<p>Workflow API detail fetch failed. Showing live fallback data.</p>
+			<button type="button" onclick={loadWorkflows} class="btn-ghost" style="font-size: 0.65rem; padding: 0.3rem 0.625rem">Retry</button>
 		</div>
 	{/if}
 
 	{#if loading}
-		<div class="text-gray-400">Loading workflows...</div>
+		<div class="loading-state"><span class="running-dot"></span><span>Loading workflows...</span></div>
 	{:else if workflowTasks.length === 0}
-		<div class="rounded-lg border border-gray-800 bg-gray-900 p-8 text-center text-gray-500">
-			No workflow runs yet.
-		</div>
+		<div class="panel empty-panel">No workflow runs yet.</div>
 	{:else}
-		<div class="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
-			<aside class="space-y-4">
+		<div class="wf-layout">
+			<aside class="wf-sidebar">
 				<section>
-					<h3 class="mb-2 text-xs font-semibold uppercase text-gray-500">Active Workflows</h3>
-					<div class="space-y-2">
+					<div class="label-xs prompt-label" style="margin-bottom: 0.625rem">active</div>
+					<div class="wf-list">
 						{#each activeWorkflows as workflow}
 							<button
 								type="button"
 								onclick={() => selectWorkflow(executionId(workflow))}
-								class="w-full rounded border p-3 text-left transition
-									{executionId(selectedWorkflow) === executionId(workflow) ? 'border-guild-500 bg-guild-950/30' : 'border-gray-800 bg-gray-900 hover:border-gray-700'}"
+								class="wf-item {executionId(selectedWorkflow) === executionId(workflow) ? 'wf-item--active' : ''}"
 							>
-								<div class="flex items-center justify-between gap-3">
-									<p class="truncate text-sm font-semibold text-gray-100">{workflow.assigned_agent}</p>
-									<span class="rounded border px-2 py-0.5 text-[11px] {statusClass(workflow.status)}">{workflow.status}</span>
+								<div class="wf-item-top">
+									<span class="running-dot"></span>
+									<p class="wf-name">{workflow.assigned_agent}</p>
+									<span class="status-badge status-{workflow.status}">{workflow.status}</span>
 								</div>
-								<p class="mt-2 line-clamp-2 text-xs text-gray-400">{workflow.description}</p>
-								<p class="mt-2 font-mono text-[11px] text-gray-600">exec {shortId(executionId(workflow))}</p>
+								<p class="wf-desc">{workflow.description}</p>
+								<p class="wf-id">exec {shortId(executionId(workflow))}</p>
 							</button>
 						{:else}
-							<p class="rounded border border-gray-800 bg-gray-900 px-3 py-4 text-sm text-gray-600">No active workflows.</p>
+							<div class="empty-state">No active workflows.</div>
 						{/each}
 					</div>
 				</section>
 
-				<section>
-					<h3 class="mb-2 text-xs font-semibold uppercase text-gray-500">Completed / Failed</h3>
-					<div class="max-h-[52vh] space-y-2 overflow-y-auto pr-1">
+				<section style="margin-top: 1.25rem">
+					<div class="label-xs prompt-label" style="margin-bottom: 0.625rem">completed / failed</div>
+					<div class="wf-list wf-list--scroll">
 						{#each pastWorkflows as workflow}
 							<button
 								type="button"
 								onclick={() => selectWorkflow(executionId(workflow))}
-								class="w-full rounded border p-3 text-left transition
-									{executionId(selectedWorkflow) === executionId(workflow) ? 'border-guild-500 bg-guild-950/30' : 'border-gray-800 bg-gray-900 hover:border-gray-700'}"
+								class="wf-item {executionId(selectedWorkflow) === executionId(workflow) ? 'wf-item--active' : ''}"
 							>
-								<div class="flex items-center justify-between gap-3">
-									<p class="truncate text-sm font-semibold text-gray-100">{workflow.assigned_agent}</p>
-									<span class="rounded border px-2 py-0.5 text-[11px] {statusClass(workflow.status)}">{workflow.status}</span>
+								<div class="wf-item-top">
+									<span class="status-dot status-dot--{workflow.status}"></span>
+									<p class="wf-name">{workflow.assigned_agent}</p>
+									<span class="status-badge status-{workflow.status}">{workflow.status}</span>
 								</div>
-								<p class="mt-2 line-clamp-2 text-xs text-gray-400">{workflow.description}</p>
-								<p class="mt-2 font-mono text-[11px] text-gray-600">exec {shortId(executionId(workflow))}</p>
-								<p class="mt-2 text-[11px] text-gray-600">{workflow.completed_at || workflow.created_at}</p>
+								<p class="wf-desc">{workflow.description}</p>
+								<p class="wf-id">exec {shortId(executionId(workflow))}</p>
+								<p class="wf-time">{workflow.completed_at || workflow.created_at}</p>
 							</button>
 						{/each}
 					</div>
@@ -269,89 +260,82 @@
 			</aside>
 
 			{#if selectedWorkflow}
-				<section class="space-y-4">
-					<div class="rounded-lg border border-gray-800 bg-gray-900 p-4">
-						<div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-							<div>
-								<div class="flex flex-wrap items-center gap-2">
-									<h3 class="text-lg font-semibold text-gray-100">{selectedWorkflow.assigned_agent}</h3>
-									<span class="rounded border px-2 py-0.5 text-xs {statusClass(selectedWorkflow.status)}">{selectedWorkflow.status}</span>
+				<section class="wf-detail">
+					<div class="panel wf-detail-header">
+						<div class="wf-detail-title-row">
+							<div class="wf-detail-title-left">
+								<div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap">
+									<h2 class="detail-title">{selectedWorkflow.assigned_agent}</h2>
+									<span class="status-badge status-{selectedWorkflow.status}">{selectedWorkflow.status}</span>
 								</div>
-								<p class="mt-2 text-sm text-gray-400">{selectedWorkflow.description}</p>
-								<div class="mt-2 flex flex-wrap items-center gap-2">
-									<p class="font-mono text-xs text-gray-600">execution_id={executionId(selectedWorkflow)}</p>
-									<button
-										type="button"
-										onclick={() => copyText('execution', executionId(selectedWorkflow))}
-										class="rounded border border-gray-800 px-2 py-1 text-[11px] text-gray-400 hover:border-guild-500 hover:text-guild-300"
-									>
-										{copied === 'execution' ? 'Copied ID' : 'Copy ID'}
+								<p class="detail-desc">{selectedWorkflow.description}</p>
+								<div class="detail-id-row">
+									<span class="wf-id-full">exec={executionId(selectedWorkflow)}</span>
+									<button type="button" onclick={() => copyText('execution', executionId(selectedWorkflow))} class="btn-ghost" style="font-size: 0.65rem; padding: 0.18rem 0.5rem">
+										{copied === 'execution' ? 'Copied' : 'Copy ID'}
 									</button>
 								</div>
 							</div>
-							<button
-								type="button"
-								onclick={() => copyText('workflow', workflowOutput(selectedWorkflow))}
-								class="rounded border border-gray-700 px-3 py-2 text-xs text-gray-300 hover:border-guild-500 hover:text-guild-300"
-							>
+							<button type="button" onclick={() => copyText('workflow', workflowOutput(selectedWorkflow))} class="btn-ghost" style="align-self: flex-start; flex-shrink: 0">
 								{copied === 'workflow' ? 'Copied' : 'Copy output'}
 							</button>
 						</div>
 					</div>
 
-					<div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-						<div class="space-y-4">
-							<div class="rounded-lg border border-gray-800 bg-gray-900 p-4">
-								<div class="mb-3 flex items-center justify-between">
-									<h4 class="text-sm font-semibold uppercase text-gray-500">Workflow Output</h4>
-									<span class="text-xs text-gray-600">{selectedWorkflow.completed_at || selectedWorkflow.created_at}</span>
+					<div class="wf-detail-body">
+						<div class="wf-main-col">
+							<div class="panel" style="padding: 1rem">
+								<div class="section-head">
+									<div class="label-xs prompt-label">output</div>
+									<span class="wf-time">{selectedWorkflow.completed_at || selectedWorkflow.created_at}</span>
 								</div>
-								<pre class="max-h-[42vh] overflow-auto whitespace-pre-wrap rounded border border-gray-800 bg-gray-950 p-4 text-sm leading-6 text-gray-200">{workflowOutput(selectedWorkflow) || 'No output written yet.'}</pre>
+								<pre class="output-pre">{workflowOutput(selectedWorkflow) || 'No output written yet.'}</pre>
 							</div>
 
-							<div class="rounded-lg border border-gray-800 bg-gray-900 p-4">
-								<h4 class="mb-3 text-sm font-semibold uppercase text-gray-500">Block Runs</h4>
-								<div class="space-y-3">
+							<div class="panel" style="padding: 1rem">
+								<div class="label-xs prompt-label" style="margin-bottom: 0.75rem">block runs</div>
+								<div class="block-list">
 									{#each selectedBlockRuns as block}
-										<div class="rounded border border-gray-800 bg-gray-950/60 p-3">
-											<div class="flex flex-wrap items-center justify-between gap-2">
+										<div class="block-run">
+											<div class="block-run-head">
 												<div>
-													<p class="text-sm font-semibold text-gray-100">{block.blockName}</p>
-													<p class="font-mono text-[11px] text-gray-600">{block.agentId}</p>
+													<p class="block-name">{block.blockName}</p>
+													<p class="block-id">{block.agentId}</p>
 												</div>
-												<span class="rounded border px-2 py-0.5 text-[11px] {statusClass(block.status)}">{block.status}</span>
+												<span class="status-badge status-{block.status}">{block.status}</span>
 											</div>
 											{#if block.result}
-												<pre class="mt-3 max-h-48 overflow-auto whitespace-pre-wrap rounded border border-gray-800 bg-gray-950 p-3 text-xs leading-5 text-gray-300">{block.result}</pre>
+												<pre class="block-output">{block.result}</pre>
 												<button
 													type="button"
 													onclick={() => copyText(block.agentId, block.result)}
-													class="mt-2 text-xs text-guild-400 hover:text-guild-300"
+													class="link-accent"
+													style="font-size: 0.68rem; margin-top: 0.375rem; background: none; border: none; cursor: pointer; padding: 0"
 												>
-													{copied === block.agentId ? 'Copied block output' : 'Copy block output'}
+													{copied === block.agentId ? 'Copied' : 'Copy output'}
 												</button>
 											{/if}
 										</div>
 									{:else}
-										<p class="text-sm text-gray-600">No block agents recorded for this workflow.</p>
+										<p class="empty-state">No block agents recorded.</p>
 									{/each}
 								</div>
 							</div>
 						</div>
 
-						<div class="rounded-lg border border-gray-800 bg-gray-900 p-4">
-							<h4 class="mb-3 text-sm font-semibold uppercase text-gray-500">Timeline</h4>
-							<div class="space-y-3">
+						<div class="panel wf-timeline-col">
+							<div class="label-xs prompt-label" style="margin-bottom: 0.75rem">timeline</div>
+							<div class="timeline-list">
 								{#each selectedEvents.slice().reverse() as event}
-									<div class="border-l border-gray-800 pl-3">
-										<div class="flex items-center gap-2">
-											<span class="text-[10px] font-semibold uppercase text-guild-400">{event.event_type}</span>
-											<span class="text-[11px] text-gray-600">{event.timestamp}</span>
+									<div class="t-event">
+										<div class="t-event-head">
+											<span class="t-event-type">{event.event_type}</span>
+											<span class="t-event-time">{event.timestamp}</span>
 										</div>
-										<p class="mt-1 text-xs leading-5 text-gray-300">{event.message}</p>
+										<p class="t-event-msg">{event.message}</p>
 									</div>
 								{:else}
-									<p class="text-sm text-gray-600">No events recorded.</p>
+									<p class="empty-state">No events recorded.</p>
 								{/each}
 							</div>
 						</div>
@@ -361,3 +345,137 @@
 		</div>
 	{/if}
 </div>
+
+<style>
+	.page { display: flex; flex-direction: column; gap: 1.25rem; }
+	.page-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+	.page-title {
+		font-size: 1.125rem;
+		font-weight: 700;
+		background: linear-gradient(90deg, var(--text-primary) 60%, var(--text-secondary));
+		-webkit-background-clip: text;
+		-webkit-text-fill-color: transparent;
+		background-clip: text;
+	}
+
+	.stat-row { display: flex; gap: 0.5rem; }
+	.stat-chip {
+		background: var(--bg-surface);
+		border: 1px solid var(--border-default);
+		border-radius: 0.15rem;
+		padding: 0.625rem 0.875rem;
+		min-width: 4.5rem;
+		text-align: right;
+	}
+	.stat-num { font-size: 1.5rem; font-weight: 700; color: var(--text-primary); line-height: 1; margin-top: 0.25rem; }
+
+	.loading-state { display: flex; align-items: center; gap: 0.625rem; font-size: 0.78rem; color: var(--text-secondary); }
+	.empty-panel { padding: 3rem; text-align: center; font-size: 0.8rem; color: var(--text-secondary); }
+
+	.notice-bar {
+		display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+		padding: 0.625rem 0.875rem;
+		background: rgba(251, 191, 36, 0.06);
+		border: 1px solid rgba(251, 191, 36, 0.2);
+		border-radius: 0.15rem;
+		font-size: 0.78rem;
+		color: #fbbf24;
+	}
+
+	.wf-layout {
+		display: grid;
+		grid-template-columns: 260px 1fr;
+		gap: 1rem;
+		align-items: start;
+	}
+
+	.wf-sidebar { display: flex; flex-direction: column; }
+	.wf-list { display: flex; flex-direction: column; }
+	.wf-list--scroll { max-height: 48vh; overflow-y: auto; }
+
+	.wf-item {
+		width: 100%;
+		text-align: left;
+		padding: 0.625rem 0.75rem;
+		border: 1px solid var(--border-subtle);
+		border-left: 3px solid transparent;
+		border-radius: 0.15rem;
+		background: var(--bg-surface);
+		cursor: pointer;
+		display: flex;
+		flex-direction: column;
+		gap: 0.2rem;
+		margin-bottom: 0.375rem;
+		transition: background 0.1s;
+	}
+	.wf-item:hover { background: var(--bg-hover); }
+	.wf-item--active { border-left-color: var(--accent); background: rgba(56, 189, 248, 0.06); }
+
+	.detail-title {
+		font-size: 0.95rem;
+		font-weight: 700;
+		background: linear-gradient(90deg, var(--text-primary) 60%, var(--text-secondary));
+		-webkit-background-clip: text;
+		-webkit-text-fill-color: transparent;
+		background-clip: text;
+	}
+
+	.wf-item-top { display: flex; align-items: center; gap: 0.375rem; }
+	.wf-name { font-size: 0.8rem; font-weight: 600; color: var(--text-primary); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	.wf-desc { font-size: 0.72rem; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	.wf-id { font-size: 0.65rem; color: var(--text-tertiary); }
+	.wf-time { font-size: 0.65rem; color: var(--text-tertiary); }
+
+	.status-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+	.status-dot--completed { background: var(--accent); }
+	.status-dot--failed, .status-dot--killed { background: #f87171; }
+	.status-dot--pending { background: var(--text-tertiary); }
+
+	.empty-state { font-size: 0.75rem; color: var(--text-secondary); padding: 0.5rem 0; }
+
+	.wf-detail { display: flex; flex-direction: column; gap: 0.875rem; }
+	.wf-detail-header { padding: 0.875rem 1rem; }
+	.wf-detail-title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+	.wf-detail-title-left { flex: 1; min-width: 0; }
+	/* detail-title defined above with gradient */
+	.detail-desc { font-size: 0.78rem; color: var(--text-secondary); margin-top: 0.3rem; }
+	.detail-id-row { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.375rem; flex-wrap: wrap; }
+	.wf-id-full { font-size: 0.65rem; color: var(--text-tertiary); word-break: break-all; }
+
+	.wf-detail-body { display: grid; grid-template-columns: 1fr 250px; gap: 0.875rem; align-items: start; }
+	.wf-main-col { display: flex; flex-direction: column; gap: 0.875rem; }
+	.section-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.625rem; }
+
+	.output-pre {
+		white-space: pre-wrap; word-break: break-words;
+		max-height: 40vh; overflow-y: auto;
+		font-size: 0.78rem; line-height: 1.6;
+		color: var(--text-primary);
+		background: var(--bg-base);
+		border: 1px solid var(--border-subtle);
+		border-radius: 0.15rem;
+		padding: 0.75rem;
+		font-family: inherit;
+	}
+
+	.block-list { display: flex; flex-direction: column; gap: 0.625rem; }
+	.block-run { background: var(--bg-elevated); border: 1px solid var(--border-subtle); border-radius: 0.15rem; padding: 0.75rem; }
+	.block-run-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.5rem; }
+	.block-name { font-size: 0.8rem; font-weight: 600; color: var(--text-primary); }
+	.block-id { font-size: 0.65rem; color: var(--text-tertiary); margin-top: 0.1rem; }
+	.block-output {
+		margin-top: 0.625rem; max-height: 12rem; overflow-y: auto;
+		white-space: pre-wrap; word-break: break-words;
+		font-size: 0.72rem; line-height: 1.5; color: var(--text-primary);
+		background: var(--bg-base); border: 1px solid var(--border-subtle);
+		border-radius: 0.15rem; padding: 0.5rem 0.625rem; font-family: inherit;
+	}
+
+	.wf-timeline-col { padding: 1rem; position: sticky; top: 0; }
+	.timeline-list { display: flex; flex-direction: column; gap: 0.5rem; max-height: 70vh; overflow-y: auto; }
+	.t-event { border-left: 2px solid var(--border-default); padding-left: 0.625rem; }
+	.t-event-head { display: flex; align-items: center; gap: 0.5rem; }
+	.t-event-type { font-size: 0.65rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); }
+	.t-event-time { font-size: 0.65rem; color: var(--text-tertiary); }
+	.t-event-msg { font-size: 0.72rem; color: var(--text-primary); margin-top: 0.2rem; line-height: 1.4; }
+</style>

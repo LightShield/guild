@@ -4,10 +4,19 @@
 	import { agents } from '$lib/stores.js';
 
 	let loading = $state(true);
+	let activeOnly = $state(false);
+	let expandedDescIds = $state(new Set());
+	function toggleAgentDesc(id, e) {
+		e.stopPropagation();
+		const s = new Set(expandedDescIds);
+		s.has(id) ? s.delete(id) : s.add(id);
+		expandedDescIds = s;
+	}
 
-	const orderedAgents = $derived(
-		[...$agents].sort((a, b) => String(b.last_seen || b.created_at || '').localeCompare(String(a.last_seen || a.created_at || '')))
-	);
+	const orderedAgents = $derived.by(() => {
+		const sorted = [...$agents].sort((a, b) => String(b.last_seen || b.created_at || '').localeCompare(String(a.last_seen || a.created_at || '')));
+		return activeOnly ? sorted.filter(a => a.status === 'running') : sorted;
+	});
 	const activeAgents = $derived(orderedAgents.filter((agent) => agent.status === 'running'));
 	const historicalAgents = $derived(orderedAgents.filter((agent) => agent.status !== 'running'));
 
@@ -51,79 +60,88 @@
 </script>
 
 <svelte:head>
-	<title>Guild - Agents</title>
+	<title>Guild — Agents</title>
 </svelte:head>
 
-<div class="space-y-6">
-	<div class="flex items-end justify-between gap-4">
+<div class="page animate-fade-in">
+	<div class="page-header">
 		<div>
-			<h2 class="text-2xl font-bold">Agents</h2>
-			<p class="text-sm text-gray-500 mt-1">Local SQLite agent rows, newest activity first.</p>
+			<div class="label-xs prompt-label" style="margin-bottom: 0.4rem">fleet</div>
+			<h1 class="page-title">Agents</h1>
 		</div>
-		<div class="flex gap-3 text-sm">
-			<div class="rounded border border-gray-800 bg-gray-900 px-3 py-2">
-				<span class="text-gray-500">Active</span>
-				<span class="ml-2 text-gray-100 font-semibold">{activeAgents.length}</span>
+		<div class="agent-counts">
+			<div class="count-chip {activeAgents.length > 0 ? 'count-chip--live' : ''}">
+				{#if activeAgents.length > 0}<span class="running-dot"></span>{/if}
+				<span class="count-chip-label">Active</span>
+				<span class="count-chip-val">{activeAgents.length}</span>
 			</div>
-			<div class="rounded border border-gray-800 bg-gray-900 px-3 py-2">
-				<span class="text-gray-500">History</span>
-				<span class="ml-2 text-gray-100 font-semibold">{historicalAgents.length}</span>
+			<div class="count-chip">
+				<span class="count-chip-label">History</span>
+				<span class="count-chip-val">{historicalAgents.length}</span>
 			</div>
+			<button
+				type="button"
+				onclick={() => activeOnly = !activeOnly}
+				class="toggle-active-btn {activeOnly ? 'toggle-active-btn--on' : ''}"
+			>
+				{activeOnly ? '● Active only' : '○ All agents'}
+			</button>
 		</div>
 	</div>
 
 	{#if loading}
-		<div class="text-gray-400">Loading agents...</div>
+		<div class="loading-state"><span class="running-dot"></span><span>Loading agents...</span></div>
 	{:else if orderedAgents.length === 0}
-		<div class="bg-gray-800 rounded-xl p-8 border border-gray-700 text-center">
-			<p class="text-gray-400">No agents registered yet.</p>
-			<p class="text-sm text-gray-500 mt-2">Agents are created when tasks are assigned.</p>
+		<div class="panel empty-panel">
+			<p>No agents registered yet.</p>
+			<p class="empty-sub">Agents are created when tasks are assigned.</p>
 		</div>
 	{:else}
-		<div class="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
-			<table class="w-full">
+		<div class="panel" style="overflow: hidden">
+			<table class="data-table">
 				<thead>
-					<tr class="border-b border-gray-800">
-						<th class="px-4 py-3 text-left text-xs text-gray-500 uppercase">Agent</th>
-						<th class="px-4 py-3 text-left text-xs text-gray-500 uppercase">Status</th>
-						<th class="px-4 py-3 text-left text-xs text-gray-500 uppercase">Origin</th>
-						<th class="px-4 py-3 text-left text-xs text-gray-500 uppercase">Task Source</th>
-						<th class="px-4 py-3 text-right text-xs text-gray-500 uppercase">Tokens</th>
-						<th class="px-4 py-3 text-left text-xs text-gray-500 uppercase">Last Seen</th>
+					<tr class="table-head-row">
+						<th class="th">Agent</th>
+						<th class="th">Status</th>
+						<th class="th">Origin</th>
+						<th class="th" style="width: 99%">Task</th>
+						<th class="th th--right">Tokens</th>
+						<th class="th">Last seen</th>
 					</tr>
 				</thead>
 				<tbody>
 					{#each orderedAgents as agent}
-						<tr class="border-b border-gray-800/70 hover:bg-gray-800/40">
-							<td class="px-4 py-3">
-								<p class="text-sm font-semibold text-gray-100">{agent.block_name}</p>
-								<p class="text-xs font-mono text-gray-500">{agent.agent_id}</p>
+						<tr class="data-row row-hover row-{agent.status}">
+							<td class="td">
+								<p class="agent-name">{agent.block_name}</p>
+								<p class="agent-id">{agent.agent_id}</p>
 							</td>
-							<td class="px-4 py-3">
-								<span class="inline-flex border px-2 py-0.5 rounded text-xs font-medium {statusClass(agent.status)}">
-									{agent.status}
-								</span>
+							<td class="td">
+								<div class="status-cell">
+									{#if agent.status === 'running'}<span class="running-dot"></span>{/if}
+									<span class="status-badge status-{agent.status}">{agent.status}</span>
+								</div>
 							</td>
-							<td class="px-4 py-3 max-w-md">
+							<td class="td">
 								{#if originHref(agent)}
-									<a href={originHref(agent)} class="text-sm text-guild-400 hover:text-guild-300">{originLabel(agent)}</a>
+									<a href={originHref(agent)} class="link-accent" style="font-size: 0.72rem">{originLabel(agent)}</a>
 								{:else}
-									<span class="text-sm text-gray-600">{originLabel(agent)}</span>
+									<span class="td--dim">{originLabel(agent)}</span>
 								{/if}
 							</td>
-							<td class="px-4 py-3 max-w-md">
-								<p class="text-sm text-gray-300 line-clamp-2">{taskLabel(agent)}</p>
+							<td class="td td--desc">
+								<p class="expandable-text {expandedDescIds.has(agent.agent_id) ? 'expandable-text--open' : ''}" style="font-size: 0.78rem" onclick={(e) => toggleAgentDesc(agent.agent_id, e)}>{taskLabel(agent)}</p>
 								{#if agent.parent_task}
-									<p class="text-xs text-gray-600 mt-1">flow {agent.parent_task.task_id?.slice(0, 8)}</p>
+									<p class="agent-flow">flow {agent.parent_task.task_id?.slice(0, 8)}</p>
 								{:else if agent.task}
-									<p class="text-xs text-gray-600 mt-1">task {agent.task.task_id?.slice(0, 8)}</p>
+									<p class="agent-flow">task {agent.task.task_id?.slice(0, 8)}</p>
 								{/if}
 							</td>
-							<td class="px-4 py-3 text-right">
-								<p class="text-sm text-gray-200">{(agent.token_input || 0).toLocaleString()} in</p>
-								<p class="text-xs text-gray-500">{(agent.token_output || 0).toLocaleString()} out</p>
+							<td class="td td--right">
+								<p class="token-in">{(agent.token_input || 0).toLocaleString()} in</p>
+								<p class="token-out">{(agent.token_output || 0).toLocaleString()} out</p>
 							</td>
-							<td class="px-4 py-3 text-sm text-gray-500">
+							<td class="td td--dim td--mono" style="font-size: 0.68rem; white-space: nowrap">
 								{agent.last_seen || agent.created_at}
 							</td>
 						</tr>
@@ -133,3 +151,90 @@
 		</div>
 	{/if}
 </div>
+
+<style>
+	.page { display: flex; flex-direction: column; gap: 1.25rem; }
+	.page-header { display: flex; align-items: flex-end; justify-content: space-between; }
+	.page-title {
+		font-size: 1.125rem;
+		font-weight: 700;
+		background: linear-gradient(90deg, var(--text-primary) 60%, var(--text-secondary));
+		-webkit-background-clip: text;
+		-webkit-text-fill-color: transparent;
+		background-clip: text;
+	}
+
+	.loading-state { display: flex; align-items: center; gap: 0.625rem; font-size: 0.78rem; color: var(--text-secondary); }
+
+	.agent-counts { display: flex; gap: 0.5rem; }
+	.count-chip {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+		padding: 0.35rem 0.75rem;
+		background: var(--bg-surface);
+		border: 1px solid var(--border-default);
+		border-radius: 0.15rem;
+		font-size: 0.72rem;
+	}
+	.count-chip--live { border-color: rgba(52,211,153,0.25); background: rgba(52,211,153,0.05); }
+	.count-chip-label { color: var(--text-secondary); }
+	.count-chip-val { font-weight: 600; color: var(--text-primary); }
+
+	.empty-panel { padding: 3rem; text-align: center; font-size: 0.8rem; color: var(--text-secondary); }
+	.empty-sub { font-size: 0.72rem; color: var(--text-tertiary); margin-top: 0.375rem; }
+
+	.data-table { width: 100%; border-collapse: collapse; }
+	.table-head-row { border-bottom: 1px solid var(--border-default); }
+	.th {
+		padding: 0.625rem 1rem;
+		text-align: left;
+		font-size: 0.7rem;
+		font-weight: 600;
+		letter-spacing: 0.1em;
+		text-transform: uppercase;
+		color: var(--text-secondary);
+		white-space: nowrap;
+	}
+	.th--right { text-align: right; }
+
+	.data-row { border-bottom: 1px solid var(--border-subtle); }
+	.td { padding: 0.625rem 1rem; font-size: 0.78rem; color: var(--text-primary); vertical-align: middle; }
+	.td--dim { color: var(--text-secondary); font-size: 0.72rem; }
+	.td--mono { font-family: inherit; }
+	.td--desc { max-width: 0; }
+	.td--right { text-align: right; }
+
+	.status-cell { display: flex; align-items: center; gap: 0.4rem; }
+
+	.agent-name { font-weight: 600; font-size: 0.8rem; color: var(--text-primary); }
+	.agent-id { font-size: 0.68rem; color: var(--text-tertiary); margin-top: 0.1rem; }
+	.agent-flow { font-size: 0.68rem; color: var(--text-tertiary); margin-top: 0.15rem; }
+
+	.token-in { font-size: 0.75rem; color: var(--text-primary); text-align: right; }
+	.token-out { font-size: 0.65rem; color: var(--text-secondary); text-align: right; }
+
+	.toggle-active-btn {
+		display: flex; align-items: center; gap: 0.375rem;
+		padding: 0.35rem 0.75rem;
+		background: var(--bg-surface);
+		border: 1px solid var(--border-default);
+		border-radius: 0.15rem;
+		font-size: 0.72rem; font-weight: 500;
+		color: var(--text-secondary);
+		cursor: pointer;
+		transition: all 0.15s;
+		font-family: inherit;
+		letter-spacing: 0.04em;
+	}
+	.toggle-active-btn:hover {
+		border-color: rgba(52,211,153,0.35);
+		color: var(--text-primary);
+	}
+	.toggle-active-btn--on {
+		border-color: rgba(52,211,153,0.4);
+		background: rgba(52,211,153,0.08);
+		color: #34d399;
+		box-shadow: 0 0 10px rgba(52,211,153,0.1);
+	}
+</style>

@@ -32,6 +32,7 @@
   let showHelp = $state(false);
   let selectedNodeIds = $state(new Set());
   let selectedEdgeIds = $state(new Set());
+  let canvasMode = $state('pan'); // 'pan' | 'select'
   let historyPast = $state([]);
   let historyFuture = $state([]);
   let editorClipboard = $state(null);
@@ -72,8 +73,12 @@
     { value: 'claude', label: 'Claude' },
   ];
   const providerModels = {
-    codex: ['codex', 'gpt-5.4', 'gpt-5.4-mini'],
-    claude: ['claude', 'sonnet', 'opus'],
+    codex: ['codex', 'gpt-4.1', 'gpt-4o', 'gpt-4o-mini', 'o1', 'o1-mini', 'o3', 'o3-mini', 'o4-mini'],
+    openai: ['gpt-4.1', 'gpt-4o', 'gpt-4o-mini', 'o1', 'o1-mini', 'o3', 'o3-mini', 'o4-mini'],
+    ollama: ['llama3.2', 'llama3.1', 'llama3', 'qwen2.5', 'qwen2.5-coder', 'deepseek-r1', 'mistral', 'phi4', 'gemma2'],
+    anthropic: ['claude-opus-4-7', 'claude-sonnet-4-6', 'claude-haiku-4-5', 'claude-3-5-sonnet-20241022', 'claude-3-5-haiku-20241022'],
+    claude: ['claude-opus-4-7', 'claude-sonnet-4-6', 'claude-haiku-4-5', 'claude-3-5-sonnet-20241022', 'claude-3-5-haiku-20241022'],
+    gemini: ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-1.5-flash'],
   };
   const MAX_HISTORY = 100;
   let draftLoaded = $state(false);
@@ -618,6 +623,7 @@
       type: 'group-boundary',
       position: { ...blockPos },
       style: `width: ${boundaryWidth}px; height: ${boundaryHeight}px;`,
+      dragHandle: '.boundary-drag',
       data: {
         blockName: blockNode.data.blockName,
         childCount: blockNode.data.childCount,
@@ -1525,7 +1531,7 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-<div class="h-[calc(100vh-4rem)] flex" role="application" aria-label="Composer Studio canvas editor" tabindex="0" onkeydown={onKeyDown}>
+<div class="h-[calc(100vh-4rem)] flex" role="application" aria-label="Composer Studio canvas editor" tabindex="0" onkeydown={onKeyDown} style="font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 13px;">
   <!-- Left sidebar -->
   <div class="w-72 bg-gray-900/50 border-r border-gray-800 overflow-y-auto flex flex-col">
     <!-- Header + Create button -->
@@ -1692,6 +1698,20 @@
 
     <!-- Bottom actions -->
     <div class="px-4 py-4 border-t border-gray-800 bg-gray-900/30 space-y-3">
+      <!-- Canvas mode toggle -->
+      <div class="flex gap-1 rounded border border-gray-700 bg-gray-900 p-0.5">
+        <button
+          onclick={() => canvasMode = 'pan'}
+          class="flex-1 px-2 py-1 rounded text-xs transition-all duration-150 {canvasMode === 'pan' ? 'bg-gray-700 text-gray-100' : 'text-gray-500 hover:text-gray-300'}"
+          title="Pan mode — drag to move canvas"
+        >&#8598; Pan</button>
+        <button
+          onclick={() => canvasMode = 'select'}
+          class="flex-1 px-2 py-1 rounded text-xs transition-all duration-150 {canvasMode === 'select' ? 'bg-blue-600/60 text-blue-200 border border-blue-500/40' : 'text-gray-500 hover:text-gray-300'}"
+          title="Select mode — drag to marquee-select nodes"
+        >&#9638; Select</button>
+      </div>
+
       <!-- Editor controls -->
       <div class="grid grid-cols-4 gap-2">
         <button
@@ -1829,44 +1849,6 @@
       </div>
     {/if}
 
-    {#if activeFlowTask}
-      <div class="absolute top-3 right-3 z-10 w-[360px] max-w-[calc(100%-1.5rem)] bg-gray-900/95 backdrop-blur-sm
-                  border border-gray-700/70 rounded-lg shadow-xl overflow-hidden">
-        <div class="px-4 py-3 border-b border-gray-800 flex items-center gap-3">
-          <span class="w-2 h-2 rounded-full
-            {activeFlowTask.status === 'running' ? 'bg-green-300 animate-pulse' :
-             activeFlowTask.status === 'completed' ? 'bg-sky-300' :
-             activeFlowTask.status === 'failed' ? 'bg-red-300' :
-             'bg-gray-300'}"></span>
-          <div class="min-w-0 flex-1">
-            <div class="flex items-center gap-2">
-              <p class="text-xs font-semibold text-gray-100 truncate">{activeFlowTask.assigned_agent}</p>
-              <span class="text-[9px] uppercase tracking-wider text-gray-500">{activeFlowTask.status}</span>
-            </div>
-            <p class="text-[11px] text-gray-500 font-mono">{activeFlowTask.task_id?.slice(0, 8)}</p>
-          </div>
-        </div>
-        <div class="px-4 py-3 space-y-2">
-          <p class="text-xs text-gray-300 line-clamp-2">{activeFlowTask.description}</p>
-          {#if activeFlowEvents.length > 0}
-            <div class="space-y-1.5 max-h-36 overflow-auto">
-              {#each activeFlowEvents as event}
-                <div class="rounded border border-gray-800 bg-gray-950/60 px-2 py-1.5">
-                  <div class="flex items-center gap-2">
-                    <span class="text-[9px] uppercase tracking-wider text-guild-400">{event.event_type}</span>
-                    <span class="text-[10px] text-gray-600">{event.timestamp}</span>
-                  </div>
-                  <p class="text-[11px] text-gray-300 mt-0.5">{event.message}</p>
-                </div>
-              {/each}
-            </div>
-          {/if}
-          <pre class="max-h-32 overflow-auto whitespace-pre-wrap break-words rounded bg-gray-950/80 border border-gray-800
-                      p-2 text-[11px] text-gray-300">{activeFlowTask.result || 'Queued. Waiting for runner progress.'}</pre>
-        </div>
-      </div>
-    {/if}
-
     {#if nodes.length === 0}
       <div class="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
         <div class="bg-gray-900/90 backdrop-blur-sm rounded-2xl p-10 border border-gray-800 text-center shadow-2xl max-w-sm">
@@ -1896,6 +1878,8 @@
       onselectionchange={onSelectionChange}
       colorMode="dark"
       selectionMode="partial"
+      panOnDrag={canvasMode === 'pan' ? true : [1, 2]}
+      selectionOnDrag={canvasMode === 'select'}
     >
       <Controls position="bottom-right" />
       <Background gap={24} size={1} />
@@ -1999,13 +1983,28 @@
 
             <div>
               <label for="create-model" class="text-[11px] text-gray-400 font-medium block mb-1">Model / Profile</label>
-              <select id="create-model" bind:value={newAgentModel}
+              <select id="create-model"
+                value={modelsForProvider(newAgentProvider).includes(newAgentModel) ? newAgentModel : '__custom__'}
+                onchange={(e) => {
+                  if (e.currentTarget.value === '__custom__') {
+                    newAgentModel = '';
+                  } else {
+                    newAgentModel = e.currentTarget.value;
+                  }
+                }}
                 class="w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-sm text-gray-200
                        focus:outline-none focus:border-guild-500">
                 {#each modelsForProvider(newAgentProvider) as m}
                   <option value={m}>{m}</option>
                 {/each}
+                <option value="__custom__">— custom model —</option>
               </select>
+              {#if !modelsForProvider(newAgentProvider).includes(newAgentModel)}
+                <input type="text" bind:value={newAgentModel}
+                  placeholder="Enter custom model name"
+                  class="mt-1.5 w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-sm text-gray-200
+                         placeholder-gray-600 focus:outline-none focus:border-guild-500 focus:ring-1 focus:ring-guild-500/20" />
+              {/if}
             </div>
 
             <div>
@@ -2073,13 +2072,28 @@
 
             <div>
               <label for="edit-model" class="text-[11px] text-gray-400 font-medium block mb-1">Model / Profile</label>
-              <select id="edit-model" bind:value={editModel}
+              <select id="edit-model"
+                value={modelsForProvider(editProvider).includes(editModel) ? editModel : '__custom__'}
+                onchange={(e) => {
+                  if (e.currentTarget.value === '__custom__') {
+                    editModel = '';
+                  } else {
+                    editModel = e.currentTarget.value;
+                  }
+                }}
                 class="w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-sm text-gray-200
                        focus:outline-none focus:border-guild-500">
                 {#each modelsForProvider(editProvider) as m}
                   <option value={m}>{m}</option>
                 {/each}
+                <option value="__custom__">— custom model —</option>
               </select>
+              {#if !modelsForProvider(editProvider).includes(editModel)}
+                <input type="text" bind:value={editModel}
+                  placeholder="Enter custom model name"
+                  class="mt-1.5 w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-sm text-gray-200
+                         placeholder-gray-600 focus:outline-none focus:border-guild-500 focus:ring-1 focus:ring-guild-500/20" />
+              {/if}
             </div>
 
             <div>
