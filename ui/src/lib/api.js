@@ -37,6 +37,15 @@ export async function fetchTaskEvents(id) {
 	return request(`/tasks/${id}/events`);
 }
 
+export async function fetchWorkflows(status = '') {
+	const query = status ? `?status=${encodeURIComponent(status)}` : '';
+	return request(`/workflows${query}`);
+}
+
+export async function fetchWorkflow(executionId) {
+	return request(`/workflows/${executionId}`);
+}
+
 export async function fetchAgents() {
 	return request('/agents');
 }

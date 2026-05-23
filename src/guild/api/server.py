@@ -49,6 +49,8 @@ API_ROUTES: dict[str, str] = {
     "GET /api/tasks/{id}": "Get task details",
     "GET /api/tasks/{id}/messages": "Get task messages",
     "GET /api/tasks/{id}/events": "Get task timeline events",
+    "GET /api/workflows": "List workflow executions",
+    "GET /api/workflows/{execution_id}": "Get workflow execution details",
     "GET /api/agents": "List all agents",
     "GET /api/blocks": "List available blocks",
     "GET /api/teams": "List available teams",
@@ -170,6 +172,61 @@ def _looks_like_block_child_task(task: dict[str, Any]) -> bool:
     description = str(task.get("description") or "")
     is_generated_agent = bool(re.match(r"^[A-Za-z0-9_-]+-[0-9a-f]{8}$", assigned_agent))
     return description.startswith("[") or is_generated_agent
+
+
+def _is_workflow_task(task: dict[str, Any], events: list[dict[str, Any]] | None = None) -> bool:
+    """Return True for top-level workflow execution tasks."""
+    assigned_agent = str(task.get("assigned_agent") or "")
+    if not assigned_agent or assigned_agent == "agent":
+        return False
+    if _looks_like_block_child_task(task):
+        return False
+    if "Completed blocks:" in str(task.get("result") or ""):
+        return True
+    return any(
+        event.get("task_id") == task.get("task_id")
+        and str(event.get("event_type") or "").startswith("block_")
+        for event in events or []
+    )
+
+
+def _workflow_output(task: dict[str, Any]) -> str:
+    """Extract the latest workflow artifact from a progress/result string."""
+    result = str(task.get("result") or "")
+    marker = "Latest output:\n"
+    if marker in result:
+        return result.split(marker, 1)[1].strip()
+    return result.strip()
+
+
+def _workflow_record(
+    task: dict[str, Any],
+    events: list[dict[str, Any]],
+    all_tasks: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Build a workflow execution record for API/UI consumers."""
+    execution_id = str(task["task_id"])
+    child_agents = [
+        str(event["agent_id"])
+        for event in events
+        if event.get("event_type") == "agent_spawned" and event.get("agent_id")
+    ]
+    child_tasks = [
+        {
+            **child,
+            "execution_id": execution_id,
+        }
+        for child in all_tasks
+        if child.get("assigned_agent") in child_agents
+    ]
+    return {
+        **task,
+        "execution_id": execution_id,
+        "workflow_name": task.get("assigned_agent"),
+        "output": _workflow_output(task),
+        "events": events,
+        "child_tasks": child_tasks,
+    }
 
 
 def _task_is_older_than(task: dict[str, Any], seconds: int) -> bool:
@@ -425,6 +482,49 @@ def _register_agent_routes(app: Any, get_storage: Callable[[], "Storage"]) -> No
                 }
             )
         return enriched
+
+
+def _register_workflow_routes(
+    app: Any, get_storage: Callable[[], "Storage"], guild_dir: Path
+) -> None:
+    """Register workflow execution query routes."""
+    from fastapi import HTTPException
+
+    @app.get("/api/workflows")  # type: ignore[untyped-decorator]
+    async def list_workflows(status: str | None = None) -> list[dict[str, Any]]:
+        """List workflow executions with stable execution IDs."""
+        storage = get_storage()
+        await _mark_stale_tasks(storage, guild_dir)
+        tasks = await storage.list_tasks()
+        events = await storage.list_task_events(limit=1000)
+        workflow_tasks = [task for task in tasks if _is_workflow_task(task, events)]
+        if status:
+            workflow_tasks = [task for task in workflow_tasks if task.get("status") == status]
+        records = []
+        for task in workflow_tasks:
+            task_events = [event for event in events if event.get("task_id") == task["task_id"]]
+            records.append(_workflow_record(task, task_events, tasks))
+        return sorted(records, key=lambda item: str(item.get("created_at") or ""), reverse=True)
+
+    @app.get("/api/workflows/{execution_id}")  # type: ignore[untyped-decorator]
+    async def get_workflow(execution_id: str) -> dict[str, Any]:
+        """Return one workflow execution by execution ID."""
+        storage = get_storage()
+        await _mark_stale_tasks(storage, guild_dir)
+        task = await storage.get_task(execution_id)
+        if task is None:
+            raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Workflow execution not found")
+        task_events = await storage.list_task_events(execution_id)
+        all_events = await storage.list_task_events(limit=2000)
+        all_tasks = await storage.list_tasks()
+        if not _is_workflow_task(task, all_events):
+            raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Workflow execution not found")
+        record = _workflow_record(task, task_events, all_tasks)
+        child_agents = {child["assigned_agent"] for child in record["child_tasks"]}
+        record["child_events"] = [
+            event for event in all_events if event.get("agent_id") in child_agents
+        ]
+        return record
 
 
 def _register_config_routes(
@@ -1109,6 +1209,7 @@ def _register_all_routes(app: Any, get_storage: Callable[[], "Storage"], guild_d
     _register_a2a_routes(app)
     _register_task_routes(app, get_storage, guild_dir)
     _register_agent_routes(app, get_storage)
+    _register_workflow_routes(app, get_storage, guild_dir)
     _register_config_routes(app, get_storage, guild_dir)
     _register_websocket(app, get_storage, guild_dir)
     _register_static_files(app)

@@ -7,6 +7,7 @@
 	const nav = [
 		{ href: '/', label: 'Dashboard', icon: '&#9632;' },
 		{ href: '/tasks', label: 'Tasks', icon: '&#9654;' },
+		{ href: '/workflows', label: 'Workflows', icon: '&#8759;' },
 		{ href: '/agents', label: 'Agents', icon: '&#9679;' },
 		{ href: '/config', label: 'Config', icon: '&#9881;' },
 		{ href: '/composer', label: 'Composer', icon: '&#9830;' },
