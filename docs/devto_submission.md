@@ -4,7 +4,7 @@ published: false
 tags: devchallenge, gemmachallenge, gemma
 ---
 
-*This is a submission for the [Gemma 4 Challenge: Build with Gemma 4](https://dev.to/devteam/join-the-gemma-4-challenge-3000-prize-pool-for-ten-winners-23in)*
+*This is a submission for the [Gemma 4 Challenge: Build with Gemma 4](https://dev.to/challenges/google-gemma-2026-05-06)*
 
 ## What I Built
 
@@ -21,7 +21,7 @@ Guild solves this with an **escalation-first architecture**: start with the chea
 
 ### Key Features
 
-- **Escalation chain**: Gemma 4 4B Dense (`gemma4-4b-dense-med`) → Gemma 4 26B MoE (`gemma4-26b-moe-agent`) → CLI tools → human (last resort)
+- **Escalation chain**: Gemma 4 E4B → Gemma 4 31B Dense → CLI tools → human (last resort)
 - **Visual flow composer**: drag-and-drop web UI to design multi-agent workflows, save reusable blocks, expand to inspect internals
 - **"Good neighbor" mode**: detects user activity via CPU/input monitoring, throttles to zero when you're working, runs full-speed when idle
 - **Truly autonomous**: survives reboots, sleep/wake cycles, crashes — picks up where it left off
@@ -31,34 +31,44 @@ Guild solves this with an **escalation-first architecture**: start with the chea
 
 ## Demo
 
-### Real Session — Multi-Agent Team Build
+### Design → Run → Monitor (all in one UI)
 
-This is from an actual run where Guild's team mode uses Gemma 4 4B as the coder and Gemma 4 26B MoE as the verifier:
+Guild's web interface lets you design multi-agent workflows visually, then run them with one click:
 
-```
-$ guild team -t music-builder "Create a Python music player with real-time notch filter"
+**1. Composer Studio — Design your agent team:**
 
-[guild] Team: music-builder (coder + e2e_runner)
-[guild] Coder agent: gemma4-4b-dense-med
-[guild] Verifier agent: gemma4-26b-moe-agent
+![Flow Composer showing Python Dev Loop with expanded TDD block](https://raw.githubusercontent.com/LightShield/guild/main/docs/images/flow-composer-expanded.jpeg)
 
-Iteration 1:
-  [coder/4B]     Writing music_player.py...
-  [coder/4B]     Writing requirements.txt...
-  [e2e/26B]      Running DSP unit test... FAIL (runtime error in callback)
+The "Python Dev Loop" preset: requirements→architect feed into verifiers, which gate a `tdd_implementer` block. Click to expand that block and see the internal pipeline (planner→test_writer→implementer→refactorer). The edit panel on the right shows agent configuration — name, role, Gemma 4 model selection, instructions, and ports.
 
-Iteration 2:
-  [coder/4B]     Fixing based on verifier feedback...
-  [coder/4B]     Rewriting with filter state persistence (zi)...
-  [e2e/26B]      Running DSP unit test... PASS
-  [e2e/26B]      Running 3s playback test... PASS
-  [e2e/26B]      Checking stderr for errors... PASS
+![Composer Studio with live execution status](https://raw.githubusercontent.com/LightShield/guild/main/docs/images/composer-live-execution.jpeg)
 
-[guild] Team completed in 2 iterations.
-[guild] Learning: "IIR notch filter requires maintaining zi state across chunks"
-```
+Same composer, now running a live workflow: "write me a hello app in assembly 8086". The planner block completed, coder is currently executing. Status badges update in real-time.
 
-See the full example with code output: [`examples/music-player-poc/`](examples/music-player-poc/)
+**2. Workflow Execution — Watch blocks run in sequence:**
+
+![Workflow detail view showing planner completed with assembly code output, coder running](https://raw.githubusercontent.com/LightShield/guild/main/docs/images/workflow-detail.jpeg)
+
+The planner agent (powered by Gemma 4) decomposed the task and produced assembly instructions. The coder block is now executing those instructions. Each block's output is visible in real-time, with a timeline showing the full execution history.
+
+**3. Task Management — Launch and monitor agents:**
+
+![Tasks view showing running workflow blocks with status badges](https://raw.githubusercontent.com/LightShield/guild/main/docs/images/tasks-view.jpeg)
+
+Launch workflows or individual agents from the UI. Filter by status, inspect execution details, stop running tasks.
+
+### "Good Neighbor" Mode — Resource Awareness
+
+Guild detects when you're using the machine and throttles itself:
+
+| Without Good Neighbor | With Good Neighbor |
+|---|---|
+| ![Ollama using 10GB RAM, 87% memory](https://raw.githubusercontent.com/LightShield/guild/main/docs/images/without-good-neighbor.jpeg) | ![Ollama using 7.5GB RAM, 69% memory](https://raw.githubusercontent.com/LightShield/guild/main/docs/images/with-good-neighbor.jpeg) |
+| Ollama consumes 10.2 GB, system at 87% memory | Throttled down — 7.5 GB, system at 69% memory |
+
+When you're gaming, browsing, or coding — Guild backs off automatically. When you're away, it ramps back up.
+
+### CLI — For When You Prefer the Terminal
 
 ```bash
 # Install and initialize
@@ -66,8 +76,8 @@ pip install -e ".[dev]"
 guild init
 
 # Configure Gemma 4 escalation chain
-guild config --set provider.model=gemma4-4b-dense-med
-guild config --set escalation.escalation_chain=gemma4-26b-moe-agent
+guild config --set provider.model=gemma4-e4b
+guild config --set escalation.escalation_chain=gemma4-31b-dense
 
 # Run a task — watch it escalate when needed
 guild task "Refactor the auth module to use JWT tokens instead of sessions"
@@ -77,19 +87,39 @@ guild task "Add comprehensive error handling to the API layer" --background
 guild ps  # check progress anytime
 ```
 
-### The Escalation in Action
+### Real Example: Tinnitus Therapy Music Player
+
+My father has tinnitus. One treatment is "notched music" — removing the phantom frequency from music over time. I had Guild build the player instead of doing it myself.
+
+**Team:** Gemma 4 E4B (coder) + Gemma 4 31B Dense (verifier)
 
 ```
-[guild] Starting task with gemma4-4b-dense-med...
-[guild] Turn 1: Reading auth module...
-[guild] Turn 2: Planning refactor approach...
-[guild] Turn 5: Stuck — repeated error in generated code
-[guild] Escalating to gemma4-26b-moe-agent (reason: stuck_loop)
-[guild] Turn 6: Analyzing error pattern...
-[guild] Turn 7: Applying corrected implementation...
-[guild] Turn 9: Running tests... all pass
-[guild] Task completed. Learning extracted: "JWT migration requires updating middleware chain first"
+Iteration 1:
+  [coder/E4B]     Wrote music_player.py (7455 chars)
+                  — real-time IIR notch filter via scipy.signal
+                  — sounddevice OutputStream callback
+                  — keyboard thread for live frequency control
+  [verifier/31B]  Running verification:
+                  ✓ Files exist
+                  ✓ Syntax valid
+                  ✗ FAIL: lfilter called with wrong argument order
+                    (data passed before coefficients)
+
+Iteration 2:
+  [coder/E4B]     Fixed lfilter call order, added zi state persistence
+  [verifier/31B]  Running verification:
+                  ✓ Files exist
+                  ✓ Syntax valid
+                  ✓ API usage correct (iirnotch + lfilter + lfilter_zi)
+                  ✓ 3-second playback test — no errors
+                  PASS (score: 90)
+
+[guild] Team completed. Learning: "lfilter(b, a, x, zi=zi) — coefficients first, not data"
 ```
+
+The verifier caught a subtle API misuse that would have caused silent audio corruption. Without the verification loop, the bug ships. With it, the coder gets specific feedback and fixes it in one turn.
+
+Full source + execution trace: [`examples/music-player-poc/`](https://github.com/LightShield/guild/tree/main/examples/music-player-poc)
 
 ## Code
 
@@ -131,11 +161,13 @@ Guild includes a web-based flow composer (`guild serve`) for designing multi-age
 
 ### Stats
 
-- **108 source modules** across 20 domain-grouped packages
-- **2307 tests** (unit, integration, E2E + Playwright)
-- **100% branch coverage**
+- **106 source modules** across 20 domain-grouped packages
+- **2383 Python tests** + **246 Playwright E2E tests** (2629 total)
+- **100% branch coverage** on Python code
 - **213 requirements** with full acceptance criteria traceability
+- **0 semantic lies** — all tests adversarially verified for honesty
 - Pure Python 3.11+, async throughout, zero cloud dependency
+- Built using a self-improving development system with gated flows (see [Guidelines](https://github.com/LightShield/Guidelines))
 
 ## How I Used Gemma 4
 
@@ -144,40 +176,40 @@ Guild includes a web-based flow composer (`guild serve`) for designing multi-age
 Gemma 4 is the ideal model family for Guild because:
 
 1. **Runs locally via Ollama** — zero API cost, complete privacy
-2. **Multiple size tiers** — enables the escalation architecture
+2. **Multiple size tiers (E2B, E4B, 31B Dense)** — enables the escalation architecture
 3. **128K context window** — can hold entire codebases in context
-4. **Strong code reasoning** — particularly the 26B MoE agent variant
+4. **Strong code reasoning** — particularly the 31B Dense variant
 
 ### The Escalation Architecture
 
-The core insight: **most agent turns don't need a 31B model**. Reading a file, running a test, writing a simple function — Gemma 4 4B handles these fine. But when the agent encounters:
+The core insight: **most agent turns don't need the 31B Dense model**. Reading a file, running a test, writing a simple function — Gemma 4 E4B handles these fine. But when the agent encounters:
 
 - Repeated failures (same error 3+ times)
 - Complex multi-file reasoning
 - Architectural decisions requiring broad context
 
-...it automatically escalates to Gemma 4 26B MoE, which has the reasoning depth to break through. This gives you:
+...it automatically escalates to Gemma 4 31B Dense, which has the reasoning depth to break through. This gives you:
 
-- **80% of turns** at 4B speed (fast, low resource usage)
-- **20% of turns** at 26B quality (when it actually matters)
+- **80% of turns** at E4B speed (fast, low resource usage)
+- **20% of turns** at 31B Dense quality (when it actually matters)
 - **Near-zero cost** compared to cloud API pricing
 
 ### Model Variants Used
 
-| Tier | Ollama Model | Params | Role |
-|------|-------------|--------|------|
-| Edge | `gemma4-2b-edge-fast` | 5.1B (Q4) | Ultra-light routing, permission checks |
-| Fast | `gemma4-4b-dense-med` | 8.0B (Q4) | Default execution — file ops, shell commands, simple code generation |
-| Smart | `gemma4-26b-moe-agent` | 25.8B (Q4) | Escalation target — complex reasoning, architecture decisions, debugging stuck states |
+| Tier | Model | Ollama Tag | Role |
+|------|-------|-----------|------|
+| Edge | **Gemma 4 E2B** | `gemma4-2b-edge-fast` | Ultra-light routing, permission checks |
+| Fast | **Gemma 4 E4B** | `gemma4-4b-dense-med` | Default execution — file ops, shell commands, simple code generation |
+| Smart | **Gemma 4 31B Dense** | `gemma4-31b-dense` | Escalation target — complex reasoning, architecture decisions, debugging stuck states |
 
 ### Why Not Just Use the Big Model?
 
 Three reasons:
-1. **Resource contention** — 26B MoE uses significant RAM/VRAM. The "good neighbor" philosophy means minimizing resource usage.
-2. **Speed** — 4B responds in 1-2 seconds; 26B takes 10-15 seconds. For simple file reads, that latency is wasted.
+1. **Resource contention** — 31B Dense uses significant RAM/VRAM. The "good neighbor" philosophy means minimizing resource usage.
+2. **Speed** — E4B responds in 1-2 seconds; 31B Dense takes 10-15 seconds. For simple file reads, that latency is wasted.
 3. **Autonomy duration** — when running overnight on a coding task, token efficiency means more work done per charge cycle.
 
-The escalation chain is configurable. If you have the hardware, run 26B all the time. If you're on a laptop, start at 4B and let Guild decide when to bring in the heavy model.
+The escalation chain is configurable. If you have the hardware, run 31B Dense all the time. If you're on a laptop, start at E4B and let Guild decide when to bring in the heavy model.
 
 ---
 
