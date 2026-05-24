@@ -52,3 +52,6 @@ ui/dist/
 ui/test-results/
 ui/playwright-report/
 ui/e2e/.auth/
+.flow/
+.guild/
+test-results/
