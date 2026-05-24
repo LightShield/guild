@@ -171,6 +171,18 @@ Guild includes a web-based flow composer (`guild serve`) for designing multi-age
 
 ## How I Used Gemma 4
 
+### Provider-Agnostic Architecture
+
+Guild is provider-agnostic — the same team definitions work across multiple backends:
+
+| Provider | Command | Use Case |
+|----------|---------|----------|
+| **Gemma 4 (Ollama)** | `guild config --set provider.provider_name=ollama` | Free, local, private. Default. |
+| **Claude (Anthropic)** | `guild config --set provider.provider_name=claude` | Cloud fallback, strong reasoning |
+| **Codex (OpenAI)** | `guild config --set provider.provider_name=codex` | Alternative cloud provider |
+
+Teams can mix providers per-block — e.g., Gemma 4 E4B for fast coding, Claude for complex review. The escalation chain automatically moves between tiers.
+
 ### Model Selection: Why Gemma 4?
 
 Gemma 4 is the ideal model family for Guild because:
