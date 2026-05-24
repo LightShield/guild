@@ -171,18 +171,6 @@ Guild includes a web-based flow composer (`guild serve`) for designing multi-age
 
 ## How I Used Gemma 4
 
-### Provider-Agnostic Architecture
-
-Guild is provider-agnostic — the same team definitions work across multiple backends:
-
-| Provider | Command | Use Case |
-|----------|---------|----------|
-| **Gemma 4 (Ollama)** | `guild config --set provider.provider_name=ollama` | Free, local, private. Default. |
-| **Claude (Anthropic)** | `guild config --set provider.provider_name=claude` | Cloud fallback, strong reasoning |
-| **Codex (OpenAI)** | `guild config --set provider.provider_name=codex` | Alternative cloud provider |
-
-Teams can mix providers per-block — e.g., Gemma 4 E4B for fast coding, Claude for complex review. The escalation chain automatically moves between tiers.
-
 ### Model Selection: Why Gemma 4?
 
 Gemma 4 is the ideal model family for Guild because:
@@ -200,19 +188,33 @@ The core insight: **most agent turns don't need the 31B Dense model**. Reading a
 - Complex multi-file reasoning
 - Architectural decisions requiring broad context
 
-...it automatically escalates to Gemma 4 31B Dense, which has the reasoning depth to break through. This gives you:
+...it automatically escalates to Gemma 4 31B Dense, which has the reasoning depth to break through. And if even that isn't enough — the chain continues to cloud providers (Claude, Codex) as a final tier before asking a human.
 
-- **80% of turns** at E4B speed (fast, low resource usage)
-- **20% of turns** at 31B Dense quality (when it actually matters)
-- **Near-zero cost** compared to cloud API pricing
+This gives you:
 
-### Model Variants Used
+- **80% of turns** at E4B speed (fast, local, free)
+- **15% of turns** at 31B Dense quality (complex local reasoning)
+- **5% of turns** at cloud tier (when local models genuinely can't solve it)
+- **Near-zero cost** — cloud is only used as last resort
 
-| Tier | Model | Ollama Tag | Role |
-|------|-------|-----------|------|
-| Edge | **Gemma 4 E2B** | `gemma4-2b-edge-fast` | Ultra-light routing, permission checks |
-| Fast | **Gemma 4 E4B** | `gemma4-4b-dense-med` | Default execution — file ops, shell commands, simple code generation |
-| Smart | **Gemma 4 31B Dense** | `gemma4-31b-dense` | Escalation target — complex reasoning, architecture decisions, debugging stuck states |
+### The Full Escalation Chain
+
+| Tier | Provider | Model | When |
+|------|----------|-------|------|
+| 1 | Ollama (local) | **Gemma 4 E2B** | Routing, permission checks, trivial ops |
+| 2 | Ollama (local) | **Gemma 4 E4B** | Default — file ops, shell, simple code |
+| 3 | Ollama (local) | **Gemma 4 31B Dense** | Complex reasoning, architecture, debugging |
+| 4 | Cloud | **Claude / Codex** | When local models are stuck (3+ failures) |
+| 5 | Human | — | Truly irreversible decisions only |
+
+Teams can also mix providers per-block — e.g., Gemma 4 E4B as the fast coder, Claude as the strict reviewer. Each block in a workflow defines its own provider independently.
+
+```bash
+# Configure the escalation chain
+guild config --set provider.provider_name=ollama
+guild config --set provider.model=gemma4-4b-dense-med
+guild config --set escalation.escalation_chain=gemma4-31b-dense,claude
+```
 
 ### Why Not Just Use the Big Model?
 
@@ -221,7 +223,7 @@ Three reasons:
 2. **Speed** — E4B responds in 1-2 seconds; 31B Dense takes 10-15 seconds. For simple file reads, that latency is wasted.
 3. **Autonomy duration** — when running overnight on a coding task, token efficiency means more work done per charge cycle.
 
-The escalation chain is configurable. If you have the hardware, run 31B Dense all the time. If you're on a laptop, start at E4B and let Guild decide when to bring in the heavy model.
+The escalation chain is configurable. If you have the hardware, run 31B Dense all the time. If you're on a laptop, start at E4B and let Guild decide when to bring in the heavy model. If you need cloud power for the hardest problems, add Claude/Codex to the chain — Guild will only use them when local models are genuinely stuck.
 
 ---
 
